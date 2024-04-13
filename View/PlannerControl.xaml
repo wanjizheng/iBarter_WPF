@@ -1,0 +1,92 @@
+﻿<UserControl x:Class="iBarter.PlannerControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:iBarter"
+             xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
+             mc:Ignorable="d"
+             d:DesignHeight="450" d:DesignWidth="800">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0">
+            <syncfusion:ButtonAdv
+         x:Name="ButtonAdv_Refresh"
+         Margin="4,0,4,0"
+         HorizontalAlignment="Center"
+         VerticalAlignment="Center"
+         IconWidth="26" IconHeight="26"
+         Label="Scan"
+         ToolTip="Scan"
+         SizeMode="Small"
+         FontFamily="Microsoft YaHei"
+         SmallIcon="/Images/refresh.png" Click="ButtonAdv_Refresh_Click" />
+        </syncfusion:ToolBarAdv>
+        <Grid Grid.Row="1">
+            <syncfusion:SfDataGrid x:Name="DataGrid_Planner" Height="NaN" Width="NaN"
+                AutoGenerateColumns="False"
+                AllowEditing="True"
+                ColumnSizer="AutoWithLastColumnFill"
+                RowSelectionBrush="DarkBlue"
+                SelectionForegroundBrush="Bisque"
+                AllowDraggingRows="True"
+                ShowRowHeader="True"
+                ScrollMode="Async"
+                CanMaintainScrollPosition="True"
+                AllowDrop="True" LiveDataUpdateMode="AllowChildViewUpdate">
+                <syncfusion:SfDataGrid.Columns>
+                    <!-- <syncfusion:GridTextColumn HeaderText="Island1" MappingName="IsLandName" UseBindingValue="True" -->
+                    <!--                            AllowResizing="True" AllowEditing="True"> -->
+                    <!-- </syncfusion:GridTextColumn> -->
+                    <syncfusion:GridTextColumn HeaderText="Group" MappingName="BarterGroup"
+                            AllowResizing="True" AllowEditing="False"
+                            ColumnSizer="AutoWithLastColumnFill" />
+                    <syncfusion:GridTextColumn HeaderText="LV" MappingName="Item1LV" AllowResizing="True" Width="40"
+                            AllowEditing="False" ColumnSizer="AutoWithLastColumnFill" />
+                    <syncfusion:GridCheckBoxColumn HeaderText="CK" MappingName="ExchangeDone"
+                                AllowResizing="True" AllowEditing="True" ColumnSizer="Auto" />
+                    <syncfusion:GridTextColumn HeaderText="Eq." MappingName="ExchangeQuantity" Width="40"
+                            AllowResizing="True" AllowEditing="False"
+                            ColumnSizer="AutoWithLastColumnFill" />
+                    <syncfusion:GridTextColumn HeaderText="No." MappingName="IslandRemaining" Width="40"
+                            AllowResizing="True" AllowEditing="False"
+                            ColumnSizer="AutoWithLastColumnFill" />
+                    <syncfusion:GridTextColumn HeaderText="Location" MappingName="IsLandName" Width="100"
+                            AllowResizing="True" AllowEditing="False"
+                            ColumnSizer="AutoWithLastColumnFill" />
+                    <!-- <syncfusion:GridTextColumn HeaderText="Parley" MappingName="Parley" AllowResizing="True" AllowEditing="True"/> -->
+                    <syncfusion:GridTextColumn HeaderText="I1 No." MappingName="Item1Number" Width="40"
+                            AllowEditing="False" AllowResizing="True"
+                            ColumnSizer="AutoWithLastColumnFill" />
+                    <syncfusion:GridImageColumn HeaderText="" MappingName="Item1Icon" Width="40" TextAlignment="Center"
+                             AllowEditing="False" AllowResizing="True" />
+                    <syncfusion:GridTextColumn HeaderText="Item" MappingName="Item1Name" Width="150"
+                            TextAlignment="Center" AllowEditing="False" AllowResizing="True"
+                            ColumnSizer="AutoWithLastColumnFill" />
+                    <syncfusion:GridImageColumn HeaderText="" MappingName="Item2Icon" Width="40" TextAlignment="Center"
+                             AllowEditing="False" />
+                    <syncfusion:GridTextColumn HeaderText="Exchange" MappingName="Item2Name" Width="150"
+                            TextAlignment="Center" AllowEditing="False" AllowResizing="True"
+                            ColumnSizer="AutoWithLastColumnFill" />
+
+                    <syncfusion:GridTextColumn HeaderText="I2 No." Width="60" MappingName="Item2Number"
+                            AllowEditing="False" AllowResizing="True"
+                            ColumnSizer="AutoWithLastColumnFill" />
+                </syncfusion:SfDataGrid.Columns>
+
+            </syncfusion:SfDataGrid>
+        </Grid>
+        <!-- <CheckBox Content="UseNativeChrome"   x:Name="usenativechrome" /> -->
+        <!--  <StackPanel Orientation="Horizontal"> -->
+        <!--         <TextBlock Text="Set Corner Radius"/> -->
+        <!--         <Slider x:Name="cornerradius" Orientation="Horizontal" Value="20" Ticks="0.5" Minimum="0" Maximum="200" Width="200"  ></Slider> -->
+        <!--     </StackPanel> -->
+        <!-- <StackPanel> -->
+        <!--     <TextBlock Text="set TitleBar Background"/> -->
+        <!--     <syncfusion:ColorPicker x:Name="background" /> -->
+        <!-- </StackPanel> -->
+    </Grid>
+</UserControl>
