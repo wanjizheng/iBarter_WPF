@@ -14,7 +14,9 @@
     <None Remove="Images\add.png" />
     <None Remove="Images\barter.png" />
     <None Remove="Images\iBarterMap.png" />
+    <None Remove="Images\load.png" />
     <None Remove="Images\refresh.png" />
+    <None Remove="Images\save.png" />
     <None Remove="Images\scan.png" />
     <None Remove="Resources\Images\anchor.bmp" />
     <None Remove="Resources\Images\edge.bmp" />
@@ -768,7 +770,9 @@
     <Resource Include="Images\add.png" />
     <Resource Include="Images\barter.png" />
     <Resource Include="Images\iBarterMap.png" />
+    <Resource Include="Images\load.png" />
     <Resource Include="Images\refresh.png" />
+    <Resource Include="Images\save.png" />
     <Resource Include="Images\scan.png" />
   </ItemGroup>
 

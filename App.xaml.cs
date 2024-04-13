@@ -16,7 +16,8 @@ namespace iBarter {
         public static BarterScanner myBarterScanner = null!;
         public static List<Islands> listIslands = null!;
         public static List<Items> listItems = null!;
-        public static List<Barter> listBarterScanner = null!;
+        public static List<Barter> listBarterScanner = new List<Barter>();
+        public static List<Barter> listBarterPlanner = new List<Barter>();
 
         public static ScannerViewModel mySVM = null!;
         public static PlannerViewModel myPVM = null!;
@@ -32,12 +33,13 @@ namespace iBarter {
             myPVM = new PlannerViewModel();
 
             myfmMain = new MainWindow();
+
             listItems = myCFun.LoadItemsCSV();
             listIslands = myCFun.LoadIslandsCSV();
-            listBarterScanner = new List<Barter>();
 
 
             
+
         }
 
         protected override void OnStartup(StartupEventArgs e)

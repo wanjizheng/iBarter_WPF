@@ -196,20 +196,22 @@ namespace iBarter {
         }
 
         private void UpdateItem() {
-            if (!item1Name.Equals(Item1.getName())) {
+            if (item1Name!="" && !item1Name.Equals(Item1.getName())) {
                 Items item1 = new Items(App.listItems.FirstOrDefault(i => i.getName().Equals(item1Name)).getName(), App.listItems.FirstOrDefault(i => i.getName().Equals(item1Name)).getID(), App.listItems.FirstOrDefault(i => i.getName().Equals(item1Name)).getLV());
                 Item1 = item1;
                 //icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.getID() + ".bmp";
             }
 
-            if (!item2Name.Equals(Item2.getName())) {
+            if (item2Name != "" && !item2Name.Equals(Item2.getName())) {
                 Items item2 = new Items(App.listItems.FirstOrDefault(i => i.getName().Equals(item2Name)).getName(), App.listItems.FirstOrDefault(i => i.getName().Equals(item2Name)).getID(), App.listItems.FirstOrDefault(i => i.getName().Equals(item2Name)).getLV());
                 Item2 = item2;
                 //icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.getID() + ".bmp";
             }
 
             RaisePropertyChanged("ItemChange");
-            App.myBarterScanner.RefreshDataGrid();
+            if (App.myBarterScanner != null) {
+                App.myBarterScanner.RefreshDataGrid();
+            }
         }
 
 

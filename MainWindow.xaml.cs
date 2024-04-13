@@ -25,6 +25,7 @@ namespace iBarter {
         public MainWindow() {
             InitializeComponent();
             var timer = new DispatcherTimer();
+            App.myBarterScanner = new BarterScanner();
             timer.Interval = TimeSpan.FromMilliseconds(10);
             timer.Tick += Timer_Tick;
             timer.Start();
@@ -71,7 +72,6 @@ namespace iBarter {
         private void OnActivateWindow(object sender, RoutedEventArgs e) {
             // var name = (sender as MenuItem).Tag as string;
             // dockingManager_Main.ActivateWindow(name);
-            App.myBarterScanner = new BarterScanner();
             App.myBarterScanner.Show();
         }
 
@@ -142,24 +142,6 @@ namespace iBarter {
                 }
                 else {
                     App.myCFun.Log("绑定游戏窗口失败", Brushes.Red);
-                }
-
-                string strPath_Setting = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myPlan_Setting.xml";
-                string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myPlan_Data.json";
-
-                if (File.Exists(strPath_Setting) && File.Exists(strPath_Data)) {
-                    using (var file = File.Open(strPath_Setting, FileMode.Open)) {
-                        myPlannerControl.DataGrid_Planner.Deserialize(file);
-                    }
-                    string readJsonData = File.ReadAllText(strPath_Data);
-                    List<Barter> dataSource = JsonConvert.DeserializeObject<List<Barter>>(readJsonData);
-
-                    for (int i = 0; i < dataSource.Count; i++) {
-                        Barter myBarter = dataSource[i];
-                        App.myPVM.BarterDetails.Add(myBarter);
-                    }
-                    
-                    //myPlannerControl.DataGrid_Planner.ItemsSource = dataSource;
                 }
             }
             catch (Exception exception) {

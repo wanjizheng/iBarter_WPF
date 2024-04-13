@@ -22,7 +22,6 @@ namespace iBarter.ViewModel {
         /// </summary>
         public PlannerViewModel() {
             BarterDetails = new ObservableCollection<Barter>();
-            BarterDetails.CollectionChanged += BarterDetails_CollectionChanged;
         }
 
         #endregion
@@ -54,28 +53,7 @@ namespace iBarter.ViewModel {
         #endregion
 
         #region Method
-
-        private void BarterDetails_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) {
-            try {
-                string strPath_Setting = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myPlan_Setting.xml";
-                string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myPlan_Data.json";
-
-                using (FileStream streamSetting = new FileStream(strPath_Setting, FileMode.OpenOrCreate, FileAccess.ReadWrite)) {
-                    App.myfmMain.myPlannerControl.DataGrid_Planner.Serialize(streamSetting);
-                }
-
-                using (FileStream streamData = new FileStream(strPath_Data, FileMode.OpenOrCreate, FileAccess.ReadWrite)) {
-                    string jsonData = JsonConvert.SerializeObject(App.myfmMain.myPlannerControl.DataGrid_Planner.ItemsSource);
-                    //File.WriteAllText(strPath_Data, jsonData);
-                    byte[] byteArray = System.Text.Encoding.UTF8.GetBytes(jsonData);
-                    streamData.Write(byteArray);
-                }
-            }
-            catch (Exception exception) {
-                App.myCFun.Log(exception.Message, Brushes.Red);
-            }
-        }
-
+        
         #endregion
     }
 }
