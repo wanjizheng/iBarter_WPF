@@ -25,7 +25,7 @@ namespace iBarter {
         public MainWindow() {
             InitializeComponent();
             var timer = new DispatcherTimer();
-            App.myBarterScanner = new BarterScanner();
+            
             timer.Interval = TimeSpan.FromMilliseconds(10);
             timer.Tick += Timer_Tick;
             timer.Start();
@@ -72,6 +72,7 @@ namespace iBarter {
         private void OnActivateWindow(object sender, RoutedEventArgs e) {
             // var name = (sender as MenuItem).Tag as string;
             // dockingManager_Main.ActivateWindow(name);
+            App.myBarterScanner = new BarterScanner();
             App.myBarterScanner.Show();
         }
 

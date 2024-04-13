@@ -13,6 +13,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
+using Emgu.CV.CvEnum;
 using Newtonsoft.Json;
 using Syncfusion.UI.Xaml.Grid;
 
@@ -55,25 +56,67 @@ namespace iBarter {
             int intGroup = 0;
             foreach (Barter barter in App.myPVM.BarterDetails.Where(b => b.Item1.getLV().Equals("0"))) {
                 int intLV = 1;
-                do {
-                    barter.BarterGroup = intGroup;
-                    Barter myBarter = App.myPVM.BarterDetails.Where(b => b.Item1.getLV().Equals(Convert.ToString(intLV)) && b.Item2Name.Equals(barter.Item1Name)).FirstOrDefault();
-                    if (myBarter != null) {
-                        myBarter.BarterGroup = intGroup;
-                    }
+                // do {
+                //     barter.BarterGroup = intGroup;
+                //     Barter myBarter = App.myPVM.BarterDetails.FirstOrDefault(b => b.Item1.getLV().Equals(Convert.ToString(intLV)) && b.Item1Name.Equals(barter.Item2Name))!;
+                //     if (myBarter != null) {
+                //         myBarter.BarterGroup = intGroup;
+                //     }
+                //
+                //     intLV++;
+                // } while (!barter.Item1.getLV().Equals("5"));
+                FindBarterGroup(barter, intLV, intGroup);
 
-                    intLV++;
-                } while (!barter.Item1LV.Equals("5"));
+                intGroup++;
+            }
+
+            foreach (Barter barter in App.myPVM.BarterDetails.Where(b => b.Item1.getLV().Equals("1") && b.BarterGroup == -1)) {
+                int intLV = 2;
+
+                FindBarterGroup(barter, intLV, intGroup);
+
+                intGroup++;
+            }
+
+            foreach (Barter barter in App.myPVM.BarterDetails.Where(b => b.Item1.getLV().Equals("2") && b.BarterGroup == -1))
+            {
+                int intLV = 3;
+
+                FindBarterGroup(barter, intLV, intGroup);
+
+                intGroup++;
+            }
+
+            foreach (Barter barter in App.myPVM.BarterDetails.Where(b => b.Item1.getLV().Equals("3") && b.BarterGroup == -1))
+            {
+                int intLV = 4;
+
+                FindBarterGroup(barter, intLV, intGroup);
 
                 intGroup++;
             }
 
             DataGrid_Planner.View.BeginInit();
             DataGrid_Planner.GroupColumnDescriptions.Add(new GroupColumnDescription() { ColumnName = "BarterGroup" });
+            DataGrid_Planner.AutoExpandGroups = true;
             DataGrid_Planner.View.EndInit();
 
 
             int a = 0;
+        }
+
+        private void FindBarterGroup(Barter _barter, int _lv, int _group) {
+            _barter.BarterGroup = _group;
+            Barter myBarter = App.myPVM.BarterDetails.FirstOrDefault(b => b.Item1.getLV().Equals(Convert.ToString(_lv)) && b.Item1Name.Equals(_barter.Item2Name))!;
+            if (myBarter != null) {
+                myBarter.BarterGroup = _group;
+                if (!myBarter.Item1.getLV().Equals("5")) {
+                    FindBarterGroup(myBarter, ++_lv, _group);
+                }
+            }
+            else {
+                App.myCFun.Log("Error: can't identify the barter group =>" + _barter.IsLandName, Brushes.Red);
+            }
         }
 
         private void ButtonAdv_Load_Click(object sender, RoutedEventArgs e) {
@@ -102,6 +145,7 @@ namespace iBarter {
                     }
 
                     RefreshDataGrid();
+                    App.myCFun.Log("Loaded...", Brushes.Blue);
                 }
                 catch (Exception exception) {
                     App.myCFun.Log(exception.Message, Brushes.Red);
@@ -117,7 +161,6 @@ namespace iBarter {
                     string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myPlan_Data.json";
 
                     using (FileStream streamSetting = new FileStream(strPath_Setting, FileMode.Create, FileAccess.Write)) {
-
                         DataGrid_Planner.Serialize(streamSetting);
                     }
 
@@ -133,8 +176,10 @@ namespace iBarter {
                         string jsonData = JsonConvert.SerializeObject(App.listBarterPlanner);
                         //File.WriteAllText(strPath_Data, jsonData);
                         byte[] byteArray = System.Text.Encoding.UTF8.GetBytes(jsonData);
-                        streamData.Write(byteArray,0,byteArray.Length);
+                        streamData.Write(byteArray, 0, byteArray.Length);
                     }
+
+                    App.myCFun.Log("Saved data.", Brushes.DarkOliveGreen);
                 }
             }
             catch (Exception exception) {

@@ -17,7 +17,6 @@ using System.Windows.Shapes;
 using Brushes = System.Windows.Media.Brushes;
 using Path = System.IO.Path;
 using Rectangle = System.Drawing.Rectangle;
-
 using System.Windows;
 using PureDM;
 using PureDM.Configs;
@@ -232,7 +231,6 @@ namespace iBarter {
                         myThickness.Bottom = double.Parse(results[5]);
                     }
                     catch (Exception e) {
-                        
                     }
 
                     var myIslands = new Islands(IslandEnum(strName), intParley);
@@ -270,7 +268,7 @@ namespace iBarter {
             }
 
 
-            List<PointPlus> listAnchors = App.myPureDM.CV.FindPictures(0, 0, App.myPureDM.WindowWidth, App.myPureDM.WindowHeight, "\\Images\\anchor.bmp", 0.8);
+            List<PointPlus> listAnchors = App.myPureDM.CV.FindPictures(0, 0, App.myPureDM.WindowWidth, App.myPureDM.WindowHeight, "\\Images\\anchor.bmp", 0.8, false);
 
             //listAnchors.OrderBy(pp => pp.Y);
 
@@ -332,7 +330,7 @@ namespace iBarter {
                 return myBarter;
             }
 
-            PointPlus pointPlusEdge = PureDM.PureDM.myCV.FindPicture(Math.Max(0, pointPlusAnchor.X - 300), pointPlusAnchor.Y - 5, pointPlusAnchor.X - 5, pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5, "\\Images\\edge.bmp", 0.8, CV.Mode.OpenCV);
+            PointPlus pointPlusEdge = PureDM.PureDM.myCV.FindPicture(Math.Max(0, pointPlusAnchor.X - 300), pointPlusAnchor.Y - 5, pointPlusAnchor.X - 5, pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5, "\\Images\\edge.bmp", 0.8, CV.Mode.OpenCV, false);
 
             if (pointPlusEdge.X == -1 || pointPlusEdge.Y == -1) {
                 return myBarter;
@@ -352,9 +350,9 @@ namespace iBarter {
             int intY2 = pointPlusAnchor.Y + 60;
             PureDM.PureDM.myDM.Capture(intX1, intY1, intX2, intY2, "barterItems.bmp");
 
-            PointPlus pointPlusParley = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Parley.bmp", 0.8, CV.Mode.OpenCV);
+            PointPlus pointPlusParley = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Parley.bmp", 0.8, CV.Mode.OpenCV, false);
 
-            PointPlus pointPlusRequired = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Required.bmp", 0.8, CV.Mode.OpenCV);
+            PointPlus pointPlusRequired = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Required.bmp", 0.8, CV.Mode.OpenCV,false);
 
             string strParley = PureDM.PureDM.myCV.OCRString(pointPlusParley.X + pointPlusParley.Size.Width, pointPlusParley.Y, pointPlusRequired.X, pointPlusParley.Y + pointPlusParley.Size.Height, CV.OCRType.Number);
 
@@ -366,7 +364,7 @@ namespace iBarter {
             catch (Exception e) {
             }
 
-            PointPlus pointPlusRemaining = PureDM.PureDM.myCV.FindPicture(0, pointPlusAnchor.Y + pointPlusAnchor.Size.Height, App.myPureDM.WindowWidth, pointPlusAnchor.Y + 60, "\\Images\\Remaining.bmp", 0.8, CV.Mode.OpenCV);
+            PointPlus pointPlusRemaining = PureDM.PureDM.myCV.FindPicture(0, pointPlusAnchor.Y + pointPlusAnchor.Size.Height, App.myPureDM.WindowWidth, pointPlusAnchor.Y + 60, "\\Images\\Remaining.bmp", 0.8, CV.Mode.OpenCV, false);
 
 
             string strRemaining = PureDM.PureDM.myCV.OCRString(pointPlusRemaining.X + pointPlusRemaining.Size.Width, pointPlusRemaining.Y, pointPlusRemaining.X + pointPlusRemaining.Size.Width + 30, pointPlusRemaining.Y + pointPlusRemaining.Size.Height + 2, CV.OCRType.Number);
@@ -388,7 +386,7 @@ namespace iBarter {
             //////////////////////////////////////////////
 
             ParallelLoopResult result = Parallel.ForEach(App.listItems, item => {
-                PointPlus myPP = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + item.getID() + ".bmp", 0.4, 0.8, 1, CV.Mode.OpenCV);
+                PointPlus myPP = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + item.getID() + ".bmp", 0.4, 0.8, 1, CV.Mode.OpenCV, false);
                 if (myPP.X != -1 && myPP.Y != -1) {
                     listPointPlus.Add(myPP);
                 }
@@ -516,7 +514,7 @@ namespace iBarter {
             else if (_island.Contains("Boa")) {
                 return EnumLists.Island.Boa;
             }
-            else if (_island.Contains("Cargo") || _island.Contains("ShipwreckedHaran'sCarg")) {
+            else if (_island.Contains("Cargo") || _island.Contains("ShipwreckedHaran'sCarg") || _island.Contains("Shipwrecked Haran")) {
                 return EnumLists.Island.Cargo;
             }
             else if (_island.Contains("Carrack")) {
@@ -570,7 +568,7 @@ namespace iBarter {
             else if (_island.Contains("Iliya") || _island.Contains("liya")) {
                 return EnumLists.Island.Iliya;
             }
-            else if (_island.Contains("Incomplete") || _island.Contains("UnfinishedAdriftVessel")) {
+            else if (_island.Contains("Incomplete") || _island.Contains("UnfinishedAdriftVessel") || _island.Contains("Unfinished Adrift")) {
                 return EnumLists.Island.Incomplete;
             }
             else if (_island.Contains("Invernen")) {

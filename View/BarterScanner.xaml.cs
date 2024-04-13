@@ -95,9 +95,19 @@ namespace iBarter {
             // myThread_SearchBarter.IsBackground = true;
             // myThread_SearchBarter.Start();
 
-            await Task.Run(() => {
-                App.myCFun.SearchBarter();
-            });
+            ButtonAdv_Scan.IsEnabled = false;
+ 
+            try {
+                App.myCFun.Log("Start scanning...", Brushes.Blue);
+                await Task.Run(() => { App.myCFun.SearchBarter(); });
+            }
+            catch (Exception ex) {
+                App.myCFun.Log(ex.Message, Brushes.Red);
+            }
+            finally {
+                App.myCFun.Log("Done!", Brushes.DarkGreen);
+                ButtonAdv_Scan.IsEnabled = true;
+            }
         }
 
         public void RefreshDataGrid() {
@@ -126,7 +136,7 @@ namespace iBarter {
         private void ButtonAdv_Add_Click(object sender, RoutedEventArgs e) {
             for (int i = 0; i < App.mySVM.BarterDetails.Count; i++) {
                 Barter barter = App.mySVM.BarterDetails[i];
-                if (!App.myPVM.BarterDetails.Contains(barter)) {
+                if (App.myPVM.BarterDetails.FirstOrDefault(b => b.IsLandName.Equals(barter.IsLandName)) == null) {
                     App.myPVM.BarterDetails.Add(barter);
                 }
             }
