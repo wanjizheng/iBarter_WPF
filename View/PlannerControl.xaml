@@ -5,14 +5,32 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:iBarter"
              xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
+             xmlns:syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
+    <UserControl.Resources>
+        <local:ColorConverter x:Key="converter"/>
+        <Style TargetType="syncfusion1:VirtualizingCellsControl">
+            <Setter Property="Background" Value="{Binding Converter={StaticResource converter}}" />
+        </Style>
+    </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0">
+            <syncfusion:ButtonAdv
+                x:Name="ButtonAdv_New"
+                Margin="4,0,4,0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                IconWidth="26" IconHeight="26"
+                Label="New"
+                ToolTip="New"
+                SizeMode="Small"
+                FontFamily="Microsoft YaHei"
+                SmallIcon="/Images/new-document.png" Click="ButtonAdv_New_Click" />
             <syncfusion:ButtonAdv
                 x:Name="ButtonAdv_Save"
                 Margin="4,0,4,0"
@@ -47,6 +65,17 @@
                 SizeMode="Small"
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/refresh.png" Click="ButtonAdv_Refresh_Click" />
+            <syncfusion:ButtonAdv
+                x:Name="ButtonAdv_Done"
+                Margin="4,0,4,0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                IconWidth="26" IconHeight="26"
+                Label="Done"
+                ToolTip="Done"
+                SizeMode="Small"
+                FontFamily="Microsoft YaHei"
+                SmallIcon="/Images/done.png" Click="ButtonAdv_Done_Click" />
         </syncfusion:ToolBarAdv>
         <Grid Grid.Row="1">
             <syncfusion:SfDataGrid x:Name="DataGrid_Planner" Height="NaN" Width="NaN"
@@ -59,47 +88,47 @@
                                    ShowRowHeader="True"
                                    ScrollMode="Async"
                                    CanMaintainScrollPosition="True"
-                                   AllowDrop="True" LiveDataUpdateMode="AllowChildViewUpdate">
+                                   AllowDrop="True" LiveDataUpdateMode="AllowChildViewUpdate" CurrentCellEndEdit="DataGrid_Planner_CurrentCellEndEdit" CurrentCellValueChanged="DataGrid_Planner_CurrentCellValueChanged">
+                <syncfusion:SfDataGrid.SortColumnDescriptions>
+                    <syncfusion:SortColumnDescription ColumnName="Item1LV" SortDirection="Ascending" />
+                </syncfusion:SfDataGrid.SortColumnDescriptions>
                 <syncfusion:SfDataGrid.Columns>
                     <!-- <syncfusion:GridTextColumn HeaderText="Island1" MappingName="IsLandName" UseBindingValue="True" -->
                     <!--                            AllowResizing="True" AllowEditing="True"> -->
                     <!-- </syncfusion:GridTextColumn> -->
                     <syncfusion:GridTextColumn HeaderText="Group" MappingName="BarterGroup"
-                                               AllowResizing="True" AllowEditing="False"
-                                               ColumnSizer="AutoWithLastColumnFill" />
-                    <syncfusion:GridTextColumn HeaderText="LV" MappingName="Item1LV" AllowResizing="True" Width="40"
-                                               AllowEditing="False" ColumnSizer="AutoWithLastColumnFill" />
-                    <syncfusion:GridCheckBoxColumn HeaderText="CK" MappingName="ExchangeDone"
-                                                   AllowResizing="True" AllowEditing="True" ColumnSizer="Auto" />
+                                               AllowResizing="True" AllowEditing="False" 
+                                               Width="50" />
+                    <syncfusion:GridTextColumn x:Name="Column_LV" HeaderText="LV" MappingName="Item1LV" AllowResizing="True" Width="70"
+                                               AllowEditing="False" />
+                    <syncfusion:GridCheckBoxColumn x:Name="GridCheckBoxColumn_CK" HeaderText="CK" MappingName="ExchangeDone"
+                                                   AllowResizing="True" AllowEditing="True" Width="30"  />
                     <syncfusion:GridTextColumn HeaderText="Eq." MappingName="ExchangeQuantity" Width="40"
-                                               AllowResizing="True" AllowEditing="True"
-                                               ColumnSizer="AutoWithLastColumnFill" />
-                    <syncfusion:GridTextColumn HeaderText="No." MappingName="IslandRemaining" Width="40"
-                                               AllowResizing="True" AllowEditing="False"
-                                               ColumnSizer="AutoWithLastColumnFill" />
+                                               AllowResizing="True" AllowEditing="True"/>
+                    <syncfusion:GridTextColumn HeaderText="N
+                                               o." MappingName="IslandRemaining" Width="40"
+                                               AllowResizing="True" AllowEditing="False"/>
                     <syncfusion:GridTextColumn HeaderText="Location" MappingName="IsLandName" Width="100"
-                                               AllowResizing="True" AllowEditing="False"
-                                               ColumnSizer="AutoWithLastColumnFill" />
+                                               AllowResizing="True" AllowEditing="False"/>
                     <!-- <syncfusion:GridTextColumn HeaderText="Parley" MappingName="Parley" AllowResizing="True" AllowEditing="True"/> -->
                     <syncfusion:GridTextColumn HeaderText="I1 No." MappingName="Item1Number" Width="40"
-                                               AllowEditing="False" AllowResizing="True"
-                                               ColumnSizer="AutoWithLastColumnFill" />
+                                               AllowEditing="False" AllowResizing="True"/>
                     <syncfusion:GridImageColumn HeaderText="I1" MappingName="Item1Icon" Width="40" TextAlignment="Center"
                                                 AllowEditing="False" AllowResizing="True">
                         </syncfusion:GridImageColumn>
                     <syncfusion:GridTextColumn HeaderText="Item" MappingName="Item1Name" Width="150"
-                                               TextAlignment="Center" AllowEditing="False" AllowResizing="True"
-                                               ColumnSizer="AutoWithLastColumnFill" />
+                                               TextAlignment="Center" AllowEditing="False" AllowResizing="True"/>
                     <syncfusion:GridImageColumn HeaderText="I2" MappingName="Item2Icon" Width="40" TextAlignment="Center"
                                                 AllowEditing="False" AllowResizing="True" />
                     <syncfusion:GridTextColumn HeaderText="Exchange" MappingName="Item2Name" Width="150"
-                                               TextAlignment="Center" AllowEditing="False" AllowResizing="True"
-                                               ColumnSizer="AutoWithLastColumnFill">
-                        </syncfusion:GridTextColumn>
+                                               TextAlignment="Center" AllowEditing="False" AllowResizing="True"/>
+                    <syncfusion:GridTextColumn HeaderText="I2 No." MappingName="Item2Number"
+                                               AllowEditing="False" AllowResizing="True"/>
+                    <syncfusion:GridTextColumn HeaderText="Inv" MappingName="InvQuantity"
+                                               AllowEditing="False" AllowResizing="True"/>
+                    <syncfusion:GridTextColumn HeaderText="InvChange" MappingName="InvQuantityChange"
+                                               AllowEditing="False" AllowResizing="True"/>
 
-                    <syncfusion:GridTextColumn HeaderText="I2 No." Width="60" MappingName="Item2Number"
-                                               AllowEditing="False" AllowResizing="True"
-                                               ColumnSizer="AutoWithLastColumnFill" />
                 </syncfusion:SfDataGrid.Columns>
 
             </syncfusion:SfDataGrid>

@@ -11,6 +11,7 @@ using System.Windows.Threading;
 using Emgu.CV.Ocl;
 using Esri.ArcGISRuntime.Geometry;
 using Esri.ArcGISRuntime.Mapping;
+using iBarter.View;
 using Newtonsoft.Json;
 using PureDM.Configs;
 using PureDM.DmSoft;
@@ -154,6 +155,14 @@ namespace iBarter {
         internal struct Win32Point {
             public int X;
             public int Y;
+        }
+
+        private void MenuItem_StorageManagement_Click(object sender, RoutedEventArgs e) {
+            if (App.myStorageVM != null) {
+                App.myStorageVM.StorageCollection.Clear();
+            }
+            App.myStorageManagement = new StorageManagement();
+            App.myStorageManagement.Show();
         }
     }
 }

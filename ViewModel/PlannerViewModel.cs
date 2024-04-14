@@ -22,6 +22,19 @@ namespace iBarter.ViewModel {
         /// </summary>
         public PlannerViewModel() {
             BarterDetails = new ObservableCollection<Barter>();
+            BarterDetails.CollectionChanged += BarterDetails_CollectionChanged;
+        }
+
+        private void BarterDetails_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) {
+            try {
+                if (App.myPVM.BarterDetails.Count > 0) {
+                    App.myfmMain.myPlannerControl.RefreshDataGrid();
+                    //App.myCFun.Log("Saved data.", Brushes.DarkOliveGreen);
+                }
+            }
+            catch (Exception exception) {
+                App.myCFun.Log(exception.Message, Brushes.Red);
+            }
         }
 
         #endregion
@@ -53,7 +66,7 @@ namespace iBarter.ViewModel {
         #endregion
 
         #region Method
-        
+
         #endregion
     }
 }

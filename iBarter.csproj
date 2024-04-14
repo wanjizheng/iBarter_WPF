@@ -13,11 +13,14 @@
   <ItemGroup>
     <None Remove="Images\add.png" />
     <None Remove="Images\barter.png" />
+    <None Remove="Images\done.png" />
     <None Remove="Images\iBarterMap.png" />
     <None Remove="Images\load.png" />
+    <None Remove="Images\new-document.png" />
     <None Remove="Images\refresh.png" />
     <None Remove="Images\save.png" />
     <None Remove="Images\scan.png" />
+    <None Remove="Images\storage.png" />
     <None Remove="Resources\Images\anchor.bmp" />
     <None Remove="Resources\Images\edge.bmp" />
     <None Remove="Resources\Images\Items\10.bmp" />
@@ -197,6 +200,7 @@
     <None Remove="Resources\Images\Required.bmp" />
     <None Remove="Resources\Islands.csv" />
     <None Remove="Resources\Items.csv" />
+    <None Remove="Resources\Storage.csv" />
     <None Remove="tessdata\eng_best.traineddata" />
   </ItemGroup>
 
@@ -738,6 +742,9 @@
     <Content Include="Resources\Items.csv">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Storage.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="tessdata\eng_best.traineddata">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
@@ -769,11 +776,14 @@
   <ItemGroup>
     <Resource Include="Images\add.png" />
     <Resource Include="Images\barter.png" />
+    <Resource Include="Images\done.png" />
     <Resource Include="Images\iBarterMap.png" />
     <Resource Include="Images\load.png" />
+    <Resource Include="Images\new-document.png" />
     <Resource Include="Images\refresh.png" />
     <Resource Include="Images\save.png" />
     <Resource Include="Images\scan.png" />
+    <Resource Include="Images\storage.png" />
   </ItemGroup>
 
 </Project>

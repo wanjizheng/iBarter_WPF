@@ -1,0 +1,70 @@
+﻿<Window x:Class="iBarter.View.StorageManagement"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:iBarter.View"
+        xmlns:Syncfusion="http://schemas.syncfusion.com/wpf"
+        xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
+        mc:Ignorable="d"
+        Title="StorageManagement" Height="450" Width="800">
+    <Grid>
+        <Grid.Resources>
+            <ResourceDictionary>
+                <Style
+                    x:Key="alternatingRowStyle"
+                    
+                    TargetType="Syncfusion1:VirtualizingCellsControl">
+                    <Setter Property="Background" Value="LightGray" />
+                </Style>
+                <Style
+                    x:Key="rowStyle"
+                    
+                    TargetType="Syncfusion1:VirtualizingCellsControl">
+                    <Setter Property="Background" Value="White" />
+                </Style>
+            </ResourceDictionary>
+        </Grid.Resources>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0"><Label Content="Default Storage:" />
+            <Syncfusion:ComboBoxAdv x:Name="ComboBoxAdv_DefaultStorage" SelectedIndex="1" >
+                <Syncfusion:ComboBoxItemAdv Content="Velia" />
+                <Syncfusion:ComboBoxItemAdv Content="Illiya" />
+                <Syncfusion:ComboBoxItemAdv Content="Epheria" />
+                <Syncfusion:ComboBoxItemAdv Content="Ancado" />
+            </Syncfusion:ComboBoxAdv>
+        </Syncfusion:ToolBarAdv>
+        <Syncfusion:SfDataGrid x:Name="DataGrid_Storage" Height="NaN" Width="NaN" AutoGenerateColumns="False"
+                               AllowEditing="True"
+                               ColumnSizer="AutoWithLastColumnFill"
+                               RowSelectionBrush="DarkBlue"
+                               SelectionForegroundBrush="Bisque"
+                               AllowDraggingRows="True"
+                               ShowRowHeader="True"
+                               AlternatingRowStyle="{StaticResource alternatingRowStyle}"
+                               RowStyle="{StaticResource rowStyle}"
+                               AllowDrop="False" LiveDataUpdateMode="AllowChildViewUpdate" AllowSorting="False" CurrentCellEndEdit="DataGrid_Storage_CurrentCellEndEdit" Grid.Row="1">
+            <Syncfusion:SfDataGrid.Columns>
+                <Syncfusion:GridTextColumn HeaderText="Inventory" MappingName="ItemName" AllowResizing="True"
+                                   AllowEditing="False" ColumnSizer="Auto"/>
+                <Syncfusion:GridImageColumn HeaderText="Icon" MappingName="ItemIcon" Width="40"
+                                    TextAlignment="Center" AllowEditing="False" />
+                <Syncfusion:GridTextColumn HeaderText="Tier" Width="70" MappingName="ItemTier"
+                                   AllowEditing="False" AllowResizing="True"/>
+                <Syncfusion:GridTextColumn HeaderText="Velia" MappingName="StorageVeliaQuantity_Velia"
+                                           AllowEditing="True" AllowResizing="True"/>
+                <Syncfusion:GridTextColumn HeaderText="Iliya" MappingName="StorageVeliaQuantity_Iliya"
+                                           AllowEditing="True" AllowResizing="True"/>
+                <Syncfusion:GridTextColumn HeaderText="Epheria" MappingName="StorageVeliaQuantity_Epheria"
+                                           AllowEditing="True" AllowResizing="True"/>
+                <Syncfusion:GridTextColumn HeaderText="Ancado" MappingName="StorageVeliaQuantity_Ancado"
+                                           AllowEditing="True" AllowResizing="True"/>
+            </Syncfusion:SfDataGrid.Columns>
+
+        </Syncfusion:SfDataGrid>
+    </Grid>
+</Window>

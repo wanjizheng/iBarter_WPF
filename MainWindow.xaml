@@ -31,10 +31,16 @@
 
                 <!--Windows Menu-->
                 <MenuItem Header="Windows">
-                    <MenuItem Header="Barter Scanner"
+                    <MenuItem x:Name="MenuItem_BarterScanner" Header="Barter Scanner"
                               Tag="BarterScanner" Click="OnActivateWindow">
                         <MenuItem.Icon>
                             <Image Source="Images\barter.png" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem x:Name="MenuItem_StorageManagement" Header="Storage Manager"
+                              Tag="StorageManagement" Click="MenuItem_StorageManagement_Click" >
+                        <MenuItem.Icon>
+                            <Image Source="Images\storage.png" />
                         </MenuItem.Icon>
                     </MenuItem>
                     <!-- <MenuItem Header="Properties Window" -->

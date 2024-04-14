@@ -130,7 +130,7 @@ namespace iBarter {
             foreach (var item in listItems) {
                 var strURL = "";
                 using (var httpClient = new HttpClient()) {
-                    using (var response = httpClient.GetAsync("https://bdocodex.com/us/item/" + item.getID()).Result) {
+                    using (var response = httpClient.GetAsync("https://bdocodex.com/us/item/" + item.ItemID).Result) {
                         using (var content = response.Content) {
                             var result = content.ReadAsStringAsync().Result;
                             strURL = getBetween(result, "<meta property=\"og:image\" content=\"", "\">");
@@ -138,7 +138,7 @@ namespace iBarter {
                     }
                 }
 
-                UpdateItemImagesAsync(item.getID(), strURL);
+                UpdateItemImagesAsync(item.ItemID, strURL);
                 Log(i + "/" + listItems.Count, Brushes.Blue);
                 i++;
                 //Thread.Sleep(500);
@@ -386,7 +386,7 @@ namespace iBarter {
             //////////////////////////////////////////////
 
             ParallelLoopResult result = Parallel.ForEach(App.listItems, item => {
-                PointPlus myPP = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + item.getID() + ".bmp", 0.4, 0.8, 1, CV.Mode.OpenCV, false);
+                PointPlus myPP = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + item.ItemID + ".bmp", 0.4, 0.8, 1, CV.Mode.OpenCV, false);
                 if (myPP.X != -1 && myPP.Y != -1) {
                     listPointPlus.Add(myPP);
                 }
@@ -395,7 +395,7 @@ namespace iBarter {
 
             //////////////////////////////////////////////
             // foreach (Items item in App.listItems) {
-            //     PointPlus myPP = FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + item.getID() + ".bmp", 0.4, 0.8, 1, Mode.OpenCV);
+            //     PointPlus myPP = FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + item.ItemID + ".bmp", 0.4, 0.8, 1, Mode.OpenCV);
             //     if (myPP.X != -1 && myPP.Y != -1)
             //     {
             //         listPointPlus.Add(myPP);
@@ -443,7 +443,7 @@ namespace iBarter {
             string strID1 = listPointPlus[0].ImageID.Substring(14, listPointPlus[0].ImageID.Length - 18);
             string strNumber1 = PureDM.PureDM.myCV.OCRString(listPointPlus[0].X, (int)(listPointPlus[0].Y + (listPointPlus[0].Size.Height * 0.6)), listPointPlus[0].X + listPointPlus[0].Size.Width, listPointPlus[0].Y + listPointPlus[0].Size.Height, CV.OCRType.Number, CV.OCRMode.Diff, false, strID1);
 
-            int intNumber1 = App.listItems.Where(i => i.getID() == strID1).Select(i => i.getNumber()).FirstOrDefault();
+            int intNumber1 = App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemNumber).FirstOrDefault();
             try {
                 intNumber1 = int.Parse(strNumber1);
             }
@@ -453,17 +453,17 @@ namespace iBarter {
             string strID2 = listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18);
             string strNumber2 = PureDM.PureDM.myCV.OCRString(listPointPlus[1].X, (int)(listPointPlus[1].Y + (listPointPlus[1].Size.Height * 0.6)), listPointPlus[1].X + listPointPlus[1].Size.Width, listPointPlus[1].Y + listPointPlus[1].Size.Height, CV.OCRType.Number, CV.OCRMode.Diff, false, strID2);
 
-            int intNumber2 = App.listItems.Where(i => i.getID() == strID2).Select(i => i.getNumber()).FirstOrDefault();
+            int intNumber2 = App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemNumber).FirstOrDefault();
             try {
                 intNumber2 = int.Parse(strNumber2);
             }
             catch (Exception e) {
             }
 
-            Items item1 = new Items(App.listItems.Where(i => i.getID() == strID1).Select(i => i.getName()).FirstOrDefault(), strID1, App.listItems.Where(i => i.getID() == strID1).Select(i => i.getLV()).FirstOrDefault(), intNumber1);
-            Items item2 = new Items(App.listItems.Where(i => i.getID() == strID2).Select(i => i.getName()).FirstOrDefault(), strID2, App.listItems.Where(i => i.getID() == strID2).Select(i => i.getLV()).FirstOrDefault(), intNumber2);
+            Items item1 = new Items(App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemName).FirstOrDefault(), strID1, App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemLV).FirstOrDefault(), intNumber1);
+            Items item2 = new Items(App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemName).FirstOrDefault(), strID2, App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemLV).FirstOrDefault(), intNumber2);
 
-            Log("<" + myIslands.Island + "-" + myIslands.Remaining + "~" + myIslands.Parley + "> Item1: " + item1.getName() + "=>" + intNumber1 + " | Item2: " + item2.getName() + "=>" + intNumber2, Brushes.Blue);
+            Log("<" + myIslands.Island + "-" + myIslands.Remaining + "~" + myIslands.Parley + "> Item1: " + item1.ItemName + "=>" + intNumber1 + " | Item2: " + item2.ItemName + "=>" + intNumber2, Brushes.Blue);
             myBarter.Item1 = item1;
             myBarter.Item2 = item2;
 

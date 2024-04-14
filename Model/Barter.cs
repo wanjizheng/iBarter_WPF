@@ -5,6 +5,7 @@ using System.Windows.Media.Imaging;
 using System.Reflection;
 using System.Linq;
 using System.Windows.Media;
+using iBarter.View;
 
 namespace iBarter {
     public class Barter : NotificationObject {
@@ -15,20 +16,27 @@ namespace iBarter {
         private int exchangeQuantity = 0;
         private bool exchangeDone = false;
         private int barterGroup = -1;
+        int intChange = 0, intInv = 0;
 
         public Barter() {
         }
 
-        public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = -1) {
+        public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = -1, int _intInv = 0, int _intChange = 0) {
             this._isLand = _isLand;
             item1 = _item1;
             item2 = _item2;
-            item1Name = item1.getName();
-            item2Name = item2.getName();
-            icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.getID() + ".bmp";
-            icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.getID() + ".bmp";
+            item1Name = item1.ItemName;
+            item2Name = item2.ItemName;
+            icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+            icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
             this.exchangeQuantity = _exchangeQuantity;
             this.barterGroup = _barterGroup;
+            exchangeDone = _exchangeDone;
+            intInv = _intInv;
+            intChange = _intChange;
+            if (InvQuantityChange == 0) {
+                InvQuantityChange = InvQuantity;
+            }
         }
 
         public Islands IsLand {
@@ -51,7 +59,20 @@ namespace iBarter {
 
         public int ExchangeQuantity {
             get { return exchangeQuantity; }
-            set { exchangeQuantity = value; }
+            set {
+                exchangeQuantity = value;
+                if (Item1 != null && Item2 != null) {
+                    Barter myBarter = App.myPVM.BarterDetails.FirstOrDefault(b => b.BarterGroup == this.BarterGroup && b.Item2Name.Equals(Item1Name));
+                    if (myBarter != null) {
+                        myBarter.InvQuantityChange = myBarter.InvQuantity - ExchangeQuantity * Item1Number;
+                    }
+                    //
+                    // intChange = 0;
+                    // intChange += (InvQuantity + ExchangeQuantity * Item2Number);
+
+                    InvQuantityChange = InvQuantity + ExchangeQuantity * Item2Number;
+                }
+            }
         }
 
         public int Parley {
@@ -95,17 +116,17 @@ namespace iBarter {
         }
 
         public int Item1Number {
-            get { return Item1.getNumber(); }
+            get { return Item1.ItemNumber; }
             set {
-                Item1.setNumber(value);
+                Item1.ItemNumber = value;
                 RaisePropertyChanged("ItemChange");
             }
         }
 
         public string Item1Name {
             get {
-                if (item1Name.Equals(""))
-                    item1Name = Item1.getName();
+                if (item1Name.Equals("") && Item1 != null)
+                    item1Name = Item1.ItemName;
                 return item1Name;
             }
             set {
@@ -148,8 +169,8 @@ namespace iBarter {
 
         public string Item1Icon {
             get {
-                if (icon1 == null || !icon1.Contains(Item1.getID())) {
-                    icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.getID() + ".bmp";
+                if (icon1 == null || !icon1.Contains(Item1.ItemID)) {
+                    icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
                 }
 
                 return icon1;
@@ -161,17 +182,17 @@ namespace iBarter {
         }
 
         public int Item2Number {
-            get { return Item2.getNumber(); }
+            get { return Item2.ItemNumber; }
             set {
-                Item2.setNumber(value);
+                Item2.ItemNumber = value;
                 RaisePropertyChanged("ItemChange");
             }
         }
 
         public string Item2Name {
             get {
-                if (item2Name.Equals(""))
-                    item2Name = Item2.getName();
+                if (item2Name.Equals("") && Item2!=null)
+                    item2Name = Item2.ItemName;
                 return item2Name;
             }
             set {
@@ -183,8 +204,8 @@ namespace iBarter {
 
         public string Item2Icon {
             get {
-                if (icon2 == null || !icon2.Contains(Item2.getID())) {
-                    icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.getID() + ".bmp";
+                if (icon2 == null || !icon2.Contains(Item2.ItemID)) {
+                    icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
                 }
 
                 return icon2;
@@ -195,17 +216,38 @@ namespace iBarter {
             }
         }
 
+        public int InvQuantity {
+            get {
+                if (App.myStorageManagement == null) {
+                    App.myStorageManagement = new StorageManagement();
+                }
+
+                Items myItem = App.myStorageVM.StorageCollection.FirstOrDefault(i => i.ItemName.Equals(Item2Name));
+                if (myItem != null) {
+                    intInv = (myItem.StorageVeliaQuantity_Iliya + myItem.StorageVeliaQuantity_Velia + myItem.StorageVeliaQuantity_Epheria + myItem.StorageVeliaQuantity_Ancado);
+                }
+
+                return intInv;
+            }
+            set { intInv = value; }
+        }
+
+        public int InvQuantityChange {
+            get { return intChange; }
+            set { intChange = value; }
+        }
+
         private void UpdateItem() {
-            if (item1Name!="" && !item1Name.Equals(Item1.getName())) {
-                Items item1 = new Items(App.listItems.FirstOrDefault(i => i.getName().Equals(item1Name)).getName(), App.listItems.FirstOrDefault(i => i.getName().Equals(item1Name)).getID(), App.listItems.FirstOrDefault(i => i.getName().Equals(item1Name)).getLV());
+            if (item1Name != "" && !item1Name.Equals(Item1.ItemName)) {
+                Items item1 = new Items(App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemName, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemID, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemLV);
                 Item1 = item1;
-                //icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.getID() + ".bmp";
+                //icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
             }
 
-            if (item2Name != "" && !item2Name.Equals(Item2.getName())) {
-                Items item2 = new Items(App.listItems.FirstOrDefault(i => i.getName().Equals(item2Name)).getName(), App.listItems.FirstOrDefault(i => i.getName().Equals(item2Name)).getID(), App.listItems.FirstOrDefault(i => i.getName().Equals(item2Name)).getLV());
+            if (item2Name != "" && !item2Name.Equals(Item2.ItemName)) {
+                Items item2 = new Items(App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemName, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemID, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemLV);
                 Item2 = item2;
-                //icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.getID() + ".bmp";
+                //icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
             }
 
             RaisePropertyChanged("ItemChange");
