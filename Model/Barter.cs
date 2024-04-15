@@ -169,9 +169,9 @@ namespace iBarter {
 
         public string Item1Icon {
             get {
-                if (icon1 == null || !icon1.Contains(Item1.ItemID)) {
-                    icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
-                }
+                // if (icon1 == null || !icon1.Contains(Item1.ItemID)) {
+                //     icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+                // }
 
                 return icon1;
             }
@@ -204,9 +204,9 @@ namespace iBarter {
 
         public string Item2Icon {
             get {
-                if (icon2 == null || !icon2.Contains(Item2.ItemID)) {
-                    icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
-                }
+                // if (icon2 == null || !icon2.Contains(Item2.ItemID)) {
+                //     icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+                // }
 
                 return icon2;
             }
@@ -241,13 +241,13 @@ namespace iBarter {
             if (item1Name != "" && !item1Name.Equals(Item1.ItemName)) {
                 Items item1 = new Items(App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemName, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemID, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemLV);
                 Item1 = item1;
-                //icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+                icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
             }
 
             if (item2Name != "" && !item2Name.Equals(Item2.ItemName)) {
                 Items item2 = new Items(App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemName, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemID, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemLV);
                 Item2 = item2;
-                //icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+                icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
             }
 
             RaisePropertyChanged("ItemChange");

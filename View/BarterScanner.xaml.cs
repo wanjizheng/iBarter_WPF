@@ -20,12 +20,15 @@ using System.Windows.Shapes;
 using iBarter.ViewModel;
 using Syncfusion.Data;
 
-namespace iBarter {
+namespace iBarter
+{
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class BarterScanner : ChromelessWindow {
-        public BarterScanner() {
+    public partial class BarterScanner : ChromelessWindow
+    {
+        public BarterScanner()
+        {
             InitializeComponent();
             BarterScanResults.QueryRowHeight += dataGrid_QueryRowHeight;
             BarterScanResults.RowDragDropController.Dropped += RowDragDropController_Dropped;
@@ -35,6 +38,9 @@ namespace iBarter {
             GridMultiColumnDropDownList_Item1.ItemsSource = App.mySVM.ItemsCollection;
             GridMultiColumnDropDownList_Item2.ItemsSource = App.mySVM.ItemsCollection;
             GridMultiColumnDropDownList_Islands.ItemsSource = App.mySVM.IslandsCollection;
+
+            GridMultiColumnDropDownList_Item1.ItemsSource = App.mySVM.ItemsCollection;
+            GridMultiColumnDropDownList_Item2.ItemsSource = App.mySVM.ItemsCollection;
         }
 
         GridRowSizingOptions gridRowResizingOptions = new GridRowSizingOptions();
@@ -42,10 +48,13 @@ namespace iBarter {
         //To get the calculated height from GetAutoRowHeight method.    
         double autoHeight = double.NaN;
 
-        private void RowDragDropController_Dropped(object sender, GridRowDroppedEventArgs e) {
-            if (e.DropPosition != DropPosition.None) {
+        private void RowDragDropController_Dropped(object sender, GridRowDroppedEventArgs e)
+        {
+            if (e.DropPosition != DropPosition.None)
+            {
                 // Get Dragging records
-                ObservableCollection<object> draggingRecords = e.Data.GetData("Records") as ObservableCollection<object>;
+                ObservableCollection<object>
+                    draggingRecords = e.Data.GetData("Records") as ObservableCollection<object>;
 
                 // Gets the TargetRecord from the underlying collection using record index of the TargetRecord (e.TargetRecord)
                 ScannerViewModel model = BarterScanResults.DataContext as ScannerViewModel;
@@ -56,7 +65,8 @@ namespace iBarter {
                 BarterScanResults.BeginInit();
 
                 // Removes the dragging records from the underlying collection
-                foreach (Barter item in draggingRecords) {
+                foreach (Barter item in draggingRecords)
+                {
                     model.BarterDetails.Remove(item);
                 }
 
@@ -66,13 +76,15 @@ namespace iBarter {
                 insertionIndex = insertionIndex < 0 ? 0 : insertionIndex;
 
                 // Insert dragging records to the target position
-                for (int i = draggingRecords.Count - 1; i >= 0; i--) {
+                for (int i = draggingRecords.Count - 1; i >= 0; i--)
+                {
                     Barter myNewScript = draggingRecords[i] as Barter;
                     //myNewScript.ID = insertionIndex + 1;
                     model.BarterDetails.Insert(insertionIndex, myNewScript);
                 }
 
-                for (int i = 0; i < model.BarterDetails.Count; i++) {
+                for (int i = 0; i < model.BarterDetails.Count; i++)
+                {
                     Barter myScript = model.BarterDetails[i] as Barter;
                     //myScript = i + 1;
                 }
@@ -81,67 +93,89 @@ namespace iBarter {
             }
         }
 
-        private void dataGrid_QueryRowHeight(object sender, QueryRowHeightEventArgs e) {
-            if (BarterScanResults.GridColumnSizer.GetAutoRowHeight(e.RowIndex, gridRowResizingOptions, out autoHeight)) {
-                if (autoHeight > 24) {
+        private void dataGrid_QueryRowHeight(object sender, QueryRowHeightEventArgs e)
+        {
+            if (BarterScanResults.GridColumnSizer.GetAutoRowHeight(e.RowIndex, gridRowResizingOptions, out autoHeight))
+            {
+                if (autoHeight > 24)
+                {
                     e.Height = autoHeight;
                     e.Handled = true;
                 }
             }
         }
 
-        private async void ButtonAdv_Scan_ClickAsync(object sender, RoutedEventArgs e) {
+        private async void ButtonAdv_Scan_ClickAsync(object sender, RoutedEventArgs e)
+        {
             // Thread myThread_SearchBarter = new Thread(App.myCFun.SearchBarter);
             // myThread_SearchBarter.IsBackground = true;
             // myThread_SearchBarter.Start();
 
             ButtonAdv_Scan.IsEnabled = false;
- 
-            try {
+
+            try
+            {
                 App.myCFun.Log("Start scanning...", Brushes.Blue);
                 await Task.Run(() => { App.myCFun.SearchBarter(); });
             }
-            catch (Exception ex) {
+            catch (Exception ex)
+            {
                 App.myCFun.Log(ex.Message, Brushes.Red);
             }
-            finally {
+            finally
+            {
                 App.myCFun.Log("Done!", Brushes.DarkGreen);
                 ButtonAdv_Scan.IsEnabled = true;
             }
         }
 
-        public void RefreshDataGrid() {
-            if (!Application.Current.Dispatcher.CheckAccess()) {
+        public void RefreshDataGrid()
+        {
+            if (!Application.Current.Dispatcher.CheckAccess())
+            {
                 Application.Current.Dispatcher.Invoke(new Action(() => RefreshDataGrid()));
             }
-            else {
-                try {
+            else
+            {
+                try
+                {
                     BarterScanResults.BeginInit();
 
-                    if (App.mySVM.BarterDetails != null) {
+                    if (App.mySVM.BarterDetails != null)
+                    {
                         App.mySVM.BarterDetails.Clear();
                     }
 
-                    foreach (Barter barter in App.listBarterScanner) {
+                    foreach (Barter barter in App.listBarterScanner)
+                    {
                         App.mySVM.BarterDetails.Add(barter);
                     }
 
                     BarterScanResults.EndInit();
                 }
-                catch (Exception e) {
+                catch (Exception e)
+                {
                 }
             }
         }
 
-        private void ButtonAdv_Add_Click(object sender, RoutedEventArgs e) {
-            for (int i = 0; i < App.mySVM.BarterDetails.Count; i++) {
+        private void ButtonAdv_Add_Click(object sender, RoutedEventArgs e)
+        {
+            for (int i = 0; i < App.mySVM.BarterDetails.Count; i++)
+            {
                 Barter barter = App.mySVM.BarterDetails[i];
-                if (App.myPVM.BarterDetails.FirstOrDefault(b => b.IsLandName.Equals(barter.IsLandName)) == null) {
+                if (App.myPVM.BarterDetails.FirstOrDefault(b => b.IsLandName.Equals(barter.IsLandName)) == null)
+                {
                     App.myPVM.BarterDetails.Add(barter);
                 }
             }
 
             App.listBarterScanner.Clear();
+            RefreshDataGrid();
+        }
+
+        private void BarterScanResults_CurrentCellEndEdit(object sender, CurrentCellEndEditEventArgs e)
+        {
             RefreshDataGrid();
         }
     }

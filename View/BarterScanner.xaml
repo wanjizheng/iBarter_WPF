@@ -42,7 +42,7 @@
                                    SelectionForegroundBrush="Bisque"
                                    AllowDraggingRows="True"
                                    ShowRowHeader="True"
-                                   AllowDrop="True" LiveDataUpdateMode="AllowChildViewUpdate">
+                                   AllowDrop="True" LiveDataUpdateMode="AllowChildViewUpdate" CurrentCellEndEdit="BarterScanResults_CurrentCellEndEdit">
                 <syncfusion:SfDataGrid.Columns>
                     <!-- <syncfusion:GridTextColumn HeaderText="Island1" MappingName="IsLandName" UseBindingValue="True" -->
                     <!--                            AllowResizing="True" AllowEditing="True"> -->
@@ -80,14 +80,14 @@
                     <syncfusion:GridImageColumn HeaderText="Icon" MappingName="Item1Icon" Width="40"
                                                 TextAlignment="Center" AllowEditing="True" />
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Item1"
-                                                            AllowAutoComplete="True"
+                                                            AllowAutoComplete="False"
                                                             AutoGenerateColumns="False"
                                                             DisplayMember="ItemName"
                                                             HeaderText="Item1 Name"
                                                             MappingName="Item1Name"
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
-                                                            AllowIncrementalFiltering="True" AllowEditing="True">
+                                                            AllowIncrementalFiltering="True" AllowEditing="True" AllowFiltering="True">
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
                                 <syncfusion:GridTextColumn
@@ -109,22 +109,22 @@
                                                 Width="42">
                     </syncfusion:GridImageColumn>
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Item2"
-                                                            AllowAutoComplete="True"
+                                                            AllowAutoComplete="False"
                                                             AutoGenerateColumns="False"
                                                             DisplayMember="ItemName"
                                                             HeaderText="Item2 Name"
                                                             MappingName="Item2Name"
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
-                                                            AllowIncrementalFiltering="True" AllowEditing="True">
+                                                            AllowIncrementalFiltering="True" AllowEditing="True" AllowFiltering="True">
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
                                 <syncfusion:GridTextColumn
                                     HeaderText="ItemID"
-                                    MappingName="ItemID" />
-                                <syncfusion:GridTextColumn HeaderText="Item Name" MappingName="ItemName" />
-                                <syncfusion:GridTextColumn HeaderText="Item LV" MappingName="ItemLV" />
-                                <syncfusion:GridTextColumn HeaderText="Item Number" MappingName="ItemNumber" />
+                                    MappingName="ItemID" AllowSorting="True" />
+                                <syncfusion:GridTextColumn HeaderText="Item Name" MappingName="ItemName" AllowSorting="True" />
+                                <syncfusion:GridTextColumn HeaderText="Item LV" MappingName="ItemLV" AllowSorting="True" />
+                                <syncfusion:GridTextColumn HeaderText="Item Number" MappingName="ItemNumber" AllowSorting="True" />
                             </syncfusion:Columns>
                         </syncfusion:GridMultiColumnDropDownList.Columns>
                     </syncfusion:GridMultiColumnDropDownList>
