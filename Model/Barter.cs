@@ -119,7 +119,7 @@ namespace iBarter {
             get { return Item1.ItemNumber; }
             set {
                 Item1.ItemNumber = value;
-                RaisePropertyChanged("ItemChange");
+                RaisePropertyChanged("Item1NumberChange");
             }
         }
 
@@ -132,7 +132,7 @@ namespace iBarter {
             set {
                 item1Name = value;
                 UpdateItem();
-                RaisePropertyChanged("ItemChange");
+                RaisePropertyChanged("Item1NameChange");
             }
         }
 
@@ -169,15 +169,15 @@ namespace iBarter {
 
         public string Item1Icon {
             get {
-                // if (icon1 == null || !icon1.Contains(Item1.ItemID)) {
-                //     icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
-                // }
+                if (icon1 == null || !icon1.Contains(Item1.ItemID)) {
+                    icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+                }
 
                 return icon1;
             }
             set {
                 icon1 = value;
-                RaisePropertyChanged("IconChange");
+                RaisePropertyChanged("Icon1Change");
             }
         }
 
@@ -185,7 +185,7 @@ namespace iBarter {
             get { return Item2.ItemNumber; }
             set {
                 Item2.ItemNumber = value;
-                RaisePropertyChanged("ItemChange");
+                RaisePropertyChanged("Item2NumberChange");
             }
         }
 
@@ -198,21 +198,21 @@ namespace iBarter {
             set {
                 item2Name = value;
                 UpdateItem();
-                RaisePropertyChanged("ItemChange");
+                RaisePropertyChanged("Item2NameChange");
             }
         }
 
         public string Item2Icon {
             get {
-                // if (icon2 == null || !icon2.Contains(Item2.ItemID)) {
-                //     icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
-                // }
+                if (icon2 == null || !icon2.Contains(Item2.ItemID)) {
+                    icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+                }
 
                 return icon2;
             }
             set {
                 icon2 = value;
-                RaisePropertyChanged("ItemChange");
+                RaisePropertyChanged("Icon2Change");
             }
         }
 
@@ -243,17 +243,17 @@ namespace iBarter {
                 Item1 = item1;
                 icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
             }
-
+            
             if (item2Name != "" && !item2Name.Equals(Item2.ItemName)) {
                 Items item2 = new Items(App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemName, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemID, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemLV);
                 Item2 = item2;
                 icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
             }
-
-            RaisePropertyChanged("ItemChange");
-            if (App.myBarterScanner != null) {
-                App.myBarterScanner.RefreshDataGrid();
-            }
+            
+            //RaisePropertyChanged("ItemChange");
+            // if (App.myBarterScanner != null) {
+            //     App.myBarterScanner.RefreshDataGrid();
+            // }
         }
 
 

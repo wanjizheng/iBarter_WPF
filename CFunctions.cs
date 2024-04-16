@@ -46,7 +46,8 @@ namespace iBarter {
 
                 App.myfmMain.richTextBox_Log.Dispatcher.Invoke(new Action(() => {
                     App.myfmMain.richTextBox_Log.AppendText(strTime);
-                    var tr = new TextRange(App.myfmMain.richTextBox_Log.Document.ContentEnd, App.myfmMain.richTextBox_Log.Document.ContentEnd);
+                    var tr = new TextRange(App.myfmMain.richTextBox_Log.Document.ContentEnd,
+                        App.myfmMain.richTextBox_Log.Document.ContentEnd);
                     tr.Text = _message + "\r\n";
                     var bc = new BrushConverter();
                     tr.ApplyPropertyValue(TextElement.ForegroundProperty, _color);
@@ -68,7 +69,8 @@ namespace iBarter {
             try {
                 for (var x = 0; x < 127; x++)
                 for (var y = 0; y < 127; y++)
-                    DownloadMapImage("https://www.somethinglovely.net/bdo/tiles2/15/" + x + "_" + y + ".jpg", "D:\\Downloads\\Maps\\" + x + "_" + y + ".jpg", ImageFormat.Jpeg);
+                    DownloadMapImage("https://www.somethinglovely.net/bdo/tiles2/15/" + x + "_" + y + ".jpg",
+                        "D:\\Downloads\\Maps\\" + x + "_" + y + ".jpg", ImageFormat.Jpeg);
             }
             catch (ExternalException) {
                 // Something is wrong with Format -- Maybe required Format is not 
@@ -163,7 +165,10 @@ namespace iBarter {
             //Uri address = new Uri("https://bdocodex.com/items/new_icon/03_etc/" + strType + _id + ".webp");
 
             using (var stream = client.OpenRead(_url)) {
-                using (var fileStream = new FileStream("E:\\wanjizheng\\Documents\\MyProject\\BDO Data\\Items\\Images\\webp\\" + _id + ".webp", FileMode.Create, FileAccess.Write)) {
+                using (var fileStream =
+                       new FileStream(
+                           "E:\\wanjizheng\\Documents\\MyProject\\BDO Data\\Items\\Images\\webp\\" + _id + ".webp",
+                           FileMode.Create, FileAccess.Write)) {
                     stream.CopyTo(fileStream);
                     stream.Flush();
                     stream.Close();
@@ -172,7 +177,8 @@ namespace iBarter {
 
 
             var webp = new WebP();
-            var bitmap = webp.Load("E:\\wanjizheng\\Documents\\MyProject\\BDO Data\\Items\\Images\\webp\\" + _id + ".webp");
+            var bitmap = webp.Load("E:\\wanjizheng\\Documents\\MyProject\\BDO Data\\Items\\Images\\webp\\" + _id +
+                                   ".webp");
             var bitmapNew = new Bitmap(44, 44, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
 
             using (var gfx = Graphics.FromImage(bitmapNew))
@@ -183,7 +189,8 @@ namespace iBarter {
             var g = Graphics.FromImage(bitmapNew);
             g.DrawImage(bitmap, 0, 0);
 
-            bitmapNew.Save("E:\\wanjizheng\\Documents\\MyProject\\BDO Data\\Items\\Images\\bmp\\" + _id + ".bmp", ImageFormat.Bmp);
+            bitmapNew.Save("E:\\wanjizheng\\Documents\\MyProject\\BDO Data\\Items\\Images\\bmp\\" + _id + ".bmp",
+                ImageFormat.Bmp);
 
             bitmapNew.Dispose();
             g.Dispose();
@@ -191,7 +198,8 @@ namespace iBarter {
 
         public List<Items> LoadItemsCSV() {
             var listItems = new List<Items>();
-            using (var reader = new StreamReader(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Items.csv")) {
+            using (var reader = new StreamReader(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                                                 "\\Resources\\Items.csv")) {
                 while (!reader.EndOfStream) {
                     var line = reader.ReadLine();
                     var results = line.Split(',');
@@ -216,7 +224,8 @@ namespace iBarter {
 
         public List<Islands> LoadIslandsCSV() {
             var listIslands = new List<Islands>();
-            using (var reader = new StreamReader(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Islands.csv")) {
+            using (var reader = new StreamReader(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                                                 "\\Resources\\Islands.csv")) {
                 while (!reader.EndOfStream) {
                     var line = reader.ReadLine();
                     var results = line.Split(',');
@@ -268,7 +277,8 @@ namespace iBarter {
             }
 
 
-            List<PointPlus> listAnchors = App.myPureDM.CV.FindPictures(0, 0, App.myPureDM.WindowWidth, App.myPureDM.WindowHeight, "\\Images\\anchor.bmp", 0.8, false);
+            List<PointPlus> listAnchors = App.myPureDM.CV.FindPictures(0, 0, App.myPureDM.WindowWidth,
+                App.myPureDM.WindowHeight, "\\Images\\anchor.bmp", 0.8, false);
 
             //listAnchors.OrderBy(pp => pp.Y);
 
@@ -289,7 +299,9 @@ namespace iBarter {
                 // listThread.Add(myThread);
 
                 Barter myBarter = IdentifyBarter(listAnchors[i]);
-                if (myBarter.IsLand != null && myBarter.Item1 != null && myBarter.Item2 != null && App.listBarterScanner.FirstOrDefault(b => b.IsLand.Island.ToString().Equals(myBarter.IsLand.Island.ToString())) == null) {
+                if (myBarter.IsLand != null && myBarter.Item1 != null && myBarter.Item2 != null &&
+                    App.listBarterScanner.FirstOrDefault(b =>
+                        b.IsLand.Island.ToString().Equals(myBarter.IsLand.Island.ToString())) == null) {
                     App.listBarterScanner.Add(myBarter);
                 }
             }
@@ -330,7 +342,9 @@ namespace iBarter {
                 return myBarter;
             }
 
-            PointPlus pointPlusEdge = PureDM.PureDM.myCV.FindPicture(Math.Max(0, pointPlusAnchor.X - 300), pointPlusAnchor.Y - 5, pointPlusAnchor.X - 5, pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5, "\\Images\\edge.bmp", 0.8, CV.Mode.OpenCV, false);
+            PointPlus pointPlusEdge = PureDM.PureDM.myCV.FindPicture(Math.Max(0, pointPlusAnchor.X - 300),
+                pointPlusAnchor.Y - 5, pointPlusAnchor.X - 5, pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5,
+                "\\Images\\edge.bmp", 0.8, CV.Mode.OpenCV, false);
 
             if (pointPlusEdge.X == -1 || pointPlusEdge.Y == -1) {
                 return myBarter;
@@ -338,7 +352,8 @@ namespace iBarter {
 
             //App.dmSoft.Capture(pointPlusEdge.X + pointPlusEdge.Size.Width, pointPlusAnchor.Y - 2, pointPlusAnchor.X - 2, pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5, "island.bmp");
             //Thread.Sleep(100);
-            string strIsland = PureDM.PureDM.myCV.OCRString(pointPlusEdge.X + pointPlusEdge.Size.Width, pointPlusAnchor.Y - 2, pointPlusAnchor.X - 2, pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5);
+            string strIsland = PureDM.PureDM.myCV.OCRString(pointPlusEdge.X + pointPlusEdge.Size.Width,
+                pointPlusAnchor.Y - 2, pointPlusAnchor.X - 2, pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5);
             myBarter = new Barter();
 
 
@@ -350,13 +365,18 @@ namespace iBarter {
             int intY2 = pointPlusAnchor.Y + 60;
             PureDM.PureDM.myDM.Capture(intX1, intY1, intX2, intY2, "barterItems.bmp");
 
-            PointPlus pointPlusParley = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Parley.bmp", 0.8, CV.Mode.OpenCV, false);
+            PointPlus pointPlusParley = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
+                "\\Images\\Parley.bmp", 0.8, CV.Mode.OpenCV, false);
 
-            PointPlus pointPlusRequired = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Required.bmp", 0.8, CV.Mode.OpenCV,false);
+            PointPlus pointPlusRequired = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
+                "\\Images\\Required.bmp", 0.8, CV.Mode.OpenCV, false);
 
-            string strParley = PureDM.PureDM.myCV.OCRString(pointPlusParley.X + pointPlusParley.Size.Width, pointPlusParley.Y, pointPlusRequired.X, pointPlusParley.Y + pointPlusParley.Size.Height, CV.OCRType.Number);
+            string strParley = PureDM.PureDM.myCV.OCRString(pointPlusParley.X + pointPlusParley.Size.Width,
+                pointPlusParley.Y, pointPlusRequired.X, pointPlusParley.Y + pointPlusParley.Size.Height,
+                CV.OCRType.Number);
 
-            int intParley = App.listIslands.Where(land => land.Island == IslandEnum(strIsland)).Select(land => land.Parley).FirstOrDefault();
+            int intParley = App.listIslands.Where(land => land.Island == IslandEnum(strIsland))
+                .Select(land => land.Parley).FirstOrDefault();
 
             try {
                 intParley = int.Parse(strParley);
@@ -364,10 +384,14 @@ namespace iBarter {
             catch (Exception e) {
             }
 
-            PointPlus pointPlusRemaining = PureDM.PureDM.myCV.FindPicture(0, pointPlusAnchor.Y + pointPlusAnchor.Size.Height, App.myPureDM.WindowWidth, pointPlusAnchor.Y + 60, "\\Images\\Remaining.bmp", 0.8, CV.Mode.OpenCV, false);
+            PointPlus pointPlusRemaining = PureDM.PureDM.myCV.FindPicture(0,
+                pointPlusAnchor.Y + pointPlusAnchor.Size.Height, App.myPureDM.WindowWidth, pointPlusAnchor.Y + 60,
+                "\\Images\\Remaining.bmp", 0.8, CV.Mode.OpenCV, false);
 
 
-            string strRemaining = PureDM.PureDM.myCV.OCRString(pointPlusRemaining.X + pointPlusRemaining.Size.Width, pointPlusRemaining.Y, pointPlusRemaining.X + pointPlusRemaining.Size.Width + 30, pointPlusRemaining.Y + pointPlusRemaining.Size.Height + 2, CV.OCRType.Number);
+            string strRemaining = PureDM.PureDM.myCV.OCRString(pointPlusRemaining.X + pointPlusRemaining.Size.Width,
+                pointPlusRemaining.Y, pointPlusRemaining.X + pointPlusRemaining.Size.Width + 30,
+                pointPlusRemaining.Y + pointPlusRemaining.Size.Height + 2, CV.OCRType.Number);
 
             int intRemaining = 0;
             try {
@@ -386,7 +410,8 @@ namespace iBarter {
             //////////////////////////////////////////////
 
             ParallelLoopResult result = Parallel.ForEach(App.listItems, item => {
-                PointPlus myPP = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + item.ItemID + ".bmp", 0.4, 0.8, 1, CV.Mode.OpenCV, false);
+                PointPlus myPP = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
+                    "\\Images\\Items\\" + item.ItemID + ".bmp", 0.4, 0.8, 1, CV.Mode.OpenCV, false);
                 if (myPP.X != -1 && myPP.Y != -1) {
                     listPointPlus.Add(myPP);
                 }
@@ -441,7 +466,10 @@ namespace iBarter {
             // \Images\Items\6020.bmp
 
             string strID1 = listPointPlus[0].ImageID.Substring(14, listPointPlus[0].ImageID.Length - 18);
-            string strNumber1 = PureDM.PureDM.myCV.OCRString(listPointPlus[0].X, (int)(listPointPlus[0].Y + (listPointPlus[0].Size.Height * 0.6)), listPointPlus[0].X + listPointPlus[0].Size.Width, listPointPlus[0].Y + listPointPlus[0].Size.Height, CV.OCRType.Number, CV.OCRMode.Diff, false, strID1);
+            string strNumber1 = PureDM.PureDM.myCV.OCRString(listPointPlus[0].X,
+                (int)(listPointPlus[0].Y + (listPointPlus[0].Size.Height * 0.6)),
+                listPointPlus[0].X + listPointPlus[0].Size.Width, listPointPlus[0].Y + listPointPlus[0].Size.Height,
+                CV.OCRType.Number, CV.OCRMode.Diff, false, strID1);
 
             int intNumber1 = App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemNumber).FirstOrDefault();
             try {
@@ -451,7 +479,10 @@ namespace iBarter {
             }
 
             string strID2 = listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18);
-            string strNumber2 = PureDM.PureDM.myCV.OCRString(listPointPlus[1].X, (int)(listPointPlus[1].Y + (listPointPlus[1].Size.Height * 0.6)), listPointPlus[1].X + listPointPlus[1].Size.Width, listPointPlus[1].Y + listPointPlus[1].Size.Height, CV.OCRType.Number, CV.OCRMode.Diff, false, strID2);
+            string strNumber2 = PureDM.PureDM.myCV.OCRString(listPointPlus[1].X,
+                (int)(listPointPlus[1].Y + (listPointPlus[1].Size.Height * 0.6)),
+                listPointPlus[1].X + listPointPlus[1].Size.Width, listPointPlus[1].Y + listPointPlus[1].Size.Height,
+                CV.OCRType.Number, CV.OCRMode.Diff, false, strID2);
 
             int intNumber2 = App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemNumber).FirstOrDefault();
             try {
@@ -460,10 +491,16 @@ namespace iBarter {
             catch (Exception e) {
             }
 
-            Items item1 = new Items(App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemName).FirstOrDefault(), strID1, App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemLV).FirstOrDefault(), intNumber1);
-            Items item2 = new Items(App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemName).FirstOrDefault(), strID2, App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemLV).FirstOrDefault(), intNumber2);
+            Items item1 =
+                new Items(App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemName).FirstOrDefault(), strID1,
+                    App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemLV).FirstOrDefault(), intNumber1);
+            Items item2 =
+                new Items(App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemName).FirstOrDefault(), strID2,
+                    App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemLV).FirstOrDefault(), intNumber2);
 
-            Log("<" + myIslands.Island + "-" + myIslands.Remaining + "~" + myIslands.Parley + "> Item1: " + item1.ItemName + "=>" + intNumber1 + " | Item2: " + item2.ItemName + "=>" + intNumber2, Brushes.Blue);
+            Log(
+                "<" + myIslands.Island + "-" + myIslands.Remaining + "~" + myIslands.Parley + "> Item1: " +
+                item1.ItemName + "=>" + intNumber1 + " | Item2: " + item2.ItemName + "=>" + intNumber2, Brushes.Blue);
             myBarter.Item1 = item1;
             myBarter.Item2 = item2;
 
@@ -514,7 +551,8 @@ namespace iBarter {
             else if (_island.Contains("Boa")) {
                 return EnumLists.Island.Boa;
             }
-            else if (_island.Contains("Cargo") || _island.Contains("ShipwreckedHaran'sCarg") || _island.Contains("Shipwrecked Haran")) {
+            else if (_island.Contains("Cargo") || _island.Contains("ShipwreckedHaran'sCarg") ||
+                     _island.Contains("Shipwrecked Haran")) {
                 return EnumLists.Island.Cargo;
             }
             else if (_island.Contains("Carrack")) {
@@ -568,7 +606,8 @@ namespace iBarter {
             else if (_island.Contains("Iliya") || _island.Contains("liya")) {
                 return EnumLists.Island.Iliya;
             }
-            else if (_island.Contains("Incomplete") || _island.Contains("UnfinishedAdriftVessel") || _island.Contains("Unfinished Adrift")) {
+            else if (_island.Contains("Incomplete") || _island.Contains("UnfinishedAdriftVessel") ||
+                     _island.Contains("Unfinished Adrift")) {
                 return EnumLists.Island.Incomplete;
             }
             else if (_island.Contains("Invernen")) {

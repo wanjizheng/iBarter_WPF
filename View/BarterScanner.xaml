@@ -40,9 +40,9 @@
                                    ColumnSizer="AutoWithLastColumnFill"
                                    RowSelectionBrush="DarkBlue"
                                    SelectionForegroundBrush="Bisque"
-                                   AllowDraggingRows="True"
+                                   AllowDraggingRows="False"
                                    ShowRowHeader="True"
-                                   AllowDrop="True" LiveDataUpdateMode="AllowChildViewUpdate" CurrentCellEndEdit="BarterScanResults_CurrentCellEndEdit">
+                                   AllowDrop="True" LiveDataUpdateMode="AllowDataShaping" CurrentCellEndEdit="BarterScanResults_CurrentCellEndEdit" CurrentCellDropDownSelectionChanged="BarterScanResults_CurrentCellDropDownSelectionChanged">
                 <syncfusion:SfDataGrid.Columns>
                     <!-- <syncfusion:GridTextColumn HeaderText="Island1" MappingName="IsLandName" UseBindingValue="True" -->
                     <!--                            AllowResizing="True" AllowEditing="True"> -->
@@ -87,7 +87,7 @@
                                                             MappingName="Item1Name"
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
-                                                            AllowIncrementalFiltering="True" AllowEditing="True" AllowFiltering="True">
+                                                            AllowIncrementalFiltering="True" AllowEditing="True" AllowFiltering="True" >
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
                                 <syncfusion:GridTextColumn

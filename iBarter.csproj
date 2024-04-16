@@ -755,13 +755,13 @@
     <PackageReference Include="Esri.ArcGISRuntime.Toolkit.WPF" Version="200.4.0" />
     <PackageReference Include="Esri.ArcGISRuntime.WPF" Version="200.4.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="Syncfusion.Licensing" Version="25.1.39" />
-    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="25.1.39" />
-    <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="25.1.39" />
-    <PackageReference Include="Syncfusion.Shared.WPF" Version="25.1.39" />
-    <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="25.1.39" />
-    <PackageReference Include="Syncfusion.Tools.WPF" Version="25.1.39" />
-    <PackageReference Include="syncfusion.ui.wpf.net" Version="25.1.39" />
+    <PackageReference Include="Syncfusion.Licensing" Version="25.1.40" />
+    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="25.1.40" />
+    <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="25.1.40" />
+    <PackageReference Include="Syncfusion.Shared.WPF" Version="25.1.40" />
+    <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="25.1.40" />
+    <PackageReference Include="Syncfusion.Tools.WPF" Version="25.1.40" />
+    <PackageReference Include="syncfusion.ui.wpf.net" Version="25.1.40" />
     <PackageReference Include="System.Drawing.Common" Version="8.0.4" />
   </ItemGroup>
 
