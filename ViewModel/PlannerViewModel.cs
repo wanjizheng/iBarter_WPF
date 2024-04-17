@@ -23,6 +23,8 @@ namespace iBarter.ViewModel {
         public PlannerViewModel() {
             BarterDetails = new ObservableCollection<Barter>();
             BarterDetails.CollectionChanged += BarterDetails_CollectionChanged;
+            itemscollection = PopulateItems();
+            islandscollection = PopulateIslands();
         }
 
         private void BarterDetails_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) {
@@ -63,10 +65,48 @@ namespace iBarter.ViewModel {
             set { _barterCollection = value; }
         }
 
+        private ObservableCollection<Items> itemscollection;
+
+        public ObservableCollection<Items> ItemsCollection {
+            get { return itemscollection; }
+            set {
+                itemscollection = value;
+                RaisePropertyChanged("ItemsCollectionChange");
+            }
+        }
+
+        private ObservableCollection<Islands> islandscollection;
+
+        public ObservableCollection<Islands> IslandsCollection {
+            get { return islandscollection; }
+            set {
+                islandscollection = value;
+                RaisePropertyChanged("IslandsCollectionChange");
+            }
+        }
+
         #endregion
 
         #region Method
+        private ObservableCollection<Items> PopulateItems() {
+            ObservableCollection<Items> itemsList = new ObservableCollection<Items>();
+            List<Items> myList = App.myCFun.LoadItemsCSV();
+            foreach (Items item in myList) {
+                itemsList.Add(item);
+            }
 
+            return itemsList;
+        }
+
+        private ObservableCollection<Islands> PopulateIslands() {
+            ObservableCollection<Islands> islandsList = new ObservableCollection<Islands>();
+            List<Islands> myList = App.myCFun.LoadIslandsCSV();
+            foreach (Islands item in myList) {
+                islandsList.Add(item);
+            }
+
+            return islandsList;
+        }
         #endregion
     }
 }

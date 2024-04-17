@@ -30,12 +30,15 @@ namespace iBarter {
             this.DataContext = App.myPVM;
             DataGrid_Planner.ItemsSource = App.myPVM.BarterDetails;
             DataGrid_Planner.AutoScroller.AutoScrolling = AutoScrollOrientation.Both;
+            GridMultiColumnDropDownList_Item.ItemsSource = App.myPVM.ItemsCollection;
+            GridMultiColumnDropDownList_Exchange.ItemsSource = App.myPVM.ItemsCollection;
+            GridMultiColumnDropDownList_Islands.ItemsSource = App.myPVM.IslandsCollection;
+
             //DataGrid_Planner.SortColumnDescriptions.Add(new SortColumnDescription() { ColumnName = "x:Column_LV", SortDirection = ListSortDirection.Ascending });
             //SetupDataGridStyle();
         }
 
-        private void SetupDataGridStyle()
-        {
+        private void SetupDataGridStyle() {
             // 创建转换器实例并添加到资源中
             var colorConverter = new ColorConverter();
             this.Resources.Add("converter", colorConverter);
@@ -44,8 +47,7 @@ namespace iBarter {
             Style vccStyle = new Style(typeof(VirtualizingCellsControl));
 
             // 创建绑定
-            Binding backgroundBinding = new Binding
-            {
+            Binding backgroundBinding = new Binding {
                 Converter = (IValueConverter)this.Resources["converter"]
             };
 
@@ -69,7 +71,8 @@ namespace iBarter {
                     }
 
                     foreach (Barter barter in App.listBarterPlanner) {
-                        Barter myBarter = new Barter(barter.IsLand, barter.Item1, barter.Item2, barter.ExchangeQuantity, barter.ExchangeDone, barter.BarterGroup, barter.InvQuantity, barter.InvQuantityChange);
+                        Barter myBarter = new Barter(barter.IsLand, barter.Item1, barter.Item2, barter.ExchangeQuantity,
+                            barter.ExchangeDone, barter.BarterGroup, barter.InvQuantity, barter.InvQuantityChange);
                         App.myPVM.BarterDetails.Add(myBarter);
                     }
 
@@ -102,7 +105,8 @@ namespace iBarter {
                 intGroup++;
             }
 
-            foreach (Barter barter in App.myPVM.BarterDetails.Where(b => b.Item1.ItemLV.Equals("1") && b.BarterGroup == -1)) {
+            foreach (Barter barter in App.myPVM.BarterDetails.Where(b =>
+                         b.Item1.ItemLV.Equals("1") && b.BarterGroup == -1)) {
                 int intLV = 2;
 
                 FindBarterGroup(barter, intLV, intGroup);
@@ -110,7 +114,8 @@ namespace iBarter {
                 intGroup++;
             }
 
-            foreach (Barter barter in App.myPVM.BarterDetails.Where(b => b.Item1.ItemLV.Equals("2") && b.BarterGroup == -1)) {
+            foreach (Barter barter in App.myPVM.BarterDetails.Where(b =>
+                         b.Item1.ItemLV.Equals("2") && b.BarterGroup == -1)) {
                 int intLV = 3;
 
                 FindBarterGroup(barter, intLV, intGroup);
@@ -118,7 +123,8 @@ namespace iBarter {
                 intGroup++;
             }
 
-            foreach (Barter barter in App.myPVM.BarterDetails.Where(b => b.Item1.ItemLV.Equals("3") && b.BarterGroup == -1)) {
+            foreach (Barter barter in App.myPVM.BarterDetails.Where(b =>
+                         b.Item1.ItemLV.Equals("3") && b.BarterGroup == -1)) {
                 int intLV = 4;
 
                 FindBarterGroup(barter, intLV, intGroup);
@@ -128,13 +134,21 @@ namespace iBarter {
 
             try {
                 DataGrid_Planner.View.BeginInit();
-                DataGrid_Planner.GroupColumnDescriptions.Add(new GroupColumnDescription() { ColumnName = "BarterGroup" });
+                DataGrid_Planner.GroupColumnDescriptions.Add(
+                    new GroupColumnDescription() { ColumnName = "BarterGroup" });
             }
             catch (Exception exception) {
             }
             finally {
                 DataGrid_Planner.AutoExpandGroups = true;
-                DataGrid_Planner.ExpandAllGroup();
+                try {
+                    if (intGroup > 0) {
+                        DataGrid_Planner.ExpandAllGroup();
+                    }
+                }
+                catch (Exception e) {
+                }
+
                 DataGrid_Planner.View.EndInit();
             }
 
@@ -145,7 +159,8 @@ namespace iBarter {
 
         private void FindBarterGroup(Barter _barter, int _lv, int _group) {
             _barter.BarterGroup = _group;
-            Barter myBarter = App.myPVM.BarterDetails.FirstOrDefault(b => b.Item1.ItemLV.Equals(Convert.ToString(_lv)) && b.Item1Name.Equals(_barter.Item2Name))!;
+            Barter myBarter = App.myPVM.BarterDetails.FirstOrDefault(b =>
+                b.Item1.ItemLV.Equals(Convert.ToString(_lv)) && b.Item1Name.Equals(_barter.Item2Name))!;
             if (myBarter != null) {
                 myBarter.BarterGroup = _group;
                 if (!myBarter.Item1.ItemLV.Equals("5")) {
@@ -158,8 +173,10 @@ namespace iBarter {
         }
 
         private void ButtonAdv_Load_Click(object sender, RoutedEventArgs e) {
-            string strPath_Setting = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myPlan_Setting.xml";
-            string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myPlan_Data.json";
+            string strPath_Setting = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                                     "\\Resources\\myPlan_Setting.xml";
+            string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                                  "\\Resources\\myPlan_Data.json";
 
             if (File.Exists(strPath_Setting) && File.Exists(strPath_Data)) {
                 try {
@@ -183,7 +200,7 @@ namespace iBarter {
                     }
 
                     RefreshDataGrid();
-                    Grouping();
+                    //Grouping();
                     App.myCFun.Log("Loaded...", Brushes.Blue);
                 }
                 catch (Exception exception) {
@@ -200,10 +217,13 @@ namespace iBarter {
         private void SaveData() {
             try {
                 if (App.myPVM.BarterDetails.Count > 0) {
-                    string strPath_Setting = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myPlan_Setting.xml";
-                    string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myPlan_Data.json";
+                    string strPath_Setting = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                                             "\\Resources\\myPlan_Setting.xml";
+                    string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                                          "\\Resources\\myPlan_Data.json";
 
-                    using (FileStream streamSetting = new FileStream(strPath_Setting, FileMode.Create, FileAccess.Write)) {
+                    using (FileStream streamSetting =
+                           new FileStream(strPath_Setting, FileMode.Create, FileAccess.Write)) {
                         DataGrid_Planner.Serialize(streamSetting);
                     }
 
@@ -233,7 +253,7 @@ namespace iBarter {
         private void DataGrid_Planner_CurrentCellEndEdit(object sender, CurrentCellEndEditEventArgs e) {
             SaveData();
             //RefreshDataGrid();
-            Grouping();
+            //Grouping();
         }
 
         private void DataGrid_Planner_CurrentCellValueChanged(object sender, CurrentCellValueChangedEventArgs e) {

@@ -203,7 +203,7 @@ namespace iBarter {
                 while (!reader.EndOfStream) {
                     var line = reader.ReadLine();
                     var results = line.Split(',');
-                    var strName = results[0].Replace(" ", "_").Replace("'", "").Replace("(", "_").Replace(")", "");
+                    var strName = results[0].Replace("'", "").Replace("(", "").Replace(")", "");
                     var strID = results[1];
 
                     int intNumber = -1;
@@ -229,7 +229,7 @@ namespace iBarter {
                 while (!reader.EndOfStream) {
                     var line = reader.ReadLine();
                     var results = line.Split(',');
-                    var strName = results[0].Replace(" ", "_").Replace("'", "").Replace("(", "_").Replace(")", "");
+                    var strName = results[0].Replace("'", "").Replace("(", "").Replace(")", "");
                     int intParley = Convert.ToInt32(results[1]);
 
                     Thickness myThickness = new Thickness(0, 0, 0, 0);
@@ -400,6 +400,10 @@ namespace iBarter {
             catch (Exception e) {
             }
 
+            if (IslandEnum(strIsland) == EnumLists.Island.UnKnown) {
+                App.myCFun.Log("Unknown islands! Double check your result!", Brushes.Red);
+            }
+
             Islands myIslands = new Islands(IslandEnum(strIsland), intParley, intRemaining);
 
             myBarter.IsLand = myIslands;
@@ -547,9 +551,6 @@ namespace iBarter {
             }
             else if (_island.Contains("Beiruwa")) {
                 return EnumLists.Island.Beiruwa;
-            }
-            else if (_island.Contains("Boa")) {
-                return EnumLists.Island.Boa;
             }
             else if (_island.Contains("Cargo") || _island.Contains("ShipwreckedHaran'sCarg") ||
                      _island.Contains("Shipwrecked Haran")) {
@@ -753,6 +754,9 @@ namespace iBarter {
             }
             else if (_island.Contains("Weita")) {
                 return EnumLists.Island.Weita;
+            }
+            else if (_island.Contains("Boa")) {
+                return EnumLists.Island.Boa;
             }
             else
                 return EnumLists.Island.UnKnown;

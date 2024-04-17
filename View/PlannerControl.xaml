@@ -9,7 +9,7 @@
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
     <UserControl.Resources>
-        <local:ColorConverter x:Key="converter"/>
+        <local:ColorConverter x:Key="converter" />
         <Style TargetType="syncfusion1:VirtualizingCellsControl">
             <Setter Property="Background" Value="{Binding Converter={StaticResource converter}}" />
         </Style>
@@ -53,7 +53,7 @@
                 SizeMode="Small"
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/load.png" Click="ButtonAdv_Load_Click" />
-            <Separator/>
+            <Separator />
             <syncfusion:ButtonAdv
                 x:Name="ButtonAdv_Refresh"
                 Margin="4,0,4,0"
@@ -88,7 +88,9 @@
                                    ShowRowHeader="True"
                                    ScrollMode="Async"
                                    CanMaintainScrollPosition="True"
-                                   AllowDrop="True" LiveDataUpdateMode="AllowChildViewUpdate" CurrentCellEndEdit="DataGrid_Planner_CurrentCellEndEdit" CurrentCellValueChanged="DataGrid_Planner_CurrentCellValueChanged">
+                                   AllowDrop="True" LiveDataUpdateMode="AllowDataShaping"
+                                   CurrentCellEndEdit="DataGrid_Planner_CurrentCellEndEdit"
+                                   CurrentCellValueChanged="DataGrid_Planner_CurrentCellValueChanged">
                 <syncfusion:SfDataGrid.SortColumnDescriptions>
                     <syncfusion:SortColumnDescription ColumnName="Item1LV" SortDirection="Ascending" />
                 </syncfusion:SfDataGrid.SortColumnDescriptions>
@@ -97,37 +99,98 @@
                     <!--                            AllowResizing="True" AllowEditing="True"> -->
                     <!-- </syncfusion:GridTextColumn> -->
                     <syncfusion:GridTextColumn HeaderText="Group" MappingName="BarterGroup"
-                                               AllowResizing="True" AllowEditing="False" 
+                                               AllowResizing="True" AllowEditing="False"
                                                Width="50" />
-                    <syncfusion:GridTextColumn x:Name="Column_LV" HeaderText="LV" MappingName="Item1LV" AllowResizing="True" Width="70"
+                    <syncfusion:GridTextColumn x:Name="Column_LV" HeaderText="LV" MappingName="Item1LV"
+                                               AllowResizing="True" Width="70"
                                                AllowEditing="False" />
-                    <syncfusion:GridCheckBoxColumn x:Name="GridCheckBoxColumn_CK" HeaderText="CK" MappingName="ExchangeDone"
-                                                   AllowResizing="True" AllowEditing="True" Width="30"  />
+                    <syncfusion:GridCheckBoxColumn x:Name="GridCheckBoxColumn_CK" HeaderText="CK"
+                                                   MappingName="ExchangeDone"
+                                                   AllowResizing="True" AllowEditing="True" Width="30" />
                     <syncfusion:GridTextColumn HeaderText="Eq." MappingName="ExchangeQuantity" Width="40"
-                                               AllowResizing="True" AllowEditing="True"/>
-                    <syncfusion:GridTextColumn HeaderText="N
-                                               o." MappingName="IslandRemaining" Width="40"
-                                               AllowResizing="True" AllowEditing="False"/>
-                    <syncfusion:GridTextColumn HeaderText="Location" MappingName="IsLandName" Width="100"
-                                               AllowResizing="True" AllowEditing="False"/>
+                                               AllowResizing="True" AllowEditing="True" />
+                    <syncfusion:GridTextColumn HeaderText="No."
+                                               MappingName="IslandRemaining" Width="40"
+                                               AllowResizing="True" AllowEditing="False" />
+                    <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Islands"
+                                                            AllowAutoComplete="True"
+                                                            AutoGenerateColumns="False"
+                                                            DisplayMember="IslandsName"
+                                                            HeaderText="Location"
+                                                            MappingName="IsLandName"
+                                                            ValueMember="IslandsName"
+                                                            AllowResizing="True"
+                                                            AllowIncrementalFiltering="True" AllowEditing="True" Width="100">
+                        <syncfusion:GridMultiColumnDropDownList.Columns>
+                            <syncfusion:Columns>
+                                <syncfusion:GridTextColumn HeaderText="Islands" MappingName="IslandsName" />
+                                <syncfusion:GridTextColumn HeaderText="Parley" MappingName="Parley" />
+                                <syncfusion:GridTextColumn HeaderText="Remaining" MappingName="Remaining" />
+                            </syncfusion:Columns>
+                        </syncfusion:GridMultiColumnDropDownList.Columns>
+                    </syncfusion:GridMultiColumnDropDownList>
+                    <!-- <syncfusion:GridTextColumn HeaderText="Location" MappingName="IsLandName" Width="100" -->
+                    <!--                            AllowResizing="True" AllowEditing="False" /> -->
                     <!-- <syncfusion:GridTextColumn HeaderText="Parley" MappingName="Parley" AllowResizing="True" AllowEditing="True"/> -->
                     <syncfusion:GridTextColumn HeaderText="I1 No." MappingName="Item1Number" Width="40"
-                                               AllowEditing="False" AllowResizing="True"/>
-                    <syncfusion:GridImageColumn HeaderText="I1" MappingName="Item1Icon" Width="40" TextAlignment="Center"
+                                               AllowEditing="True" AllowResizing="True" />
+                    <syncfusion:GridImageColumn HeaderText="I1" MappingName="Item1Icon" Width="40"
+                                                TextAlignment="Center"
                                                 AllowEditing="False" AllowResizing="True">
-                        </syncfusion:GridImageColumn>
-                    <syncfusion:GridTextColumn HeaderText="Item" MappingName="Item1Name" Width="150"
-                                               TextAlignment="Center" AllowEditing="False" AllowResizing="True"/>
-                    <syncfusion:GridImageColumn HeaderText="I2" MappingName="Item2Icon" Width="40" TextAlignment="Center"
+                    </syncfusion:GridImageColumn>
+                    <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Item"
+                                                            AllowAutoComplete="False"
+                                                            AutoGenerateColumns="False"
+                                                            DisplayMember="ItemName"
+                                                            HeaderText="Item"
+                                                            MappingName="Item1Name"
+                                                            ValueMember="ItemName"
+                                                            AllowResizing="True"
+                                                            AllowIncrementalFiltering="True" AllowEditing="True" AllowFiltering="True" Width="150">
+                        <syncfusion:GridMultiColumnDropDownList.Columns>
+                            <syncfusion:Columns>
+                                <syncfusion:GridTextColumn
+                                    HeaderText="ItemID"
+                                    MappingName="ItemID" />
+                                <syncfusion:GridTextColumn HeaderText="Item Name" MappingName="ItemName" />
+                                <syncfusion:GridTextColumn HeaderText="Item LV" MappingName="ItemLV" />
+                                <syncfusion:GridTextColumn HeaderText="Item Number" MappingName="ItemNumber" />
+                            </syncfusion:Columns>
+                        </syncfusion:GridMultiColumnDropDownList.Columns>
+                    </syncfusion:GridMultiColumnDropDownList>
+                    <!-- <syncfusion:GridTextColumn HeaderText="Item" MappingName="Item1Name" Width="150" -->
+                    <!--                            TextAlignment="Center" AllowEditing="False" AllowResizing="True" /> -->
+                    <syncfusion:GridImageColumn HeaderText="I2" MappingName="Item2Icon" Width="40"
+                                                TextAlignment="Center"
                                                 AllowEditing="False" AllowResizing="True" />
-                    <syncfusion:GridTextColumn HeaderText="Exchange" MappingName="Item2Name" Width="150"
-                                               TextAlignment="Center" AllowEditing="False" AllowResizing="True"/>
+                    <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Exchange"
+                                                            AllowAutoComplete="False"
+                                                            AutoGenerateColumns="False"
+                                                            DisplayMember="ItemName"
+                                                            HeaderText="Exchange"
+                                                            MappingName="Item2Name"
+                                                            ValueMember="ItemName"
+                                                            AllowResizing="True"
+                                                            AllowIncrementalFiltering="True" AllowEditing="True" AllowFiltering="True" Width="150">
+                        <syncfusion:GridMultiColumnDropDownList.Columns>
+                            <syncfusion:Columns>
+                                <syncfusion:GridTextColumn
+                                    HeaderText="ItemID"
+                                    MappingName="ItemID" AllowSorting="True" />
+                                <syncfusion:GridTextColumn HeaderText="Item Name" MappingName="ItemName" AllowSorting="True" />
+                                <syncfusion:GridTextColumn HeaderText="Item LV" MappingName="ItemLV" AllowSorting="True" />
+                                <syncfusion:GridTextColumn HeaderText="Item Number" MappingName="ItemNumber" AllowSorting="True" />
+                            </syncfusion:Columns>
+                        </syncfusion:GridMultiColumnDropDownList.Columns>
+                    </syncfusion:GridMultiColumnDropDownList>
+                    <!-- <syncfusion:GridTextColumn HeaderText="Exchange" MappingName="Item2Name" Width="150" -->
+                    <!--                            TextAlignment="Center" AllowEditing="False" AllowResizing="True" /> -->
                     <syncfusion:GridTextColumn HeaderText="I2 No." MappingName="Item2Number"
-                                               AllowEditing="False" AllowResizing="True"/>
+                                               AllowEditing="True" AllowResizing="True" />
                     <syncfusion:GridTextColumn HeaderText="Inv" MappingName="InvQuantity"
-                                               AllowEditing="False" AllowResizing="True"/>
+                                               AllowEditing="False" AllowResizing="True" />
                     <syncfusion:GridTextColumn HeaderText="InvChange" MappingName="InvQuantityChange"
-                                               AllowEditing="False" AllowResizing="True"/>
+                                               AllowEditing="False" AllowResizing="True" />
 
                 </syncfusion:SfDataGrid.Columns>
 
