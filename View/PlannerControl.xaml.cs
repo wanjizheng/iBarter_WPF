@@ -94,6 +94,9 @@ namespace iBarter {
             if (intParley > 1000000) {
                 Label_SelectedParley.Foreground = Brushes.Red;
             }
+            else {
+                Label_SelectedParley.Foreground = Brushes.Black;
+            }
         }
 
         private void ButtonAdv_Refresh_Click(object sender, RoutedEventArgs e) {

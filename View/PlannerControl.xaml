@@ -78,8 +78,8 @@
                 SmallIcon="/Images/done.png" Click="ButtonAdv_Done_Click" />
             <Separator />
             <Label Content="Parley: " />
-            <Label x:Name="Label_SelectedParley" Content="0" HorizontalAlignment="Right" />
-            <Label Content="/1000000" HorizontalAlignment="Left"/>
+            <Label x:Name="Label_SelectedParley" Content="0" HorizontalAlignment="Right" Margin="0"/>
+            <Label Content="/1000000" HorizontalAlignment="Left" Margin="0"/>
         </syncfusion:ToolBarAdv>
         <Grid Grid.Row="1">
             <syncfusion:SfDataGrid x:Name="DataGrid_Planner" Height="NaN" Width="NaN"
