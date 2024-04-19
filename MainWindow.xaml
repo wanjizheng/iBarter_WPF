@@ -133,7 +133,7 @@
 
                     <!-- <esri:MapView x:Name="MainMapView" -->
                     <!--               Map="{Binding Map, Source={StaticResource MapViewModel}}" /> -->
-                    <local:MapControl HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                    <local:MapControl x:Name="myMapControl" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
                 </Grid>
             </ContentControl>
 

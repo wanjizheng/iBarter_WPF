@@ -19,6 +19,7 @@ using Newtonsoft.Json;
 using Syncfusion.UI.Xaml.Grid;
 using Syncfusion.Windows.Controls.PivotGrid;
 using Syncfusion.Windows.Shared;
+using Brush = System.Windows.Media.Brush;
 
 namespace iBarter {
     /// <summary>
@@ -83,8 +84,21 @@ namespace iBarter {
             }
         }
 
+        private void UpdateParley() {
+            int intParley = 0;
+            foreach (Barter barter in App.myPVM.BarterDetails.Where(b=>b.ExchangeDone==false && b.ExchangeQuantity>0)) {
+                intParley += barter.Parley * barter.ExchangeQuantity;
+            }
+
+            Label_SelectedParley.Content = intParley;
+            if (intParley > 1000000) {
+                Label_SelectedParley.Foreground = Brushes.Red;
+            }
+        }
+
         private void ButtonAdv_Refresh_Click(object sender, RoutedEventArgs e) {
             Grouping();
+            UpdateParley();
         }
 
         private void Grouping() {
@@ -154,7 +168,7 @@ namespace iBarter {
 
             //RefreshDataGrid();
 
-            int a = 0;
+            UpdateMapControl();
         }
 
         private void FindBarterGroup(Barter _barter, int _lv, int _group) {
@@ -208,6 +222,7 @@ namespace iBarter {
                 }
                 //myPlannerControl.DataGrid_Planner.ItemsSource = dataSource;
             }
+            UpdateParley();
         }
 
         private void ButtonAdv_Save_Click(object sender, RoutedEventArgs e) {
@@ -242,7 +257,7 @@ namespace iBarter {
                         streamData.Write(byteArray, 0, byteArray.Length);
                     }
 
-                    App.myCFun.Log("Saved data.", Brushes.DarkOliveGreen);
+                    //App.myCFun.Log("Saved data.", Brushes.DarkOliveGreen);
                 }
             }
             catch (Exception exception) {
@@ -252,13 +267,115 @@ namespace iBarter {
 
         private void DataGrid_Planner_CurrentCellEndEdit(object sender, CurrentCellEndEditEventArgs e) {
             SaveData();
-            //RefreshDataGrid();
+            RefreshDataGrid();
+            UpdateParley();
             //Grouping();
+            UpdateMapControl();
         }
 
         private void DataGrid_Planner_CurrentCellValueChanged(object sender, CurrentCellValueChangedEventArgs e) {
             if (e.Column.MappingName == "ExchangeDone") {
                 SaveData();
+                UpdateParley();
+                // if (e.RowColumnIndex.ColumnIndex == 5) { //Eq.
+                //     
+                // }
+                // Barter myBarter = (Barter)DataGrid_Planner.CurrentItem;
+                // if (myBarter.ExchangeDone) {
+                //     App.myCFun.Log("Checked", Brushes.Blue);
+                // }
+                // else {
+                //     App.myCFun.Log("UnChecked", Brushes.Red);
+                // }
+                //
+                // int a = 0;
+                UpdateMapControl();
+            }
+        }
+
+        private void UpdateMapControl() {
+            for (int i = App.myfmMain.myMapControl.Grid_MapMain.Children.Count - 1; i > 0; i--) {
+                var child = App.myfmMain.myMapControl.Grid_MapMain.Children[i];
+                if (child is Grid && ((Grid)child).Name.StartsWith("GridContainer_")) {
+                    App.myfmMain.myMapControl.Grid_MapMain.Children.Remove(child);
+                }
+            }
+            foreach (Barter myBarter in App.myPVM.BarterDetails.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0)) {
+                App.myfmMain.myMapControl.IslandsButtonInitialisation(myBarter, GetBursh(myBarter));
+            }
+        }
+
+        private Brush GetBursh(Barter _barter) {
+            switch (_barter.BarterGroup) {
+                case -1:
+                    return Brushes.Bisque;
+                    break;
+                case 0:
+                    return Brushes.Aquamarine;
+                    break;
+                case 1:
+                    return Brushes.CornflowerBlue;
+                    break;
+                case 2:
+                    return Brushes.DarkCyan;
+                    break;
+                case 3:
+                    return Brushes.CadetBlue;
+                    break;
+                case 4:
+                    return Brushes.Chocolate;
+                    break;
+                case 5:
+                    return Brushes.BurlyWood;
+                    break;
+                case 6:
+                    return Brushes.DarkTurquoise;
+                    break;
+                case 7:
+                    return Brushes.Ivory;
+                    break;
+                case 8:
+                    return Brushes.DeepSkyBlue;
+                    break;
+                case 9:
+                    return Brushes.DarkSalmon;
+                    break;
+                case 10:
+                    return Brushes.LawnGreen;
+                    break;
+                case 11:
+                    return Brushes.Orchid;
+                    break;
+                case 12:
+                    return Brushes.Olive;
+                    break;
+                case 13:
+                    return Brushes.Orange;
+                    break;
+                case 14:
+                    return Brushes.Plum;
+                    break;
+                case 15:
+                    return Brushes.DarkViolet;
+                    break;
+                case 16:
+                    return Brushes.Yellow;
+                    break;
+                case 17:
+                    return Brushes.Tomato;
+                    break;
+                case 18:
+                    return Brushes.MediumSlateBlue;
+                    break;
+                case 19:
+                    return Brushes.SpringGreen;
+                    break;
+                case 20:
+                    return Brushes.SandyBrown;
+                    break;
+                default:
+                    return Brushes.RoyalBlue;
+                    break;
             }
         }
 

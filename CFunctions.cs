@@ -38,21 +38,23 @@ namespace iBarter {
                 Application.Current.Dispatcher.Invoke(new Action(() => Log(_message, _color)));
             }
             else {
-                var myDT = DateTime.Now;
+                if (App.myfmMain != null) {
+                    var myDT = DateTime.Now;
 
 
-                var strTime = "[ " + myDT.ToString("hh:mm:ss") + " ]  ";
+                    var strTime = "[ " + myDT.ToString("hh:mm:ss") + " ]  ";
 
 
-                App.myfmMain.richTextBox_Log.Dispatcher.Invoke(new Action(() => {
-                    App.myfmMain.richTextBox_Log.AppendText(strTime);
-                    var tr = new TextRange(App.myfmMain.richTextBox_Log.Document.ContentEnd,
-                        App.myfmMain.richTextBox_Log.Document.ContentEnd);
-                    tr.Text = _message + "\r\n";
-                    var bc = new BrushConverter();
-                    tr.ApplyPropertyValue(TextElement.ForegroundProperty, _color);
-                    App.myfmMain.richTextBox_Log.ScrollToEnd();
-                }));
+                    App.myfmMain.richTextBox_Log.Dispatcher.Invoke(new Action(() => {
+                        App.myfmMain.richTextBox_Log.AppendText(strTime);
+                        var tr = new TextRange(App.myfmMain.richTextBox_Log.Document.ContentEnd,
+                            App.myfmMain.richTextBox_Log.Document.ContentEnd);
+                        tr.Text = _message + "\r\n";
+                        var bc = new BrushConverter();
+                        tr.ApplyPropertyValue(TextElement.ForegroundProperty, _color);
+                        App.myfmMain.richTextBox_Log.ScrollToEnd();
+                    }));
+                }
             }
         }
 
@@ -552,9 +554,9 @@ namespace iBarter {
             else if (_island.Contains("Beiruwa")) {
                 return EnumLists.Island.Beiruwa;
             }
-            else if (_island.Contains("Cargo") || _island.Contains("ShipwreckedHaran'sCarg") ||
+            else if (_island.Contains("Haran") || _island.Contains("ShipwreckedHaran'sCarg") ||
                      _island.Contains("Shipwrecked Haran")) {
-                return EnumLists.Island.Cargo;
+                return EnumLists.Island.Haran;
             }
             else if (_island.Contains("Carrack")) {
                 return EnumLists.Island.Carrack;
@@ -607,9 +609,9 @@ namespace iBarter {
             else if (_island.Contains("Iliya") || _island.Contains("liya")) {
                 return EnumLists.Island.Iliya;
             }
-            else if (_island.Contains("Incomplete") || _island.Contains("UnfinishedAdriftVessel") ||
+            else if (_island.Contains("Unfinished") || _island.Contains("UnfinishedAdriftVessel") ||
                      _island.Contains("Unfinished Adrift")) {
-                return EnumLists.Island.Incomplete;
+                return EnumLists.Island.Unfinished;
             }
             else if (_island.Contains("Invernen")) {
                 return EnumLists.Island.Invernen;

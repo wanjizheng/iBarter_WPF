@@ -8,18 +8,260 @@
     mc:Ignorable="d"
     d:DesignHeight="450" d:DesignWidth="800">
     <Grid x:Name="Grid_MapMain" SizeChanged="Grid_MapMain_SizeChanged">
+
         <Image HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top" Stretch="Fill"
                Source="/Images/iBarterMap.png" />
-        <Grid x:Name="Grid_Ajir" Margin="506,249,284,191" Width="10" Height="10">
-            <Rectangle Fill="Blue"/>
-            <Image x:Name="Image_Ajir" HorizontalAlignment="Left" Height="10" Margin="0,0,0,0"
-                   VerticalAlignment="Top" Width="10" />
-        </Grid>
-        <Grid x:Name="Grid_Albresser" Margin="243,354,547,86" Width="10" Height="10">
-            <Rectangle Fill="Blue"/>
-            <Image x:Name="Image_Albresser" HorizontalAlignment="Left" Height="10" Margin="0,0,0,0"
-                   VerticalAlignment="Top" Width="10" />
-        </Grid>
+        <!-- <Grid x:Name="Grid_Ancient" Margin="131,94,659,346" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Cox_Pirates" Margin="77,137,713,303" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Rickun" Margin="56,110,734,330" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Cholace" Margin="36,78,754,362" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Haran" Margin="86,58,704,382" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Carrack" Margin="28,43,762,397" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Unfinished" Margin="106,0,684,440" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Lantinia" Margin="156,24,634,416" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Pakio" Margin="249,13,541,427" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Wandering" Margin="203,43,587,397" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Crow" Margin="216,73,574,367" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Halmad" Margin="668,124,122,316" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Kashuma" Margin="690,94,100,346" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Derko" Margin="726,68,64,372" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Hakoven" Margin="759,34,31,406" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+
+
+        <!-- <Grid x:Name="Grid_Ajir" Margin="506,249,284,191" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!--     <Image x:Name="Image_Ajir" HorizontalAlignment="Left" Height="10" Margin="0,0,0,0" -->
+        <!--            VerticalAlignment="Top" Width="10" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid> -->
+        <!--     <Grid x:Name="Grid_Albresser" Margin="243,354,547,86" Width="10" Height="10"> -->
+        <!--         <Rectangle Fill="Blue" /> -->
+        <!--         <Image x:Name="Image_Albresser" HorizontalAlignment="Left" Height="10" Margin="0,0,0,0" -->
+        <!--                VerticalAlignment="Top" Width="10" /> -->
+        <!--     </Grid> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Almai" Margin="198,243,592,197" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Al_Naha" Margin="483,220,307,220" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Angie" Margin="373,309,417,131" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Arakil" Margin="520,320,270,120" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Arita" Margin="301,243,489,197" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Baeza" Margin="172,412,618,28" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Balvege" Margin="398,289,392,151" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Barater" Margin="245,372,545,68" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Baremi" Margin="464,273,326,167" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Beiruwa" Margin="515,359,275,81" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Boa" Margin="730,218,60,222" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Daton" Margin="172,320,618,120" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Delinghart" Margin="594,332,196,108" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Duch" Margin="395,332,395,108" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Dunde" Margin="208,350,582,90" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Eberdeen" Margin="223,337,567,103" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Ephde_Rune" Margin="460,358,330,82" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Esfah" Margin="731,309,59,131" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Eveto" Margin="406,321,384,119" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Ginburrey" Margin="167,367,623,73" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Illiya" Margin="554,273,236,167" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Invernen" Margin="378,264,412,176" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Kanvera" Margin="511,305,279,135" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Kuit" Margin="231,216,559,224" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Lema" Margin="424,185,366,255" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Lerao" Margin="634,110,156,330" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Lisz" Margin="306,288,484,152" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Louruve" Margin="318,311,472,129" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Luivano" Margin="426,345,364,95" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Mariveno" Margin="440,318,350,122" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Marka" Margin="339,303,451,137" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Marlene" Margin="417,289,373,151" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Modric" Margin="153,402,637,38" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Narvo" Margin="338,270,452,170" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Netnume" Margin="185,340,605,100" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Oben" Margin="203,327,587,113" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Orffs" Margin="421,247,369,193" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Orisha" Margin="733,249,57,191" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Ostra" Margin="550,327,240,113" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Padix" Margin="231,275,559,165" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Paratama" Margin="486,330,304,110" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Pilava" Margin="622,345,168,95" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Portanen" Margin="648,156,142,284" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Pujara" Margin="626,268,164,172" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Racid" Margin="503,194,287,246" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Rameda" Margin="125,367,665,73" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Randis" Margin="208,394,582,46" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Riyed" Margin="714,347,76,93" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Rosevan" Margin="663,185,127,255" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Serca" Margin="208,412,582,28" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Shasha" Margin="632,191,158,249" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Shirna" Margin="748,292,42,148" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Sokota" Margin="673,372,117,68" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Staren" Margin="296,331,494,109" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Taramura" Margin="542,341,248,99" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Tashu" Margin="378,176,412,264" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Teste" Margin="177,259,613,181" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Teyamal" Margin="114,422,676,18" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Theonil" Margin="142,389,648,51" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Tigris" Margin="723,295,67,145" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Tinberra" Margin="606,105,184,335" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Tulu" Margin="401,249,389,191" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Weita" Margin="478,296,312,144" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+
+
+        <!-- <local:ToolTipControl x:Name="myTTC1" Width="150" Height ="35" Margin="-125,272,625,108"></local:ToolTipControl> -->
 
     </Grid>
 </UserControl>

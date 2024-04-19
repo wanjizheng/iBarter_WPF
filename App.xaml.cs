@@ -32,6 +32,9 @@ namespace iBarter {
 
 
             myCFun = new CFunctions();
+            listItems = myCFun.LoadItemsCSV();
+            listIslands = myCFun.LoadIslandsCSV();
+            listStorage = new List<Items>();
 
             mySVM = new ScannerViewModel();
             myPVM = new PlannerViewModel();
@@ -39,9 +42,7 @@ namespace iBarter {
 
             myfmMain = new MainWindow();
 
-            listItems = myCFun.LoadItemsCSV();
-            listIslands = myCFun.LoadIslandsCSV();
-            listStorage = new List<Items>();
+   
         }
 
         protected override void OnStartup(StartupEventArgs e) {
