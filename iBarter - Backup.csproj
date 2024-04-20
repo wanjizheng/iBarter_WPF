@@ -776,9 +776,7 @@
     <Resource Include="Images\done.png" />
     <Resource Include="Images\iBarterMap.png" />
     <Resource Include="Images\load.png" />
-    <Resource Include="Images\new-document.png">
-      <CopyToOutputDirectory></CopyToOutputDirectory>
-    </Resource>
+    <CodeAnalysisDictionary Include="Images\new-document.png" />
     <Resource Include="Images\refresh.png" />
     <Resource Include="Images\save.png" />
     <Resource Include="Images\scan.png" />

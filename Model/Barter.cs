@@ -5,9 +5,9 @@ using System.Reflection;
 
 namespace iBarter {
     public class Barter : NotificationObject {
-        private Islands _isLand = null!;
-        private Items? item1 = null!, item2 = null!;
-        private String icon1 = null!, icon2 = null!;
+        private Islands isLand = null!;
+        private Items item1 = null, item2 = null;
+        private String icon1 = null, icon2 = null;
         private String item1Name = "", item2Name = "";
         private int exchangeQuantity = 0;
         private bool exchangeDone = false;
@@ -18,7 +18,7 @@ namespace iBarter {
         }
 
         public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = -1, int _intInv = 0, int _intChange = 0) {
-            this._isLand = _isLand;
+            isLand = _isLand;
 
             item1 = _item1;
             item2 = _item2;
@@ -28,8 +28,8 @@ namespace iBarter {
             item2Name = item2.ItemName;
             icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
 
-            this.exchangeQuantity = _exchangeQuantity;
-            this.barterGroup = _barterGroup;
+            exchangeQuantity = _exchangeQuantity;
+            barterGroup = _barterGroup;
             exchangeDone = _exchangeDone;
             intInv = _intInv;
             intChange = _intChange;
@@ -39,9 +39,9 @@ namespace iBarter {
         }
 
         public Islands IsLand {
-            get { return _isLand; }
+            get { return isLand; }
             set {
-                _isLand = value;
+                isLand = value;
                 RaisePropertyChanged("IsLand");
             }
         }
