@@ -13,14 +13,14 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 
-namespace iBarter
+namespace iBarter.View
 {
     /// <summary>
-    /// Interaction logic for ToolTipControl.xaml
+    /// Interaction logic for UserControl1.xaml
     /// </summary>
-    public partial class ToolTipControl : UserControl
+    public partial class UserControl1 : UserControl
     {
-        public ToolTipControl()
+        public UserControl1()
         {
             InitializeComponent();
         }

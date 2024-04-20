@@ -8,13 +8,8 @@
 
 #endregion
 
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Text;
-using Esri.ArcGISRuntime.Portal;
 using Syncfusion.Windows.Shared;
+using System.Collections.ObjectModel;
 
 namespace iBarter.ViewModel {
     public class ScannerViewModel : NotificationObject {

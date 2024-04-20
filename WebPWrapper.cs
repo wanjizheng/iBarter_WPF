@@ -22,7 +22,6 @@
 /// float[] PictureDistortion(Bitmap source, Bitmap reference, int metric_type) - Get PSNR, SSIM or LSIM distortion metric between two pictures
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -30,17 +29,14 @@ using System.Runtime.InteropServices;
 using System.Security;
 using System.Windows.Forms;
 
-namespace iBarter
-{
-    public sealed class WebP : IDisposable
-    {
+namespace iBarter {
+    public sealed class WebP : IDisposable {
         private const int WEBP_MAX_DIMENSION = 16383;
 
         #region | Destruction |
 
         /// <summary>Free memory</summary>
-        public void Dispose()
-        {
+        public void Dispose() {
             GC.SuppressFinalize(this);
         }
 
@@ -51,16 +47,13 @@ namespace iBarter
         /// <summary>Read a WebP file</summary>
         /// <param name="pathFileName">WebP file to load</param>
         /// <returns>Bitmap with the WebP image</returns>
-        public Bitmap Load(string pathFileName)
-        {
-            try
-            {
+        public Bitmap Load(string pathFileName) {
+            try {
                 var rawWebP = File.ReadAllBytes(pathFileName);
 
                 return Decode(rawWebP);
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 throw new Exception(ex.Message + "\r\nIn WebP.Load");
             }
         }
@@ -68,14 +61,12 @@ namespace iBarter
         /// <summary>Decode a WebP image</summary>
         /// <param name="rawWebP">The data to uncompress</param>
         /// <returns>Bitmap with the WebP image</returns>
-        public Bitmap Decode(byte[] rawWebP)
-        {
+        public Bitmap Decode(byte[] rawWebP) {
             Bitmap bmp = null;
             BitmapData bmpData = null;
             var pinnedWebP = GCHandle.Alloc(rawWebP, GCHandleType.Pinned);
 
-            try
-            {
+            try {
                 //Get image width and height
                 GetInfo(rawWebP, out var imgWidth, out var imgHeight, out var hasAlpha, out var hasAnimation, out var format);
 
@@ -96,8 +87,7 @@ namespace iBarter
 
                 return bmp;
             }
-            finally
-            {
+            finally {
                 //Unlock the pixels
                 if (bmpData != null)
                     bmp.UnlockBits(bmpData);
@@ -112,37 +102,32 @@ namespace iBarter
         /// <param name="rawWebP">the data to uncompress</param>
         /// <param name="options">Options for advanced decode</param>
         /// <returns>Bitmap with the WebP image</returns>
-        public Bitmap Decode(byte[] rawWebP, WebPDecoderOptions options, PixelFormat pixelFormat = PixelFormat.DontCare)
-        {
+        public Bitmap Decode(byte[] rawWebP, WebPDecoderOptions options, PixelFormat pixelFormat = PixelFormat.DontCare) {
             var pinnedWebP = GCHandle.Alloc(rawWebP, GCHandleType.Pinned);
             Bitmap bmp = null;
             BitmapData bmpData = null;
             VP8StatusCode result;
-            try
-            {
+            try {
                 var config = new WebPDecoderConfig();
                 if (UnsafeNativeMethods.WebPInitDecoderConfig(ref config) == 0) throw new Exception("WebPInitDecoderConfig failed. Wrong version?");
                 // Read the .webp input file information
                 var ptrRawWebP = pinnedWebP.AddrOfPinnedObject();
                 int height;
                 int width;
-                if (options.use_scaling == 0)
-                {
+                if (options.use_scaling == 0) {
                     result = UnsafeNativeMethods.WebPGetFeatures(ptrRawWebP, rawWebP.Length, ref config.input);
                     if (result != VP8StatusCode.VP8_STATUS_OK)
                         throw new Exception("Failed WebPGetFeatures with error " + result);
 
                     //Test cropping values
-                    if (options.use_cropping == 1)
-                    {
+                    if (options.use_cropping == 1) {
                         if (options.crop_left + options.crop_width > config.input.Width || options.crop_top + options.crop_height > config.input.Height)
                             throw new Exception("Crop options exceeded WebP image dimensions");
                         width = options.crop_width;
                         height = options.crop_height;
                     }
                 }
-                else
-                {
+                else {
                     width = options.scaled_width;
                     height = options.scaled_height;
                 }
@@ -163,13 +148,11 @@ namespace iBarter
                 config.options.alpha_dithering_strength = options.alpha_dithering_strength;
 
                 //Create a BitmapData and Lock all pixels to be written
-                if (config.input.Has_alpha == 1)
-                {
+                if (config.input.Has_alpha == 1) {
                     config.output.colorspace = WEBP_CSP_MODE.MODE_bgrA;
                     bmp = new Bitmap(config.input.Width, config.input.Height, PixelFormat.Format32bppArgb);
                 }
-                else
-                {
+                else {
                     config.output.colorspace = WEBP_CSP_MODE.MODE_BGR;
                     bmp = new Bitmap(config.input.Width, config.input.Height, PixelFormat.Format24bppRgb);
                 }
@@ -191,12 +174,10 @@ namespace iBarter
 
                 return bmp;
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 throw new Exception(ex.Message + "\r\nIn WebP.Decode");
             }
-            finally
-            {
+            finally {
                 //Unlock the pixels
                 if (bmpData != null)
                     bmp.UnlockBits(bmpData);
@@ -212,14 +193,12 @@ namespace iBarter
         /// <param name="width">Wanted width of thumbnail</param>
         /// <param name="height">Wanted height of thumbnail</param>
         /// <returns>Bitmap with the WebP thumbnail in 24bpp</returns>
-        public Bitmap GetThumbnailFast(byte[] rawWebP, int width, int height)
-        {
+        public Bitmap GetThumbnailFast(byte[] rawWebP, int width, int height) {
             var pinnedWebP = GCHandle.Alloc(rawWebP, GCHandleType.Pinned);
             Bitmap bmp = null;
             BitmapData bmpData = null;
 
-            try
-            {
+            try {
                 var config = new WebPDecoderConfig();
                 if (UnsafeNativeMethods.WebPInitDecoderConfig(ref config) == 0)
                     throw new Exception("WebPInitDecoderConfig failed. Wrong version?");
@@ -255,12 +234,10 @@ namespace iBarter
 
                 return bmp;
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 throw new Exception(ex.Message + "\r\nIn WebP.Thumbnail");
             }
-            finally
-            {
+            finally {
                 //Unlock the pixels
                 if (bmpData != null)
                     bmp.UnlockBits(bmpData);
@@ -276,14 +253,12 @@ namespace iBarter
         /// <param name="width">Wanted width of thumbnail</param>
         /// <param name="height">Wanted height of thumbnail</param>
         /// <returns>Bitmap with the WebP thumbnail</returns>
-        public Bitmap GetThumbnailQuality(byte[] rawWebP, int width, int height)
-        {
+        public Bitmap GetThumbnailQuality(byte[] rawWebP, int width, int height) {
             var pinnedWebP = GCHandle.Alloc(rawWebP, GCHandleType.Pinned);
             Bitmap bmp = null;
             BitmapData bmpData = null;
 
-            try
-            {
+            try {
                 var config = new WebPDecoderConfig();
                 if (UnsafeNativeMethods.WebPInitDecoderConfig(ref config) == 0)
                     throw new Exception("WebPInitDecoderConfig failed. Wrong version?");
@@ -302,13 +277,11 @@ namespace iBarter
                 config.options.scaled_height = height;
 
                 //Create a BitmapData and Lock all pixels to be written
-                if (config.input.Has_alpha == 1)
-                {
+                if (config.input.Has_alpha == 1) {
                     config.output.colorspace = WEBP_CSP_MODE.MODE_bgrA;
                     bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
                 }
-                else
-                {
+                else {
                     config.output.colorspace = WEBP_CSP_MODE.MODE_BGR;
                     bmp = new Bitmap(width, height, PixelFormat.Format24bppRgb);
                 }
@@ -332,12 +305,10 @@ namespace iBarter
 
                 return bmp;
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 throw new Exception(ex.Message + "\r\nIn WebP.Thumbnail");
             }
-            finally
-            {
+            finally {
                 //Unlock the pixels
                 if (bmpData != null)
                     bmp.UnlockBits(bmpData);
@@ -356,20 +327,17 @@ namespace iBarter
         /// <param name="bmp">Bitmap with the WebP image</param>
         /// <param name="pathFileName">The file to write</param>
         /// <param name="quality">Between 0 (lower quality, lowest file size) and 100 (highest quality, higher file size)</param>
-        public void Save(Bitmap bmp, string pathFileName, int quality = 75)
-        {
+        public void Save(Bitmap bmp, string pathFileName, int quality = 75) {
             byte[] rawWebP;
 
-            try
-            {
+            try {
                 //Encode in webP format
                 rawWebP = EncodeLossy(bmp, quality);
 
                 //Write webP file
                 File.WriteAllBytes(pathFileName, rawWebP);
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 throw new Exception(ex.Message + "\r\nIn WebP.Save");
             }
         }
@@ -378,8 +346,7 @@ namespace iBarter
         /// <param name="bmp">Bitmap with the image</param>
         /// <param name="quality">Between 0 (lower quality, lowest file size) and 100 (highest quality, higher file size)</param>
         /// <returns>Compressed data</returns>
-        public byte[] EncodeLossy(Bitmap bmp, int quality = 75)
-        {
+        public byte[] EncodeLossy(Bitmap bmp, int quality = 75) {
             //test bmp
             if (bmp.Width == 0 || bmp.Height == 0)
                 throw new ArgumentException("Bitmap contains no data.", "bmp");
@@ -391,8 +358,7 @@ namespace iBarter
             BitmapData bmpData = null;
             var unmanagedData = IntPtr.Zero;
 
-            try
-            {
+            try {
                 int size;
 
                 //Get bmp data
@@ -412,12 +378,10 @@ namespace iBarter
 
                 return rawWebP;
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 throw new Exception(ex.Message + "\r\nIn WebP.EncodeLossly");
             }
-            finally
-            {
+            finally {
                 //Unlock the pixels
                 if (bmpData != null)
                     bmp.UnlockBits(bmpData);
@@ -433,8 +397,7 @@ namespace iBarter
         /// <param name="quality">Between 0 (lower quality, lowest file size) and 100 (highest quality, higher file size)</param>
         /// <param name="speed">Between 0 (fastest, lowest compression) and 9 (slower, best compression)</param>
         /// <returns>Compressed data</returns>
-        public byte[] EncodeLossy(Bitmap bmp, int quality, int speed, bool info = false)
-        {
+        public byte[] EncodeLossy(Bitmap bmp, int quality, int speed, bool info = false) {
             //Initialize configuration structure
             var config = new WebPConfig();
 
@@ -461,8 +424,7 @@ namespace iBarter
                 config.preprocessing = 4;
                 config.use_sharp_yuv = 1;
             }
-            else
-            {
+            else {
                 config.preprocessing = 3;
             }
 
@@ -472,8 +434,7 @@ namespace iBarter
         /// <summary>Lossless encoding bitmap to WebP (Simple encoding API)</summary>
         /// <param name="bmp">Bitmap with the image</param>
         /// <returns>Compressed data</returns>
-        public byte[] EncodeLossless(Bitmap bmp)
-        {
+        public byte[] EncodeLossless(Bitmap bmp) {
             //test bmp
             if (bmp.Width == 0 || bmp.Height == 0)
                 throw new ArgumentException("Bitmap contains no data.", "bmp");
@@ -484,8 +445,7 @@ namespace iBarter
 
             BitmapData bmpData = null;
             var unmanagedData = IntPtr.Zero;
-            try
-            {
+            try {
                 //Get bmp data
                 bmpData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, bmp.PixelFormat);
 
@@ -502,12 +462,10 @@ namespace iBarter
 
                 return rawWebP;
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 throw new Exception(ex.Message + "\r\nIn WebP.EncodeLossless (Simple)");
             }
-            finally
-            {
+            finally {
                 //Unlock the pixels
                 if (bmpData != null)
                     bmp.UnlockBits(bmpData);
@@ -522,8 +480,7 @@ namespace iBarter
         /// <param name="bmp">Bitmap with the image</param>
         /// <param name="speed">Between 0 (fastest, lowest compression) and 9 (slower, best compression)</param>
         /// <returns>Compressed data</returns>
-        public byte[] EncodeLossless(Bitmap bmp, int speed)
-        {
+        public byte[] EncodeLossless(Bitmap bmp, int speed) {
             //Initialize configuration structure
             var config = new WebPConfig();
 
@@ -532,13 +489,11 @@ namespace iBarter
                 throw new Exception("Can´t config preset");
 
             //Old version of DLL does not support info and WebPConfigLosslessPreset
-            if (UnsafeNativeMethods.WebPGetDecoderVersion() > 1082)
-            {
+            if (UnsafeNativeMethods.WebPGetDecoderVersion() > 1082) {
                 if (UnsafeNativeMethods.WebPConfigLosslessPreset(ref config, speed) == 0)
                     throw new Exception("Can´t configure lossless preset");
             }
-            else
-            {
+            else {
                 config.lossless = 1;
                 config.method = speed;
                 if (config.method > 6)
@@ -560,8 +515,7 @@ namespace iBarter
         /// <param name="quality">Between 0 (lower quality, lowest file size) and 100 (highest quality, higher file size)</param>
         /// <param name="speed">Between 0 (fastest, lowest compression) and 9 (slower, best compression)</param>
         /// <returns>Compress data</returns>
-        public byte[] EncodeNearLossless(Bitmap bmp, int quality, int speed = 9)
-        {
+        public byte[] EncodeNearLossless(Bitmap bmp, int quality, int speed = 9) {
             //test DLL version
             if (UnsafeNativeMethods.WebPGetDecoderVersion() <= 1082)
                 throw new Exception("This DLL version not support EncodeNearLossless");
@@ -590,18 +544,15 @@ namespace iBarter
 
         /// <summary>Get the libwebp version</summary>
         /// <returns>Version of library</returns>
-        public string GetVersion()
-        {
-            try
-            {
+        public string GetVersion() {
+            try {
                 var v = (uint)UnsafeNativeMethods.WebPGetDecoderVersion();
                 var revision = v % 256;
                 var minor = (v >> 8) % 256;
                 var major = (v >> 16) % 256;
                 return major + "." + minor + "." + revision;
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 throw new Exception(ex.Message + "\r\nIn WebP.GetVersion");
             }
         }
@@ -613,13 +564,11 @@ namespace iBarter
         /// <param name="has_alpha">Image has alpha channel</param>
         /// <param name="has_animation">Image is a animation</param>
         /// <param name="format">Format of image: 0 = undefined (/mixed), 1 = lossy, 2 = lossless</param>
-        public void GetInfo(byte[] rawWebP, out int width, out int height, out bool has_alpha, out bool has_animation, out string format)
-        {
+        public void GetInfo(byte[] rawWebP, out int width, out int height, out bool has_alpha, out bool has_animation, out string format) {
             VP8StatusCode result;
             var pinnedWebP = GCHandle.Alloc(rawWebP, GCHandleType.Pinned);
 
-            try
-            {
+            try {
                 var ptrRawWebP = pinnedWebP.AddrOfPinnedObject();
 
                 var features = new WebPBitstreamFeatures();
@@ -634,8 +583,7 @@ namespace iBarter
                 else has_alpha = false;
                 if (features.Has_animation == 1) has_animation = true;
                 else has_animation = false;
-                switch (features.Format)
-                {
+                switch (features.Format) {
                     case 1:
                         format = "lossy";
                         break;
@@ -647,12 +595,10 @@ namespace iBarter
                         break;
                 }
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 throw new Exception(ex.Message + "\r\nIn WebP.GetInfo");
             }
-            finally
-            {
+            finally {
                 //Free memory
                 if (pinnedWebP.IsAllocated)
                     pinnedWebP.Free();
@@ -667,8 +613,7 @@ namespace iBarter
         /// <param name="reference">Reference picture</param>
         /// <param name="metric_type">0 = PSNR, 1 = SSIM, 2 = LSIM</param>
         /// <returns>dB in the Y/U/V/Alpha/All order</returns>
-        public float[] GetPictureDistortion(Bitmap source, Bitmap reference, int metric_type)
-        {
+        public float[] GetPictureDistortion(Bitmap source, Bitmap reference, int metric_type) {
             var wpicSource = new WebPPicture();
             var wpicReference = new WebPPicture();
             BitmapData sourceBmpData = null;
@@ -676,8 +621,7 @@ namespace iBarter
             var result = new float[5];
             var pinnedResult = GCHandle.Alloc(result, GCHandleType.Pinned);
 
-            try
-            {
+            try {
                 if (source == null)
                     throw new Exception("Source picture is void");
                 if (reference == null)
@@ -696,14 +640,12 @@ namespace iBarter
                 wpicSource.height = source.Height;
 
                 //Put the source bitmap componets in wpic
-                if (sourceBmpData.PixelFormat == PixelFormat.Format32bppArgb)
-                {
+                if (sourceBmpData.PixelFormat == PixelFormat.Format32bppArgb) {
                     wpicSource.use_argb = 1;
                     if (UnsafeNativeMethods.WebPPictureImportBGRA(ref wpicSource, sourceBmpData.Scan0, sourceBmpData.Stride) != 1)
                         throw new Exception("Can´t allocate memory in WebPPictureImportBGR");
                 }
-                else
-                {
+                else {
                     wpicSource.use_argb = 0;
                     if (UnsafeNativeMethods.WebPPictureImportBGR(ref wpicSource, sourceBmpData.Scan0, sourceBmpData.Stride) != 1)
                         throw new Exception("Can´t allocate memory in WebPPictureImportBGR");
@@ -719,14 +661,12 @@ namespace iBarter
                 wpicReference.use_argb = 1;
 
                 //Put the source bitmap contents in WebPPicture instance
-                if (sourceBmpData.PixelFormat == PixelFormat.Format32bppArgb)
-                {
+                if (sourceBmpData.PixelFormat == PixelFormat.Format32bppArgb) {
                     wpicSource.use_argb = 1;
                     if (UnsafeNativeMethods.WebPPictureImportBGRA(ref wpicReference, referenceBmpData.Scan0, referenceBmpData.Stride) != 1)
                         throw new Exception("Can´t allocate memory in WebPPictureImportBGR");
                 }
-                else
-                {
+                else {
                     wpicSource.use_argb = 0;
                     if (UnsafeNativeMethods.WebPPictureImportBGR(ref wpicReference, referenceBmpData.Scan0, referenceBmpData.Stride) != 1)
                         throw new Exception("Can´t allocate memory in WebPPictureImportBGR");
@@ -738,12 +678,10 @@ namespace iBarter
                     throw new Exception("Can´t measure.");
                 return result;
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 throw new Exception(ex.Message + "\r\nIn WebP.GetPictureDistortion");
             }
-            finally
-            {
+            finally {
                 //Unlock the pixels
                 if (sourceBmpData != null)
                     source.UnlockBits(sourceBmpData);
@@ -770,8 +708,7 @@ namespace iBarter
         /// <param name="config">Configuration for encode</param>
         /// <param name="info">True if need encode info.</param>
         /// <returns>Compressed data</returns>
-        private byte[] AdvancedEncode(Bitmap bmp, WebPConfig config, bool info)
-        {
+        private byte[] AdvancedEncode(Bitmap bmp, WebPConfig config, bool info) {
             byte[] rawWebP = null;
             byte[] dataWebp = null;
             var wpic = new WebPPicture();
@@ -780,8 +717,7 @@ namespace iBarter
             var ptrStats = IntPtr.Zero;
             var pinnedArrayHandle = new GCHandle();
             int dataWebpSize;
-            try
-            {
+            try {
                 //Validate the configuration
                 if (UnsafeNativeMethods.WebPValidateConfig(ref config) != 1)
                     throw new Exception("Bad configuration parameters");
@@ -802,8 +738,7 @@ namespace iBarter
                 wpic.height = bmp.Height;
                 wpic.use_argb = 1;
 
-                if (bmp.PixelFormat == PixelFormat.Format32bppArgb)
-                {
+                if (bmp.PixelFormat == PixelFormat.Format32bppArgb) {
                     //Put the bitmap componets in wpic
                     var result = UnsafeNativeMethods.WebPPictureImportBGRA(ref wpic, bmpData.Scan0, bmpData.Stride);
                     if (result != 1)
@@ -812,8 +747,7 @@ namespace iBarter
                     dataWebpSize = bmp.Width * bmp.Height * 32;
                     dataWebp = new byte[bmp.Width * bmp.Height * 32]; //Memory for WebP output
                 }
-                else
-                {
+                else {
                     //Put the bitmap contents in WebPPicture instance
                     var result = UnsafeNativeMethods.WebPPictureImportBGR(ref wpic, bmpData.Scan0, bmpData.Stride);
                     if (result != 1)
@@ -822,8 +756,7 @@ namespace iBarter
                 }
 
                 //Set up statistics of compression
-                if (info)
-                {
+                if (info) {
                     stats = new WebPAuxStats();
                     ptrStats = Marshal.AllocHGlobal(Marshal.SizeOf(stats));
                     Marshal.StructureToPtr(stats, ptrStats, false);
@@ -863,8 +796,7 @@ namespace iBarter
                 dataWebp = null;
 
                 //Show statistics
-                if (info)
-                {
+                if (info) {
                     stats = (WebPAuxStats)Marshal.PtrToStructure(ptrStats, typeof(WebPAuxStats));
                     MessageBox.Show(
                         "Dimension: " + wpic.width + " x " + wpic.height + " pixels\n" + "Output:    " + stats.coded_size + " bytes\n" + "PSNR Y:    " + stats.PSNRY + " db\n" + "PSNR u:    " + stats.PSNRU + " db\n" + "PSNR v:    " + stats.PSNRV + " db\n" + "PSNR ALL:  " + stats.PSNRALL + " db\n" + "Block intra4:  " + stats.block_count_intra4 + "\n" + "Block intra16: " + stats.block_count_intra16 + "\n" + "Block skipped: " + stats.block_count_skipped + "\n" + "Header size:    " + stats.header_bytes + " bytes\n" + "Mode-partition: " + stats.mode_partition_0 + " bytes\n" + "Macro-blocks 0: " + stats.segment_size_segments0 + " residuals bytes\n" + "Macro-blocks 1: " + stats.segment_size_segments1 + " residuals bytes\n" + "Macro-blocks 2: " + stats.segment_size_segments2 + " residuals bytes\n" + "Macro-blocks 3: " + stats.segment_size_segments3 + " residuals bytes\n" + "Quantizer    0: " + stats.segment_quant_segments0 + " residuals bytes\n" + "Quantizer    1: " + stats.segment_quant_segments1 + " residuals bytes\n" + "Quantizer    2: " + stats.segment_quant_segments2 + " residuals bytes\n" + "Quantizer    3: " + stats.segment_quant_segments3 + " residuals bytes\n" +
@@ -873,12 +805,10 @@ namespace iBarter
 
                 return rawWebP;
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 throw new Exception(ex.Message + "\r\nIn WebP.AdvancedEncode");
             }
-            finally
-            {
+            finally {
                 //Free temporal compress memory
                 if (pinnedArrayHandle.IsAllocated) pinnedArrayHandle.Free();
 
@@ -893,8 +823,7 @@ namespace iBarter
             }
         }
 
-        private int MyWriter([InAttribute] IntPtr data, UIntPtr data_size, ref WebPPicture picture)
-        {
+        private int MyWriter([InAttribute] IntPtr data, UIntPtr data_size, ref WebPPicture picture) {
             UnsafeNativeMethods.CopyMemory(picture.custom_ptr, data, (uint)data_size);
             //picture.custom_ptr = IntPtr.Add(picture.custom_ptr, (int)data_size);   //Only in .NET > 4.0
             picture.custom_ptr = new IntPtr(picture.custom_ptr.ToInt64() + (int)data_size);
@@ -909,8 +838,7 @@ namespace iBarter
     #region | Import libwebp functions |
 
     [SuppressUnmanagedCodeSecurityAttribute]
-    internal sealed class UnsafeNativeMethods
-    {
+    internal sealed class UnsafeNativeMethods {
         private static readonly int WEBP_DECODER_ABI_VERSION = 0x0208;
         internal static WebPMemoryWrite OnCallback;
 
@@ -925,10 +853,8 @@ namespace iBarter
         /// <param name="preset">Type of image</param>
         /// <param name="quality">Quality of compression</param>
         /// <returns>0 if error</returns>
-        internal static int WebPConfigInit(ref WebPConfig config, WebPPreset preset, float quality)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPConfigInit(ref WebPConfig config, WebPPreset preset, float quality) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPConfigInitInternal_x86(ref config, preset, quality, WEBP_DECODER_ABI_VERSION);
                 case 8:
@@ -949,10 +875,8 @@ namespace iBarter
         /// <param name="data_size">Size of rawWebP</param>
         /// <param name="features">Features of WebP image</param>
         /// <returns>VP8StatusCode</returns>
-        internal static VP8StatusCode WebPGetFeatures(IntPtr rawWebP, int data_size, ref WebPBitstreamFeatures features)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static VP8StatusCode WebPGetFeatures(IntPtr rawWebP, int data_size, ref WebPBitstreamFeatures features) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPGetFeaturesInternal_x86(rawWebP, (UIntPtr)data_size, ref features, WEBP_DECODER_ABI_VERSION);
                 case 8:
@@ -972,10 +896,8 @@ namespace iBarter
         /// <param name="config">The WebPConfig struct</param>
         /// <param name="level">between 0 (fastest, lowest compression) and 9 (slower, best compression)</param>
         /// <returns>0 in case of parameter error</returns>
-        internal static int WebPConfigLosslessPreset(ref WebPConfig config, int level)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPConfigLosslessPreset(ref WebPConfig config, int level) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPConfigLosslessPreset_x86(ref config, level);
                 case 8:
@@ -994,10 +916,8 @@ namespace iBarter
         /// <summary>Check that configuration is non-NULL and all configuration parameters are within their valid ranges</summary>
         /// <param name="config">The WebPConfig structure</param>
         /// <returns>1 if configuration is OK</returns>
-        internal static int WebPValidateConfig(ref WebPConfig config)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPValidateConfig(ref WebPConfig config) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPValidateConfig_x86(ref config);
                 case 8:
@@ -1016,10 +936,8 @@ namespace iBarter
         /// <summary>Initialize the WebPPicture structure checking the DLL version</summary>
         /// <param name="wpic">The WebPPicture structure</param>
         /// <returns>1 if not error</returns>
-        internal static int WebPPictureInitInternal(ref WebPPicture wpic)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPPictureInitInternal(ref WebPPicture wpic) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPPictureInitInternal_x86(ref wpic, WEBP_DECODER_ABI_VERSION);
                 case 8:
@@ -1040,10 +958,8 @@ namespace iBarter
         /// <param name="bgr">PointPlus to BGR data</param>
         /// <param name="stride">stride of BGR data</param>
         /// <returns>Returns 0 in case of memory error.</returns>
-        internal static int WebPPictureImportBGR(ref WebPPicture wpic, IntPtr bgr, int stride)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPPictureImportBGR(ref WebPPicture wpic, IntPtr bgr, int stride) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPPictureImportBGR_x86(ref wpic, bgr, stride);
                 case 8:
@@ -1064,10 +980,8 @@ namespace iBarter
         /// <param name="bgra">PointPlus to BGRA data</param>
         /// <param name="stride">stride of BGRA data</param>
         /// <returns>Returns 0 in case of memory error.</returns>
-        internal static int WebPPictureImportBGRA(ref WebPPicture wpic, IntPtr bgra, int stride)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPPictureImportBGRA(ref WebPPicture wpic, IntPtr bgra, int stride) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPPictureImportBGRA_x86(ref wpic, bgra, stride);
                 case 8:
@@ -1088,10 +1002,8 @@ namespace iBarter
         /// <param name="bgr">PointPlus to BGR data</param>
         /// <param name="stride">stride of BGR data</param>
         /// <returns>Returns 0 in case of memory error.</returns>
-        internal static int WebPPictureImportBGRX(ref WebPPicture wpic, IntPtr bgr, int stride)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPPictureImportBGRX(ref WebPPicture wpic, IntPtr bgr, int stride) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPPictureImportBGRX_x86(ref wpic, bgr, stride);
                 case 8:
@@ -1111,10 +1023,8 @@ namespace iBarter
         /// <param name="config">The configuration structure for compression parameters</param>
         /// <param name="picture">'picture' hold the source samples in both YUV(A) or ARGB input</param>
         /// <returns>Returns 0 in case of error, 1 otherwise. In case of error, picture->error_code is updated accordingly.</returns>
-        internal static int WebPEncode(ref WebPConfig config, ref WebPPicture picture)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPEncode(ref WebPConfig config, ref WebPPicture picture) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPEncode_x86(ref config, ref picture);
                 case 8:
@@ -1136,10 +1046,8 @@ namespace iBarter
         ///     Besides memory (which is reclaimed) all other fields of 'picture' are preserved
         /// </summary>
         /// <param name="picture">Picture structure</param>
-        internal static void WebPPictureFree(ref WebPPicture picture)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static void WebPPictureFree(ref WebPPicture picture) {
+            switch (IntPtr.Size) {
                 case 4:
                     WebPPictureFree_x86(ref picture);
                     break;
@@ -1166,10 +1074,8 @@ namespace iBarter
         /// <param name="width">The range is limited currently from 1 to 16383</param>
         /// <param name="height">The range is limited currently from 1 to 16383</param>
         /// <returns>1 if success, otherwise error code returned in the case of (a) formatting error(s).</returns>
-        internal static int WebPGetInfo(IntPtr data, int data_size, out int width, out int height)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPGetInfo(IntPtr data, int data_size, out int width, out int height) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPGetInfo_x86(data, (UIntPtr)data_size, out width, out height);
                 case 8:
@@ -1191,10 +1097,8 @@ namespace iBarter
         /// <param name="output_buffer">Pointer to decoded WebP image</param>
         /// <param name="output_buffer_size">Size of allocated buffer</param>
         /// <param name="output_stride">Specifies the distance between scan lines</param>
-        internal static void WebPDecodeBGRInto(IntPtr data, int data_size, IntPtr output_buffer, int output_buffer_size, int output_stride)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static void WebPDecodeBGRInto(IntPtr data, int data_size, IntPtr output_buffer, int output_buffer_size, int output_stride) {
+            switch (IntPtr.Size) {
                 case 4:
                     if (WebPDecodeBGRInto_x86(data, (UIntPtr)data_size, output_buffer, output_buffer_size, output_stride) == null)
                         throw new InvalidOperationException("Can not decode WebP");
@@ -1220,10 +1124,8 @@ namespace iBarter
         /// <param name="output_buffer">Pointer to decoded WebP image</param>
         /// <param name="output_buffer_size">Size of allocated buffer</param>
         /// <param name="output_stride">Specifies the distance between scan lines</param>
-        internal static void WebPDecodeBGRAInto(IntPtr data, int data_size, IntPtr output_buffer, int output_buffer_size, int output_stride)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static void WebPDecodeBGRAInto(IntPtr data, int data_size, IntPtr output_buffer, int output_buffer_size, int output_stride) {
+            switch (IntPtr.Size) {
                 case 4:
                     if (WebPDecodeBGRAInto_x86(data, (UIntPtr)data_size, output_buffer, output_buffer_size, output_stride) == null)
                         throw new InvalidOperationException("Can not decode WebP");
@@ -1249,10 +1151,8 @@ namespace iBarter
         /// <param name="output_buffer">Pointer to decoded WebP image</param>
         /// <param name="output_buffer_size">Size of allocated buffer</param>
         /// <param name="output_stride">Specifies the distance between scan lines</param>
-        internal static void WebPDecodeARGBInto(IntPtr data, int data_size, IntPtr output_buffer, int output_buffer_size, int output_stride)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static void WebPDecodeARGBInto(IntPtr data, int data_size, IntPtr output_buffer, int output_buffer_size, int output_stride) {
+            switch (IntPtr.Size) {
                 case 4:
                     if (WebPDecodeARGBInto_x86(data, (UIntPtr)data_size, output_buffer, output_buffer_size, output_stride) == null)
                         throw new InvalidOperationException("Can not decode WebP");
@@ -1278,10 +1178,8 @@ namespace iBarter
         /// </summary>
         /// <param name="webPDecoderConfig">Configuration structure</param>
         /// <returns>False in case of mismatched version.</returns>
-        internal static int WebPInitDecoderConfig(ref WebPDecoderConfig webPDecoderConfig)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPInitDecoderConfig(ref WebPDecoderConfig webPDecoderConfig) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPInitDecoderConfigInternal_x86(ref webPDecoderConfig, WEBP_DECODER_ABI_VERSION);
                 case 8:
@@ -1302,10 +1200,8 @@ namespace iBarter
         /// <param name="data_size">Size of WebP data </param>
         /// <param name="webPDecoderConfig">Configuration structure</param>
         /// <returns>VP8_STATUS_OK if the decoding was successful</returns>
-        internal static VP8StatusCode WebPDecode(IntPtr data, int data_size, ref WebPDecoderConfig webPDecoderConfig)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static VP8StatusCode WebPDecode(IntPtr data, int data_size, ref WebPDecoderConfig webPDecoderConfig) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPDecode_x86(data, (UIntPtr)data_size, ref webPDecoderConfig);
                 case 8:
@@ -1326,10 +1222,8 @@ namespace iBarter
         ///     itself
         /// </summary>
         /// <param name="buffer">WebPDecBuffer</param>
-        internal static void WebPFreeDecBuffer(ref WebPDecBuffer buffer)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static void WebPFreeDecBuffer(ref WebPDecBuffer buffer) {
+            switch (IntPtr.Size) {
                 case 4:
                     WebPFreeDecBuffer_x86(ref buffer);
                     break;
@@ -1358,10 +1252,8 @@ namespace iBarter
         /// </param>
         /// <param name="output">output_buffer with WebP image</param>
         /// <returns>Size of WebP Image or 0 if an error occurred</returns>
-        internal static int WebPEncodeBGR(IntPtr bgr, int width, int height, int stride, float quality_factor, out IntPtr output)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPEncodeBGR(IntPtr bgr, int width, int height, int stride, float quality_factor, out IntPtr output) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPEncodeBGR_x86(bgr, width, height, stride, quality_factor, out output);
                 case 8:
@@ -1388,10 +1280,8 @@ namespace iBarter
         /// </param>
         /// <param name="output">output_buffer with WebP image</param>
         /// <returns>Size of WebP Image or 0 if an error occurred</returns>
-        internal static int WebPEncodeBGRA(IntPtr bgra, int width, int height, int stride, float quality_factor, out IntPtr output)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPEncodeBGRA(IntPtr bgra, int width, int height, int stride, float quality_factor, out IntPtr output) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPEncodeBGRA_x86(bgra, width, height, stride, quality_factor, out output);
                 case 8:
@@ -1414,10 +1304,8 @@ namespace iBarter
         /// <param name="stride">Specifies the distance between scan lines</param>
         /// <param name="output">output_buffer with WebP image</param>
         /// <returns>Size of WebP Image or 0 if an error occurred</returns>
-        internal static int WebPEncodeLosslessBGR(IntPtr bgr, int width, int height, int stride, out IntPtr output)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPEncodeLosslessBGR(IntPtr bgr, int width, int height, int stride, out IntPtr output) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPEncodeLosslessBGR_x86(bgr, width, height, stride, out output);
                 case 8:
@@ -1440,10 +1328,8 @@ namespace iBarter
         /// <param name="stride">Specifies the distance between scan lines</param>
         /// <param name="output">output_buffer with WebP image</param>
         /// <returns>Size of WebP Image or 0 if an error occurred</returns>
-        internal static int WebPEncodeLosslessBGRA(IntPtr bgra, int width, int height, int stride, out IntPtr output)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPEncodeLosslessBGRA(IntPtr bgra, int width, int height, int stride, out IntPtr output) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPEncodeLosslessBGRA_x86(bgra, width, height, stride, out output);
                 case 8:
@@ -1461,10 +1347,8 @@ namespace iBarter
 
         /// <summary>Releases memory returned by the WebPEncode</summary>
         /// <param name="p">Pointer to memory</param>
-        internal static void WebPFree(IntPtr p)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static void WebPFree(IntPtr p) {
+            switch (IntPtr.Size) {
                 case 4:
                     WebPFree_x86(p);
                     break;
@@ -1484,10 +1368,8 @@ namespace iBarter
 
         /// <summary>Get the WebP version library</summary>
         /// <returns>8bits for each of major/minor/revision packet in integer. E.g: v2.5.7 is 0x020507</returns>
-        internal static int WebPGetDecoderVersion()
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPGetDecoderVersion() {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPGetDecoderVersion_x86();
                 case 8:
@@ -1509,10 +1391,8 @@ namespace iBarter
         /// <param name="metric_type">0 = PSNR, 1 = SSIM, 2 = LSIM</param>
         /// <param name="pResult">dB in the Y/U/V/Alpha/All order</param>
         /// <returns>False in case of error (the two pictures don't have same dimension, ...)</returns>
-        internal static int WebPPictureDistortion(ref WebPPicture srcPicture, ref WebPPicture refPicture, int metric_type, IntPtr pResult)
-        {
-            switch (IntPtr.Size)
-            {
+        internal static int WebPPictureDistortion(ref WebPPicture srcPicture, ref WebPPicture refPicture, int metric_type, IntPtr pResult) {
+            switch (IntPtr.Size) {
                 case 4:
                     return WebPPictureDistortion_x86(ref srcPicture, ref refPicture, metric_type, pResult);
                 case 8:
@@ -1545,8 +1425,7 @@ namespace iBarter
     ///     Enumerate some predefined settings for WebPConfig, depending on the type of source picture. These presets are
     ///     used when calling WebPConfigPreset()
     /// </summary>
-    internal enum WebPPreset
-    {
+    internal enum WebPPreset {
         /// <summary>Default preset</summary>
         WEBP_PRESET_DEFAULT = 0,
 
@@ -1567,8 +1446,7 @@ namespace iBarter
     }
 
     /// <summary>Encoding error conditions</summary>
-    internal enum WebPEncodingError
-    {
+    internal enum WebPEncodingError {
         /// <summary>No error</summary>
         VP8_ENC_OK = 0,
 
@@ -1607,8 +1485,7 @@ namespace iBarter
     }
 
     /// <summary>Enumeration of the status codes</summary>
-    internal enum VP8StatusCode
-    {
+    internal enum VP8StatusCode {
         /// <summary>No error</summary>
         VP8_STATUS_OK = 0,
 
@@ -1629,8 +1506,7 @@ namespace iBarter
     }
 
     /// <summary>Image characteristics hint for the underlying encoder</summary>
-    internal enum WebPImageHint
-    {
+    internal enum WebPImageHint {
         /// <summary>Default preset</summary>
         WEBP_HINT_DEFAULT = 0,
 
@@ -1648,8 +1524,7 @@ namespace iBarter
     }
 
     /// <summary>Describes the byte-ordering of packed samples in memory</summary>
-    internal enum WEBP_CSP_MODE
-    {
+    internal enum WEBP_CSP_MODE {
         /// <summary>Byte-order: R,G,B,R,G,B,..</summary>
         MODE_RGB = 0,
 
@@ -1707,8 +1582,7 @@ namespace iBarter
     ///     WEBP_HEADER->VP8L_HEADER->VP8L_DATA->DONE for a lossless image.
     ///     If there is any error the decoder goes into state ERROR.
     /// </summary>
-    internal enum DecState
-    {
+    internal enum DecState {
         STATE_WEBP_HEADER, // All the data before that of the VP8/VP8L chunk.
         STATE_VP8_HEADER, // The VP8 Frame header (within the VP8 chunk).
         STATE_VP8_PARTS0,
@@ -1725,8 +1599,7 @@ namespace iBarter
 
     /// <summary>Features gathered from the bit stream</summary>
     [StructLayoutAttribute(LayoutKind.Sequential)]
-    internal struct WebPBitstreamFeatures
-    {
+    internal struct WebPBitstreamFeatures {
         /// <summary>Width in pixels, as read from the bit stream</summary>
         public int Width;
 
@@ -1749,8 +1622,7 @@ namespace iBarter
 
     /// <summary>Compression parameters</summary>
     [StructLayoutAttribute(LayoutKind.Sequential)]
-    internal struct WebPConfig
-    {
+    internal struct WebPConfig {
         /// <summary>Lossless encoding (0=lossy(default), 1=lossless)</summary>
         public int lossless;
 
@@ -1849,8 +1721,7 @@ namespace iBarter
 
     /// <summary>Main exchange structure (input samples, output bytes, statistics)</summary>
     [StructLayoutAttribute(LayoutKind.Sequential)]
-    internal struct WebPPicture
-    {
+    internal struct WebPPicture {
         /// <summary>
         ///     Main flag for encoder selecting between ARGB or YUV input. Recommended to use ARGB input (*argb, argb_stride)
         ///     for lossless, and YUV input (*y, *u, *v, etc.) for lossy
@@ -1949,8 +1820,7 @@ namespace iBarter
 
     /// <summary>Structure for storing auxiliary statistics (mostly for lossy encoding)</summary>
     [StructLayoutAttribute(LayoutKind.Sequential)]
-    internal struct WebPAuxStats
-    {
+    internal struct WebPAuxStats {
         /// <summary>Final size</summary>
         public int coded_size;
 
@@ -2093,8 +1963,7 @@ namespace iBarter
     }
 
     [StructLayoutAttribute(LayoutKind.Sequential)]
-    internal struct WebPDecoderConfig
-    {
+    internal struct WebPDecoderConfig {
         /// <summary>Immutable bit stream features (optional)</summary>
         public WebPBitstreamFeatures input;
 
@@ -2107,8 +1976,7 @@ namespace iBarter
 
     /// <summary>Output buffer</summary>
     [StructLayoutAttribute(LayoutKind.Sequential)]
-    internal struct WebPDecBuffer
-    {
+    internal struct WebPDecBuffer {
         /// <summary>Color space</summary>
         public WEBP_CSP_MODE colorspace;
 
@@ -2148,16 +2016,14 @@ namespace iBarter
 
     /// <summary>Union of buffer parameters</summary>
     [StructLayoutAttribute(LayoutKind.Explicit)]
-    internal struct RGBA_YUVA_Buffer
-    {
+    internal struct RGBA_YUVA_Buffer {
         [FieldOffsetAttribute(0)] public WebPRGBABuffer RGBA;
 
         [FieldOffsetAttribute(0)] public WebPYUVABuffer YUVA;
     }
 
     [StructLayoutAttribute(LayoutKind.Sequential)]
-    internal struct WebPYUVABuffer
-    {
+    internal struct WebPYUVABuffer {
         /// <summary>Pointer to luma samples</summary>
         public IntPtr y;
 
@@ -2197,8 +2063,7 @@ namespace iBarter
 
     /// <summary>Generic structure for describing the output sample buffer</summary>
     [StructLayoutAttribute(LayoutKind.Sequential)]
-    internal struct WebPRGBABuffer
-    {
+    internal struct WebPRGBABuffer {
         /// <summary>Pointer to RGBA samples</summary>
         public IntPtr rgba;
 
@@ -2211,8 +2076,7 @@ namespace iBarter
 
     /// <summary>Decoding options</summary>
     [StructLayout(LayoutKind.Sequential)]
-    public struct WebPDecoderOptions
-    {
+    public struct WebPDecoderOptions {
         /// <summary>If true, skip the in-loop filtering</summary>
         public int bypass_filtering;
 

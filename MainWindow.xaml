@@ -6,13 +6,10 @@
     xmlns:local="clr-namespace:iBarter"
     xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
     xmlns:esri="http://schemas.esri.com/arcgis/runtime/2013"
+    xmlns:view="clr-namespace:iBarter.View"
     x:Class="iBarter.MainWindow"
     mc:Ignorable="d"
     Title="MainWindow" Height="868" Width="1054" Loaded="Window_Loaded">
-
-    <Window.Resources>
-        <!-- <local:MapViewModel x:Key="MapViewModel" /> -->
-    </Window.Resources>
 
     <Grid>
         <Grid.ColumnDefinitions>
@@ -25,7 +22,7 @@
         </Grid.RowDefinitions>
 
         <Grid x:Name="MenuGrid" Grid.Row="0" Grid.ColumnSpan="2">
-            <local:BannerCombo HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+            <view:BannerCombo HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
             <Menu SnapsToDevicePixels="True" VerticalAlignment="Bottom"
                   HorizontalContentAlignment="Stretch">
 
@@ -38,55 +35,11 @@
                         </MenuItem.Icon>
                     </MenuItem>
                     <MenuItem x:Name="MenuItem_StorageManagement" Header="Storage Manager"
-                              Tag="StorageManagement" Click="MenuItem_StorageManagement_Click" >
+                              Tag="StorageManagement" Click="MenuItem_StorageManagement_Click">
                         <MenuItem.Icon>
                             <Image Source="Images\storage.png" />
                         </MenuItem.Icon>
                     </MenuItem>
-                    <!-- <MenuItem Header="Properties Window" -->
-                    <!--           Tag="Properties" Click="OnActivateWindow"> -->
-                    <!--     <MenuItem.Icon> -->
-                    <!--         <Image Source="Images\barter.png" /> -->
-                    <!--     </MenuItem.Icon> -->
-                    <!-- </MenuItem> -->
-                    <!-- <MenuItem Header="Class View" -->
-                    <!--           Tag="ClassView" Click="OnActivateWindow"> -->
-                    <!--     <MenuItem.Icon> -->
-                    <!--         <Image Source="Images\barter.png" /> -->
-                    <!--     </MenuItem.Icon> -->
-                    <!-- </MenuItem> -->
-                    <!-- <MenuItem Header="Toolbox" -->
-                    <!--           Tag="Toolbox" Click="OnActivateWindow"> -->
-                    <!--     <MenuItem.Icon> -->
-                    <!--         <Image Source="Images\barter.png" /> -->
-                    <!--     </MenuItem.Icon> -->
-                    <!-- </MenuItem> -->
-                    <!-- <MenuItem Header="Find Results" -->
-                    <!--           Tag="FindResults" Click="OnActivateWindow"> -->
-                    <!--     <MenuItem.Icon> -->
-                    <!--         <Image Source="Images\barter.png" /> -->
-                    <!--     </MenuItem.Icon> -->
-                    <!-- </MenuItem> -->
-                    <!-- <MenuItem Header="Error List" Tag="ErrorList" Click="OnActivateWindow"> -->
-                    <!--     <MenuItem.Icon> -->
-                    <!--         <Image Source="Images\barter.png" /> -->
-                    <!--     </MenuItem.Icon> -->
-                    <!-- </MenuItem> -->
-                    <!-- <MenuItem Header="Output" -->
-                    <!--           Tag="Output" Click="OnActivateWindow"> -->
-                    <!--     <MenuItem.Icon> -->
-                    <!--         <Image Source="Images\barter.png" /> -->
-                    <!--     </MenuItem.Icon> -->
-                    <!-- </MenuItem> -->
-                    <!-- <MenuItem Header="Find Symbol Results" -->
-                    <!--           Tag="FindSymbolResults" Click="OnActivateWindow"> -->
-                    <!--     <MenuItem.Icon> -->
-                    <!--         <Image Source="Images\barter.png" /> -->
-                    <!--     </MenuItem.Icon> -->
-                    <!-- </MenuItem> -->
-                    <!-- <MenuItem x:Name="Refresh" Header="Refresh" Click="Refresh_OnClick_Click" /> -->
-                    <!-- <MenuItem x:Name="Test" Header="Test" Click="Test_Click" /> -->
-                    <!-- <MenuItem Header="MenuItem" /> -->
                 </MenuItem>
             </Menu>
         </Grid>
@@ -119,30 +72,16 @@
             <ContentControl x:Name="document_Planner" syncfusion:DockingManager.CanDocument="True"
                             syncfusion:DockingManager.Header="Planner"
                             syncfusion:DockingManager.State="Document">
-                <local:PlannerControl x:Name="myPlannerControl"></local:PlannerControl>
+                <view:PlannerControl x:Name="myPlannerControl"></view:PlannerControl>
             </ContentControl>
             <ContentControl x:Name="document_Map" syncfusion:DockingManager.CanDocument="True"
                             syncfusion:DockingManager.Header="Map"
                             syncfusion:DockingManager.State="Document">
-
-                <!-- <src:MapControl x:Name="mapControl" Zoom="13" MaxZoom="24" MinZoom="1" /> -->
-                <!-- <GroupBox Name="mapgroup" VerticalContentAlignment="Stretch" HorizontalContentAlignment="Stretch"> -->
-                <!--     <src:MapControl x:Name="MainMap" Zoom="13" MaxZoom="24" MinZoom="1" /> -->
-                <!-- </GroupBox> -->
-                <Grid>
-
-                    <!-- <esri:MapView x:Name="MainMapView" -->
-                    <!--               Map="{Binding Map, Source={StaticResource MapViewModel}}" /> -->
-                    <local:MapControl x:Name="myMapControl" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-                </Grid>
+                <view:MapControl x:Name="myMapControl" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
             </ContentControl>
 
         </syncfusion:DockingManager>
-        <!-- <Grid> -->
-        <!--     <GroupBox Name="mapgroup" VerticalContentAlignment="Stretch" HorizontalContentAlignment="Stretch"> -->
-        <!--         <src:MapControl x:Name="MainMap" Zoom="13" MaxZoom="24" MinZoom="1" /> -->
-        <!--     </GroupBox> -->
-        <!-- </Grid> -->
+
         <Grid x:Name="StatusBar" Grid.Row="2" Grid.ColumnSpan="2">
             <StatusBar x:Name="myStatusBar" SnapsToDevicePixels="True" VerticalAlignment="Bottom"
                        HorizontalContentAlignment="Stretch" Height="20">

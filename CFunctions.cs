@@ -1,26 +1,19 @@
-﻿using System;
+﻿using PureDM;
 using System.Collections;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
 using Brush = System.Windows.Media.Brush;
-using Color = System.Drawing.Color;
-using System.Windows.Shapes;
 using Brushes = System.Windows.Media.Brushes;
+using Color = System.Drawing.Color;
 using Path = System.IO.Path;
-using Rectangle = System.Drawing.Rectangle;
-using System.Windows;
-using PureDM;
-using PureDM.Configs;
-using Point = System.Drawing.Point;
 using Size = System.Drawing.Size;
 using SystemColors = System.Drawing.SystemColors;
 
@@ -70,9 +63,9 @@ namespace iBarter {
         public void downloadMap() {
             try {
                 for (var x = 0; x < 127; x++)
-                for (var y = 0; y < 127; y++)
-                    DownloadMapImage("https://www.somethinglovely.net/bdo/tiles2/15/" + x + "_" + y + ".jpg",
-                        "D:\\Downloads\\Maps\\" + x + "_" + y + ".jpg", ImageFormat.Jpeg);
+                    for (var y = 0; y < 127; y++)
+                        DownloadMapImage("https://www.somethinglovely.net/bdo/tiles2/15/" + x + "_" + y + ".jpg",
+                            "D:\\Downloads\\Maps\\" + x + "_" + y + ".jpg", ImageFormat.Jpeg);
             }
             catch (ExternalException) {
                 // Something is wrong with Format -- Maybe required Format is not 
@@ -108,11 +101,11 @@ namespace iBarter {
             var imageHeights = new ArrayList();
 
             for (var x = 0; x < 127; x++)
-            for (var y = 0; y < 127; y++) {
-                var img = Image.FromFile(folderName + "\\" + x + "_" + y + ".jpg");
-                g.DrawImage(img, x * img0.Width, y * img0.Height);
-                img.Dispose();
-            }
+                for (var y = 0; y < 127; y++) {
+                    var img = Image.FromFile(folderName + "\\" + x + "_" + y + ".jpg");
+                    g.DrawImage(img, x * img0.Width, y * img0.Height);
+                    img.Dispose();
+                }
 
             //img3.Save("E:\\map.jpg",System.Drawing.Imaging.ImageFormat.Jpeg);
 

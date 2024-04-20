@@ -1,9 +1,6 @@
-﻿namespace iBarter
-{
-    public class EnumLists
-    {
-        public enum Island
-        {
+﻿namespace iBarter {
+    public class EnumLists {
+        public enum Island {
             Ajir,
             Albresser,
             Almai,
@@ -87,8 +84,7 @@
             UnKnown
         }
 
-        public enum Items
-        {
+        public enum Items {
         }
     }
 }

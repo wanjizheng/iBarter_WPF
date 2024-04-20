@@ -1,14 +1,11 @@
 ﻿using System.Windows.Controls;
 
-namespace iBarter
-{
+namespace iBarter.View {
     /// <summary>
     ///     Interaction logic for CharCombo.xaml
     /// </summary>
-    public partial class CharCombo : UserControl
-    {
-        public CharCombo()
-        {
+    public partial class CharCombo : UserControl {
+        public CharCombo() {
             InitializeComponent();
         }
     }

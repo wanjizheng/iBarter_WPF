@@ -1,28 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
 using System.Windows.Shapes;
-using Esri.ArcGISRuntime.UI;
-using iBarter.View;
-using Syncfusion.UI.Xaml.Grid;
-using Syncfusion.UI.Xaml.Grid.ScrollAxis;
-using Syncfusion.Windows.Controls.PivotGrid;
 using static iBarter.EnumLists;
 using Grid = System.Windows.Controls.Grid;
 using RowColumnIndex = Syncfusion.UI.Xaml.ScrollAxis.RowColumnIndex;
 
 
-namespace iBarter {
+namespace iBarter.View {
     /// <summary>
     /// Interaction logic for MapControl.xaml
     /// </summary>
@@ -31,9 +17,69 @@ namespace iBarter {
 
         public MapControl() {
             InitializeComponent();
-            // Islands myIsland = new Islands(Island.Albresser, 1000, 10);
-            // Barter myBater = new Barter(myIsland, App.listItems.FirstOrDefault(i => i.ItemName == "Panacea"), App.listItems.First(i => i.ItemName == "Mysterious Rock"), 10, false, 0, 0, 0);
-            // IslandsButtonInitialisation(myBater, Brushes.Gold);
+            InitTempGrid();
+        }
+
+        public void InitTempGrid() {
+            Islands myIsland = new Islands(Island.Ancient, 1000, 10);
+            Barter myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Cox_Pirates, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Rickun, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Cholace, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Haran, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Carrack, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Unfinished, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Lantinia, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Pakio, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Wandering, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Crow, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Halmad, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Kashuma, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Derko, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Hakoven, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
         }
 
         private void Grid_MapMain_SizeChanged(object sender, SizeChangedEventArgs e) {
@@ -41,6 +87,7 @@ namespace iBarter {
         }
 
         private void IslandsButtonRearrange() {
+            
             // Grid_Ajir.Margin = new Thickness(0.6325 * Grid_MapMain.ActualWidth, 0.55333 * Grid_MapMain.ActualHeight,
             //     0.355 * Grid_MapMain.ActualWidth, 0.42444 * Grid_MapMain.ActualHeight);
             // Grid_Albresser.Margin = new Thickness(0.30375 * Grid_MapMain.ActualWidth,
@@ -49,8 +96,18 @@ namespace iBarter {
 
             foreach (Grid grid in listGrid_Islands) {
                 Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == grid.Name.Substring(14, grid.Name.Length - 14));
-                Grid Grid_Image = FindGrid(grid, "GridImage_" + myIslands.IslandsName);
-                Label myLabel = FindLabel(grid, "Label_" + myIslands.IslandsName);
+                Grid Grid_Image = null;
+                Label myLabel = null;
+                if (myIslands != null) {
+                    Grid_Image = FindGrid(grid, "GridImage_" + myIslands.IslandsName);
+                    myLabel = FindLabel(grid, "Label_" + myIslands.IslandsName);
+                }
+                else {
+                    myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName + "Temp" == grid.Name.Substring(14, grid.Name.Length - 14));
+                    Grid_Image = FindGrid(grid, "GridImage_" + myIslands.IslandsName + "Temp");
+                    myLabel = FindLabel(grid, "Label_" + myIslands.IslandsName + "Temp");
+                }
+
                 if (myIslands != null) {
                     if (myLabel.ActualWidth != 0 && myLabel.ActualHeight != 0) {
                         myLabel.Width = myLabel.ActualWidth;
@@ -64,14 +121,11 @@ namespace iBarter {
                         myLabel.Height = myLabel.ActualHeight;
                     }
 
-                    // myLabel.Width = 100;
-                    // myLabel.Height = 50;
+
                     Grid_Image.Margin = new Thickness(myIslands.IslandsThickness.Left * Grid_MapMain.ActualWidth, myIslands.IslandsThickness.Top * Grid_MapMain.ActualHeight, myIslands.IslandsThickness.Right * Grid_MapMain.ActualWidth, myIslands.IslandsThickness.Bottom * Grid_MapMain.ActualHeight);
-                    //myLabel.Margin = new Thickness(double.Max(0, Grid_Image.Margin.Left - myLabel.ActualWidth), Grid_Image.Margin.Top + Grid_Image.ActualHeight, double.Min(Grid_Image.Margin.Right, Grid_Image.Margin.Right + myLabel.ActualWidth), Grid_Image.Margin.Top + myLabel.ActualHeight);
-                    //myLabel.Margin = Grid_Image.Margin;
-                    //myLabel.Margin = new Thickness(0);
+
                     myLabel.Margin = new Thickness(Grid_Image.Margin.Left - myLabel.Width / 2, Grid_Image.Margin.Top, Grid_Image.Margin.Right - myLabel.Width, Grid_Image.Margin.Bottom - myLabel.Height);
-                    //App.myCFun.Log(myLabel.Margin.ToString(), Brushes.Red);
+                    ;
 
                     NewMargin(myLabel);
                 }
@@ -128,11 +182,25 @@ namespace iBarter {
 
         public void IslandsButtonInitialisation(Barter _barter, Brush _brush) {
             Grid myGrid_Container = new Grid();
-            myGrid_Container.Name = "GridContainer_" + _barter.IsLandName;
-            myGrid_Container.MouseLeftButtonDown += Islands_MouseLeftButtonDown;
-            myGrid_Container.MouseRightButtonDown += Islands_MouseRightButtonDown;
+
+            if (_barter.Item1Name != "" && _barter.Item2Name != null) {
+                myGrid_Container.Name = "GridContainer_" + _barter.IsLandName;
+                myGrid_Container.MouseLeftButtonDown += Islands_MouseLeftButtonDown;
+                myGrid_Container.MouseRightButtonDown += Islands_MouseRightButtonDown;
+            }
+            else {
+                myGrid_Container.Name = "GridContainer_" + _barter.IsLandName + "Temp";
+            }
+
             Grid myGrid_Image = new Grid();
-            myGrid_Image.Name = "GridImage_" + _barter.IsLandName;
+            if (_barter.Item1Name != "" && _barter.Item2Name != null) {
+                myGrid_Image.Name = "GridImage_" + _barter.IsLandName;
+            }
+            else {
+                myGrid_Image.Name = "GridImage_" + _barter.IsLandName + "Temp";
+            }
+
+
             myGrid_Image.Margin = new Thickness(_barter.IsLand.IslandsThickness.Left * Grid_MapMain.ActualWidth, _barter.IsLand.IslandsThickness.Top * Grid_MapMain.ActualHeight, _barter.IsLand.IslandsThickness.Right * Grid_MapMain.ActualWidth, _barter.IsLand.IslandsThickness.Bottom * Grid_MapMain.ActualHeight);
             myGrid_Image.Width = 10;
             myGrid_Image.Height = 10;
@@ -141,7 +209,13 @@ namespace iBarter {
             myRectangle.Fill = _brush;
 
             Image myImage = new Image();
-            myImage.Name = "Image_" + _barter.IsLand.IslandsName;
+            if (_barter.Item1Name != "" && _barter.Item2Name != null) {
+                myImage.Name = "Image_" + _barter.IsLand.IslandsName;
+            }
+            else {
+                myImage.Name = "Image_" + _barter.IsLand.IslandsName + "Temp";
+            }
+
             myImage.HorizontalAlignment = HorizontalAlignment.Center;
             myImage.VerticalAlignment = VerticalAlignment.Center;
             myImage.Width = 10;
@@ -149,10 +223,21 @@ namespace iBarter {
             myImage.Margin = new Thickness(0);
 
             Label myLabel = new Label();
-            myLabel.Name = "Label_" + _barter.IsLand.IslandsName;
+            if (_barter.Item1Name != "" && _barter.Item2Name != null) {
+                myLabel.Name = "Label_" + _barter.IsLand.IslandsName;
+            }
+            else {
+                myLabel.Name = "Label_" + _barter.IsLand.IslandsName + "Temp";
+            }
+
             myLabel.Foreground = _brush;
             myLabel.HorizontalAlignment = HorizontalAlignment.Left;
-            myLabel.Content = "[" + _barter.Item1Number * _barter.ExchangeQuantity + "] " + _barter.Item1Name + " => " + _barter.Item2Name + " [" + _barter.Item2Number * _barter.ExchangeQuantity + "]";
+            if (_barter.Item1Name != "" && _barter.Item2Name != "") {
+                myLabel.Content = "[" + _barter.Item1Number * _barter.ExchangeQuantity + "] " + _barter.Item1Name + " => " + _barter.Item2Name + " [" + _barter.Item2Number * _barter.ExchangeQuantity + "]";
+            }
+            else {
+                myLabel.Content = "";
+            }
             //myLabel.Margin = new Thickness(double.Max(0, Grid_MapMain.Margin.Left - myLabel.ActualWidth), Grid_MapMain.Margin.Top + myGrid_Image.ActualHeight, double.Min(Grid_MapMain.Margin.Right, Grid_MapMain.Margin.Right + myLabel.ActualWidth), Grid_MapMain.Margin.Top + myLabel.ActualHeight);
 
             if (myLabel.ActualWidth != 0 && myLabel.ActualHeight != 0) {
@@ -205,7 +290,6 @@ namespace iBarter {
                 }
             }
             else if (e.ClickCount == 1) {
-                ToolTipControl myTTC = new ToolTipControl();
                 //Grid_MapMain.Children.Add(myTTC);
                 //Grid_Albresser.Children.Add(myTTC);
             }
@@ -219,7 +303,7 @@ namespace iBarter {
                     App.myfmMain.dockingManager_Main.ActiveWindow = App.myfmMain.document_Planner;
                     App.myfmMain.myPlannerControl.DataGrid_Planner.SelectedItem = myBarter;
 
-                    App.myfmMain.myPlannerControl.DataGrid_Planner.ScrollInView(new RowColumnIndex(App.myfmMain.myPlannerControl.DataGrid_Planner.SelectedIndex,0));
+                    App.myfmMain.myPlannerControl.DataGrid_Planner.ScrollInView(new RowColumnIndex(App.myfmMain.myPlannerControl.DataGrid_Planner.SelectedIndex, 0));
                 }
             }
         }

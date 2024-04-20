@@ -1,27 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.IO;
-using System.Linq;
+﻿using System.IO;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using Emgu.CV.CvEnum;
 using Newtonsoft.Json;
 using Syncfusion.UI.Xaml.Grid;
-using Syncfusion.Windows.Controls.PivotGrid;
-using Syncfusion.Windows.Shared;
 using Brush = System.Windows.Media.Brush;
 
-namespace iBarter {
+namespace iBarter.View {
     /// <summary>
     /// Interaction logic for PlannerControl.xaml
     /// </summary>
@@ -318,7 +305,7 @@ namespace iBarter {
         private void UpdateMapControl() {
             for (int i = App.myfmMain.myMapControl.Grid_MapMain.Children.Count - 1; i > 0; i--) {
                 var child = App.myfmMain.myMapControl.Grid_MapMain.Children[i];
-                if (child is Grid && ((Grid)child).Name.StartsWith("GridContainer_")) {
+                if (child is Grid && ((Grid)child).Name.StartsWith("GridContainer_") && !((Grid)child).Name.EndsWith("Temp")) {
                     App.myfmMain.myMapControl.Grid_MapMain.Children.Remove(child);
                 }
             }

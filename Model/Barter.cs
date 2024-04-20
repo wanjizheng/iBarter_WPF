@@ -1,16 +1,12 @@
-﻿using System;
-using System.IO;
+﻿using iBarter.View;
 using Syncfusion.Windows.Shared;
-using System.Windows.Media.Imaging;
+using System.IO;
 using System.Reflection;
-using System.Linq;
-using System.Windows.Media;
-using iBarter.View;
 
 namespace iBarter {
     public class Barter : NotificationObject {
         private Islands _isLand = null!;
-        private Items item1 = null!, item2 = null!;
+        private Items? item1 = null!, item2 = null!;
         private String icon1 = null!, icon2 = null!;
         private String item1Name = "", item2Name = "";
         private int exchangeQuantity = 0;
@@ -23,12 +19,15 @@ namespace iBarter {
 
         public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = -1, int _intInv = 0, int _intChange = 0) {
             this._isLand = _isLand;
+
             item1 = _item1;
             item2 = _item2;
+
             item1Name = item1.ItemName;
-            item2Name = item2.ItemName;
             icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+            item2Name = item2.ItemName;
             icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+
             this.exchangeQuantity = _exchangeQuantity;
             this.barterGroup = _barterGroup;
             exchangeDone = _exchangeDone;

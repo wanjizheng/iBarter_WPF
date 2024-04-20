@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Windows;
-using Esri.ArcGISRuntime;
-using iBarter.View;
+﻿using iBarter.View;
 using iBarter.ViewModel;
 using Syncfusion.Licensing;
+using System.Windows;
 
 namespace iBarter {
     /// <summary>
@@ -28,7 +25,7 @@ namespace iBarter {
 
         public App() {
             SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1NBaF5cXmtCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdnWXtec3RcRmRYUUdxWUM=");
-            ArcGISRuntimeEnvironment.ApiKey = "AAPK590677eae59f4202b58b3047aa240321Iygj3PiBEOzP4HFiSGiEXHLApeMp2mGY54BLLcjQJbk1wvi5dSRfbPibOUw4lpES";
+            // ArcGISRuntimeEnvironment.ApiKey = "AAPK590677eae59f4202b58b3047aa240321Iygj3PiBEOzP4HFiSGiEXHLApeMp2mGY54BLLcjQJbk1wvi5dSRfbPibOUw4lpES";
 
 
             myCFun = new CFunctions();
@@ -42,7 +39,7 @@ namespace iBarter {
 
             myfmMain = new MainWindow();
 
-   
+            this.ShutdownMode = ShutdownMode.OnMainWindowClose;
         }
 
         protected override void OnStartup(StartupEventArgs e) {

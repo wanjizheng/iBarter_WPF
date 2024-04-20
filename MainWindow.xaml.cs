@@ -1,22 +1,9 @@
-﻿using System;
-using System.Diagnostics;
-using System.IO;
-using System.Reflection;
+﻿using iBarter.View;
+using PureDM.Logging;
 using System.Runtime.InteropServices;
-using System.Threading;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Emgu.CV.Ocl;
-using Esri.ArcGISRuntime.Geometry;
-using Esri.ArcGISRuntime.Mapping;
-using iBarter.View;
-using Newtonsoft.Json;
-using PureDM.Configs;
-using PureDM.DmSoft;
-using PureDM.Logging;
-using Point = System.Drawing.Point;
 
 namespace iBarter {
     /// <summary>
@@ -25,8 +12,9 @@ namespace iBarter {
     public partial class MainWindow : Window {
         public MainWindow() {
             InitializeComponent();
+
             var timer = new DispatcherTimer();
-            
+
             timer.Interval = TimeSpan.FromMilliseconds(10);
             timer.Tick += Timer_Tick;
             timer.Start();

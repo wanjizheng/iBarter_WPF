@@ -4,7 +4,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="clr-namespace:iBarter"
-    xmlns:Syncfusion="http://schemas.syncfusion.com/wpf" x:Class="iBarter.MapControl"
+    xmlns:Syncfusion="http://schemas.syncfusion.com/wpf" x:Class="iBarter.View.MapControl"
     mc:Ignorable="d"
     d:DesignHeight="450" d:DesignWidth="800">
     <Grid x:Name="Grid_MapMain" SizeChanged="Grid_MapMain_SizeChanged">

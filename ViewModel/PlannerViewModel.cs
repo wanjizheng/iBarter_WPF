@@ -1,17 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Syncfusion.Windows.Shared;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Media;
-using PureDM.Logging;
-using Syncfusion.Windows.Shared;
-using Newtonsoft.Json;
-using System.Windows.Controls;
 
 namespace iBarter.ViewModel {
     public class PlannerViewModel : NotificationObject {
