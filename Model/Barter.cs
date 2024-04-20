@@ -60,18 +60,28 @@ namespace iBarter {
         public int ExchangeQuantity {
             get { return exchangeQuantity; }
             set {
-                exchangeQuantity = value;
-                if (Item1 != null && Item2 != null) {
-                    Barter myBarter = App.myPVM.BarterDetails.FirstOrDefault(b => b.BarterGroup == this.BarterGroup && b.Item2Name.Equals(Item1Name));
-                    if (myBarter != null) {
-                        myBarter.InvQuantityChange = myBarter.InvQuantity - ExchangeQuantity * Item1Number;
-                    }
-                    //
-                    // intChange = 0;
-                    // intChange += (InvQuantity + ExchangeQuantity * Item2Number);
-
-                    InvQuantityChange = InvQuantity + ExchangeQuantity * Item2Number;
+                if (value > IslandRemaining) {
+                    value = IslandRemaining;
                 }
+                else if (value < 0) {
+                    value = 0;
+                }
+
+                exchangeQuantity = value;
+                // if (Item1 != null && Item2 != null) {
+                //     Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.BarterGroup == this.BarterGroup && b.Item1Name.Equals(Item2Name));
+                //     if (myBarter != null) {
+                //         myBarter.InvQuantityChange = myBarter.InvQuantityChange + ExchangeQuantity * Item2Number;
+                //         if (myBarter.Item1.ItemLV == "5" && myBarter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex + 1) {
+                //             myBarter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex + 1;
+                //         }
+                //     }
+                //     //
+                //     // intChange = 0;
+                //     // intChange += (InvQuantity + ExchangeQuantity * Item2Number);
+                //
+                //     InvQuantityChange = Math.Max(0, InvQuantityChange - ExchangeQuantity * Item1Number);
+                // }
             }
         }
 
@@ -191,7 +201,7 @@ namespace iBarter {
 
         public string Item2Name {
             get {
-                if (item2Name.Equals("") && Item2!=null)
+                if (item2Name.Equals("") && Item2 != null)
                     item2Name = Item2.ItemName;
                 return item2Name;
             }
@@ -222,7 +232,7 @@ namespace iBarter {
                     App.myStorageManagement = new StorageManagement();
                 }
 
-                Items myItem = App.myStorageVM.StorageCollection.FirstOrDefault(i => i.ItemName.Equals(Item2Name));
+                Items myItem = App.myStorageVM.StorageCollection.FirstOrDefault(i => i.ItemName.Equals(Item1Name));
                 if (myItem != null) {
                     intInv = (myItem.StorageVeliaQuantity_Iliya + myItem.StorageVeliaQuantity_Velia + myItem.StorageVeliaQuantity_Epheria + myItem.StorageVeliaQuantity_Ancado);
                 }
@@ -243,13 +253,13 @@ namespace iBarter {
                 Item1 = item1;
                 icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
             }
-            
+
             if (item2Name != "" && !item2Name.Equals(Item2.ItemName)) {
                 Items item2 = new Items(App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemName, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemID, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemLV);
                 Item2 = item2;
                 icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
             }
-            
+
             //RaisePropertyChanged("ItemChange");
             // if (App.myBarterScanner != null) {
             //     App.myBarterScanner.RefreshDataGrid();

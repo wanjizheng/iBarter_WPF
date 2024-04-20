@@ -21,15 +21,15 @@ namespace iBarter.ViewModel {
         /// Initializes a new instance of the <see cref="PlannerViewModel"/> class.
         /// </summary>
         public PlannerViewModel() {
-            BarterDetails = new ObservableCollection<Barter>();
-            BarterDetails.CollectionChanged += BarterDetails_CollectionChanged;
+            BarterCollection = new ObservableCollection<Barter>();
+            BarterCollection.CollectionChanged += BarterCollectionCollectionChanged;
             itemscollection = PopulateItems();
             islandscollection = PopulateIslands();
         }
 
-        private void BarterDetails_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) {
+        private void BarterCollectionCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) {
             try {
-                if (App.myPVM.BarterDetails.Count > 0) {
+                if (App.myPVM.BarterCollection.Count > 0) {
                     App.myfmMain.myPlannerControl.RefreshDataGrid();
                     //App.myCFun.Log("Saved data.", Brushes.DarkOliveGreen);
                 }
@@ -43,27 +43,17 @@ namespace iBarter.ViewModel {
 
         #region Properties
 
-        private ObservableCollection<Barter> _barterDetails;
+        private ObservableCollection<Barter> _barterCollection;
 
         /// <summary>
         /// Gets or sets the employee details.
         /// </summary>
         /// <value>The employee details.</value>
-        public ObservableCollection<Barter> BarterDetails {
-            get { return _barterDetails; }
-            set { _barterDetails = value; }
-        }
-
-        private ObservableCollection<Barter> _barterCollection = new ObservableCollection<Barter>();
-
-        /// <summary>
-        /// Gets or sets the orders details.
-        /// </summary>
-        /// <value>The orders details.</value>
         public ObservableCollection<Barter> BarterCollection {
             get { return _barterCollection; }
             set { _barterCollection = value; }
         }
+
 
         private ObservableCollection<Items> itemscollection;
 

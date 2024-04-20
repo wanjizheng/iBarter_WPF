@@ -116,12 +116,12 @@
             <ContentControl x:Name="document1" syncfusion:DockingManager.CanDocument="True"
                             syncfusion:DockingManager.Header="Document1.xaml"
                             syncfusion:DockingManager.State="Document" />
-            <ContentControl x:Name="document2" syncfusion:DockingManager.CanDocument="True"
+            <ContentControl x:Name="document_Planner" syncfusion:DockingManager.CanDocument="True"
                             syncfusion:DockingManager.Header="Planner"
                             syncfusion:DockingManager.State="Document">
                 <local:PlannerControl x:Name="myPlannerControl"></local:PlannerControl>
             </ContentControl>
-            <ContentControl x:Name="document3" syncfusion:DockingManager.CanDocument="True"
+            <ContentControl x:Name="document_Map" syncfusion:DockingManager.CanDocument="True"
                             syncfusion:DockingManager.Header="Map"
                             syncfusion:DockingManager.State="Document">
 

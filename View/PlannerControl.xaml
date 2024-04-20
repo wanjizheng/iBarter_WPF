@@ -14,6 +14,7 @@
             <Setter Property="Background" Value="{Binding Converter={StaticResource converter}}" />
         </Style>
     </UserControl.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -66,6 +67,17 @@
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/refresh.png" Click="ButtonAdv_Refresh_Click" />
             <syncfusion:ButtonAdv
+                x:Name="ButtonAdv_Clean"
+                Margin="4,0,4,0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                IconWidth="26" IconHeight="26"
+                Label="Clean"
+                ToolTip="Clean"
+                SizeMode="Small"
+                FontFamily="Microsoft YaHei"
+                SmallIcon="/Images/clean.png" Click="ButtonAdv_Clean_Click" />
+            <syncfusion:ButtonAdv
                 x:Name="ButtonAdv_Done"
                 Margin="4,0,4,0"
                 HorizontalAlignment="Center"
@@ -77,9 +89,23 @@
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/done.png" Click="ButtonAdv_Done_Click" />
             <Separator />
-            <Label Content="Parley: " />
-            <Label x:Name="Label_SelectedParley" Content="0" HorizontalAlignment="Right" Margin="0"/>
-            <Label Content="/1000000" HorizontalAlignment="Left" Margin="0"/>
+            <Label Content="Max LV5:" VerticalAlignment="Center"/>
+            <syncfusion:ComboBoxAdv x:Name="ComboBox_LV5Max" SelectedIndex="5" >
+                <syncfusion:RibbonComboBoxItem Content="1"/>
+                <syncfusion:RibbonComboBoxItem Content="2"/>
+                <syncfusion:RibbonComboBoxItem Content="3"/>
+                <syncfusion:RibbonComboBoxItem Content="4"/>
+                <syncfusion:RibbonComboBoxItem Content="5"/>
+                <syncfusion:RibbonComboBoxItem Content="6"/>
+                <syncfusion:RibbonComboBoxItem Content="7"/>
+                <syncfusion:RibbonComboBoxItem Content="8"/>
+                <syncfusion:RibbonComboBoxItem Content="9"/>
+                <syncfusion:RibbonComboBoxItem Content="10"/>
+            </syncfusion:ComboBoxAdv>
+            <Separator Margin="10,0,0,0"/>
+            <Label Content="Parley: " VerticalAlignment="Center"/>
+            <Label x:Name="Label_SelectedParley" Content="0" HorizontalAlignment="Right" Margin="0" VerticalAlignment="Center"/>
+            <Label Content="/1000000" HorizontalAlignment="Left" Margin="0" VerticalAlignment="Center"/>
         </syncfusion:ToolBarAdv>
         <Grid Grid.Row="1">
             <syncfusion:SfDataGrid x:Name="DataGrid_Planner" Height="NaN" Width="NaN"
@@ -92,9 +118,10 @@
                                    ShowRowHeader="True"
                                    ScrollMode="Async"
                                    CanMaintainScrollPosition="True"
-                                   AllowDrop="True" LiveDataUpdateMode="AllowDataShaping"
+                                   AllowDrop="False" LiveDataUpdateMode="AllowDataShaping"
                                    CurrentCellEndEdit="DataGrid_Planner_CurrentCellEndEdit"
                                    CurrentCellValueChanged="DataGrid_Planner_CurrentCellValueChanged">
+
                 <syncfusion:SfDataGrid.SortColumnDescriptions>
                     <syncfusion:SortColumnDescription ColumnName="Item1LV" SortDirection="Ascending" />
                 </syncfusion:SfDataGrid.SortColumnDescriptions>
@@ -110,7 +137,7 @@
                                                AllowEditing="False" />
                     <syncfusion:GridCheckBoxColumn x:Name="GridCheckBoxColumn_CK" HeaderText="CK"
                                                    MappingName="ExchangeDone"
-                                                   AllowResizing="True" AllowEditing="True" Width="30" />
+                                                   AllowResizing="True" AllowEditing="True" Width="30" UseBindingValue="True" />
                     <syncfusion:GridTextColumn HeaderText="Eq." MappingName="ExchangeQuantity" Width="40"
                                                AllowResizing="True" AllowEditing="True" />
                     <syncfusion:GridTextColumn HeaderText="No."

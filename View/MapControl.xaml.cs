@@ -14,8 +14,13 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Esri.ArcGISRuntime.UI;
 using iBarter.View;
+using Syncfusion.UI.Xaml.Grid;
+using Syncfusion.UI.Xaml.Grid.ScrollAxis;
+using Syncfusion.Windows.Controls.PivotGrid;
 using static iBarter.EnumLists;
 using Grid = System.Windows.Controls.Grid;
+using RowColumnIndex = Syncfusion.UI.Xaml.ScrollAxis.RowColumnIndex;
+
 
 namespace iBarter {
     /// <summary>
@@ -69,7 +74,6 @@ namespace iBarter {
                     //App.myCFun.Log(myLabel.Margin.ToString(), Brushes.Red);
 
                     NewMargin(myLabel);
-
                 }
             }
         }
@@ -125,10 +129,11 @@ namespace iBarter {
         public void IslandsButtonInitialisation(Barter _barter, Brush _brush) {
             Grid myGrid_Container = new Grid();
             myGrid_Container.Name = "GridContainer_" + _barter.IsLandName;
+            myGrid_Container.MouseLeftButtonDown += Islands_MouseLeftButtonDown;
+            myGrid_Container.MouseRightButtonDown += Islands_MouseRightButtonDown;
             Grid myGrid_Image = new Grid();
             myGrid_Image.Name = "GridImage_" + _barter.IsLandName;
             myGrid_Image.Margin = new Thickness(_barter.IsLand.IslandsThickness.Left * Grid_MapMain.ActualWidth, _barter.IsLand.IslandsThickness.Top * Grid_MapMain.ActualHeight, _barter.IsLand.IslandsThickness.Right * Grid_MapMain.ActualWidth, _barter.IsLand.IslandsThickness.Bottom * Grid_MapMain.ActualHeight);
-            myGrid_Image.MouseLeftButtonDown += IslandsImage_MouseLeftButtonDown;
             myGrid_Image.Width = 10;
             myGrid_Image.Height = 10;
 
@@ -191,14 +196,31 @@ namespace iBarter {
             }
         }
 
-        private void IslandsImage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
+        private void Islands_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
             if (e.ClickCount == 2) {
-                App.myCFun.Log("Double click", Brushes.Blue);
+                var clickedGrid = sender as Grid;
+                if (clickedGrid != null) {
+                    App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == clickedGrid.Name.Substring(14, clickedGrid.Name.Length - 14))!.ExchangeDone = true;
+                    App.myfmMain.myPlannerControl.Grouping();
+                }
             }
             else if (e.ClickCount == 1) {
                 ToolTipControl myTTC = new ToolTipControl();
                 //Grid_MapMain.Children.Add(myTTC);
                 //Grid_Albresser.Children.Add(myTTC);
+            }
+        }
+
+        private void Islands_MouseRightButtonDown(object sender, MouseButtonEventArgs e) {
+            var clickedGrid = sender as Grid;
+            if (clickedGrid != null) {
+                Barter? myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == clickedGrid.Name.Substring(14, clickedGrid.Name.Length - 14));
+                if (myBarter != null) {
+                    App.myfmMain.dockingManager_Main.ActiveWindow = App.myfmMain.document_Planner;
+                    App.myfmMain.myPlannerControl.DataGrid_Planner.SelectedItem = myBarter;
+
+                    App.myfmMain.myPlannerControl.DataGrid_Planner.ScrollInView(new RowColumnIndex(App.myfmMain.myPlannerControl.DataGrid_Planner.SelectedIndex,0));
+                }
             }
         }
     }

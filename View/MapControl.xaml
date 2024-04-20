@@ -10,7 +10,7 @@
     <Grid x:Name="Grid_MapMain" SizeChanged="Grid_MapMain_SizeChanged">
 
         <Image HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top" Stretch="Fill"
-               Source="/Images/iBarterMap.png" />
+               Source="/Images/iBarterMap.png"/>
         <!-- <Grid x:Name="Grid_Ancient" Margin="131,94,659,346" Width="10" Height="10"> -->
         <!--     <Rectangle Fill="DarkSlateGray" /> -->
         <!-- </Grid> -->

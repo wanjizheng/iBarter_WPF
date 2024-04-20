@@ -88,8 +88,8 @@ namespace iBarter {
         private void ButtonAdv_Add_Click(object sender, RoutedEventArgs e) {
             for (int i = 0; i < App.mySVM.BarterDetails.Count; i++) {
                 Barter barter = App.mySVM.BarterDetails[i];
-                if (App.myPVM.BarterDetails.FirstOrDefault(b => b.IsLandName.Equals(barter.IsLandName)) == null) {
-                    App.myPVM.BarterDetails.Add(barter);
+                if (App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName.Equals(barter.IsLandName)) == null) {
+                    App.myPVM.BarterCollection.Add(barter);
                 }
             }
 

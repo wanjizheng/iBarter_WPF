@@ -29,7 +29,7 @@ namespace iBarter {
         public PlannerControl() {
             InitializeComponent();
             this.DataContext = App.myPVM;
-            DataGrid_Planner.ItemsSource = App.myPVM.BarterDetails;
+            DataGrid_Planner.ItemsSource = App.myPVM.BarterCollection;
             DataGrid_Planner.AutoScroller.AutoScrolling = AutoScrollOrientation.Both;
             GridMultiColumnDropDownList_Item.ItemsSource = App.myPVM.ItemsCollection;
             GridMultiColumnDropDownList_Exchange.ItemsSource = App.myPVM.ItemsCollection;
@@ -67,14 +67,14 @@ namespace iBarter {
                 try {
                     DataGrid_Planner.BeginInit();
 
-                    if (App.myPVM.BarterDetails != null) {
-                        App.myPVM.BarterDetails.Clear();
+                    if (App.myPVM.BarterCollection != null) {
+                        App.myPVM.BarterCollection.Clear();
                     }
 
                     foreach (Barter barter in App.listBarterPlanner) {
                         Barter myBarter = new Barter(barter.IsLand, barter.Item1, barter.Item2, barter.ExchangeQuantity,
                             barter.ExchangeDone, barter.BarterGroup, barter.InvQuantity, barter.InvQuantityChange);
-                        App.myPVM.BarterDetails.Add(myBarter);
+                        App.myPVM.BarterCollection.Add(myBarter);
                     }
 
                     DataGrid_Planner.EndInit();
@@ -86,7 +86,7 @@ namespace iBarter {
 
         private void UpdateParley() {
             int intParley = 0;
-            foreach (Barter barter in App.myPVM.BarterDetails.Where(b=>b.ExchangeDone==false && b.ExchangeQuantity>0)) {
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0)) {
                 intParley += barter.Parley * barter.ExchangeQuantity;
             }
 
@@ -101,12 +101,11 @@ namespace iBarter {
 
         private void ButtonAdv_Refresh_Click(object sender, RoutedEventArgs e) {
             Grouping();
-            UpdateParley();
         }
 
-        private void Grouping() {
+        public void Grouping() {
             int intGroup = 0;
-            foreach (Barter barter in App.myPVM.BarterDetails.Where(b => b.Item1.ItemLV.Equals("0"))) {
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.Item1.ItemLV.Equals("0"))) {
                 int intLV = 1;
                 // do {
                 //     barter.BarterGroup = intGroup;
@@ -122,7 +121,7 @@ namespace iBarter {
                 intGroup++;
             }
 
-            foreach (Barter barter in App.myPVM.BarterDetails.Where(b =>
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b =>
                          b.Item1.ItemLV.Equals("1") && b.BarterGroup == -1)) {
                 int intLV = 2;
 
@@ -131,7 +130,7 @@ namespace iBarter {
                 intGroup++;
             }
 
-            foreach (Barter barter in App.myPVM.BarterDetails.Where(b =>
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b =>
                          b.Item1.ItemLV.Equals("2") && b.BarterGroup == -1)) {
                 int intLV = 3;
 
@@ -140,7 +139,7 @@ namespace iBarter {
                 intGroup++;
             }
 
-            foreach (Barter barter in App.myPVM.BarterDetails.Where(b =>
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b =>
                          b.Item1.ItemLV.Equals("3") && b.BarterGroup == -1)) {
                 int intLV = 4;
 
@@ -170,13 +169,13 @@ namespace iBarter {
             }
 
             //RefreshDataGrid();
-
+            UpdateParley();
             UpdateMapControl();
         }
 
         private void FindBarterGroup(Barter _barter, int _lv, int _group) {
             _barter.BarterGroup = _group;
-            Barter myBarter = App.myPVM.BarterDetails.FirstOrDefault(b =>
+            Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b =>
                 b.Item1.ItemLV.Equals(Convert.ToString(_lv)) && b.Item1Name.Equals(_barter.Item2Name))!;
             if (myBarter != null) {
                 myBarter.BarterGroup = _group;
@@ -225,6 +224,7 @@ namespace iBarter {
                 }
                 //myPlannerControl.DataGrid_Planner.ItemsSource = dataSource;
             }
+
             UpdateParley();
         }
 
@@ -234,7 +234,7 @@ namespace iBarter {
 
         private void SaveData() {
             try {
-                if (App.myPVM.BarterDetails.Count > 0) {
+                if (App.myPVM.BarterCollection.Count > 0) {
                     string strPath_Setting = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
                                              "\\Resources\\myPlan_Setting.xml";
                     string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
@@ -247,8 +247,8 @@ namespace iBarter {
 
                     using (FileStream streamData = new FileStream(strPath_Data, FileMode.Create, FileAccess.Write)) {
                         App.listBarterPlanner.Clear();
-                        for (int i = 0; i < App.myPVM.BarterDetails.Count; i++) {
-                            Barter myBarter = App.myPVM.BarterDetails[i];
+                        for (int i = 0; i < App.myPVM.BarterCollection.Count; i++) {
+                            Barter myBarter = App.myPVM.BarterCollection[i];
                             if (!App.listBarterPlanner.Contains(myBarter)) {
                                 App.listBarterPlanner.Add(myBarter);
                             }
@@ -269,29 +269,48 @@ namespace iBarter {
         }
 
         private void DataGrid_Planner_CurrentCellEndEdit(object sender, CurrentCellEndEditEventArgs e) {
+            if (e.RowColumnIndex.ColumnIndex == 5) {
+                Barter barter = (Barter)DataGrid_Planner.CurrentItem;
+                Barter? myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == barter.IsLandName);
+                if (myBarter.ExchangeQuantity > myBarter.IslandRemaining || myBarter.ExchangeQuantity < 0) {
+                    myBarter.ExchangeQuantity = myBarter.IslandRemaining;
+                }
+
+                UpdateInvChange(myBarter.BarterGroup);
+            }
+
             SaveData();
-            RefreshDataGrid();
+            //RefreshDataGrid();
+            DataGrid_Planner.View.Refresh();
             UpdateParley();
             //Grouping();
             UpdateMapControl();
+        }
+
+        private void UpdateInvChange(int _groupNumber) {
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.BarterGroup == _groupNumber).OrderBy(b => b.Item1LV)) {
+                if (barter.Item1.ItemLV == "0") {
+                    continue;
+                }
+
+                Barter? myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.BarterGroup == barter.BarterGroup && b.Item2Name.Equals(barter.Item1Name));
+                if (myBarter != null) {
+                    barter.InvQuantityChange = Math.Max(0, myBarter.ExchangeQuantity * myBarter.Item2Number + barter.InvQuantity - barter.ExchangeQuantity * barter.Item1Number);
+                }
+                else {
+                    barter.InvQuantityChange = Math.Max(0, barter.InvQuantity - barter.ExchangeQuantity * barter.Item1Number);
+                }
+
+                if (barter.Item1.ItemLV == "5" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex + 1) {
+                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex + 1;
+                }
+            }
         }
 
         private void DataGrid_Planner_CurrentCellValueChanged(object sender, CurrentCellValueChangedEventArgs e) {
             if (e.Column.MappingName == "ExchangeDone") {
                 SaveData();
                 UpdateParley();
-                // if (e.RowColumnIndex.ColumnIndex == 5) { //Eq.
-                //     
-                // }
-                // Barter myBarter = (Barter)DataGrid_Planner.CurrentItem;
-                // if (myBarter.ExchangeDone) {
-                //     App.myCFun.Log("Checked", Brushes.Blue);
-                // }
-                // else {
-                //     App.myCFun.Log("UnChecked", Brushes.Red);
-                // }
-                //
-                // int a = 0;
                 UpdateMapControl();
             }
         }
@@ -303,7 +322,8 @@ namespace iBarter {
                     App.myfmMain.myMapControl.Grid_MapMain.Children.Remove(child);
                 }
             }
-            foreach (Barter myBarter in App.myPVM.BarterDetails.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0)) {
+
+            foreach (Barter myBarter in App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0)) {
                 App.myfmMain.myMapControl.IslandsButtonInitialisation(myBarter, GetBursh(myBarter));
             }
         }
@@ -386,7 +406,7 @@ namespace iBarter {
             if (App.myStorageVM.StorageCollection != null) {
                 foreach (Items item in App.myStorageVM.StorageCollection) {
                     if (App.myPVM != null) {
-                        Barter myBarter = App.myPVM.BarterDetails.FirstOrDefault(b => b.Item2Name == item.ItemName);
+                        Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.Item2Name == item.ItemName);
                         if (myBarter != null) {
                             switch (App.myStorageManagement.ComboBoxAdv_DefaultStorage.SelectedIndex) {
                                 case 0:
@@ -410,7 +430,7 @@ namespace iBarter {
             if (App.myPVM != null) {
                 App.listBarterPlanner.Clear();
                 DataGrid_Planner.BeginInit();
-                App.myPVM.BarterDetails.Clear();
+                App.myPVM.BarterCollection.Clear();
                 DataGrid_Planner.EndInit();
             }
         }
@@ -418,10 +438,23 @@ namespace iBarter {
         private void ButtonAdv_New_Click(object sender, RoutedEventArgs e) {
             DataGrid_Planner.BeginInit();
             if (App.myPVM != null) {
-                App.myPVM.BarterDetails.Clear();
+                App.myPVM.BarterCollection.Clear();
             }
 
             DataGrid_Planner.EndInit();
+        }
+
+        private void ButtonAdv_Clean_Click(object sender, RoutedEventArgs e) {
+            foreach (Barter barter in App.myPVM.BarterCollection) {
+                barter.ExchangeDone = false;
+                barter.ExchangeQuantity = 0;
+                barter.InvQuantityChange = barter.InvQuantity;
+            }
+
+            UpdateParley();
+            SaveData();
+            DataGrid_Planner.View.Refresh();
+            UpdateMapControl();
         }
     }
 }
