@@ -4,15 +4,20 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:iBarter"
+             xmlns:vm="clr-namespace:iBarter.ViewModel"
              xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
-             xmlns:syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
     <UserControl.Resources>
         <local:ColorConverter x:Key="converter" />
-        <Style TargetType="syncfusion1:VirtualizingCellsControl">
-            <Setter Property="Background" Value="{Binding Converter={StaticResource converter}}" />
-        </Style>
+
+        <!-- <Style TargetType="syncfusion1:VirtualizingCellsControl"> -->
+        <!--     <Setter Property="Background" Value="{Binding Converter={StaticResource converter}}" /> -->
+        <!-- </Style> -->
+        <!-- <Style  TargetType= "syncfusion:GridRowHeaderCell"> -->
+        <!--     ~1~By using converter the Background color is changed based on the business logic@1@ -->
+        <!--     <Setter Property="Background" Value="{Binding Converter={StaticResource converter }}"/> -->
+        <!-- </Style> -->
     </UserControl.Resources>
 
     <Grid>
@@ -89,23 +94,30 @@
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/done.png" Click="ButtonAdv_Done_Click" />
             <Separator />
-            <Label Content="Max LV5:" VerticalAlignment="Center"/>
-            <syncfusion:ComboBoxAdv x:Name="ComboBox_LV5Max" SelectedIndex="5" >
-                <syncfusion:RibbonComboBoxItem Content="1"/>
-                <syncfusion:RibbonComboBoxItem Content="2"/>
-                <syncfusion:RibbonComboBoxItem Content="3"/>
-                <syncfusion:RibbonComboBoxItem Content="4"/>
-                <syncfusion:RibbonComboBoxItem Content="5"/>
-                <syncfusion:RibbonComboBoxItem Content="6"/>
-                <syncfusion:RibbonComboBoxItem Content="7"/>
-                <syncfusion:RibbonComboBoxItem Content="8"/>
-                <syncfusion:RibbonComboBoxItem Content="9"/>
-                <syncfusion:RibbonComboBoxItem Content="10"/>
+            <Label Content="Value Pack:" VerticalAlignment="Center" />
+            <CheckBox x:Name="CheckBox_ValuePack"  VerticalAlignment="Center" IsChecked="True"/>
+            <Separator Margin="10,0,0,0" />
+            <Label Content="Max LV5:" VerticalAlignment="Center" />
+            <syncfusion:ComboBoxAdv x:Name="ComboBox_LV5Max" SelectedIndex="5">
+                <syncfusion:RibbonComboBoxItem Content="1" />
+                <syncfusion:RibbonComboBoxItem Content="2" />
+                <syncfusion:RibbonComboBoxItem Content="3" />
+                <syncfusion:RibbonComboBoxItem Content="4" />
+                <syncfusion:RibbonComboBoxItem Content="5" />
+                <syncfusion:RibbonComboBoxItem Content="6" />
+                <syncfusion:RibbonComboBoxItem Content="7" />
+                <syncfusion:RibbonComboBoxItem Content="8" />
+                <syncfusion:RibbonComboBoxItem Content="9" />
+                <syncfusion:RibbonComboBoxItem Content="10" />
             </syncfusion:ComboBoxAdv>
-            <Separator Margin="10,0,0,0"/>
-            <Label Content="Parley: " VerticalAlignment="Center"/>
-            <Label x:Name="Label_SelectedParley" Content="0" HorizontalAlignment="Right" Margin="0" VerticalAlignment="Center"/>
-            <Label Content="/1000000" HorizontalAlignment="Left" Margin="0" VerticalAlignment="Center"/>
+            <Separator Margin="10,0,0,0" />
+            <Label Content="Alt Level:" VerticalAlignment="Center" />
+            <syncfusion:ComboBoxAdv x:Name="ComboBox_AltLevel" />
+            <Separator Margin="10,0,0,0" />
+            <Label Content="Parley: " VerticalAlignment="Center" />
+            <Label x:Name="Label_SelectedParley" Content="0" HorizontalAlignment="Right" Margin="0"
+                   VerticalAlignment="Center" />
+            <Label Content="/1000000" HorizontalAlignment="Left" Margin="0" VerticalAlignment="Center" />
         </syncfusion:ToolBarAdv>
         <Grid Grid.Row="1">
             <syncfusion:SfDataGrid x:Name="DataGrid_Planner" Height="NaN" Width="NaN"
@@ -134,12 +146,17 @@
                                                Width="50" />
                     <syncfusion:GridTextColumn x:Name="Column_LV" HeaderText="LV" MappingName="Item1LV"
                                                AllowResizing="True" Width="70"
-                                               AllowEditing="False" />
+                                               AllowEditing="False"/>
                     <syncfusion:GridCheckBoxColumn x:Name="GridCheckBoxColumn_CK" HeaderText="CK"
                                                    MappingName="ExchangeDone"
-                                                   AllowResizing="True" AllowEditing="True" Width="30" UseBindingValue="True" />
+                                                   AllowResizing="True" AllowEditing="True" Width="40"
+                                                   UseBindingValue="True" />
                     <syncfusion:GridTextColumn HeaderText="Eq." MappingName="ExchangeQuantity" Width="40"
                                                AllowResizing="True" AllowEditing="True" />
+                    <syncfusion:GridCheckBoxColumn x:Name="GridCheckBoxColumn_ALT" HeaderText="ALT"
+                                                   MappingName="UsingALT"
+                                                   AllowResizing="True" AllowEditing="True" Width="40"
+                                                   UseBindingValue="True" />
                     <syncfusion:GridTextColumn HeaderText="No."
                                                MappingName="IslandRemaining" Width="40"
                                                AllowResizing="True" AllowEditing="True" />

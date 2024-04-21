@@ -399,7 +399,8 @@ namespace iBarter {
                 App.myCFun.Log("Unknown islands! Double check your result!", Brushes.Red);
             }
 
-            Islands myIslands = new Islands(IslandEnum(strIsland), intParley, intRemaining);
+            //Islands myIslands = new Islands(IslandEnum(strIsland), intParley, intRemaining);
+            Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == strIsland);
 
             myBarter.IsLand = myIslands;
 
@@ -749,6 +750,9 @@ namespace iBarter {
             }
             else if (_island.Contains("Weita")) {
                 return EnumLists.Island.Weita;
+            }
+            else if (_island.Contains("Marine")) {
+                return EnumLists.Island.Marine;
             }
             else if (_island.Contains("Boa")) {
                 return EnumLists.Island.Boa;

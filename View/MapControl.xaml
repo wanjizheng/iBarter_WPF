@@ -7,14 +7,17 @@
     xmlns:Syncfusion="http://schemas.syncfusion.com/wpf" x:Class="iBarter.View.MapControl"
     mc:Ignorable="d"
     d:DesignHeight="450" d:DesignWidth="800">
-    <Grid x:Name="Grid_MapMain" SizeChanged="Grid_MapMain_SizeChanged">
+    <Grid x:Name="Grid_MapMain" >
 
-        <Image HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top" Stretch="Fill"
+        <Image x:Name="Image_BackgroundMap" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top" Stretch="Fill"
                Source="/Images/iBarterMap.png"/>
         <!-- <Grid x:Name="Grid_Ancient" Margin="131,94,659,346" Width="10" Height="10"> -->
         <!--     <Rectangle Fill="DarkSlateGray" /> -->
         <!-- </Grid> -->
         <!-- <Grid x:Name="Grid_Cox_Pirates" Margin="77,137,713,303" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
+        <!-- <Grid x:Name="Grid_Marine" Margin="23,124,767,316" Width="10" Height="10"> -->
         <!--     <Rectangle Fill="DarkSlateGray" /> -->
         <!-- </Grid> -->
         <!-- <Grid x:Name="Grid_Rickun" Margin="56,110,734,330" Width="10" Height="10"> -->
@@ -68,6 +71,7 @@
         <!--         <Rectangle Fill="Blue" /> -->
         <!--         <Image x:Name="Image_Albresser" HorizontalAlignment="Left" Height="10" Margin="0,0,0,0" -->
         <!--                VerticalAlignment="Top" Width="10" /> -->
+        <!--         <Label x:Name="Label_Albresser" HorizontalAlignment="Left" Content="ABC"></Label> -->
         <!--     </Grid> -->
         <!-- </Grid> -->
         <!-- <Grid x:Name="Grid_Almai" Margin="198,243,592,197" Width="10" Height="10"> -->

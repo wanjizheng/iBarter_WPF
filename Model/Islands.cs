@@ -3,9 +3,10 @@
 namespace iBarter {
     public class Islands {
         private EnumLists.Island enumIsland;
-        private int intParley;
+        private int intParley = 0;
         private int intRemaining;
         private Thickness myThickness;
+  
 
         public Islands(EnumLists.Island _name, int _parley, int _remaining = 0) {
             intParley = _parley;
@@ -15,7 +16,13 @@ namespace iBarter {
         }
 
         public Thickness IslandsThickness {
-            get { return myThickness; }
+            get {
+                if (myThickness.Left +myThickness.Right+myThickness.Top+myThickness.Bottom==0) {
+                    myThickness = App.listIslands.FirstOrDefault(i => i.IslandsName == IslandsName).IslandsThickness;
+                }
+
+                return myThickness;
+            }
             set { myThickness = value; }
         }
 
@@ -30,7 +37,9 @@ namespace iBarter {
 
         public int Parley {
             get { return intParley; }
-            set { intParley = value; }
+            set {
+                    intParley = value;
+            }
         }
 
         public int Remaining {

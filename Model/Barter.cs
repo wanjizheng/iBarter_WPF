@@ -10,14 +10,14 @@ namespace iBarter {
         private String icon1 = null, icon2 = null;
         private String item1Name = "", item2Name = "";
         private int exchangeQuantity = 0;
-        private bool exchangeDone = false;
+        private bool exchangeDone = false, usingALT = false;
         private int barterGroup = -1;
         int intChange = 0, intInv = 0;
 
         public Barter() {
         }
 
-        public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = -1, int _intInv = 0, int _intChange = 0) {
+        public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = -1, int _intInv = 0, int _intChange = 0, bool _usingALT = false) {
             isLand = _isLand;
 
             item1 = _item1;
@@ -31,6 +31,7 @@ namespace iBarter {
             exchangeQuantity = _exchangeQuantity;
             barterGroup = _barterGroup;
             exchangeDone = _exchangeDone;
+            usingALT = _usingALT;
             intInv = _intInv;
             intChange = _intChange;
             if (InvQuantityChange == 0) {
@@ -54,6 +55,11 @@ namespace iBarter {
         public bool ExchangeDone {
             get { return exchangeDone; }
             set { exchangeDone = value; }
+        }
+
+        public bool UsingALT {
+            get { return usingALT; }
+            set { usingALT = value; }
         }
 
         public int ExchangeQuantity {
@@ -95,8 +101,11 @@ namespace iBarter {
         public string IsLandName {
             get { return IsLand.IslandsName; }
             set {
-                Islands myIslands = new Islands(App.myCFun.IslandEnum(value), App.listIslands.Where(land => land.Island == App.myCFun.IslandEnum(value)).Select(land => land.Parley).FirstOrDefault());
+                int intParley = Parley;
+                //Islands myIslands = new Islands(App.myCFun.IslandEnum(value), App.listIslands.Where(land => land.Island == App.myCFun.IslandEnum(value)).Select(land => land.Parley).FirstOrDefault());
+                Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == value);
                 IsLand = myIslands;
+                IsLand.Parley = intParley;
             }
         }
 

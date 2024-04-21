@@ -46,7 +46,7 @@
 
         <syncfusion:DockingManager x:Name="dockingManager_Main" Grid.Row="1"
                                    UseDocumentContainer="True" UseNativeFloatWindow="True"
-                                   Grid.ColumnSpan="2" Margin="0,0,0,22">
+                                   Grid.ColumnSpan="2" Margin="0,0,0,22" ActiveWindowChanged="dockingManager_Main_ActiveWindowChanged">
             <ContentControl x:Name="dockRight" syncfusion:DockingManager.Header="Dock Right"
                             syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Right" />
             <ContentControl x:Name="dockBottom" syncfusion:DockingManager.Header="Log"

@@ -152,5 +152,15 @@ namespace iBarter {
             App.myStorageManagement = new StorageManagement();
             App.myStorageManagement.Show();
         }
+
+        private void dockingManager_Main_ActiveWindowChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) {
+            if (dockingManager_Main.ActiveWindow.Name == "document_Map") {
+                myMapControl.IslandsButtonRearrange();
+                myMapControl.myTimer.Start();
+            }
+            else {
+                myMapControl.myTimer.Stop();
+            }
+        }
     }
 }

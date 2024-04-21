@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Collections.ObjectModel;
+using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -17,22 +18,30 @@ namespace iBarter.View {
             InitializeComponent();
             this.DataContext = App.myPVM;
             DataGrid_Planner.ItemsSource = App.myPVM.BarterCollection;
+
             DataGrid_Planner.AutoScroller.AutoScrolling = AutoScrollOrientation.Both;
             GridMultiColumnDropDownList_Item.ItemsSource = App.myPVM.ItemsCollection;
             GridMultiColumnDropDownList_Exchange.ItemsSource = App.myPVM.ItemsCollection;
             GridMultiColumnDropDownList_Islands.ItemsSource = App.myPVM.IslandsCollection;
 
+            ComboBox_AltLevel.ItemsSource = App.myPVM.AltCollection;
+            ComboBox_AltLevel.DisplayMemberPath = "Level";
+            ComboBox_AltLevel.SelectedValuePath = "Value";
+            ComboBox_AltLevel.SelectedIndex = 1;
+
+
             //DataGrid_Planner.SortColumnDescriptions.Add(new SortColumnDescription() { ColumnName = "x:Column_LV", SortDirection = ListSortDirection.Ascending });
-            //SetupDataGridStyle();
+            SetupDataGridStyle();
         }
 
         private void SetupDataGridStyle() {
             // 创建转换器实例并添加到资源中
-            var colorConverter = new ColorConverter();
-            this.Resources.Add("converter", colorConverter);
+            // var colorConverter = new ColorConverter();
+            // this.Resources.Add("converter", colorConverter);
 
             // 创建样式
             Style vccStyle = new Style(typeof(VirtualizingCellsControl));
+            Style grhcStyle = new Style(typeof(GridRowHeaderCell));
 
             // 创建绑定
             Binding backgroundBinding = new Binding {
@@ -41,9 +50,12 @@ namespace iBarter.View {
 
             // 设置样式属性
             vccStyle.Setters.Add(new Setter(VirtualizingCellsControl.BackgroundProperty, backgroundBinding));
+            grhcStyle.Setters.Add(new Setter(GridRowHeaderCell.BackgroundProperty, backgroundBinding));
 
             // 应用样式到 SfDataGrid (您可能需要调整这部分以确保它正确应用到 VirtualizingCellsControl)
-            DataGrid_Planner.CellStyle = vccStyle;
+            //DataGrid_Planner.RowStyle = vccStyle;
+            this.Resources.Add(typeof(VirtualizingCellsControl), vccStyle);
+            this.Resources.Add(typeof(GridRowHeaderCell), grhcStyle);
         }
 
         public void RefreshDataGrid() {
@@ -60,7 +72,7 @@ namespace iBarter.View {
 
                     foreach (Barter barter in App.listBarterPlanner) {
                         Barter myBarter = new Barter(barter.IsLand, barter.Item1, barter.Item2, barter.ExchangeQuantity,
-                            barter.ExchangeDone, barter.BarterGroup, barter.InvQuantity, barter.InvQuantityChange);
+                            barter.ExchangeDone, barter.BarterGroup, barter.InvQuantity, barter.InvQuantityChange, barter.UsingALT);
                         App.myPVM.BarterCollection.Add(myBarter);
                     }
 
@@ -74,7 +86,69 @@ namespace iBarter.View {
         private void UpdateParley() {
             int intParley = 0;
             foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0)) {
-                intParley += barter.Parley * barter.ExchangeQuantity;
+                if (!barter.UsingALT) {
+                    intParley += barter.Parley * barter.ExchangeQuantity;
+                }
+                else {
+                    int intParleyTemp = 0;
+                    double doubValuePack = 1;
+                    switch (barter.IsLand.Island) {
+                        case EnumLists.Island.Halmad:
+                            intParleyTemp = 29430;
+                            break;
+                        case EnumLists.Island.Kashuma:
+                            intParleyTemp = 29430;
+                            break;
+                        case EnumLists.Island.Hakoven:
+                            intParleyTemp = 43780;
+                            break;
+                        case EnumLists.Island.Haran:
+                            intParleyTemp = 46544;
+                            break;
+                        case EnumLists.Island.Unfinished:
+                            intParleyTemp = 46544;
+                            break;
+                        case EnumLists.Island.Lantinia:
+                            intParleyTemp = 46544;
+                            break;
+                        case EnumLists.Island.Pakio:
+                            intParleyTemp = 58180;
+                            break;
+                        case EnumLists.Island.Ancient:
+                            intParleyTemp = 58180;
+                            break;
+                        case EnumLists.Island.Crow:
+                            intParleyTemp = 58180;
+                            break;
+                        case EnumLists.Island.Cholace:
+                            intParleyTemp = 58180;
+                            break;
+                        case EnumLists.Island.Rickun:
+                            intParleyTemp = 58180;
+                            break;
+                        case EnumLists.Island.Cox_Pirates:
+                            intParleyTemp = 58180;
+                            break;
+                        case EnumLists.Island.Wandering:
+                            intParleyTemp = 58180;
+                            break;
+                        case EnumLists.Island.Derko:
+                            intParleyTemp = 36420;
+                            break;
+                        case EnumLists.Island.Marine:
+                            intParleyTemp = 58180;
+                            break;
+                        default:
+                            intParleyTemp = 14286;
+                            break;
+                    }
+
+                    if (CheckBox_ValuePack.IsChecked == true) {
+                        doubValuePack = 0.9;
+                    }
+
+                    intParley += (int)(intParleyTemp * barter.ExchangeQuantity * doubValuePack);
+                }
             }
 
             Label_SelectedParley.Content = intParley;
@@ -216,6 +290,7 @@ namespace iBarter.View {
         }
 
         private void ButtonAdv_Save_Click(object sender, RoutedEventArgs e) {
+            App.myCFun.Log("Saved...", Brushes.Blue);
             SaveData();
         }
 
@@ -300,6 +375,10 @@ namespace iBarter.View {
                 UpdateParley();
                 UpdateMapControl();
             }
+            else if (e.Column.MappingName == "UsingALT") {
+                SaveData();
+                UpdateParley();
+            }
         }
 
         private void UpdateMapControl() {
@@ -309,10 +388,7 @@ namespace iBarter.View {
                     App.myfmMain.myMapControl.Grid_MapMain.Children.Remove(child);
                 }
             }
-
-            foreach (Barter myBarter in App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0)) {
-                App.myfmMain.myMapControl.IslandsButtonInitialisation(myBarter, GetBursh(myBarter));
-            }
+            App.myfmMain.myMapControl.IslandsButtonInitialisation();
         }
 
         private Brush GetBursh(Barter _barter) {
