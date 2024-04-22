@@ -782,4 +782,13 @@
     <Resource Include="Images\storage.png" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Update="C:\Users\wanjizheng\.nuget\packages\puredm\1.1.0\contentFiles\any\net8.0-windows7.0\libs\dm.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Update="C:\Users\wanjizheng\.nuget\packages\puredm\1.1.0\contentFiles\any\net8.0-windows7.0\libs\DmReg.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
