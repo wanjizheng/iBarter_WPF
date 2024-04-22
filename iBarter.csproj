@@ -753,6 +753,7 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="PureDM" Version="1.1.0" />
     <PackageReference Include="Syncfusion.Licensing" Version="25.1.40" />
     <PackageReference Include="Syncfusion.SfGrid.WPF" Version="25.1.40" />
     <PackageReference Include="Syncfusion.Shared.WPF" Version="25.1.40" />
@@ -763,10 +764,6 @@
 
   <ItemGroup>
     <Folder Include="Resources\Images\Testing\" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\PureDM\PureDM.csproj" />
   </ItemGroup>
 
   <ItemGroup>
