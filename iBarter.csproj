@@ -753,12 +753,12 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="PureDM" Version="1.1.0" />
-    <PackageReference Include="Syncfusion.Licensing" Version="25.1.40" />
-    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="25.1.40" />
-    <PackageReference Include="Syncfusion.Shared.WPF" Version="25.1.40" />
-    <PackageReference Include="Syncfusion.Tools.WPF" Version="25.1.40" />
-    <PackageReference Include="syncfusion.ui.wpf.net" Version="25.1.40" />
+    <PackageReference Include="PureDM" Version="1.1.1" />
+    <PackageReference Include="Syncfusion.Licensing" Version="25.1.41" />
+    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="25.1.41" />
+    <PackageReference Include="Syncfusion.Shared.WPF" Version="25.1.41" />
+    <PackageReference Include="Syncfusion.Tools.WPF" Version="25.1.41" />
+    <PackageReference Include="syncfusion.ui.wpf.net" Version="25.1.41" />
     <PackageReference Include="System.Drawing.Common" Version="8.0.4" />
   </ItemGroup>
 
@@ -787,6 +787,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Update="C:\Users\wanjizheng\.nuget\packages\puredm\1.1.0\contentFiles\any\net8.0-windows7.0\libs\DmReg.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Update="C:\Users\wanjizheng\.nuget\packages\puredm\1.1.1\contentFiles\any\net8.0-windows7.0\libs\dm.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Update="C:\Users\wanjizheng\.nuget\packages\puredm\1.1.1\contentFiles\any\net8.0-windows7.0\libs\DmReg.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

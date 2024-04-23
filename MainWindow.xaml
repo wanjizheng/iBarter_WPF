@@ -9,7 +9,7 @@
     xmlns:view="clr-namespace:iBarter.View"
     x:Class="iBarter.MainWindow"
     mc:Ignorable="d"
-    Title="MainWindow" Height="868" Width="1054" Loaded="Window_Loaded">
+    Title="MainWindow" Height="868" Width="1254" Loaded="Window_Loaded">
 
     <Grid>
         <Grid.ColumnDefinitions>
@@ -47,8 +47,8 @@
         <syncfusion:DockingManager x:Name="dockingManager_Main" Grid.Row="1"
                                    UseDocumentContainer="True" UseNativeFloatWindow="True"
                                    Grid.ColumnSpan="2" Margin="0,0,0,22" ActiveWindowChanged="dockingManager_Main_ActiveWindowChanged">
-            <ContentControl x:Name="dockRight" syncfusion:DockingManager.Header="Dock Right"
-                            syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Right" />
+            <ContentControl x:Name="dockRight_ShipCargo" syncfusion:DockingManager.Header="Ship Cargo"
+                            syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Right" MinWidth="0.3" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" syncfusion:DockingManager.DesiredWidthInDockedMode="300"/>
             <ContentControl x:Name="dockBottom" syncfusion:DockingManager.Header="Log"
                             syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Bottom">
                 <RichTextBox x:Name="richTextBox_Log" x:FieldModifier="public" VerticalScrollBarVisibility="Auto"
@@ -60,9 +60,9 @@
                     </RichTextBox.Resources>
                 </RichTextBox>
             </ContentControl>
-            <ContentControl x:Name="dockTabbed" syncfusion:DockingManager.Header="Dock Tabbed"
-                            syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Tabbed"
-                            syncfusion:DockingManager.TargetNameInDockedMode="dockBottom" />
+            <!-- <ContentControl x:Name="dockTabbed" syncfusion:DockingManager.Header="Dock Tabbed" -->
+            <!--                 syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Tabbed" -->
+            <!--                 syncfusion:DockingManager.TargetNameInDockedMode="dockBottom" /> -->
             <ContentControl x:Name="autoHidden" syncfusion:DockingManager.Header="Auto Hidden"
                             syncfusion:DockingManager.State="AutoHidden"
                             syncfusion:DockingManager.SideInDockedMode="Left" />
