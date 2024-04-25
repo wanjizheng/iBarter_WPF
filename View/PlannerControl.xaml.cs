@@ -83,79 +83,81 @@ namespace iBarter.View {
         }
 
         private void UpdateParley() {
-            int intParley = 0;
-            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0)) {
-                if (!barter.UsingALT) {
-                    intParley += barter.Parley * barter.ExchangeQuantity;
+            if (Label_SelectedParley != null) {
+                int intParley = 0;
+                foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0)) {
+                    if (!barter.UsingALT) {
+                        intParley += barter.Parley * barter.ExchangeQuantity;
+                    }
+                    else {
+                        int intParleyTemp = 0;
+                        double doubValuePack = 1;
+                        switch (barter.IsLand.Island) {
+                            case EnumLists.Island.Halmad:
+                                intParleyTemp = 29430;
+                                break;
+                            case EnumLists.Island.Kashuma:
+                                intParleyTemp = 29430;
+                                break;
+                            case EnumLists.Island.Hakoven:
+                                intParleyTemp = 43780;
+                                break;
+                            case EnumLists.Island.Haran:
+                                intParleyTemp = 46544;
+                                break;
+                            case EnumLists.Island.Unfinished:
+                                intParleyTemp = 46544;
+                                break;
+                            case EnumLists.Island.Lantinia:
+                                intParleyTemp = 46544;
+                                break;
+                            case EnumLists.Island.Pakio:
+                                intParleyTemp = 58180;
+                                break;
+                            case EnumLists.Island.Ancient:
+                                intParleyTemp = 58180;
+                                break;
+                            case EnumLists.Island.Crow:
+                                intParleyTemp = 58180;
+                                break;
+                            case EnumLists.Island.Cholace:
+                                intParleyTemp = 58180;
+                                break;
+                            case EnumLists.Island.Rickun:
+                                intParleyTemp = 58180;
+                                break;
+                            case EnumLists.Island.Cox_Pirates:
+                                intParleyTemp = 58180;
+                                break;
+                            case EnumLists.Island.Wandering:
+                                intParleyTemp = 58180;
+                                break;
+                            case EnumLists.Island.Derko:
+                                intParleyTemp = 36420;
+                                break;
+                            case EnumLists.Island.Marine:
+                                intParleyTemp = 58180;
+                                break;
+                            default:
+                                intParleyTemp = 14286;
+                                break;
+                        }
+
+                        if (CheckBox_ValuePack.IsChecked == true) {
+                            doubValuePack = 0.9;
+                        }
+
+                        intParley += (int)(intParleyTemp * barter.ExchangeQuantity * doubValuePack);
+                    }
+                }
+
+                Label_SelectedParley.Content = intParley;
+                if (intParley > 1000000) {
+                    Label_SelectedParley.Foreground = Brushes.Red;
                 }
                 else {
-                    int intParleyTemp = 0;
-                    double doubValuePack = 1;
-                    switch (barter.IsLand.Island) {
-                        case EnumLists.Island.Halmad:
-                            intParleyTemp = 29430;
-                            break;
-                        case EnumLists.Island.Kashuma:
-                            intParleyTemp = 29430;
-                            break;
-                        case EnumLists.Island.Hakoven:
-                            intParleyTemp = 43780;
-                            break;
-                        case EnumLists.Island.Haran:
-                            intParleyTemp = 46544;
-                            break;
-                        case EnumLists.Island.Unfinished:
-                            intParleyTemp = 46544;
-                            break;
-                        case EnumLists.Island.Lantinia:
-                            intParleyTemp = 46544;
-                            break;
-                        case EnumLists.Island.Pakio:
-                            intParleyTemp = 58180;
-                            break;
-                        case EnumLists.Island.Ancient:
-                            intParleyTemp = 58180;
-                            break;
-                        case EnumLists.Island.Crow:
-                            intParleyTemp = 58180;
-                            break;
-                        case EnumLists.Island.Cholace:
-                            intParleyTemp = 58180;
-                            break;
-                        case EnumLists.Island.Rickun:
-                            intParleyTemp = 58180;
-                            break;
-                        case EnumLists.Island.Cox_Pirates:
-                            intParleyTemp = 58180;
-                            break;
-                        case EnumLists.Island.Wandering:
-                            intParleyTemp = 58180;
-                            break;
-                        case EnumLists.Island.Derko:
-                            intParleyTemp = 36420;
-                            break;
-                        case EnumLists.Island.Marine:
-                            intParleyTemp = 58180;
-                            break;
-                        default:
-                            intParleyTemp = 14286;
-                            break;
-                    }
-
-                    if (CheckBox_ValuePack.IsChecked == true) {
-                        doubValuePack = 0.9;
-                    }
-
-                    intParley += (int)(intParleyTemp * barter.ExchangeQuantity * doubValuePack);
+                    Label_SelectedParley.Foreground = Brushes.Black;
                 }
-            }
-
-            Label_SelectedParley.Content = intParley;
-            if (intParley > 1000000) {
-                Label_SelectedParley.Foreground = Brushes.Red;
-            }
-            else {
-                Label_SelectedParley.Foreground = Brushes.Black;
             }
         }
 
