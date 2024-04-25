@@ -46,9 +46,15 @@
 
         <syncfusion:DockingManager x:Name="dockingManager_Main" Grid.Row="1"
                                    UseDocumentContainer="True" UseNativeFloatWindow="True"
-                                   Grid.ColumnSpan="2" Margin="0,0,0,22" ActiveWindowChanged="dockingManager_Main_ActiveWindowChanged">
+                                   Grid.ColumnSpan="2" Margin="0,0,0,22"
+                                   ActiveWindowChanged="dockingManager_Main_ActiveWindowChanged">
             <ContentControl x:Name="dockRight_ShipCargo" syncfusion:DockingManager.Header="Ship Cargo"
-                            syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Right" MinWidth="0.3" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" syncfusion:DockingManager.DesiredWidthInDockedMode="300"/>
+                            syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Right"
+                            MinWidth="0.3" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                            ScrollViewer.VerticalScrollBarVisibility="Auto"
+                            syncfusion:DockingManager.DesiredWidthInDockedMode="300">
+                <view:ShipCargoControl x:Name="myShipCargo"></view:ShipCargoControl>
+            </ContentControl>
             <ContentControl x:Name="dockBottom" syncfusion:DockingManager.Header="Log"
                             syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Bottom">
                 <RichTextBox x:Name="richTextBox_Log" x:FieldModifier="public" VerticalScrollBarVisibility="Auto"

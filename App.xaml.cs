@@ -22,11 +22,11 @@ namespace iBarter {
         public static ScannerViewModel mySVM = null!;
         public static PlannerViewModel myPVM = null!;
         public static StorageViewModel myStorageVM = null!;
+        public static ShipCargoViewModel myCVM = null!;
+
 
         public App() {
             SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1NBaF5cXmtCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdnWXtec3RcRmRYUUdxWUM=");
-            // ArcGISRuntimeEnvironment.ApiKey = "AAPK590677eae59f4202b58b3047aa240321Iygj3PiBEOzP4HFiSGiEXHLApeMp2mGY54BLLcjQJbk1wvi5dSRfbPibOUw4lpES";
-
 
             myCFun = new CFunctions();
             listItems = myCFun.LoadItemsCSV();
@@ -36,6 +36,8 @@ namespace iBarter {
             mySVM = new ScannerViewModel();
             myPVM = new PlannerViewModel();
             myStorageVM = new StorageViewModel();
+            myCVM = new ShipCargoViewModel();
+
 
             myfmMain = new MainWindow();
 
