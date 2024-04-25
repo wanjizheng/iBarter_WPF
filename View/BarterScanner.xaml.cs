@@ -1,7 +1,7 @@
-﻿using System.Windows;
-using System.Windows.Media;
-using Syncfusion.UI.Xaml.Grid;
+﻿using Syncfusion.UI.Xaml.Grid;
 using Syncfusion.Windows.Shared;
+using System.Windows;
+using System.Windows.Media;
 
 namespace iBarter.View {
     /// <summary>

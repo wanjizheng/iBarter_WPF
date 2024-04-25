@@ -1,12 +1,11 @@
-﻿using System.Collections.ObjectModel;
+﻿using Newtonsoft.Json;
+using Syncfusion.UI.Xaml.Grid;
 using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
-using Newtonsoft.Json;
-using Syncfusion.UI.Xaml.Grid;
 using Brush = System.Windows.Media.Brush;
 
 namespace iBarter.View {
@@ -287,6 +286,8 @@ namespace iBarter.View {
             }
 
             UpdateParley();
+
+            App.myfmMain.myShipCargo.RefreshData();
         }
 
         private void ButtonAdv_Save_Click(object sender, RoutedEventArgs e) {
@@ -371,6 +372,13 @@ namespace iBarter.View {
 
         private void DataGrid_Planner_CurrentCellValueChanged(object sender, CurrentCellValueChangedEventArgs e) {
             if (e.Column.MappingName == "ExchangeDone") {
+                Barter myBarter = (Barter)e.Record;
+                if (App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName) != null) {
+                    App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName));
+                    App.myfmMain.myShipCargo.UpdateCurrentLV();
+                    App.myfmMain.myShipCargo.SaveData();
+                }
+
                 SaveData();
                 UpdateParley();
                 UpdateMapControl();
@@ -388,6 +396,7 @@ namespace iBarter.View {
                     App.myfmMain.myMapControl.Grid_MapMain.Children.Remove(child);
                 }
             }
+
             App.myfmMain.myMapControl.IslandsButtonInitialisation();
         }
 
@@ -518,6 +527,14 @@ namespace iBarter.View {
             SaveData();
             DataGrid_Planner.View.Refresh();
             UpdateMapControl();
+        }
+
+        private void CheckBox_ValuePack_Checked(object sender, RoutedEventArgs e) {
+            UpdateParley();
+        }
+
+        private void CheckBox_ValuePack_Unchecked(object sender, RoutedEventArgs e) {
+            UpdateParley();
         }
     }
 }

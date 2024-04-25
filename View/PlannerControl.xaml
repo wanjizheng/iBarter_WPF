@@ -95,7 +95,7 @@
                 SmallIcon="/Images/done.png" Click="ButtonAdv_Done_Click" />
             <Separator />
             <Label Content="Value Pack:" VerticalAlignment="Center" />
-            <CheckBox x:Name="CheckBox_ValuePack"  VerticalAlignment="Center" IsChecked="True"/>
+            <CheckBox x:Name="CheckBox_ValuePack"  VerticalAlignment="Center" IsChecked="True" Checked="CheckBox_ValuePack_Checked" Unchecked="CheckBox_ValuePack_Unchecked"/>
             <Separator Margin="10,0,0,0" />
             <Label Content="Max LV5:" VerticalAlignment="Center" />
             <syncfusion:ComboBoxAdv x:Name="ComboBox_LV5Max" SelectedIndex="5">

@@ -9,7 +9,7 @@
     xmlns:view="clr-namespace:iBarter.View"
     x:Class="iBarter.MainWindow"
     mc:Ignorable="d"
-    Title="MainWindow" Height="868" Width="1254" Loaded="Window_Loaded">
+    Title="iBarter" Height="868" Width="1254" Loaded="Window_Loaded">
 
     <Grid>
         <Grid.ColumnDefinitions>

@@ -1,33 +1,24 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Syncfusion.Windows.Shared;
 using System.Collections.ObjectModel;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using iBarter.Model;
-using Syncfusion.Windows.PropertyGrid;
-using Syncfusion.Windows.Shared;
 
 namespace iBarter.ViewModel {
     public class ShipCargoViewModel : NotificationObject {
         public ShipCargoViewModel() {
-            CargoDetails = new ObservableCollection<ShipCargo>();
-            CargoProperty = new ObservableCollection<PropertyGridItem>();
+            CargoDetails = new ObservableCollection<Barter>();
+            CargoDetails.CollectionChanged += CargoDetails_CollectionChanged;
         }
 
-        private ObservableCollection<ShipCargo> _cargodetails;
-        private ObservableCollection<Syncfusion.Windows.PropertyGrid.PropertyGridItem> _cargoproperty = null;
+        private void CargoDetails_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
+            if (App.myfmMain != null) {
+                //SaveData();
+            }
+        }
 
-        public ObservableCollection<ShipCargo> CargoDetails {
+        private ObservableCollection<Barter> _cargodetails;
+
+        public ObservableCollection<Barter> CargoDetails {
             get { return _cargodetails; }
             set { _cargodetails = value; }
-        }
-
-        public ObservableCollection<Syncfusion.Windows.PropertyGrid.PropertyGridItem> CargoProperty {
-            get {
-                return _cargoproperty;
-            }
-            set { _cargoproperty = value; }
         }
     }
 

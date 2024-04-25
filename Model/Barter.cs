@@ -90,6 +90,14 @@ namespace iBarter {
             }
         }
 
+        public int TotalItem1ExchangeQuantity {
+            get { return ExchangeQuantity * Item1Number; }
+        }
+
+        public int TotalItem2ExchangeQuantity {
+            get { return ExchangeQuantity * Item2Number; }
+        }
+
         public int Parley {
             get { return IsLand.Parley; }
             set {

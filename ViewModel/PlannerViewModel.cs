@@ -1,8 +1,8 @@
-﻿using Syncfusion.Windows.Shared;
+﻿using iBarter.Model;
+using Syncfusion.Windows.Shared;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Windows.Media;
-using iBarter.Model;
 
 namespace iBarter.ViewModel {
     public class PlannerViewModel : NotificationObject {

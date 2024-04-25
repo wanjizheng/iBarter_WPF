@@ -1,4 +1,5 @@
-﻿using iBarter.View;
+﻿using iBarter.Model;
+using iBarter.View;
 using iBarter.ViewModel;
 using Syncfusion.Licensing;
 using System.Windows;
@@ -16,6 +17,7 @@ namespace iBarter {
         public static List<Islands> listIslands = null!;
         public static List<Items> listItems = null!;
         public static List<Items> listStorage = null;
+        public static List<Barter> listCargoItems = null;
         public static List<Barter> listBarterScanner = new List<Barter>();
         public static List<Barter> listBarterPlanner = new List<Barter>();
 
@@ -23,6 +25,7 @@ namespace iBarter {
         public static PlannerViewModel myPVM = null!;
         public static StorageViewModel myStorageVM = null!;
         public static ShipCargoViewModel myCVM = null!;
+        public static CargoProperty myCargoProperty = null;
 
 
         public App() {
@@ -32,6 +35,7 @@ namespace iBarter {
             listItems = myCFun.LoadItemsCSV();
             listIslands = myCFun.LoadIslandsCSV();
             listStorage = new List<Items>();
+            listCargoItems = new List<Barter>();
 
             mySVM = new ScannerViewModel();
             myPVM = new PlannerViewModel();

@@ -1,11 +1,10 @@
-﻿using System.Windows;
+﻿using Syncfusion.Windows.Controls.PivotGrid;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
-using Syncfusion.Windows.Controls.PivotGrid;
 using static iBarter.EnumLists;
 using Grid = System.Windows.Controls.Grid;
 using RowColumnIndex = Syncfusion.UI.Xaml.ScrollAxis.RowColumnIndex;
@@ -116,7 +115,7 @@ namespace iBarter.View {
 
             for (int i = listGrid_Islands.Count - 1; i > 0; i--) {
                 Grid grid = listGrid_Islands[i];
-                if (App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0 && b.IsLandName== grid.Name.Substring(14, grid.Name.Length - 14)) == null) {
+                if (App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0 && b.IsLandName == grid.Name.Substring(14, grid.Name.Length - 14)) == null) {
                     listGrid_Islands.Remove(grid);
                 }
             }
@@ -153,9 +152,24 @@ namespace iBarter.View {
                         myLabel.Height = myLabel.ActualHeight;
                     }
 
+                    Barter barter = App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myIslands.IslandsName);
+                    if (barter != null) {
+                        myLabel.FontWeight = FontWeights.Bold;
+                        myLabel.FontSize = 14;
+                        myLabel.Width = Double.NaN;
+                        myLabel.Height = Double.NaN;
+                    }
+                    else if (myLabel.FontWeight == FontWeights.Bold) {
+                        myLabel.FontWeight = FontWeights.Normal;
+                        myLabel.FontSize = 12;
+                        myLabel.Width = Double.NaN;
+                        myLabel.Height = Double.NaN;
+                    }
+
                     Grid_Image.Margin = new Thickness(myIslands.IslandsThickness.Left * Grid_MapMain.ActualWidth, myIslands.IslandsThickness.Top * Grid_MapMain.ActualHeight, myIslands.IslandsThickness.Right * Grid_MapMain.ActualWidth, myIslands.IslandsThickness.Bottom * Grid_MapMain.ActualHeight);
 
-                    myLabel.Margin = new Thickness(Grid_Image.Margin.Left - myLabel.Width / 2, Grid_Image.Margin.Top + Grid_Image.ActualHeight, Grid_Image.Margin.Right - myLabel.Width, Grid_Image.Margin.Bottom - myLabel.Height);
+                    myLabel.Margin = new Thickness(Grid_Image.Margin.Left - myLabel.ActualWidth / 2, Grid_Image.Margin.Top + Grid_Image.ActualHeight, Grid_Image.Margin.Right - myLabel.ActualWidth, Grid_Image.Margin.Bottom - myLabel.ActualHeight);
+
 
                     NewMargin(myLabel);
                     if (myLabel.Content != "") {
@@ -521,7 +535,7 @@ namespace iBarter.View {
 
             InitTempGrid();
             foreach (Barter myBarter in App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0)) {
-                ButtonInitialisation(myBarter,GetBursh(myBarter));
+                ButtonInitialisation(myBarter, GetBursh(myBarter));
             }
         }
 
@@ -532,6 +546,7 @@ namespace iBarter.View {
                 myGrid_Container.Name = "GridContainer_" + _barter.IsLandName;
                 myGrid_Container.MouseLeftButtonDown += Islands_MouseLeftButtonDown;
                 myGrid_Container.MouseRightButtonDown += Islands_MouseRightButtonDown;
+                myGrid_Container.MouseDown += MyGrid_Container_MouseDown;
             }
             else {
                 myGrid_Container.Name = "GridContainer_" + _barter.IsLandName + "Temp";
@@ -621,28 +636,35 @@ namespace iBarter.View {
             //IslandsButtonRearrange();
         }
 
-        private void Image_Albresser_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
-            if (e.ClickCount == 2) {
-                App.myCFun.Log("Double click", Brushes.Blue);
-            }
-            else if (e.ClickCount == 1) {
-                //ToolTipControl myTTC = new ToolTipControl();
-                //Grid_MapMain.Children.Add(myTTC);
-                //Grid_Albresser.Children.Add(myTTC);
+        private void MyGrid_Container_MouseDown(object sender, MouseButtonEventArgs e) {
+            if (e.ChangedButton == MouseButton.Middle && e.ButtonState == MouseButtonState.Pressed) {
+                var clickedGrid = sender as Grid;
+                if (clickedGrid != null) {
+                    Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == clickedGrid.Name.Substring(14, clickedGrid.Name.Length - 14))!;
+                    if (App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName) == null) {
+                        App.myCVM.CargoDetails.Add(myBarter);
+                    }
+                    else {
+                        App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName));
+                    }
+
+                    App.myfmMain.myShipCargo.UpdateCurrentLV();
+                    App.myfmMain.myShipCargo.SaveData();
+                }
             }
         }
 
         private void Islands_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
-            if (e.ClickCount == 2) {
-                var clickedGrid = sender as Grid;
-                if (clickedGrid != null) {
-                    App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == clickedGrid.Name.Substring(14, clickedGrid.Name.Length - 14))!.ExchangeDone = true;
-                    App.myfmMain.myPlannerControl.Grouping();
+            var clickedGrid = sender as Grid;
+            if (clickedGrid != null) {
+                Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == clickedGrid.Name.Substring(14, clickedGrid.Name.Length - 14))!;
+                myBarter.ExchangeDone = true;
+                App.myfmMain.myPlannerControl.Grouping();
+                if (App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName) != null) {
+                    App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName));
+                    App.myfmMain.myShipCargo.UpdateCurrentLV();
+                    App.myfmMain.myShipCargo.SaveData();
                 }
-            }
-            else if (e.ClickCount == 1) {
-                //Grid_MapMain.Children.Add(myTTC);
-                //Grid_Albresser.Children.Add(myTTC);
             }
         }
 

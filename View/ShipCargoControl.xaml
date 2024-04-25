@@ -8,34 +8,35 @@
     xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
     mc:Ignorable="d"
     d:DesignHeight="850" d:DesignWidth="300">
+    <Control.Resources>
+        <DataTemplate x:Key="ListBoxTemplate">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{Binding TotalItem1ExchangeQuantity, StringFormat='[{0}]'}" FontWeight="Bold"
+                           VerticalAlignment="Center" />
+                <Image Source="{Binding Item1Icon}" />
+                <TextBlock Text=" => " FontWeight="Bold" VerticalAlignment="Center" />
+                <Image Source="{Binding Item2Icon}" />
+                <TextBlock Text="{Binding TotalItem2ExchangeQuantity, StringFormat='[{0}]'}" FontWeight="Bold"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </DataTemplate>
+    </Control.Resources>
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <Syncfusion:ToolBarAdv Grid.Row="0">
-            <Syncfusion:ButtonAdv
-                x:Name="ButtonAdv_New"
-                Margin="4,0,4,0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                IconWidth="26" IconHeight="26"
-                Label="New"
-                ToolTip="New"
-                SizeMode="Small"
-                FontFamily="Microsoft YaHei"
-                SmallIcon="/Images/new-document.png" />
-        </Syncfusion:ToolBarAdv>
-        <ListBox x:Name="ListBox_ShipCargo" Grid.Row="1" d:ItemsSource="{d:SampleData ItemCount=5}" />
-        <Syncfusion:SfGridSplitter Height="2" Grid.Row="2" HorizontalAlignment="Stretch"
+        <ListBox x:Name="ListBox_ShipCargo" Grid.Row="0" ItemTemplate="{StaticResource ListBoxTemplate}" />
+        <Syncfusion:SfGridSplitter Height="2" Grid.Row="1" HorizontalAlignment="Stretch"
                                    VerticalAlignment="Top"
                                    EnableCollapseButton="True"
                                    ResizeBehavior="PreviousAndNext"
                                    ShowsPreview="True" />
-        <Grid Grid.Row="3">
-            <Syncfusion:PropertyGrid x:Name="PropertyGrid_Ship" />
+        <Grid Grid.Row="2">
+            <Syncfusion:PropertyGrid x:Name="PropertyGrid_Ship">
+                
+            </Syncfusion:PropertyGrid>
         </Grid>
         <!-- <Syncfusion:SfGridSplitter  Margin="0,0,0,0" Grid.Row="1" VerticalAlignment="Center"/> -->
 
