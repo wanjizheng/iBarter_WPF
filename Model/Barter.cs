@@ -10,14 +10,14 @@ namespace iBarter {
         private String icon1 = null, icon2 = null;
         private String item1Name = "", item2Name = "";
         private int exchangeQuantity = 0;
-        private bool exchangeDone = false, usingALT = false;
+        private bool exchangeDone = false, usingALT = false, calculatedAlready = false;
         private int barterGroup = -1;
         int intChange = 0, intInv = 0;
 
         public Barter() {
         }
 
-        public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = -1, int _intInv = 0, int _intChange = 0, bool _usingALT = false) {
+        public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = -1, int _intInv = 0, int _intChange = 0, bool _usingALT = false, bool _calculatedAlready = false) {
             isLand = _isLand;
 
             item1 = _item1;
@@ -34,9 +34,15 @@ namespace iBarter {
             usingALT = _usingALT;
             intInv = _intInv;
             intChange = _intChange;
+            calculatedAlready = _calculatedAlready;
             if (InvQuantityChange == 0) {
                 InvQuantityChange = InvQuantity;
             }
+        }
+
+        public bool CalculatedAlready {
+            get { return calculatedAlready; }
+            set { calculatedAlready = value; }
         }
 
         public Islands IsLand {

@@ -656,10 +656,11 @@ namespace iBarter.View {
 
         private void Islands_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
             var clickedGrid = sender as Grid;
-            if (clickedGrid != null) {
+            if (clickedGrid != null && e.ClickCount == 2) {
                 Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == clickedGrid.Name.Substring(14, clickedGrid.Name.Length - 14))!;
                 myBarter.ExchangeDone = true;
                 App.myfmMain.myPlannerControl.Grouping();
+                App.myfmMain.myPlannerControl.SaveData();
                 if (App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName) != null) {
                     App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName));
                     App.myfmMain.myShipCargo.UpdateCurrentLV();

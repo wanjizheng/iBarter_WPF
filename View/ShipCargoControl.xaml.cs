@@ -1,5 +1,6 @@
 ﻿using iBarter.Model;
 using Newtonsoft.Json;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
@@ -18,7 +19,8 @@ namespace iBarter.View {
 
         public void RefreshData() {
             if (App.myfmMain != null) {
-                string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myShipCargoItems_Data.json";
+                string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                                      "\\Resources\\myShipCargoItems_Data.json";
 
                 if (File.Exists(strPath_Data)) {
                     try {
@@ -35,7 +37,8 @@ namespace iBarter.View {
                         }
 
                         ListBox_ShipCargo.EndInit();
-                        strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myShipProperty_Data.json";
+                        strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                                       "\\Resources\\myShipProperty_Data.json";
                         if (File.Exists(strPath_Data)) {
                             readJsonData = File.ReadAllText(strPath_Data);
                             App.myCargoProperty = JsonConvert.DeserializeObject<CargoProperty>(readJsonData);
@@ -55,6 +58,7 @@ namespace iBarter.View {
                     App.myCargoProperty = new CargoProperty();
                     //PropertyGrid_Ship.SelectedObject = App.myCargoProperty;
                 }
+
                 ListBox_ShipCargo.ItemsSource = App.myCVM.CargoDetails;
                 PropertyGrid_Ship.SelectedObject = App.myCargoProperty;
             }
@@ -63,7 +67,8 @@ namespace iBarter.View {
         public void SaveData() {
             try {
                 if (App.myCVM != null) {
-                    string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myShipCargoItems_Data.json";
+                    string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                                          "\\Resources\\myShipCargoItems_Data.json";
 
                     using (FileStream streamData = new FileStream(strPath_Data, FileMode.Create, FileAccess.Write)) {
                         App.listCargoItems.Clear();
@@ -89,29 +94,62 @@ namespace iBarter.View {
         }
 
         public void UpdateCurrentLV() {
-            App.myCargoProperty.CurrentLT = 0;
-            foreach (Barter barter in App.myCVM.CargoDetails) {
-                int intWeight = 0;
-                switch (barter.Item2.ItemLV) {
-                    case "1":
-                        intWeight = 100;
-                        break;
-                    case "2":
-                        intWeight = 800;
-                        break;
-                    case "3":
-                        intWeight = 900;
-                        break;
-                    case "4":
-                    case "5":
-                        intWeight = 1000;
-                        break;
-                    default:
-                        intWeight = 0;
-                        break;
-                }
+            foreach (Barter myCvmCargoDetail in App.myCVM.CargoDetails) {
+                myCvmCargoDetail.CalculatedAlready = false;
+            }
 
-                App.myCargoProperty.CurrentLT += intWeight * barter.TotalItem2ExchangeQuantity;
+            App.myCargoProperty.CurrentLT = 0;
+            List<Barter> myList = (List<Barter>)App.myCVM.CargoDetails.ToList();
+            myList.Sort((b1, b2) => { return int.Parse(b1.Item1.ItemLV).CompareTo(int.Parse(b2.Item1.ItemLV)); });
+
+            foreach (Barter barter in myList) {
+                IdentifyChain(barter, int.Parse(barter.Item1.ItemLV));
+
+                // int intWeight = GetWeight(barter.Item2.ItemLV);
+                //
+                // App.myCargoProperty.CurrentLT += intWeight * barter.TotalItem2ExchangeQuantity;
+            }
+        }
+
+        private int GetWeight(string _lv) {
+            int intWeight = 0;
+            switch (_lv) {
+                case "1":
+                    intWeight = 100;
+                    break;
+                case "2":
+                    intWeight = 800;
+                    break;
+                case "3":
+                    intWeight = 900;
+                    break;
+                case "4":
+                case "5":
+                    intWeight = 1000;
+                    break;
+                default:
+                    intWeight = 0;
+                    break;
+            }
+
+            return intWeight;
+        }
+
+        private void IdentifyChain(Barter _barter, int _lv) {
+            Barter myBarter = App.myCVM.CargoDetails.FirstOrDefault(b =>
+                b.Item1.ItemLV.Equals(Convert.ToString(_lv + 1)) && b.Item1Name.Equals(_barter.Item2Name) && b.CalculatedAlready == false)!;
+            if (myBarter != null) {
+                App.myCargoProperty.CurrentLT += (_barter.TotalItem2ExchangeQuantity - myBarter.TotalItem1ExchangeQuantity) * GetWeight(_barter.Item2.ItemLV);
+                _barter.CalculatedAlready = true;
+                if (!myBarter.Item1.ItemLV.Equals("5")) {
+                    IdentifyChain(myBarter, ++_lv);
+                }
+            }
+            else {
+                if (!_barter.CalculatedAlready) {
+                    App.myCargoProperty.CurrentLT += GetWeight(_barter.Item2.ItemLV) * _barter.TotalItem2ExchangeQuantity;
+                    _barter.CalculatedAlready = true;
+                }
             }
         }
     }

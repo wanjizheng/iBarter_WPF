@@ -297,7 +297,7 @@ namespace iBarter.View {
             SaveData();
         }
 
-        private void SaveData() {
+        public void SaveData() {
             try {
                 if (App.myPVM.BarterCollection.Count > 0) {
                     string strPath_Setting = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
