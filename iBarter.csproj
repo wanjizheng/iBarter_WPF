@@ -752,6 +752,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="libwebp.v140" Version="0.5.0.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="PureDM" Version="1.1.1" />
     <PackageReference Include="Syncfusion.Licensing" Version="25.1.41" />
@@ -795,6 +796,12 @@
     <Content Update="C:\Users\wanjizheng\.nuget\packages\puredm\1.1.1\contentFiles\any\net8.0-windows7.0\libs\DmReg.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Resources\Images\Testing\ReadMe.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

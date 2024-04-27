@@ -215,6 +215,10 @@ namespace iBarter {
                     icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
                 }
 
+                if (!File.Exists(icon1) && item1 != null && int.Parse(Item1.ItemID) > 0) {
+                    App.myCFun.RefreshItems(item1.ItemID);
+                }
+
                 return icon1;
             }
             set {
@@ -248,6 +252,10 @@ namespace iBarter {
             get {
                 if (icon2 == null || !icon2.Contains(Item2.ItemID)) {
                     icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+                }
+
+                if (!File.Exists(icon2) && item2 != null && int.Parse(Item2.ItemID) > 0) {
+                    App.myCFun.RefreshItems(item2.ItemID);
                 }
 
                 return icon2;

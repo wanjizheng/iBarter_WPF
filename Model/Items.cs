@@ -44,6 +44,10 @@ namespace iBarter {
                     icon = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + ItemID + ".bmp";
                 }
 
+                if (!File.Exists(icon) &&  int.Parse(ItemID) > 0) {
+                    App.myCFun.RefreshItems(ItemID);
+                }
+
                 return icon;
             }
             set {

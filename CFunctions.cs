@@ -63,9 +63,9 @@ namespace iBarter {
         public void downloadMap() {
             try {
                 for (var x = 0; x < 127; x++)
-                    for (var y = 0; y < 127; y++)
-                        DownloadMapImage("https://www.somethinglovely.net/bdo/tiles2/15/" + x + "_" + y + ".jpg",
-                            "D:\\Downloads\\Maps\\" + x + "_" + y + ".jpg", ImageFormat.Jpeg);
+                for (var y = 0; y < 127; y++)
+                    DownloadMapImage("https://www.somethinglovely.net/bdo/tiles2/15/" + x + "_" + y + ".jpg",
+                        "D:\\Downloads\\Maps\\" + x + "_" + y + ".jpg", ImageFormat.Jpeg);
             }
             catch (ExternalException) {
                 // Something is wrong with Format -- Maybe required Format is not 
@@ -101,11 +101,11 @@ namespace iBarter {
             var imageHeights = new ArrayList();
 
             for (var x = 0; x < 127; x++)
-                for (var y = 0; y < 127; y++) {
-                    var img = Image.FromFile(folderName + "\\" + x + "_" + y + ".jpg");
-                    g.DrawImage(img, x * img0.Width, y * img0.Height);
-                    img.Dispose();
-                }
+            for (var y = 0; y < 127; y++) {
+                var img = Image.FromFile(folderName + "\\" + x + "_" + y + ".jpg");
+                g.DrawImage(img, x * img0.Width, y * img0.Height);
+                img.Dispose();
+            }
 
             //img3.Save("E:\\map.jpg",System.Drawing.Imaging.ImageFormat.Jpeg);
 
@@ -121,8 +121,14 @@ namespace iBarter {
 
         #region RefreshItems
 
-        public void RefreshItems() {
-            var listItems = LoadItemsCSV();
+        public void RefreshItems(string _itemID = "") {
+            List<Items> listItems = LoadItemsCSV();
+            if (_itemID != null) {
+                Items myItem = listItems.Where(i => i.ItemID == _itemID).FirstOrDefault();
+                listItems.Clear();
+                listItems.Add(myItem);
+            }
+
             int i = 1;
             foreach (var item in listItems) {
                 var strURL = "";
@@ -158,11 +164,11 @@ namespace iBarter {
         private void UpdateItemImagesAsync(string _id, string _url) {
             var client = new WebClient();
             //Uri address = new Uri("https://bdocodex.com/items/new_icon/03_etc/" + strType + _id + ".webp");
-
+            //Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
             using (var stream = client.OpenRead(_url)) {
                 using (var fileStream =
-                       new FileStream(
-                           "E:\\wanjizheng\\Documents\\MyProject\\BDO Data\\Items\\Images\\webp\\" + _id + ".webp",
+                       new FileStream(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Testing\\" + _id + ".webp",
+                           //"E:\\wanjizheng\\Documents\\MyProject\\BDO Data\\Items\\Images\\webp\\" + _id + ".webp",
                            FileMode.Create, FileAccess.Write)) {
                     stream.CopyTo(fileStream);
                     stream.Flush();
@@ -172,8 +178,7 @@ namespace iBarter {
 
 
             var webp = new WebP();
-            var bitmap = webp.Load("E:\\wanjizheng\\Documents\\MyProject\\BDO Data\\Items\\Images\\webp\\" + _id +
-                                   ".webp");
+            var bitmap = webp.Load(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Testing\\" + _id + ".webp");
             var bitmapNew = new Bitmap(44, 44, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
 
             using (var gfx = Graphics.FromImage(bitmapNew))
@@ -184,7 +189,7 @@ namespace iBarter {
             var g = Graphics.FromImage(bitmapNew);
             g.DrawImage(bitmap, 0, 0);
 
-            bitmapNew.Save("E:\\wanjizheng\\Documents\\MyProject\\BDO Data\\Items\\Images\\bmp\\" + _id + ".bmp",
+            bitmapNew.Save(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + _id + ".bmp",
                 ImageFormat.Bmp);
 
             bitmapNew.Dispose();
@@ -400,7 +405,10 @@ namespace iBarter {
             }
 
             //Islands myIslands = new Islands(IslandEnum(strIsland), intParley, intRemaining);
-            Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == strIsland);
+            Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == IslandEnum(strIsland).ToString());
+
+            myIslands.Parley = intParley;
+            myIslands.Remaining = intRemaining;
 
             myBarter.IsLand = myIslands;
 

@@ -1,0 +1,1 @@
+This is a folder used by the application. Do not delete it.

@@ -480,7 +480,7 @@ namespace iBarter.View {
             if (App.myStorageVM.StorageCollection != null) {
                 foreach (Items item in App.myStorageVM.StorageCollection) {
                     if (App.myPVM != null) {
-                        Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.Item2Name == item.ItemName);
+                        Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.Item1Name == item.ItemName);
                         if (myBarter != null) {
                             switch (App.myStorageManagement.ComboBoxAdv_DefaultStorage.SelectedIndex) {
                                 case 0:
