@@ -114,9 +114,10 @@ namespace iBarter {
                 App.myPureDM.GetProcessName("BlackDesert64");
                 App.myPureDM.BindMode = 103;
                 App.myPureDM.DisplayMode = "dx.graphic.3d.10plus";
-                App.myPureDM.MouseMode = "dx.public.active.api|dx.public.active.message|dx.mouse.position.lock.api|dx.mouse.state.api|dx.mouse.api|dx.mouse.focus.input.api|dx.mouse.focus.input.message|dx.mouse.clip.lock.api|dx.mouse.input.lock.api| dx.mouse.cursor";
+                // App.myPureDM.MouseMode = "dx.public.active.api|dx.public.active.message|dx.mouse.position.lock.api|dx.mouse.state.api|dx.mouse.api|dx.mouse.focus.input.api|dx.mouse.focus.input.message|dx.mouse.clip.lock.api|dx.mouse.input.lock.api| dx.mouse.cursor";
+                App.myPureDM.MouseMode = "dx.mouse.raw.input";
                 App.myPureDM.KeyboardMode = "dx.keypad.raw.input";
-                App.myPureDM.PublicMode = "dx.public.graphic.protect|dx.public.anti.api|dx.public.km.protect|dx.mouse.raw.input|dx.mouse.cursor|dx.public.input.ime|dx.public.focus.message";
+                App.myPureDM.PublicMode = "dx.public.graphic.protect|dx.public.anti.api|dx.public.km.protect|dx.public.input.ime|dx.public.focus.message";
 
 
                 App.myPureDM.DM.SetWindowState((int)App.myPureDM.Hwnd, 1);
@@ -154,13 +155,13 @@ namespace iBarter {
         }
 
         private void dockingManager_Main_ActiveWindowChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) {
-            if (dockingManager_Main.ActiveWindow.Name == "document_Map") {
-                myMapControl.IslandsButtonRearrange();
-                myMapControl.myTimer.Start();
-            }
-            else {
-                myMapControl.myTimer.Stop();
-            }
+            // if (dockingManager_Main.ActiveWindow.Name == "document_Map") {
+            //     myMapControl.IslandsButtonRearrange();
+            //     myMapControl.myTimer.Start();
+            // }
+            // else {
+            //     myMapControl.myTimer.Stop();
+            // }
         }
     }
 }

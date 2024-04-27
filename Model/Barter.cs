@@ -13,11 +13,12 @@ namespace iBarter {
         private bool exchangeDone = false, usingALT = false, calculatedAlready = false;
         private int barterGroup = -1;
         int intChange = 0, intInv = 0;
+        private volatile int totalitem1ExchangeQuantity, totalitem2ExchangeQuantity;
 
         public Barter() {
         }
 
-        public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = -1, int _intInv = 0, int _intChange = 0, bool _usingALT = false, bool _calculatedAlready = false) {
+        public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = -1, int _intInv = 0, int _intChange = 0, bool _usingALT = false, bool _calculatedAlready = false, int _totalitem1ExchangeQuantity = -1) {
             isLand = _isLand;
 
             item1 = _item1;
@@ -35,6 +36,8 @@ namespace iBarter {
             intInv = _intInv;
             intChange = _intChange;
             calculatedAlready = _calculatedAlready;
+
+            totalitem1ExchangeQuantity = _totalitem1ExchangeQuantity;
             if (InvQuantityChange == 0) {
                 InvQuantityChange = InvQuantity;
             }
@@ -97,7 +100,14 @@ namespace iBarter {
         }
 
         public int TotalItem1ExchangeQuantity {
-            get { return ExchangeQuantity * Item1Number; }
+            get {
+                if (!calculatedAlready) {
+                    totalitem1ExchangeQuantity = ExchangeQuantity * Item1Number;
+                }
+
+                return totalitem1ExchangeQuantity;
+            }
+            set { totalitem1ExchangeQuantity = value; }
         }
 
         public int TotalItem2ExchangeQuantity {

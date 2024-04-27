@@ -71,7 +71,7 @@ namespace iBarter.View {
 
                     foreach (Barter barter in App.listBarterPlanner) {
                         Barter myBarter = new Barter(barter.IsLand, barter.Item1, barter.Item2, barter.ExchangeQuantity,
-                            barter.ExchangeDone, barter.BarterGroup, barter.InvQuantity, barter.InvQuantityChange, barter.UsingALT);
+                            barter.ExchangeDone, barter.BarterGroup, barter.InvQuantity, barter.InvQuantityChange, barter.UsingALT,barter.CalculatedAlready,barter.TotalItem1ExchangeQuantity);
                         App.myPVM.BarterCollection.Add(myBarter);
                     }
 
