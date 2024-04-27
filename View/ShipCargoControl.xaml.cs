@@ -209,5 +209,14 @@ namespace iBarter.View {
                 }
             }
         }
+
+        private void ButtonAdv_Clean_Click(object sender, RoutedEventArgs e) {
+            if (App.myCVM != null) {
+                App.myCVM.CargoDetails.Clear();
+                App.myCargoProperty.CurrentLT = 0;
+                UpdateCurrentLV();
+                SaveData();
+            }
+        }
     }
 }

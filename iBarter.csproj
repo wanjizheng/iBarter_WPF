@@ -8,6 +8,7 @@
     <UseWPF>true</UseWPF>
     <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
     <Platforms>AnyCPU;x86</Platforms>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -752,7 +753,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="libwebp.v140" Version="0.5.0.2" />
+    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="13.7.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="PureDM" Version="1.1.1" />
     <PackageReference Include="Syncfusion.Licensing" Version="25.1.41" />

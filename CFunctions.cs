@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
+using ImageMagick;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 using Color = System.Drawing.Color;
@@ -177,23 +178,36 @@ namespace iBarter {
             }
 
 
-            var webp = new WebP();
-            var bitmap = webp.Load(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Testing\\" + _id + ".webp");
-            var bitmapNew = new Bitmap(44, 44, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            //var webp = new WebP();
+            // var bitmap = webp.Load(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Testing\\" + _id + ".webp");
 
-            using (var gfx = Graphics.FromImage(bitmapNew))
-            using (var brush = new SolidBrush(Color.FromArgb(24, 23, 25))) {
-                gfx.FillRectangle(brush, 0, 0, 44, 44);
+            using (var bitmap = new MagickImage(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Testing\\" + _id + ".webp")) {
+                var bitmapNew = new Bitmap(44, 44, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+
+                using (var gfx = Graphics.FromImage(bitmapNew))
+                using (var brush = new SolidBrush(Color.FromArgb(24, 23, 25))) {
+                    gfx.FillRectangle(brush, 0, 0, 44, 44);
+                }
+
+                using (var memoryStream = new MemoryStream()) {
+                    // 保存 MagickImage 到内存流，并确保使用正确的格式
+                    bitmap.Format = MagickFormat.Bmp; // 设置为 PNG 格式来保持透明度（如果需要）
+                    bitmap.Write(memoryStream, MagickFormat.Bmp);
+                    memoryStream.Position = 0; // 重置流位置至开始
+
+
+                    // 从内存流创建 System.Drawing.Image
+                    using (var systemImage = Image.FromStream(memoryStream)) {
+                        var g = Graphics.FromImage(bitmapNew);
+                        g.DrawImage(systemImage, 0, 0);
+                        bitmapNew.Save(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + _id + ".bmp",
+                            ImageFormat.Bmp);
+
+                        bitmapNew.Dispose();
+                        g.Dispose();
+                    }
+                }
             }
-
-            var g = Graphics.FromImage(bitmapNew);
-            g.DrawImage(bitmap, 0, 0);
-
-            bitmapNew.Save(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + _id + ".bmp",
-                ImageFormat.Bmp);
-
-            bitmapNew.Dispose();
-            g.Dispose();
         }
 
         public List<Items> LoadItemsCSV() {
@@ -406,6 +420,10 @@ namespace iBarter {
 
             //Islands myIslands = new Islands(IslandEnum(strIsland), intParley, intRemaining);
             Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == IslandEnum(strIsland).ToString());
+            if (myIslands == null) {
+                Log("Error, cannot identify the islands information => " + strIsland, Brushes.Red);
+                return null;
+            }
 
             myIslands.Parley = intParley;
             myIslands.Remaining = intRemaining;
@@ -708,7 +726,7 @@ namespace iBarter {
             else if (_island.Contains("Rickun")) {
                 return EnumLists.Island.Rickun;
             }
-            else if (_island.Contains("Riyed")) {
+            else if (_island.Contains("Riyed") || _island.Contains("Ried")) {
                 return EnumLists.Island.Riyed;
             }
             else if (_island.Contains("Rosevan")) {

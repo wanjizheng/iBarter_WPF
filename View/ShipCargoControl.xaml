@@ -23,24 +23,38 @@
     </Control.Resources>
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height=" Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <ListBox x:Name="ListBox_ShipCargo" Grid.Row="0" ItemTemplate="{StaticResource ListBoxTemplate}"
+        <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0">
+            <Syncfusion:ButtonAdv
+                x:Name="ButtonAdv_Clean"
+                Margin="4,0,4,0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                IconWidth="26" IconHeight="26"
+                Label="Clean"
+                ToolTip="Clean"
+                SizeMode="Small"
+                FontFamily="Microsoft YaHei"
+                SmallIcon="/Images/clean.png" Click="ButtonAdv_Clean_Click" />
+        </Syncfusion:ToolBarAdv>
+        <ListBox x:Name="ListBox_ShipCargo" Grid.Row="1" ItemTemplate="{StaticResource ListBoxTemplate}"
                  AllowDrop="True" PreviewMouseLeftButtonDown="ListBox_PreviewMouseLeftButtonDown" Drop="ListBox_Drop">
             <ListBox.ItemContainerStyle>
                 <Style TargetType="ListBoxItem">
-                    <Setter Property="AllowDrop" Value="True"/>
+                    <Setter Property="AllowDrop" Value="True" />
                 </Style>
             </ListBox.ItemContainerStyle>
         </ListBox>
-        <Syncfusion:SfGridSplitter Height="2" Grid.Row="1" HorizontalAlignment="Stretch"
+        <Syncfusion:SfGridSplitter Height="2" Grid.Row="2" HorizontalAlignment="Stretch"
                                    VerticalAlignment="Top"
                                    EnableCollapseButton="True"
                                    ResizeBehavior="PreviousAndNext"
                                    ShowsPreview="True" />
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
             <Syncfusion:PropertyGrid x:Name="PropertyGrid_Ship">
 
             </Syncfusion:PropertyGrid>

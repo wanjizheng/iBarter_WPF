@@ -71,7 +71,7 @@ namespace iBarter.View {
 
                     foreach (Barter barter in App.listBarterPlanner) {
                         Barter myBarter = new Barter(barter.IsLand, barter.Item1, barter.Item2, barter.ExchangeQuantity,
-                            barter.ExchangeDone, barter.BarterGroup, barter.InvQuantity, barter.InvQuantityChange, barter.UsingALT,barter.CalculatedAlready,barter.TotalItem1ExchangeQuantity);
+                            barter.ExchangeDone, barter.BarterGroup, barter.InvQuantity, barter.InvQuantityChange, barter.UsingALT, barter.CalculatedAlready, barter.TotalItem1ExchangeQuantity);
                         App.myPVM.BarterCollection.Add(myBarter);
                     }
 
@@ -167,6 +167,10 @@ namespace iBarter.View {
 
         public void Grouping() {
             int intGroup = 0;
+            foreach (Barter barter in App.myPVM.BarterCollection) {
+                barter.BarterGroup = -1;
+            }
+
             foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.Item1.ItemLV.Equals("0"))) {
                 int intLV = 1;
                 // do {
@@ -270,16 +274,17 @@ namespace iBarter.View {
                 try {
                     string readJsonData = File.ReadAllText(strPath_Data);
                     List<Barter> dataSource = JsonConvert.DeserializeObject<List<Barter>>(readJsonData);
+                    if (dataSource != null && dataSource.Count > 0) {
+                        App.listBarterPlanner.Clear();
+                        for (int i = 0; i < dataSource.Count; i++) {
+                            Barter myBarter = dataSource[i];
+                            App.listBarterPlanner.Add(myBarter);
+                        }
 
-                    App.listBarterPlanner.Clear();
-                    for (int i = 0; i < dataSource.Count; i++) {
-                        Barter myBarter = dataSource[i];
-                        App.listBarterPlanner.Add(myBarter);
+                        RefreshDataGrid();
+                        //Grouping();
+                        App.myCFun.Log("Loaded...", Brushes.Blue);
                     }
-
-                    RefreshDataGrid();
-                    //Grouping();
-                    App.myCFun.Log("Loaded...", Brushes.Blue);
                 }
                 catch (Exception exception) {
                     App.myCFun.Log(exception.Message, Brushes.Red);
