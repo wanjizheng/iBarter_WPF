@@ -755,7 +755,6 @@
   <ItemGroup>
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="13.7.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="PureDM" Version="1.1.1" />
     <PackageReference Include="Syncfusion.Licensing" Version="25.1.41" />
     <PackageReference Include="Syncfusion.SfGrid.WPF" Version="25.1.41" />
     <PackageReference Include="Syncfusion.Shared.WPF" Version="25.1.41" />
@@ -766,6 +765,10 @@
 
   <ItemGroup>
     <Folder Include="Resources\Images\Testing\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PureDM\PureDM.csproj" />
   </ItemGroup>
 
   <ItemGroup>

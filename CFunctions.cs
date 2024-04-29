@@ -39,15 +39,13 @@ namespace iBarter {
                     var strTime = "[ " + myDT.ToString("hh:mm:ss") + " ]  ";
 
 
-                    App.myfmMain.richTextBox_Log.Dispatcher.Invoke(new Action(() => {
-                        App.myfmMain.richTextBox_Log.AppendText(strTime);
-                        var tr = new TextRange(App.myfmMain.richTextBox_Log.Document.ContentEnd,
-                            App.myfmMain.richTextBox_Log.Document.ContentEnd);
-                        tr.Text = _message + "\r\n";
-                        var bc = new BrushConverter();
-                        tr.ApplyPropertyValue(TextElement.ForegroundProperty, _color);
-                        App.myfmMain.richTextBox_Log.ScrollToEnd();
-                    }));
+                    App.myfmMain.richTextBox_Log.AppendText(strTime);
+                    var tr = new TextRange(App.myfmMain.richTextBox_Log.Document.ContentEnd,
+                        App.myfmMain.richTextBox_Log.Document.ContentEnd);
+                    tr.Text = _message + "\r\n";
+                    var bc = new BrushConverter();
+                    tr.ApplyPropertyValue(TextElement.ForegroundProperty, _color);
+                    App.myfmMain.richTextBox_Log.ScrollToEnd();
                 }
             }
         }
@@ -270,18 +268,14 @@ namespace iBarter {
 
 
         #region Identify Route
-
-        public void SearchBarter() {
-            IdentifyRoutes();
-        }
-
+        
         private void CleanDataGrid() {
             if (App.mySVM.BarterDetails != null) {
                 App.mySVM.BarterDetails.Clear();
             }
         }
 
-        public void IdentifyRoutes() {
+        public async Task IdentifyRoutes() {
             App.listBarterScanner.Clear();
             if (!Application.Current.Dispatcher.CheckAccess()) {
                 Application.Current.Dispatcher.Invoke(new Action(CleanDataGrid));
@@ -312,7 +306,7 @@ namespace iBarter {
                 // Thread.Sleep(100);
                 // listThread.Add(myThread);
 
-                Barter myBarter = IdentifyBarter(listAnchors[i]);
+                Barter myBarter = await IdentifyBarterAsync(listAnchors[i]);
                 if (myBarter.IsLand != null && myBarter.Item1 != null && myBarter.Item2 != null &&
                     App.listBarterScanner.FirstOrDefault(b =>
                         b.IsLand.Island.ToString().Equals(myBarter.IsLand.Island.ToString())) == null) {
@@ -349,7 +343,7 @@ namespace iBarter {
             App.myBarterScanner.RefreshDataGrid();
         }
 
-        private Barter IdentifyBarter(PointPlus _pp) {
+        private async Task<Barter> IdentifyBarterAsync(PointPlus _pp) {
             PointPlus pointPlusAnchor = _pp;
             Barter myBarter = null;
             if (pointPlusAnchor.X == -1 || pointPlusAnchor.Y == -1) {
@@ -435,13 +429,29 @@ namespace iBarter {
             //List<Thread> listThread = new List<Thread>();
             //////////////////////////////////////////////
 
-            ParallelLoopResult result = Parallel.ForEach(App.listItems, item => {
-                PointPlus myPP = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
-                    "\\Images\\Items\\" + item.ItemID + ".bmp", 0.4, 0.8, 1, CV.Mode.OpenCV, false);
-                if (myPP.X != -1 && myPP.Y != -1) {
-                    listPointPlus.Add(myPP);
-                }
-            });
+            // ParallelLoopResult result = Parallel.ForEach(App.listItems, item => {
+            //     PointPlus myPP = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
+            //         "\\Images\\Items\\" + item.ItemID + ".bmp", 0.4, 0.8, 1, CV.Mode.OpenCV, false);
+            //     if (myPP.X != -1 && myPP.Y != -1) {
+            //         listPointPlus.Add(myPP);
+            //     }
+            // });
+
+
+
+
+            // await Task.Run(() => {
+            //     var options = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount / 2 }; // 使用一半的核心
+            //     Parallel.ForEach(App.listItems, options, item => {
+            //         PointPlus myPP = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
+            //             "\\Images\\Items\\" + item.ItemID + ".bmp", 0.4, 0.8, 1, CV.Mode.OpenCV, false);
+            //         if (myPP.X != -1 && myPP.Y != -1) {
+            //             lock (listPointPlus) {
+            //                 listPointPlus.Add(myPP);
+            //             }
+            //         }
+            //     });
+            // });
 
 
             //////////////////////////////////////////////
@@ -452,6 +462,14 @@ namespace iBarter {
             //         listPointPlus.Add(myPP);
             //     }
             // }
+
+            foreach (Items item in App.listItems) {
+                PointPlus myPP = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
+                    "\\Images\\Items\\" + item.ItemID + ".bmp", 0.4, 0.8, 1, CV.Mode.OpenCV, false);
+                if (myPP.X != -1 && myPP.Y != -1) {
+                    listPointPlus.Add(myPP);
+                }
+            }
 
             if (listPointPlus.Count < 2) {
                 Log("Can't identify items: " + myIslands.Island, Brushes.Red);
