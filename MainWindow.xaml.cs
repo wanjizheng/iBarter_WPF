@@ -12,12 +12,18 @@ namespace iBarter {
     public partial class MainWindow : Window {
         public MainWindow() {
             InitializeComponent();
+            this.WindowState = WindowState.Minimized;
 
-            var timer = new DispatcherTimer();
 
-            timer.Interval = TimeSpan.FromMilliseconds(10);
-            timer.Tick += Timer_Tick;
-            timer.Start();
+
+            Thread thread = new Thread(() => {
+                App.mySplashScreen = new SplashScreen();
+                App.mySplashScreen.Show();
+                System.Windows.Threading.Dispatcher.Run();
+            });
+            thread.SetApartmentState(ApartmentState.STA); // 设置线程为 STA
+            thread.IsBackground = true;
+            thread.Start();
 
             //var mapCenterPoint = new MapPoint(14, 21, SpatialReferences.Wgs84);
             //MainMapView.SetViewpoint(new Viewpoint(mapCenterPoint, 52541284));
@@ -77,7 +83,7 @@ namespace iBarter {
 
             // App.dmSoft.Capture(0,0 , 1920, 1080, "screen.bmp");
             // ;
-            // var m_SourceImage = new Image<Gray, float>(System.IO.Path.GetDirectoryName(Assembly.GetEntryAssembly().Location)+"\\Resources\\screen.bmp");
+            // var m_SourceImage = new Image<Gray, float>(System.IO.AppDomain.CurrentDomain.BaseDirectory+"\\Resources\\screen.bmp");
             // var m_CornerImage = new Image<Gray, float>("e:\\wanjizheng\\Documents\\MyProject\\iBDO\\iBarter\\bin\\Debug\\Resources\\Images\\anchor.bmp");
             // //CvInvoke.CornerHarris(m_SourceImage,m_CornerImage,3,3,0.01);
             // using (Image<Gray, float> result = m_SourceImage.MatchTemplate(m_CornerImage, TemplateMatchingType.CcoeffNormed))
@@ -108,6 +114,7 @@ namespace iBarter {
 
         private void Window_Loaded(object sender, RoutedEventArgs e) {
             try {
+                // App.mySplashScreen.worker.ReportProgress(10);
                 Logging.SaveConsoleLog = false;
                 Logging.myTextBoxWriter = new TextBoxWriter(richTextBox_Log);
                 App.myPureDM = new PureDM.PureDM("wanjizheng1c1f9b855a9f822cbf24afa526dfca3c");
@@ -118,14 +125,14 @@ namespace iBarter {
                 App.myPureDM.MouseMode = "dx.mouse.position.lock.api|dx.mouse.focus.input.api|dx.mouse.focus.input.message|dx.mouse.clip.lock.api|dx.mouse.state.api|dx.mouse.api|dx.mouse.cursor";
                 App.myPureDM.KeyboardMode = "dx.keypad.input.lock.api|dx.keypad.state.api|dx.keypad.api";
                 App.myPureDM.PublicMode = "dx.public.graphic.protect|dx.public.anti.api|dx.public.km.protect|dx.public.input.ime|dx.public.focus.message";
-
+                // App.mySplashScreen.worker.ReportProgress(50);
 
                 App.myPureDM.DM.SetWindowState((int)App.myPureDM.Hwnd, 1);
                 //int bindResult = App.dmSoft.BindWindowEx((int)App.myHwnd, "dx.graphic.3d.10plus", "dx.mouse.cursor|dx.mouse.raw.input", "windows", "dx.mouse.raw.input", 101);
 
                 int bindResult = App.myPureDM.CV.BindWindow((int)App.myPureDM.Hwnd);
 
-
+                // App.mySplashScreen.worker.ReportProgress(90);
                 //int bindResult = App.dmSoft.BindWindowEx((int)App.myHwnd, "dx2", "normal", "normal", "dx.public.km.protect|dx.public.anti.api|dx.public.inject.super|", 101);
                 if (bindResult == 1) {
                     App.myCFun.Log("绑定游戏窗口成功", Brushes.Blue);
@@ -134,6 +141,22 @@ namespace iBarter {
                 else {
                     App.myCFun.Log("绑定游戏窗口失败", Brushes.Red);
                 }
+                // App.mySplashScreen.worker.ReportProgress(100);
+                var timer = new DispatcherTimer();
+
+                timer.Interval = TimeSpan.FromMilliseconds(10);
+                timer.Tick += Timer_Tick;
+                timer.Start();
+                //this.Opacity = 100;
+                App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
+                this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                this.WindowState = WindowState.Normal;
+                double screenWidth = SystemParameters.PrimaryScreenWidth;
+                double screenHeight = SystemParameters.PrimaryScreenHeight;
+                double windowWidth = this.Width;
+                double windowHeight = this.Height;
+                this.Left = (screenWidth / 2) - (windowWidth / 2);
+                this.Top = (screenHeight / 2) - (windowHeight / 2);
             }
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);

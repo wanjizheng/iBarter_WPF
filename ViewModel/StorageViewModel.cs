@@ -12,7 +12,6 @@ using Newtonsoft.Json;
 using Syncfusion.Windows.Shared;
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Reflection;
 using System.Windows.Media;
 
 namespace iBarter.ViewModel {
@@ -34,7 +33,7 @@ namespace iBarter.ViewModel {
         public void SaveData() {
             try {
                 if (App.myStorageVM.StorageCollection.Count > 0) {
-                    string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myStorage_Data.json";
+                    string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "Resources\\myStorage_Data.json";
 
                     using (FileStream streamData = new FileStream(strPath_Data, FileMode.Create, FileAccess.Write)) {
                         App.listStorage.Clear();

@@ -7,7 +7,8 @@
                              xmlns:local="clr-namespace:iBarter"
                              mc:Ignorable="d"
                              AllowsTransparency="True" WindowStyle="None"
-                             Title="BarterScanner" Height="350" Width="700">
+                             Icon="/Images/barter.png"
+                             Title="BarterScanner" Height="350" Width="750">
     <Grid>
         <StackPanel>
             <syncfusion:ToolBarAdv x:Name="ScannerToolBar">

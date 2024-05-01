@@ -11,6 +11,8 @@
     <Control.Resources>
         <DataTemplate x:Key="ListBoxTemplate">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{Binding IsLandName, StringFormat='{}{0}: '}" FontWeight="Bold"
+                VerticalAlignment="Center" />
                 <TextBlock Text="{Binding TotalItem1ExchangeQuantity, StringFormat='[{0}]'}" FontWeight="Bold"
                            VerticalAlignment="Center" />
                 <Image Source="{Binding Item1Icon}" />
@@ -18,6 +20,15 @@
                 <Image Source="{Binding Item2Icon}" />
                 <TextBlock Text="{Binding TotalItem2ExchangeQuantity, StringFormat='[{0}]'}" FontWeight="Bold"
                            VerticalAlignment="Center" />
+                <StackPanel.ToolTip>
+                    <ToolTip>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Item1Name}" FontWeight="Bold" FontStyle="Italic"/>
+                            <TextBlock Text=" => " FontWeight="Bold" FontStyle="Italic"/>
+                            <TextBlock Text="{Binding Item2Name}" FontWeight="Bold" FontStyle="Italic"/>
+                        </StackPanel>
+                    </ToolTip>
+                </StackPanel.ToolTip>
             </StackPanel>
         </DataTemplate>
     </Control.Resources>
@@ -26,7 +37,7 @@
             <RowDefinition Height=" Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="300" />
         </Grid.RowDefinitions>
         <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0">
             <Syncfusion:ButtonAdv
@@ -46,6 +57,8 @@
             <ListBox.ItemContainerStyle>
                 <Style TargetType="ListBoxItem">
                     <Setter Property="AllowDrop" Value="True" />
+                    <EventSetter Event="PreviewMouseLeftButtonDown" Handler="ListBoxItem_MouseLeftButtonDown"/>
+                    <EventSetter Event="PreviewMouseRightButtonDown" Handler="ListBoxItem_MouseRightButtonDown"/>
                 </Style>
             </ListBox.ItemContainerStyle>
         </ListBox>

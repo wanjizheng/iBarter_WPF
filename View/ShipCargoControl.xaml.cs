@@ -1,12 +1,9 @@
 ﻿using iBarter.Model;
 using Newtonsoft.Json;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -19,6 +16,7 @@ namespace iBarter.View {
             InitializeComponent();
             DataContext = App.myCVM;
             //PropertyGrid_Ship.Items = App.myCVM.CargoProperty;
+            App.myCargoProperty = new CargoProperty();
         }
 
         private object _draggedItem;
@@ -32,6 +30,7 @@ namespace iBarter.View {
                 DragDrop.DoDragDrop(item, _draggedItem, System.Windows.DragDropEffects.Move);
             }
         }
+
         private void ListBox_Drop(object sender, System.Windows.DragEventArgs e) {
             if (_draggedItem != null) {
                 // 获取原项目的位置和新放置位置
@@ -53,15 +52,16 @@ namespace iBarter.View {
                 if (current is T) {
                     return (T)current;
                 }
+
                 current = VisualTreeHelper.GetParent(current);
-            }
-            while (current != null);
+            } while (current != null);
+
             return null;
         }
 
         public void RefreshData() {
             if (App.myfmMain != null) {
-                string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                string strPath_Data = AppDomain.CurrentDomain.BaseDirectory +
                                       "\\Resources\\myShipCargoItems_Data.json";
 
                 if (File.Exists(strPath_Data)) {
@@ -78,8 +78,9 @@ namespace iBarter.View {
                             App.myCVM.CargoDetails.Add(App.listCargoItems[i]);
                         }
 
+
                         ListBox_ShipCargo.EndInit();
-                        strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                        strPath_Data = AppDomain.CurrentDomain.BaseDirectory +
                                        "\\Resources\\myShipProperty_Data.json";
                         if (File.Exists(strPath_Data)) {
                             readJsonData = File.ReadAllText(strPath_Data);
@@ -109,7 +110,7 @@ namespace iBarter.View {
         public void SaveData() {
             try {
                 if (App.myCVM != null) {
-                    string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                    string strPath_Data = AppDomain.CurrentDomain.BaseDirectory +
                                           "\\Resources\\myShipCargoItems_Data.json";
 
                     using (FileStream streamData = new FileStream(strPath_Data, FileMode.Create, FileAccess.Write)) {
@@ -146,7 +147,7 @@ namespace iBarter.View {
             myList.Sort((b1, b2) => { return int.Parse(b1.Item1.ItemLV).CompareTo(int.Parse(b2.Item1.ItemLV)); });
 
             foreach (Barter barter in myList) {
-                IdentifyChain(App.myCVM.CargoDetails.FirstOrDefault(b=>b.IsLandName== barter.IsLandName), int.Parse(barter.Item1.ItemLV));
+                IdentifyChain(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == barter.IsLandName), int.Parse(barter.Item1.ItemLV));
 
                 // int intWeight = GetWeight(barter.Item2.ItemLV);
                 //
@@ -216,6 +217,39 @@ namespace iBarter.View {
                 App.myCargoProperty.CurrentLT = 0;
                 UpdateCurrentLV();
                 SaveData();
+            }
+        }
+
+        private void ListBoxItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
+            if (e.ClickCount == 2) {
+                try {
+                    ListBoxItem myItem = sender as ListBoxItem;
+                    Barter myBarter = (Barter)myItem.Content;
+                    if (myBarter != null) {
+                        Clipboard.SetText(myBarter.Item1Name);
+                        App.myCFun.Log(myBarter.Item1Name + " copied to the clipboard.", Brushes.DarkGreen);
+                    }
+                }
+                catch (Exception exception) {
+                    App.myCFun.Log(exception.Message, Brushes.Red);
+                }
+            }
+        }
+
+        private void ListBoxItem_MouseRightButtonDown(object sender, MouseButtonEventArgs e) {
+            try {
+                if (e.ClickCount == 2) {
+                    ListBoxItem myItem = sender as ListBoxItem;
+                    Barter myBarter = (Barter)myItem.Content;
+                    if (myBarter != null) {
+                        Clipboard.SetText(myBarter.Item2Name);
+                        App.myCFun.Log(myBarter.Item2Name + " copied to the clipboard.", Brushes.DarkGreen);
+                    }
+                }
+            }
+            catch (Exception exception) {
+                App.myCFun.Log(exception.Message, Brushes.Red);
+                ;
             }
         }
     }

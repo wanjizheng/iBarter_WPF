@@ -1,7 +1,6 @@
 ﻿using Newtonsoft.Json;
 using System.ComponentModel;
 using System.IO;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Media;
@@ -10,7 +9,7 @@ namespace iBarter.Model {
     public class CargoProperty : INotifyPropertyChanged {
         private double propExtraLT, propTotalLT, doubCurrentLT;
 
-        public CargoProperty(double _extralLT = 1009, double _totalLT = 21500, double _currentLT = 0) {
+        public CargoProperty(double _extralLT = 2109, double _totalLT = 21500, double _currentLT = 0) {
             propExtraLT = _extralLT;
             propTotalLT = _totalLT;
             doubCurrentLT = _currentLT;
@@ -57,7 +56,7 @@ namespace iBarter.Model {
         private void SaveData() {
             try {
                 if (App.myCargoProperty != null) {
-                    string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myShipProperty_Data.json";
+                    string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "Resources\\myShipProperty_Data.json";
 
                     using (FileStream streamData = new FileStream(strPath_Data, FileMode.Create, FileAccess.Write)) {
                         string jsonData = JsonConvert.SerializeObject(App.myCargoProperty);

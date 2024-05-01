@@ -9,19 +9,33 @@
     <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
     <Platforms>AnyCPU;x86</Platforms>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+	<RuntimeIdentifier>win-x86</RuntimeIdentifier>
+	<PackageIcon>iBarterIcon.ico</PackageIcon>
+	<ApplicationIcon>Images\iBarterIcon.ico</ApplicationIcon>
   </PropertyGroup>
+  
+<PropertyGroup Condition="'$(Configuration)'=='Debug'">
+  <DebugType>full</DebugType>
+</PropertyGroup>
+
+<PropertyGroup Condition="'$(Configuration)'=='Release'">
+  <DebugType>none</DebugType>
+</PropertyGroup>
+
 
   <ItemGroup>
     <None Remove="Images\add.png" />
     <None Remove="Images\barter.png" />
     <None Remove="Images\clean.png" />
     <None Remove="Images\done.png" />
+    <None Remove="Images\iBarterIcon.ico" />
     <None Remove="Images\iBarterMap.png" />
     <None Remove="Images\load.png" />
     <None Remove="Images\new-document.png" />
     <None Remove="Images\refresh.png" />
     <None Remove="Images\save.png" />
     <None Remove="Images\scan.png" />
+    <None Remove="Images\SplashScreen.png" />
     <None Remove="Images\storage.png" />
     <None Remove="Resources\Images\anchor.bmp" />
     <None Remove="Resources\Images\edge.bmp" />
@@ -754,12 +768,13 @@
 
   <ItemGroup>
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="13.7.0" />
+    <PackageReference Include="MaterialDesignThemes" Version="5.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="Syncfusion.Licensing" Version="25.1.41" />
-    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="25.1.41" />
-    <PackageReference Include="Syncfusion.Shared.WPF" Version="25.1.41" />
-    <PackageReference Include="Syncfusion.Tools.WPF" Version="25.1.41" />
-    <PackageReference Include="syncfusion.ui.wpf.net" Version="25.1.41" />
+    <PackageReference Include="Syncfusion.Licensing" Version="25.1.42" />
+    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="25.1.42" />
+    <PackageReference Include="Syncfusion.Shared.WPF" Version="25.1.42" />
+    <PackageReference Include="Syncfusion.Tools.WPF" Version="25.1.42" />
+    <PackageReference Include="syncfusion.ui.wpf.net" Version="25.1.42" />
     <PackageReference Include="System.Drawing.Common" Version="8.0.4" />
   </ItemGroup>
 
@@ -776,6 +791,7 @@
     <Resource Include="Images\barter.png" />
     <Resource Include="Images\clean.png" />
     <Resource Include="Images\done.png" />
+    <Resource Include="Images\iBarterIcon.ico" />
     <Resource Include="Images\iBarterMap.png" />
     <Resource Include="Images\load.png" />
     <Resource Include="Images\new-document.png">
@@ -784,6 +800,7 @@
     <Resource Include="Images\refresh.png" />
     <Resource Include="Images\save.png" />
     <Resource Include="Images\scan.png" />
+    <Resource Include="Images\SplashScreen.png" />
     <Resource Include="Images\storage.png" />
   </ItemGroup>
 
@@ -803,6 +820,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Resources\Images\iBarterIcon.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
     <None Update="Resources\Images\Testing\ReadMe.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

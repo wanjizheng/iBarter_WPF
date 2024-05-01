@@ -1,0 +1,29 @@
+﻿<Window x:Class="iBarter.SplashScreen"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:iBarter"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        mc:Ignorable="d"
+        WindowStyle="None"
+        WindowStartupLocation="CenterScreen"
+        AllowsTransparency="True"
+        Background="{x:Null}"
+        Title="SplashScreen" Height="450" Width="750" Topmost="True">
+    <materialDesign:Card UniformCornerRadius="15" Background="White" materialDesign:ElevationAssist.Elevation="Dp4"
+                         Margin="25">
+        <Grid>
+            <Image Source="Images/SplashScreen.png" Margin="-30,-8,-30,-8"/>
+            <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Margin="19,64,0,0">
+                <WrapPanel>
+                    <Image Source="Images/iBarterIcon.ico" HorizontalAlignment="Left" Height="50" Width="50"></Image>
+                    <TextBlock Text="iBarter" FontSize="28" FontWeight="Bold" HorizontalAlignment="Left"
+                               VerticalAlignment="Center" Margin="15 0 0 0">
+                    </TextBlock>
+                </WrapPanel>
+            </StackPanel>
+            <ProgressBar Name="ProgressBar_SplashScreen" Value="0" Height="5" Width="280" IsIndeterminate="True" Margin="201,385,219,10"></ProgressBar>
+        </Grid>
+    </materialDesign:Card>
+</Window>

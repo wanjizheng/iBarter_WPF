@@ -94,9 +94,11 @@
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/done.png" Click="ButtonAdv_Done_Click" />
             <Separator />
-            <Label Content="Value Pack:" VerticalAlignment="Center" />
-            <CheckBox x:Name="CheckBox_ValuePack"  VerticalAlignment="Center" IsChecked="True" Checked="CheckBox_ValuePack_Checked" Unchecked="CheckBox_ValuePack_Unchecked"/>
-            <Separator Margin="10,0,0,0" />
+            <Label x:Name="Label_TotalBarters" Content="Total Barters: " VerticalAlignment="Center" />
+            <Separator />
+            <!-- <Label Content="Value Pack:" VerticalAlignment="Center" /> -->
+            <!-- <CheckBox x:Name="CheckBox_ValuePack"  VerticalAlignment="Center" IsChecked="True" Checked="CheckBox_ValuePack_Checked" Unchecked="CheckBox_ValuePack_Unchecked"/> -->
+            <!-- <Separator Margin="10,0,0,0" /> -->
             <Label Content="Max LV5:" VerticalAlignment="Center" />
             <syncfusion:ComboBoxAdv x:Name="ComboBox_LV5Max" SelectedIndex="5">
                 <syncfusion:RibbonComboBoxItem Content="1" />
@@ -111,9 +113,9 @@
                 <syncfusion:RibbonComboBoxItem Content="10" />
             </syncfusion:ComboBoxAdv>
             <Separator Margin="10,0,0,0" />
-            <Label Content="Alt Level:" VerticalAlignment="Center" />
-            <syncfusion:ComboBoxAdv x:Name="ComboBox_AltLevel" />
-            <Separator Margin="10,0,0,0" />
+            <!-- <Label Content="Alt Level:" VerticalAlignment="Center" /> -->
+            <!-- <syncfusion:ComboBoxAdv x:Name="ComboBox_AltLevel" /> -->
+            <!-- <Separator Margin="10,0,0,0" /> -->
             <Label Content="Parley: " VerticalAlignment="Center" />
             <Label x:Name="Label_SelectedParley" Content="0" HorizontalAlignment="Right" Margin="0"
                    VerticalAlignment="Center" />
@@ -134,9 +136,9 @@
                                    CurrentCellEndEdit="DataGrid_Planner_CurrentCellEndEdit"
                                    CurrentCellValueChanged="DataGrid_Planner_CurrentCellValueChanged">
 
-                <syncfusion:SfDataGrid.SortColumnDescriptions>
-                    <syncfusion:SortColumnDescription ColumnName="Item1LV" SortDirection="Ascending" />
-                </syncfusion:SfDataGrid.SortColumnDescriptions>
+                <!-- <syncfusion:SfDataGrid.SortColumnDescriptions> -->
+                <!--     <syncfusion:SortColumnDescription ColumnName="Item1LV" SortDirection="Ascending" /> -->
+                <!-- </syncfusion:SfDataGrid.SortColumnDescriptions> -->
                 <syncfusion:SfDataGrid.Columns>
                     <!-- <syncfusion:GridTextColumn HeaderText="Island1" MappingName="IsLandName" UseBindingValue="True" -->
                     <!--                            AllowResizing="True" AllowEditing="True"> -->
@@ -146,17 +148,17 @@
                                                Width="50" />
                     <syncfusion:GridTextColumn x:Name="Column_LV" HeaderText="LV" MappingName="Item1LV"
                                                AllowResizing="True" Width="70"
-                                               AllowEditing="False"/>
+                                               AllowEditing="False" AllowFiltering="True"/>
                     <syncfusion:GridCheckBoxColumn x:Name="GridCheckBoxColumn_CK" HeaderText="CK"
                                                    MappingName="ExchangeDone"
                                                    AllowResizing="True" AllowEditing="True" Width="40"
                                                    UseBindingValue="True" />
                     <syncfusion:GridTextColumn HeaderText="Eq." MappingName="ExchangeQuantity" Width="40"
                                                AllowResizing="True" AllowEditing="True" />
-                    <syncfusion:GridCheckBoxColumn x:Name="GridCheckBoxColumn_ALT" HeaderText="ALT"
-                                                   MappingName="UsingALT"
-                                                   AllowResizing="True" AllowEditing="True" Width="40"
-                                                   UseBindingValue="True" />
+                    <!-- <syncfusion:GridCheckBoxColumn x:Name="GridCheckBoxColumn_ALT" HeaderText="ALT" -->
+                    <!--                                MappingName="UsingALT" -->
+                    <!--                                AllowResizing="True" AllowEditing="True" Width="40" -->
+                    <!--                                UseBindingValue="True" /> -->
                     <syncfusion:GridTextColumn HeaderText="No."
                                                MappingName="IslandRemaining" Width="40"
                                                AllowResizing="True" AllowEditing="True" />
@@ -169,6 +171,7 @@
                                                             ValueMember="IslandsName"
                                                             AllowResizing="True"
                                                             AllowIncrementalFiltering="True" AllowEditing="True"
+                                                            AllowFiltering="True"
                                                             Width="100">
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>

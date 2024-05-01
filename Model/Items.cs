@@ -1,6 +1,5 @@
 ﻿using Syncfusion.Windows.Shared;
 using System.IO;
-using System.Reflection;
 
 namespace iBarter {
     public class Items : NotificationObject {
@@ -41,11 +40,12 @@ namespace iBarter {
         public string ItemIcon {
             get {
                 if (icon == null || !icon.Contains(ItemID)) {
-                    icon = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + ItemID + ".bmp";
+                    icon = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + ItemID + ".bmp";
                 }
 
-                if (!File.Exists(icon) &&  int.Parse(ItemID) > 0) {
+                if (!File.Exists(icon) && int.Parse(ItemID) > 0) {
                     App.myCFun.RefreshItems(ItemID);
+                    icon = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + ItemID + ".bmp";
                 }
 
                 return icon;

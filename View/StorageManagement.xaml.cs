@@ -1,15 +1,13 @@
 ﻿using Newtonsoft.Json;
+using Syncfusion.Windows.Shared;
 using System.IO;
-using System.Reflection;
-using System.Windows;
 using System.Windows.Media;
-using Path = System.IO.Path;
 
 namespace iBarter.View {
     /// <summary>
     /// Interaction logic for StorageManagement.xaml
     /// </summary>
-    public partial class StorageManagement : Window {
+    public partial class StorageManagement : ChromelessWindow {
         public StorageManagement() {
             InitializeComponent();
             DataContext = App.myStorageVM;
@@ -18,9 +16,10 @@ namespace iBarter.View {
         }
 
         public void RefreshData() {
-            string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\myStorage_Data.json";
+            string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "Resources\\myStorage_Data.json";
+            FileInfo fileInfo = new FileInfo(strPath_Data);
 
-            if (File.Exists(strPath_Data)) {
+            if (File.Exists(strPath_Data) && fileInfo.Length > 0) {
                 try {
                     string readJsonData = File.ReadAllText(strPath_Data);
                     List<Items> dataSource = JsonConvert.DeserializeObject<List<Items>>(readJsonData);

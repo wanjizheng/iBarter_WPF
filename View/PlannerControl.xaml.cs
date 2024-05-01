@@ -1,7 +1,7 @@
 ﻿using Newtonsoft.Json;
 using Syncfusion.UI.Xaml.Grid;
+using System.ComponentModel;
 using System.IO;
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -23,10 +23,10 @@ namespace iBarter.View {
             GridMultiColumnDropDownList_Exchange.ItemsSource = App.myPVM.ItemsCollection;
             GridMultiColumnDropDownList_Islands.ItemsSource = App.myPVM.IslandsCollection;
 
-            ComboBox_AltLevel.ItemsSource = App.myPVM.AltCollection;
-            ComboBox_AltLevel.DisplayMemberPath = "Level";
-            ComboBox_AltLevel.SelectedValuePath = "Value";
-            ComboBox_AltLevel.SelectedIndex = 1;
+            // ComboBox_AltLevel.ItemsSource = App.myPVM.AltCollection;
+            // ComboBox_AltLevel.DisplayMemberPath = "Level";
+            // ComboBox_AltLevel.SelectedValuePath = "Value";
+            // ComboBox_AltLevel.SelectedIndex = 1;
 
 
             //DataGrid_Planner.SortColumnDescriptions.Add(new SortColumnDescription() { ColumnName = "x:Column_LV", SortDirection = ListSortDirection.Ascending });
@@ -143,9 +143,9 @@ namespace iBarter.View {
                                 break;
                         }
 
-                        if (CheckBox_ValuePack.IsChecked == true) {
-                            doubValuePack = 0.9;
-                        }
+                        // if (CheckBox_ValuePack.IsChecked == true) {
+                        //     doubValuePack = 0.9;
+                        // }
 
                         intParley += (int)(intParleyTemp * barter.ExchangeQuantity * doubValuePack);
                     }
@@ -216,8 +216,19 @@ namespace iBarter.View {
 
             try {
                 DataGrid_Planner.View.BeginInit();
-                DataGrid_Planner.GroupColumnDescriptions.Add(
-                    new GroupColumnDescription() { ColumnName = "BarterGroup" });
+                DataGrid_Planner.SortColumnDescriptions.Clear();
+                DataGrid_Planner.GroupColumnDescriptions.Clear();
+                SortColumnDescription mySCD_ItemLV = new SortColumnDescription();
+                mySCD_ItemLV.ColumnName = "Item1LV";
+                mySCD_ItemLV.SortDirection = ListSortDirection.Ascending;
+                DataGrid_Planner.SortColumnDescriptions.Add(mySCD_ItemLV);
+                GroupColumnDescription mySCD_Group = new GroupColumnDescription();
+                mySCD_Group.ColumnName = "BarterGroup";
+                mySCD_Group.SortGroupRecords = true;
+
+                DataGrid_Planner.GroupColumnDescriptions.Add(mySCD_Group);
+                // DataGrid_Planner.GroupColumnDescriptions.Add(
+                //     new GroupColumnDescription() { ColumnName = "BarterGroup" });
             }
             catch (Exception exception) {
             }
@@ -242,7 +253,7 @@ namespace iBarter.View {
         private void FindBarterGroup(Barter _barter, int _lv, int _group) {
             _barter.BarterGroup = _group;
             Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b =>
-                b.Item1.ItemLV.Equals(Convert.ToString(_lv)) && b.Item1Name.Equals(_barter.Item2Name))!;
+                b.Item1.ItemLV.Equals(Convert.ToString(_lv)) && b.Item1Name.Equals(_barter.Item2Name) && (b.Item2.ItemLV != "-1"||b.Item2Name=="Crow Coin"))!;
             if (myBarter != null) {
                 myBarter.BarterGroup = _group;
                 if (!myBarter.Item1.ItemLV.Equals("5")) {
@@ -255,9 +266,9 @@ namespace iBarter.View {
         }
 
         private void ButtonAdv_Load_Click(object sender, RoutedEventArgs e) {
-            string strPath_Setting = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+            string strPath_Setting = AppDomain.CurrentDomain.BaseDirectory +
                                      "\\Resources\\myPlan_Setting.xml";
-            string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+            string strPath_Data = AppDomain.CurrentDomain.BaseDirectory +
                                   "\\Resources\\myPlan_Data.json";
 
             if (File.Exists(strPath_Setting) && File.Exists(strPath_Data)) {
@@ -305,9 +316,9 @@ namespace iBarter.View {
         public void SaveData() {
             try {
                 if (App.myPVM.BarterCollection.Count > 0) {
-                    string strPath_Setting = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                    string strPath_Setting = AppDomain.CurrentDomain.BaseDirectory +
                                              "\\Resources\\myPlan_Setting.xml";
-                    string strPath_Data = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+                    string strPath_Data = AppDomain.CurrentDomain.BaseDirectory +
                                           "\\Resources\\myPlan_Data.json";
 
                     using (FileStream streamSetting =
@@ -482,35 +493,39 @@ namespace iBarter.View {
         }
 
         private void ButtonAdv_Done_Click(object sender, RoutedEventArgs e) {
-            if (App.myStorageVM.StorageCollection != null) {
-                foreach (Items item in App.myStorageVM.StorageCollection) {
-                    if (App.myPVM != null) {
-                        Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.Item1Name == item.ItemName);
-                        if (myBarter != null) {
-                            switch (App.myStorageManagement.ComboBoxAdv_DefaultStorage.SelectedIndex) {
-                                case 0:
-                                    item.StorageVeliaQuantity_Velia = myBarter.InvQuantityChange;
-                                    break;
-                                case 1:
-                                    item.StorageVeliaQuantity_Iliya = myBarter.InvQuantityChange;
-                                    break;
-                                case 2:
-                                    item.StorageVeliaQuantity_Epheria = myBarter.InvQuantityChange;
-                                    break;
-                                case 3:
-                                    item.StorageVeliaQuantity_Ancado = myBarter.InvQuantityChange;
-                                    break;
+            MessageBoxResult result = MessageBox.Show("Are you sure you have completed this plan?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes) {
+                if (App.myStorageVM.StorageCollection != null) {
+                    foreach (Items item in App.myStorageVM.StorageCollection) {
+                        if (App.myPVM != null) {
+                            Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.Item1Name == item.ItemName);
+                            if (myBarter != null) {
+                                switch (App.myStorageManagement.ComboBoxAdv_DefaultStorage.SelectedIndex) {
+                                    case 0:
+                                        item.StorageVeliaQuantity_Velia = myBarter.InvQuantityChange;
+                                        break;
+                                    case 1:
+                                        item.StorageVeliaQuantity_Iliya = myBarter.InvQuantityChange;
+                                        break;
+                                    case 2:
+                                        item.StorageVeliaQuantity_Epheria = myBarter.InvQuantityChange;
+                                        break;
+                                    case 3:
+                                        item.StorageVeliaQuantity_Ancado = myBarter.InvQuantityChange;
+                                        break;
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            if (App.myPVM != null) {
-                App.listBarterPlanner.Clear();
-                DataGrid_Planner.BeginInit();
-                App.myPVM.BarterCollection.Clear();
-                DataGrid_Planner.EndInit();
+                if (App.myPVM != null) {
+                    App.listBarterPlanner.Clear();
+                    DataGrid_Planner.BeginInit();
+                    App.myPVM.BarterCollection.Clear();
+                    DataGrid_Planner.EndInit();
+                }
             }
         }
 
@@ -524,16 +539,27 @@ namespace iBarter.View {
         }
 
         private void ButtonAdv_Clean_Click(object sender, RoutedEventArgs e) {
-            foreach (Barter barter in App.myPVM.BarterCollection) {
-                barter.ExchangeDone = false;
-                barter.ExchangeQuantity = 0;
-                barter.InvQuantityChange = barter.InvQuantity;
-            }
+            MessageBoxResult result = MessageBox.Show("Are you sure you want to clean this plan?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
-            UpdateParley();
-            SaveData();
-            DataGrid_Planner.View.Refresh();
-            UpdateMapControl();
+            if (result == MessageBoxResult.Yes) {
+                foreach (Barter barter in App.myPVM.BarterCollection) {
+                    barter.ExchangeDone = false;
+                    barter.ExchangeQuantity = 0;
+                    barter.InvQuantityChange = barter.InvQuantity;
+                    barter.BarterGroup = -1;
+                }
+
+                DataGrid_Planner.SortColumnDescriptions.Clear();
+                // SortColumnDescription mySCD = new SortColumnDescription();
+                // mySCD.ColumnName = "Item1LV";
+                // mySCD.SortDirection = ListSortDirection.Ascending;
+                // DataGrid_Planner.SortColumnDescriptions.Add(mySCD);
+
+                UpdateParley();
+                SaveData();
+                DataGrid_Planner.View.Refresh();
+                UpdateMapControl();
+            }
         }
 
         private void CheckBox_ValuePack_Checked(object sender, RoutedEventArgs e) {

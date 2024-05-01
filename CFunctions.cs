@@ -1,20 +1,18 @@
-﻿using PureDM;
+﻿using ImageMagick;
+using PureDM;
 using System.Collections;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Net;
 using System.Net.Http;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
-using ImageMagick;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 using Color = System.Drawing.Color;
-using Path = System.IO.Path;
 using Size = System.Drawing.Size;
 using SystemColors = System.Drawing.SystemColors;
 
@@ -62,9 +60,9 @@ namespace iBarter {
         public void downloadMap() {
             try {
                 for (var x = 0; x < 127; x++)
-                for (var y = 0; y < 127; y++)
-                    DownloadMapImage("https://www.somethinglovely.net/bdo/tiles2/15/" + x + "_" + y + ".jpg",
-                        "D:\\Downloads\\Maps\\" + x + "_" + y + ".jpg", ImageFormat.Jpeg);
+                    for (var y = 0; y < 127; y++)
+                        DownloadMapImage("https://www.somethinglovely.net/bdo/tiles2/15/" + x + "_" + y + ".jpg",
+                            "D:\\Downloads\\Maps\\" + x + "_" + y + ".jpg", ImageFormat.Jpeg);
             }
             catch (ExternalException) {
                 // Something is wrong with Format -- Maybe required Format is not 
@@ -100,11 +98,11 @@ namespace iBarter {
             var imageHeights = new ArrayList();
 
             for (var x = 0; x < 127; x++)
-            for (var y = 0; y < 127; y++) {
-                var img = Image.FromFile(folderName + "\\" + x + "_" + y + ".jpg");
-                g.DrawImage(img, x * img0.Width, y * img0.Height);
-                img.Dispose();
-            }
+                for (var y = 0; y < 127; y++) {
+                    var img = Image.FromFile(folderName + "\\" + x + "_" + y + ".jpg");
+                    g.DrawImage(img, x * img0.Width, y * img0.Height);
+                    img.Dispose();
+                }
 
             //img3.Save("E:\\map.jpg",System.Drawing.Imaging.ImageFormat.Jpeg);
 
@@ -163,10 +161,10 @@ namespace iBarter {
         private void UpdateItemImagesAsync(string _id, string _url) {
             var client = new WebClient();
             //Uri address = new Uri("https://bdocodex.com/items/new_icon/03_etc/" + strType + _id + ".webp");
-            //Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+            //AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
             using (var stream = client.OpenRead(_url)) {
                 using (var fileStream =
-                       new FileStream(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Testing\\" + _id + ".webp",
+                       new FileStream(AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Testing\\" + _id + ".webp",
                            //"E:\\wanjizheng\\Documents\\MyProject\\BDO Data\\Items\\Images\\webp\\" + _id + ".webp",
                            FileMode.Create, FileAccess.Write)) {
                     stream.CopyTo(fileStream);
@@ -177,9 +175,9 @@ namespace iBarter {
 
 
             //var webp = new WebP();
-            // var bitmap = webp.Load(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Testing\\" + _id + ".webp");
+            // var bitmap = webp.Load(AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Testing\\" + _id + ".webp");
 
-            using (var bitmap = new MagickImage(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Testing\\" + _id + ".webp")) {
+            using (var bitmap = new MagickImage(AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Testing\\" + _id + ".webp")) {
                 var bitmapNew = new Bitmap(44, 44, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
 
                 using (var gfx = Graphics.FromImage(bitmapNew))
@@ -198,7 +196,7 @@ namespace iBarter {
                     using (var systemImage = Image.FromStream(memoryStream)) {
                         var g = Graphics.FromImage(bitmapNew);
                         g.DrawImage(systemImage, 0, 0);
-                        bitmapNew.Save(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + _id + ".bmp",
+                        bitmapNew.Save(AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + _id + ".bmp",
                             ImageFormat.Bmp);
 
                         bitmapNew.Dispose();
@@ -210,7 +208,7 @@ namespace iBarter {
 
         public List<Items> LoadItemsCSV() {
             var listItems = new List<Items>();
-            using (var reader = new StreamReader(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+            using (var reader = new StreamReader(AppDomain.CurrentDomain.BaseDirectory +
                                                  "\\Resources\\Items.csv")) {
                 while (!reader.EndOfStream) {
                     var line = reader.ReadLine();
@@ -236,7 +234,7 @@ namespace iBarter {
 
         public List<Islands> LoadIslandsCSV() {
             var listIslands = new List<Islands>();
-            using (var reader = new StreamReader(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) +
+            using (var reader = new StreamReader(AppDomain.CurrentDomain.BaseDirectory +
                                                  "\\Resources\\Islands.csv")) {
                 while (!reader.EndOfStream) {
                     var line = reader.ReadLine();
@@ -268,7 +266,7 @@ namespace iBarter {
 
 
         #region Identify Route
-        
+
         private void CleanDataGrid() {
             if (App.mySVM.BarterDetails != null) {
                 App.mySVM.BarterDetails.Clear();
@@ -510,6 +508,14 @@ namespace iBarter {
             // \Images\Items\6020.bmp
 
             string strID1 = listPointPlus[0].ImageID.Substring(14, listPointPlus[0].ImageID.Length - 18);
+
+            if (strID1 == "800011") {
+                strID1 = "800012";
+            }
+            else if (strID1 == "800012") {
+                strID1 = "800011";
+            }
+
             string strNumber1 = PureDM.PureDM.myCV.OCRString(listPointPlus[0].X,
                 (int)(listPointPlus[0].Y + (listPointPlus[0].Size.Height * 0.6)),
                 listPointPlus[0].X + listPointPlus[0].Size.Width, listPointPlus[0].Y + listPointPlus[0].Size.Height,
@@ -523,6 +529,14 @@ namespace iBarter {
             }
 
             string strID2 = listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18);
+
+            if (strID2 == "800011") {
+                strID2 = "800012";
+            }
+            else if (strID2 == "800012") {
+                strID2 = "800011";
+            }
+
             string strNumber2 = PureDM.PureDM.myCV.OCRString(listPointPlus[1].X,
                 (int)(listPointPlus[1].Y + (listPointPlus[1].Size.Height * 0.6)),
                 listPointPlus[1].X + listPointPlus[1].Size.Width, listPointPlus[1].Y + listPointPlus[1].Size.Height,

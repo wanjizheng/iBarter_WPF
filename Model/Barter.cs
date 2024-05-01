@@ -1,7 +1,6 @@
 ﻿using iBarter.View;
 using Syncfusion.Windows.Shared;
 using System.IO;
-using System.Reflection;
 
 namespace iBarter {
     public class Barter : NotificationObject {
@@ -25,9 +24,9 @@ namespace iBarter {
             item2 = _item2;
 
             item1Name = item1.ItemName;
-            icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+            icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
             item2Name = item2.ItemName;
-            icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+            icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
 
             exchangeQuantity = _exchangeQuantity;
             barterGroup = _barterGroup;
@@ -212,7 +211,7 @@ namespace iBarter {
         public string Item1Icon {
             get {
                 if (icon1 == null || !icon1.Contains(Item1.ItemID)) {
-                    icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+                    icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
                 }
 
                 if (!File.Exists(icon1) && item1 != null && int.Parse(Item1.ItemID) > 0) {
@@ -251,7 +250,7 @@ namespace iBarter {
         public string Item2Icon {
             get {
                 if (icon2 == null || !icon2.Contains(Item2.ItemID)) {
-                    icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+                    icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
                 }
 
                 if (!File.Exists(icon2) && item2 != null && int.Parse(Item2.ItemID) > 0) {
@@ -291,13 +290,13 @@ namespace iBarter {
             if (item1Name != "" && !item1Name.Equals(Item1.ItemName)) {
                 Items item1 = new Items(App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemName, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemID, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemLV);
                 Item1 = item1;
-                icon1 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+                icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
             }
 
             if (item2Name != "" && !item2Name.Equals(Item2.ItemName)) {
                 Items item2 = new Items(App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemName, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemID, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemLV);
                 Item2 = item2;
-                icon2 = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location) + "\\Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+                icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
             }
 
             //RaisePropertyChanged("ItemChange");

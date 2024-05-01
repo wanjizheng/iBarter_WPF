@@ -8,20 +8,19 @@
     xmlns:esri="http://schemas.esri.com/arcgis/runtime/2013"
     xmlns:view="clr-namespace:iBarter.View"
     x:Class="iBarter.MainWindow"
+    WindowStartupLocation="CenterScreen"
     mc:Ignorable="d"
+    Icon="Images/iBarterIcon.ico"
     Title="iBarter" Height="868" Width="1254" Loaded="Window_Loaded">
 
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="232*" />
-            <ColumnDefinition Width="293*" />
-        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="55" />
             <RowDefinition Height="8.9*" />
+            <RowDefinition Height="20" />
         </Grid.RowDefinitions>
 
-        <Grid x:Name="MenuGrid" Grid.Row="0" Grid.ColumnSpan="2">
+        <Grid x:Name="MenuGrid" Grid.Row="0">
             <view:BannerCombo HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
             <Menu SnapsToDevicePixels="True" VerticalAlignment="Bottom"
                   HorizontalContentAlignment="Stretch">
@@ -46,7 +45,7 @@
 
         <syncfusion:DockingManager x:Name="dockingManager_Main" Grid.Row="1"
                                    UseDocumentContainer="True" UseNativeFloatWindow="True"
-                                   Grid.ColumnSpan="2" Margin="0,0,0,22"
+                                   Margin="0,0,0,0"
                                    ActiveWindowChanged="dockingManager_Main_ActiveWindowChanged">
             <ContentControl x:Name="dockRight_ShipCargo" syncfusion:DockingManager.Header="Ship Cargo"
                             syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Right"
@@ -69,12 +68,12 @@
             <!-- <ContentControl x:Name="dockTabbed" syncfusion:DockingManager.Header="Dock Tabbed" -->
             <!--                 syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Tabbed" -->
             <!--                 syncfusion:DockingManager.TargetNameInDockedMode="dockBottom" /> -->
-            <ContentControl x:Name="autoHidden" syncfusion:DockingManager.Header="Auto Hidden"
-                            syncfusion:DockingManager.State="AutoHidden"
-                            syncfusion:DockingManager.SideInDockedMode="Left" />
-            <ContentControl x:Name="document1" syncfusion:DockingManager.CanDocument="True"
-                            syncfusion:DockingManager.Header="Document1.xaml"
-                            syncfusion:DockingManager.State="Document" />
+            <!-- <ContentControl x:Name="autoHidden" syncfusion:DockingManager.Header="Auto Hidden" -->
+            <!--                 syncfusion:DockingManager.State="AutoHidden" -->
+            <!--                 syncfusion:DockingManager.SideInDockedMode="Left" /> -->
+            <!-- <ContentControl x:Name="document1" syncfusion:DockingManager.CanDocument="True" -->
+            <!--                 syncfusion:DockingManager.Header="Document1.xaml" -->
+            <!--                 syncfusion:DockingManager.State="Document" /> -->
             <ContentControl x:Name="document_Planner" syncfusion:DockingManager.CanDocument="True"
                             syncfusion:DockingManager.Header="Planner"
                             syncfusion:DockingManager.State="Document">
@@ -88,7 +87,7 @@
 
         </syncfusion:DockingManager>
 
-        <Grid x:Name="StatusBar" Grid.Row="2" Grid.ColumnSpan="2">
+        <Grid x:Name="StatusBar" Grid.Row="2">
             <StatusBar x:Name="myStatusBar" SnapsToDevicePixels="True" VerticalAlignment="Bottom"
                        HorizontalContentAlignment="Stretch" Height="20">
                 <StatusBarItem>

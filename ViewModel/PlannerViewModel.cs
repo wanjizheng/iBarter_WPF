@@ -21,10 +21,11 @@ namespace iBarter.ViewModel {
 
         private void BarterCollectionCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) {
             try {
-                if (App.myPVM.BarterCollection.Count > 0) {
-                    //App.myfmMain.myPlannerControl.RefreshDataGrid();
-                    //App.myCFun.Log("Saved data.", Brushes.DarkOliveGreen);
-                }
+                // if (App.myPVM.BarterCollection.Count > 0) {
+                //     //App.myfmMain.myPlannerControl.RefreshDataGrid();
+                //     //App.myCFun.Log("Saved data.", Brushes.DarkOliveGreen);
+                // }
+                App.myfmMain.myPlannerControl.Label_TotalBarters.Content = "Total Barters: " + BarterCollection.Count;
             }
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);

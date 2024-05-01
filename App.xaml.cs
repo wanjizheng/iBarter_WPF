@@ -12,6 +12,7 @@ namespace iBarter {
         public static global::PureDM.PureDM myPureDM = null!;
         public static CFunctions myCFun = null!;
         public static MainWindow myfmMain = null!;
+        public static SplashScreen mySplashScreen = null!;
         public static BarterScanner myBarterScanner = null!;
         public static StorageManagement myStorageManagement = null!;
         public static List<Islands> listIslands = null!;
@@ -42,8 +43,9 @@ namespace iBarter {
             myStorageVM = new StorageViewModel();
             myCVM = new ShipCargoViewModel();
 
-
+            //mySplashScreen = new SplashScreen();
             myfmMain = new MainWindow();
+
 
             this.ShutdownMode = ShutdownMode.OnMainWindowClose;
         }
@@ -52,6 +54,7 @@ namespace iBarter {
             base.OnStartup(e);
 
             myfmMain.Show();
+            //mySplashScreen.Show();
         }
     }
 }

@@ -191,7 +191,7 @@
         <!-- <Grid x:Name="Grid_Ostra" Margin="550,327,240,113" Width="10" Height="10"> -->
         <!--     <Rectangle Fill="Blue" /> -->
         <!-- </Grid> -->
-        <!-- <Grid x:Name="Grid_Padix" Margin="231,275,559,165" Width="10" Height="10"> -->
+        <!-- <Grid x:Name="Grid_Padix" Margin="236,241,554,199" Width="10" Height="10"> -->
         <!--     <Rectangle Fill="Blue" /> -->
         <!-- </Grid> -->
         <!-- <Grid x:Name="Grid_Paratama" Margin="486,330,304,110" Width="10" Height="10"> -->

@@ -1,13 +1,14 @@
-﻿<Window x:Class="iBarter.View.StorageManagement"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:iBarter.View"
-        xmlns:Syncfusion="http://schemas.syncfusion.com/wpf"
-        xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
-        mc:Ignorable="d"
-        Title="StorageManagement" Height="450" Width="800">
+﻿<Syncfusion:ChromelessWindow x:Class="iBarter.View.StorageManagement"
+                             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                             xmlns:local="clr-namespace:iBarter.View"
+                             xmlns:Syncfusion="http://schemas.syncfusion.com/wpf"
+                             xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
+                             mc:Ignorable="d"
+                             Icon="/Images/storage.png"
+                             Title="StorageManagement" Height="450" Width="800">
     <Grid>
         <Grid.Resources>
             <ResourceDictionary>
@@ -67,4 +68,4 @@
 
         </Syncfusion:SfDataGrid>
     </Grid>
-</Window>
+</Syncfusion:ChromelessWindow>

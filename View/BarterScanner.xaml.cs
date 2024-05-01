@@ -1,5 +1,4 @@
-﻿using PureDM;
-using Syncfusion.UI.Xaml.Grid;
+﻿using Syncfusion.UI.Xaml.Grid;
 using Syncfusion.Windows.Shared;
 using System.Windows;
 using System.Windows.Media;
@@ -36,7 +35,7 @@ namespace iBarter.View {
                 App.myCFun.Log("Start scanning...", Brushes.Blue);
                 //await Task.Run(() => { App.myCFun.SearchBarter(); });
 
-                await Task.Run(()=>App.myCFun.IdentifyRoutes());
+                await Task.Run(() => App.myCFun.IdentifyRoutes());
             }
             catch (Exception ex) {
                 App.myCFun.Log(ex.Message, Brushes.Red);
