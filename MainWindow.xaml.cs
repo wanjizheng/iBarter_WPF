@@ -18,7 +18,7 @@ namespace iBarter {
             this.DataContext = App.myMainWVM;
             App.myMainWVM.BlurVisibility = Visibility.Visible;
             SfSkinManager.ApplyStylesOnApplication = true;
-            SfSkinManager.SetTheme(this, new Theme("Windows11Light"));
+            //SfSkinManager.SetTheme(this, new Theme("Windows11Light"));
             this.WindowState = WindowState.Minimized;
 
             Thread thread = new Thread(() => {
@@ -160,6 +160,7 @@ namespace iBarter {
                 }
 
                 //this.Opacity = 100;
+
                 App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
                 this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
                 this.WindowState = WindowState.Normal;
@@ -169,6 +170,10 @@ namespace iBarter {
                 double windowHeight = this.Height;
                 this.Left = (screenWidth / 2) - (windowWidth / 2);
                 this.Top = (screenHeight / 2) - (windowHeight / 2);
+
+                App.myMainWVM.OnSelectedProductChanged();
+
+
             }
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);

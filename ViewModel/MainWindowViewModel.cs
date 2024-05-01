@@ -270,6 +270,25 @@ namespace iBarter.ViewModel {
 
         private List<Palette> PaletteList = new List<Palette>();
 
+        /// <summary>
+        /// Method helps to perform product selection change.
+        /// </summary>
+        public void OnSelectedProductChanged() {
+            selectedthemename = MainWindowViewModel.DefaultThemeName;
+
+            // Fluent theme is the default theme.
+            selectedtheme = themelist.FirstOrDefault(theme => theme.ThemeName == "Windows11Light");
+            Palettes = new ObservableCollection<Palette>(PaletteList.Where(x => (x.Theme.Equals(selectedthemename))).ToList<Palette>());
+            SelectedPalette = Palettes.Where(x => x.Name.Equals("Default")).ToList<Palette>()[0];
+            UpdateTitleBarBackgroundandForeground(selectedthemename);
+
+           
+            //if (ThemeChanged != null) {
+                ThemeChanged();
+            //}
+
+        }
+
 
         private bool colorpalettevisibility = true;
 
@@ -329,24 +348,22 @@ namespace iBarter.ViewModel {
         }
 
 
-        private ObservableCollection<Themes> themelist = new ObservableCollection<Themes>()
-        {
-            new Themes{ThemeName="Windows11Light", DisplayName="Light" , ThemeType="Windows 11 Themes", EllipseFill=(Brush)new BrushConverter().ConvertFromString("#FFFFFF") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#E5E5E5"), PathFill=(Brush)new BrushConverter().ConvertFromString("#005FB8")},
-            new Themes{ThemeName="Windows11Dark" ,DisplayName="Dark" , ThemeType="Windows 11 Themes",EllipseFill=(Brush)new BrushConverter().ConvertFromString("#202020") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#333333"), PathFill=(Brush)new BrushConverter().ConvertFromString("#60CDFF")},
-            new Themes{ThemeName="MaterialLight",DisplayName="Light", ThemeType="Material Themes",EllipseFill=(Brush)new BrushConverter().ConvertFromString("#FFFFFF") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#E9E9E9"), PathFill=(Brush)new BrushConverter().ConvertFromString("#0077FF")},
-            new Themes{ThemeName="MaterialDark", DisplayName="Dark" ,ThemeType="Material Themes",EllipseFill=(Brush)new BrushConverter().ConvertFromString("#848484") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#5F5F5F"), PathFill=(Brush)new BrushConverter().ConvertFromString("#0077FF") },
-            new Themes{ThemeName ="MaterialLightBlue", DisplayName="Light Blue", ThemeType="Material Themes",EllipseFill=(Brush)new BrushConverter().ConvertFromString("#BEFFF3") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#E9E9E9"), PathFill=(Brush)new BrushConverter().ConvertFromString("#008FA3")},
-            new Themes{ThemeName="MaterialDarkBlue", DisplayName="Dark Blue",ThemeType="Material Themes",EllipseFill=(Brush)new BrushConverter().ConvertFromString("#808EA3") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#64638E"), PathFill=(Brush)new BrushConverter().ConvertFromString("#08C2CE")},
-            new Themes{ThemeName="Office2019White", DisplayName="White",ThemeType="Office 2019 Themes",EllipseFill=(Brush)new BrushConverter().ConvertFromString("#FFFFFF") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#E9E9E9"), PathFill=(Brush)new BrushConverter().ConvertFromString("#0077FF")},
-            new Themes{ThemeName="Office2019Black", DisplayName="Black",ThemeType="Office 2019 Themes",EllipseFill=(Brush)new BrushConverter().ConvertFromString("#020202") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#262626"), PathFill=(Brush)new BrushConverter().ConvertFromString("#008FA3")},
-            new Themes{ThemeName="Office2019Colorful", DisplayName="Colorful",ThemeType="Office 2019 Themes" ,EllipseFill=(Brush)new BrushConverter().ConvertFromString("#FFFFFF") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#E9E9E9"), PathFill=(Brush)new BrushConverter().ConvertFromString("#0077FF")},
-            new Themes{ThemeName="Office2019DarkGray", DisplayName="Dark Gray",ThemeType="Office 2019 Themes",EllipseFill=(Brush)new BrushConverter().ConvertFromString("#949494") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#949494"), PathFill=(Brush)new BrushConverter().ConvertFromString("#0077FF")},
-            new Themes{ThemeName="Office2019HighContrast",DisplayName="High Contrast Black",ThemeType="Office 2019 Themes" ,EllipseFill=(Brush)new BrushConverter().ConvertFromString("#000000") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#000000"), PathFill=(Brush)new BrushConverter().ConvertFromString("#FFD600")},
-            new Themes{ThemeName="Office2019HighContrastWhite", DisplayName="High Contrast White",ThemeType="Office 2019 Themes" ,EllipseFill=(Brush)new BrushConverter().ConvertFromString("#FFFFFF") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#E9E9E9"), PathFill=(Brush)new BrushConverter().ConvertFromString("#5419B4")},
-            new Themes{ThemeName="FluentLight", DisplayName="Light" , ThemeType="Fluent Themes", EllipseFill=(Brush)new BrushConverter().ConvertFromString("#FFFFFF") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#E9E9E9"), PathFill=(Brush)new BrushConverter().ConvertFromString("#0077FF")},
-            new Themes{ThemeName="FluentDark" ,DisplayName="Dark" , ThemeType="Fluent Themes",EllipseFill=(Brush)new BrushConverter().ConvertFromString("#313131") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#000000"), PathFill=(Brush)new BrushConverter().ConvertFromString("#0077FF")},
-            new Themes{ThemeName="SystemTheme", DisplayName="System Theme", ThemeType="System Theme",EllipseFill=(Brush)new BrushConverter().ConvertFromString("#FFFFFF") , EllipseStroke=(Brush)new BrushConverter().ConvertFromString("#888888"), PathFill=(Brush)new BrushConverter().ConvertFromString("#000000")}
-
+        private ObservableCollection<Themes> themelist = new ObservableCollection<Themes>() {
+            new Themes { ThemeName = "Windows11Light", DisplayName = "Light", ThemeType = "Windows 11 Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#FFFFFF"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#E5E5E5"), PathFill = (Brush)new BrushConverter().ConvertFromString("#005FB8") },
+            new Themes { ThemeName = "Windows11Dark", DisplayName = "Dark", ThemeType = "Windows 11 Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#202020"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#333333"), PathFill = (Brush)new BrushConverter().ConvertFromString("#60CDFF") },
+            new Themes { ThemeName = "MaterialLight", DisplayName = "Light", ThemeType = "Material Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#FFFFFF"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#E9E9E9"), PathFill = (Brush)new BrushConverter().ConvertFromString("#0077FF") },
+            new Themes { ThemeName = "MaterialDark", DisplayName = "Dark", ThemeType = "Material Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#848484"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#5F5F5F"), PathFill = (Brush)new BrushConverter().ConvertFromString("#0077FF") },
+            new Themes { ThemeName = "MaterialLightBlue", DisplayName = "Light Blue", ThemeType = "Material Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#BEFFF3"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#E9E9E9"), PathFill = (Brush)new BrushConverter().ConvertFromString("#008FA3") },
+            new Themes { ThemeName = "MaterialDarkBlue", DisplayName = "Dark Blue", ThemeType = "Material Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#808EA3"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#64638E"), PathFill = (Brush)new BrushConverter().ConvertFromString("#08C2CE") },
+            new Themes { ThemeName = "Office2019White", DisplayName = "White", ThemeType = "Office 2019 Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#FFFFFF"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#E9E9E9"), PathFill = (Brush)new BrushConverter().ConvertFromString("#0077FF") },
+            new Themes { ThemeName = "Office2019Black", DisplayName = "Black", ThemeType = "Office 2019 Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#020202"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#262626"), PathFill = (Brush)new BrushConverter().ConvertFromString("#008FA3") },
+            new Themes { ThemeName = "Office2019Colorful", DisplayName = "Colorful", ThemeType = "Office 2019 Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#FFFFFF"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#E9E9E9"), PathFill = (Brush)new BrushConverter().ConvertFromString("#0077FF") },
+            new Themes { ThemeName = "Office2019DarkGray", DisplayName = "Dark Gray", ThemeType = "Office 2019 Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#949494"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#949494"), PathFill = (Brush)new BrushConverter().ConvertFromString("#0077FF") },
+            new Themes { ThemeName = "Office2019HighContrast", DisplayName = "High Contrast Black", ThemeType = "Office 2019 Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#000000"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#000000"), PathFill = (Brush)new BrushConverter().ConvertFromString("#FFD600") },
+            new Themes { ThemeName = "Office2019HighContrastWhite", DisplayName = "High Contrast White", ThemeType = "Office 2019 Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#FFFFFF"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#E9E9E9"), PathFill = (Brush)new BrushConverter().ConvertFromString("#5419B4") },
+            new Themes { ThemeName = "FluentLight", DisplayName = "Light", ThemeType = "Fluent Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#FFFFFF"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#E9E9E9"), PathFill = (Brush)new BrushConverter().ConvertFromString("#0077FF") },
+            new Themes { ThemeName = "FluentDark", DisplayName = "Dark", ThemeType = "Fluent Themes", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#313131"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#000000"), PathFill = (Brush)new BrushConverter().ConvertFromString("#0077FF") },
+            new Themes { ThemeName = "SystemTheme", DisplayName = "System Theme", ThemeType = "System Theme", EllipseFill = (Brush)new BrushConverter().ConvertFromString("#FFFFFF"), EllipseStroke = (Brush)new BrushConverter().ConvertFromString("#888888"), PathFill = (Brush)new BrushConverter().ConvertFromString("#000000") }
         };
 
         public ObservableCollection<Themes> ThemeList {
@@ -439,7 +456,7 @@ namespace iBarter.ViewModel {
         /// Method helps to update the selected ColorPalettes
         /// </summary>
         /// <param name="ThemeName">Selected Theme</param>
-        void OnPaletteChanged(string ThemeName) {
+        public void OnPaletteChanged(string ThemeName) {
             switch (ThemeName) {
                 case "Windows11Light": {
                     changePalette("Syncfusion.Themes.Windows11Light.WPF.Windows11LightThemeSettings, Syncfusion.Themes.Windows11Light.WPF", "Syncfusion.Themes.Windows11Light.WPF.Windows11Palette, Syncfusion.Themes.Windows11Light.WPF", ThemeName);
@@ -498,6 +515,7 @@ namespace iBarter.ViewModel {
                     break;
                 }
             }
+
             OnThemeChanged(ThemeName);
         }
 
@@ -508,6 +526,9 @@ namespace iBarter.ViewModel {
         /// <param name="theme">Name of the selected theme</param>
         private void changePalette(string themeType, string paletteType, string theme) {
             object themeSettings = Activator.CreateInstance(Type.GetType(themeType));
+            if (SelectedPalette == null) {
+                SelectedPalette = Palettes.Where(x => x.Name.Equals("Default")).ToList<Palette>()[0];
+            }
             themeSettings.GetType().GetRuntimeProperty("Palette").SetValue(themeSettings, Enum.Parse(Type.GetType(paletteType), SelectedPalette.Name));
             SfSkinManager.RegisterThemeSettings(theme, (IThemeSetting)themeSettings);
         }
