@@ -9,7 +9,7 @@
 
     <Grid>
         <TextBlock Text="iBarter for Black Desert Online" FontSize="14" FontWeight="SemiBold" Width="Auto" Height="25"
-                   Margin="10,8,0,0" HorizontalAlignment="left" VerticalAlignment="Center" />
+                   Margin="10,0,0,0" HorizontalAlignment="left" VerticalAlignment="Center" />
         <!-- <syncfusion:ComboBoxAdv VerticalContentAlignment="Center" SelectedIndex="1" x:Name="comboChar" -->
         <!--                         HorizontalAlignment="Right" Margin="0,0,8,0" Width="200" Height="25" -->
         <!--                         DefaultText="Select Character" /> -->

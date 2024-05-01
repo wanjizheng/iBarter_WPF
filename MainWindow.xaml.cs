@@ -4,17 +4,22 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Syncfusion.SfSkinManager;
+using Syncfusion.Windows.Shared;
+using System.Windows.Input;
 
 namespace iBarter {
     /// <summary>
     ///     Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class MainWindow : Window {
+    public partial class MainWindow : ChromelessWindow {
         public MainWindow() {
             InitializeComponent();
+            this.DataContext = App.myMainWVM;
+            App.myMainWVM.BlurVisibility = Visibility.Visible;
+            SfSkinManager.ApplyStylesOnApplication = true;
+            SfSkinManager.SetTheme(this, new Theme("Windows11Light"));
             this.WindowState = WindowState.Minimized;
-
-
 
             Thread thread = new Thread(() => {
                 App.mySplashScreen = new SplashScreen();
@@ -126,27 +131,34 @@ namespace iBarter {
                 App.myPureDM.KeyboardMode = "dx.keypad.input.lock.api|dx.keypad.state.api|dx.keypad.api";
                 App.myPureDM.PublicMode = "dx.public.graphic.protect|dx.public.anti.api|dx.public.km.protect|dx.public.input.ime|dx.public.focus.message";
                 // App.mySplashScreen.worker.ReportProgress(50);
+                if ((int)App.myPureDM.Hwnd > 0) {
+                    App.myPureDM.DM.SetWindowState((int)App.myPureDM.Hwnd, 1);
+                    //int bindResult = App.dmSoft.BindWindowEx((int)App.myHwnd, "dx.graphic.3d.10plus", "dx.mouse.cursor|dx.mouse.raw.input", "windows", "dx.mouse.raw.input", 101);
 
-                App.myPureDM.DM.SetWindowState((int)App.myPureDM.Hwnd, 1);
-                //int bindResult = App.dmSoft.BindWindowEx((int)App.myHwnd, "dx.graphic.3d.10plus", "dx.mouse.cursor|dx.mouse.raw.input", "windows", "dx.mouse.raw.input", 101);
+                    int bindResult = App.myPureDM.CV.BindWindow((int)App.myPureDM.Hwnd);
 
-                int bindResult = App.myPureDM.CV.BindWindow((int)App.myPureDM.Hwnd);
 
-                // App.mySplashScreen.worker.ReportProgress(90);
-                //int bindResult = App.dmSoft.BindWindowEx((int)App.myHwnd, "dx2", "normal", "normal", "dx.public.km.protect|dx.public.anti.api|dx.public.inject.super|", 101);
-                if (bindResult == 1) {
-                    App.myCFun.Log("绑定游戏窗口成功", Brushes.Blue);
-                    App.myPureDM.DM.SetWindowState((int)App.myPureDM.Hwnd, 4);
+                    // App.mySplashScreen.worker.ReportProgress(90);
+                    //int bindResult = App.dmSoft.BindWindowEx((int)App.myHwnd, "dx2", "normal", "normal", "dx.public.km.protect|dx.public.anti.api|dx.public.inject.super|", 101);
+                    if (bindResult == 1) {
+                        App.myCFun.Log("Game window binding success!", Brushes.Blue);
+                        App.myPureDM.DM.SetWindowState((int)App.myPureDM.Hwnd, 4);
+                    }
+                    else {
+                        App.myCFun.Log("Fail to bind the game window.", Brushes.Red);
+                    }
+
+                    // App.mySplashScreen.worker.ReportProgress(100);
+                    var timer = new DispatcherTimer();
+
+                    timer.Interval = TimeSpan.FromMilliseconds(10);
+                    timer.Tick += Timer_Tick;
+                    timer.Start();
                 }
                 else {
-                    App.myCFun.Log("绑定游戏窗口失败", Brushes.Red);
+                    App.myCFun.Log("Cannot find the game process.",Brushes.Red);
                 }
-                // App.mySplashScreen.worker.ReportProgress(100);
-                var timer = new DispatcherTimer();
 
-                timer.Interval = TimeSpan.FromMilliseconds(10);
-                timer.Tick += Timer_Tick;
-                timer.Start();
                 //this.Opacity = 100;
                 App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
                 this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -185,6 +197,26 @@ namespace iBarter {
             // else {
             //     myMapControl.myTimer.Stop();
             // }
+        }
+
+        private void scrollviewver_Loaded(object sender, RoutedEventArgs e) {
+            ThemeList.AddHandler(MouseWheelEvent, new RoutedEventHandler(mousehandler), true);
+            PaletteList.AddHandler(MouseWheelEvent, new RoutedEventHandler(mousehandler), true);
+        }
+
+        /// <summary>
+        /// This  handler is used for scrolling the Items in themePanel
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void mousehandler(object sender, RoutedEventArgs e) {
+            MouseWheelEventArgs eargs = (MouseWheelEventArgs)e;
+
+            double x = (double)eargs.Delta;
+
+            double y = ThemePanelScrollViewer.VerticalOffset;
+
+            ThemePanelScrollViewer.ScrollToVerticalOffset(y - x);
         }
     }
 }

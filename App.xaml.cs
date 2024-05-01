@@ -3,8 +3,17 @@ using iBarter.View;
 using iBarter.ViewModel;
 using Syncfusion.Licensing;
 using System.Windows;
+using System.Windows.Navigation;
 
 namespace iBarter {
+    public static class DemosNavigationService {
+        public static NavigationService RootNavigationService { get; set; }
+
+        public static NavigationService DemoNavigationService { get; set; }
+
+        public static Window MainWindow { get; set; }
+    }
+
     /// <summary>
     ///     Interaction logic for App.xaml
     /// </summary>
@@ -24,6 +33,7 @@ namespace iBarter {
 
         public static ScannerViewModel mySVM = null!;
         public static PlannerViewModel myPVM = null!;
+        public static MainWindowViewModel myMainWVM = null!;
         public static StorageViewModel myStorageVM = null!;
         public static ShipCargoViewModel myCVM = null!;
         public static CargoProperty myCargoProperty = null;
@@ -42,6 +52,7 @@ namespace iBarter {
             myPVM = new PlannerViewModel();
             myStorageVM = new StorageViewModel();
             myCVM = new ShipCargoViewModel();
+            myMainWVM = new MainWindowViewModel();
 
             //mySplashScreen = new SplashScreen();
             myfmMain = new MainWindow();
