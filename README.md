@@ -1,20 +1,25 @@
 This is a .Net application inspired by the Barter Template developed by Crippling Depression. It was the best bartering tool in the Black Desert Online. 
 
-This is still on beta, so please help me test the application and provide feedback.
+This is still in beta, so please help me test the application and provide feedback.
 
-This tool uses image recognition to identify barter items in the game; then you can plan your route. To use this application, you first need to start the iBarter.exe file with admin permission, then the main interface shows below:
+This tool uses image recognition to identify barter items in the game; then you can plan your route. To use this application, you first need to start the iBarter.exe file with admin permission, then the main interface shown below:
+
 ![image](https://github.com/wanjizheng/iBarter_WPF/assets/15932911/538b032b-dbcc-42ec-b69d-29396a7d603f)
 
 Click the "Windows" menu and then select the "BarterScanner", it will then open a new window shown below:
+
 ![image](https://github.com/wanjizheng/iBarter_WPF/assets/15932911/2d0f6260-0756-42ad-ac42-71d965f785aa)
 
 Assuming you have the barter window opened in the game, click the first button in the BaarterScanner window to start scanning. Do not move the barter window in the game during the scan process, and you will get a message (in the Log window) once the scan has been done.
+
 ![image](https://github.com/wanjizheng/iBarter_WPF/assets/15932911/a4d72086-2c56-4cc3-997e-8b0d14443081)
 
 Once you finish the scan, the identified information will show in the BarterScanner window. It is not 100% accurate at the moment, so you can edit the information if necessary.
+
 ![image](https://github.com/wanjizheng/iBarter_WPF/assets/15932911/fd566e04-1e43-4aef-b2eb-dd4b3ca4d3d9)
 
 Once you are happy with the result, click the second button in the BarterScanner window to add it to your barter plan (you can access the plan from the main window).
+
 ![image](https://github.com/wanjizheng/iBarter_WPF/assets/15932911/4adfe7d8-9750-45d7-ac4e-34e59bca089d)
 
 There are six buttons on the Planner window, from the left to the right, they are:
