@@ -8,7 +8,21 @@
                              xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
                              mc:Ignorable="d"
                              Icon="/Images/storage.png"
+                             TitleBarBackground="{Binding TitleBarBackground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             TitleBarForeground="{Binding TitleBarForeground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             CloseButtonTemplate="{DynamicResource ProductsWindowCloseButtonTemplate}"
+                             MaximizeButtonTemplate="{DynamicResource ProductsWindowMaximizeButtonTemplate}"
+                             MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
+                             ResizeBorderThickness="0"
+                             RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
                              Title="StorageManagement" Height="450" Width="800">
+    <Syncfusion:ChromelessWindow.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/View/WindowStyle.xaml"></ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Syncfusion:ChromelessWindow.Resources>
     <Grid>
         <Grid.Resources>
             <ResourceDictionary>

@@ -253,7 +253,7 @@ namespace iBarter.View {
         private void FindBarterGroup(Barter _barter, int _lv, int _group) {
             _barter.BarterGroup = _group;
             Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b =>
-                b.Item1.ItemLV.Equals(Convert.ToString(_lv)) && b.Item1Name.Equals(_barter.Item2Name) && (b.Item2.ItemLV != "-1"||b.Item2Name=="Crow Coin"))!;
+                b.Item1.ItemLV.Equals(Convert.ToString(_lv)) && b.Item1Name.Equals(_barter.Item2Name) && (b.Item2.ItemLV != "-1" || b.Item2Name == "Crow Coin"))!;
             if (myBarter != null) {
                 myBarter.BarterGroup = _group;
                 if (!myBarter.Item1.ItemLV.Equals("5")) {

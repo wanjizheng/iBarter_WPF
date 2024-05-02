@@ -8,7 +8,21 @@
                              mc:Ignorable="d"
                              AllowsTransparency="True" WindowStyle="None"
                              Icon="/Images/barter.png"
+                             TitleBarBackground="{Binding TitleBarBackground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             TitleBarForeground="{Binding TitleBarForeground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             CloseButtonTemplate="{DynamicResource ProductsWindowCloseButtonTemplate}"
+                             MaximizeButtonTemplate="{DynamicResource ProductsWindowMaximizeButtonTemplate}"
+                             MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
+                             ResizeBorderThickness="0"
+                             RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
                              Title="BarterScanner" Height="350" Width="750">
+    <syncfusion:ChromelessWindow.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/View/WindowStyle.xaml"></ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </syncfusion:ChromelessWindow.Resources>
     <Grid>
         <StackPanel>
             <syncfusion:ToolBarAdv x:Name="ScannerToolBar">
@@ -33,9 +47,9 @@
                     ToolTip="Add"
                     SizeMode="Small"
                     FontFamily="Microsoft YaHei"
-                    SmallIcon="/Images/add.png" Click="ButtonAdv_Add_Click"  />
+                    SmallIcon="/Images/add.png" Click="ButtonAdv_Add_Click" />
             </syncfusion:ToolBarAdv>
-            
+
             <syncfusion:SfDataGrid x:Name="BarterScanResults" Height="NaN" Width="NaN" AutoGenerateColumns="False"
                                    AllowEditing="True"
                                    ColumnSizer="AutoWithLastColumnFill"
@@ -43,7 +57,9 @@
                                    SelectionForegroundBrush="Bisque"
                                    AllowDraggingRows="False"
                                    ShowRowHeader="True"
-                                   AllowDrop="True" LiveDataUpdateMode="AllowDataShaping" CurrentCellEndEdit="BarterScanResults_CurrentCellEndEdit" CurrentCellDropDownSelectionChanged="BarterScanResults_CurrentCellDropDownSelectionChanged">
+                                   AllowDrop="True" LiveDataUpdateMode="AllowDataShaping"
+                                   CurrentCellEndEdit="BarterScanResults_CurrentCellEndEdit"
+                                   CurrentCellDropDownSelectionChanged="BarterScanResults_CurrentCellDropDownSelectionChanged">
                 <syncfusion:SfDataGrid.Columns>
                     <!-- <syncfusion:GridTextColumn HeaderText="Island1" MappingName="IsLandName" UseBindingValue="True" -->
                     <!--                            AllowResizing="True" AllowEditing="True"> -->
@@ -68,7 +84,6 @@
                     </syncfusion:GridMultiColumnDropDownList>
 
 
-
                     <syncfusion:GridTextColumn HeaderText="No." MappingName="IslandRemaining" AllowResizing="True"
                                                AllowEditing="True">
                     </syncfusion:GridTextColumn>
@@ -88,7 +103,8 @@
                                                             MappingName="Item1Name"
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
-                                                            AllowIncrementalFiltering="True" AllowEditing="True" AllowFiltering="True" >
+                                                            AllowIncrementalFiltering="True" AllowEditing="True"
+                                                            AllowFiltering="True">
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
                                 <syncfusion:GridTextColumn
@@ -117,15 +133,19 @@
                                                             MappingName="Item2Name"
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
-                                                            AllowIncrementalFiltering="True" AllowEditing="True" AllowFiltering="True">
+                                                            AllowIncrementalFiltering="True" AllowEditing="True"
+                                                            AllowFiltering="True">
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
                                 <syncfusion:GridTextColumn
                                     HeaderText="ItemID"
                                     MappingName="ItemID" AllowSorting="True" />
-                                <syncfusion:GridTextColumn HeaderText="Item Name" MappingName="ItemName" AllowSorting="True" />
-                                <syncfusion:GridTextColumn HeaderText="Item LV" MappingName="ItemLV" AllowSorting="True" />
-                                <syncfusion:GridTextColumn HeaderText="Item Number" MappingName="ItemNumber" AllowSorting="True" />
+                                <syncfusion:GridTextColumn HeaderText="Item Name" MappingName="ItemName"
+                                                           AllowSorting="True" />
+                                <syncfusion:GridTextColumn HeaderText="Item LV" MappingName="ItemLV"
+                                                           AllowSorting="True" />
+                                <syncfusion:GridTextColumn HeaderText="Item Number" MappingName="ItemNumber"
+                                                           AllowSorting="True" />
                             </syncfusion:Columns>
                         </syncfusion:GridMultiColumnDropDownList.Columns>
                     </syncfusion:GridMultiColumnDropDownList>

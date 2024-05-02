@@ -83,50 +83,50 @@
     </Style>
 
     <!--Style used for SubDemos ListViewItem-->
-    <Style x:Key="SubDemoListViewItemStyle" TargetType="{x:Type ListViewItem}">
-        <Setter Property="Margin" Value="0,2,8,10"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="{x:Type ListViewItem}">
-                    <Border x:Name="itemContainer" 
-                            BorderThickness="1"
-                            Background="{DynamicResource SecondaryBackground}"
-                            Style="{StaticResource BorderStyle}"
-                            Margin="{TemplateBinding Margin}" 
-                            CornerRadius="15">
-                        <ContentPresenter x:Name="contentPresenter" 
-                                          Grid.Column="1" 
-                                          Focusable="False"  
-                                          TextBlock.Foreground="{DynamicResource SecondaryForeground}"
-                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" 
-                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"                                          
-                                          RecognizesAccessKey="True" 
-                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="itemContainer" Property="Background" Value="{DynamicResource SecondaryBackgroundHovered}"/>
-                            <Setter TargetName="contentPresenter" Property="TextBlock.Foreground" Value="{DynamicResource SecondaryForegroundHovered}"/>
-                        </Trigger>
-
-                        <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="itemContainer" Property="Background" Value="{DynamicResource PrimaryBackground}"/>
-                            <Setter TargetName="contentPresenter" Property="TextBlock.Foreground" Value="{DynamicResource PrimaryForeground}"/>
-                        </Trigger>
-
-                        <MultiTrigger>
-                            <MultiTrigger.Conditions>
-                                <Condition Property="IsSelected" Value="true"/>
-                                <Condition Property="IsMouseOver" Value="True"/>
-                            </MultiTrigger.Conditions>
-                            <Setter TargetName="itemContainer" Property="Background" Value="{DynamicResource PrimaryBackground}"/>
-                            <Setter TargetName="contentPresenter" Property="TextBlock.Foreground" Value="{DynamicResource PrimaryForeground}"/>
-                        </MultiTrigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
+    <!-- <Style x:Key="SubDemoListViewItemStyle" TargetType="{x:Type ListViewItem}"> -->
+    <!--     <Setter Property="Margin" Value="0,2,8,10"/> -->
+    <!--     <Setter Property="Template"> -->
+    <!--         <Setter.Value> -->
+    <!--             <ControlTemplate TargetType="{x:Type ListViewItem}"> -->
+    <!--                 <Border x:Name="itemContainer"  -->
+    <!--                         BorderThickness="1" -->
+    <!--                         Background="{DynamicResource SecondaryBackground}" -->
+    <!--                         Style="{StaticResource BorderStyle}" -->
+    <!--                         Margin="{TemplateBinding Margin}"  -->
+    <!--                         CornerRadius="15"> -->
+    <!--                     <ContentPresenter x:Name="contentPresenter"  -->
+    <!--                                       Grid.Column="1"  -->
+    <!--                                       Focusable="False"   -->
+    <!--                                       TextBlock.Foreground="{DynamicResource SecondaryForeground}" -->
+    <!--                                       HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"  -->
+    <!--                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"                                           -->
+    <!--                                       RecognizesAccessKey="True"  -->
+    <!--                                       SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/> -->
+    <!--                 </Border> -->
+    <!--                 <ControlTemplate.Triggers> -->
+    <!--                     <Trigger Property="IsMouseOver" Value="True"> -->
+    <!--                         <Setter TargetName="itemContainer" Property="Background" Value="{DynamicResource SecondaryBackgroundHovered}"/> -->
+    <!--                         <Setter TargetName="contentPresenter" Property="TextBlock.Foreground" Value="{DynamicResource SecondaryForegroundHovered}"/> -->
+    <!--                     </Trigger> -->
+    <!-- -->
+    <!--                     <Trigger Property="IsSelected" Value="True"> -->
+    <!--                         <Setter TargetName="itemContainer" Property="Background" Value="{DynamicResource PrimaryBackground}"/> -->
+    <!--                         <Setter TargetName="contentPresenter" Property="TextBlock.Foreground" Value="{DynamicResource PrimaryForeground}"/> -->
+    <!--                     </Trigger> -->
+    <!-- -->
+    <!--                     <MultiTrigger> -->
+    <!--                         <MultiTrigger.Conditions> -->
+    <!--                             <Condition Property="IsSelected" Value="true"/> -->
+    <!--                             <Condition Property="IsMouseOver" Value="True"/> -->
+    <!--                         </MultiTrigger.Conditions> -->
+    <!--                         <Setter TargetName="itemContainer" Property="Background" Value="{DynamicResource PrimaryBackground}"/> -->
+    <!--                         <Setter TargetName="contentPresenter" Property="TextBlock.Foreground" Value="{DynamicResource PrimaryForeground}"/> -->
+    <!--                     </MultiTrigger> -->
+    <!--                 </ControlTemplate.Triggers> -->
+    <!--             </ControlTemplate> -->
+    <!--         </Setter.Value> -->
+    <!--     </Setter> -->
+    <!-- </Style> -->
 
 
     <!--Focusvisual style of Hyperlink-->
@@ -172,37 +172,43 @@
             </Trigger>
         </Style.Triggers>
     </Style>
+
+
     <!--Focusvisual style of Navigate Button-->
-    <Style x:Key="NavigateButtonFocusVisualStyle">
-        <Setter Property="Control.Template">
-            <Setter.Value>
-                <ControlTemplate>
-                    <Border BorderBrush="#80000000" Width="32" Margin="-2" BorderThickness="1" CornerRadius="8">
-                        <Border.Effect>
-                            <DropShadowEffect ShadowDepth="0" BlurRadius="0" Color="#FFFFFF" Opacity="1" RenderingBias="Quality" Direction="0" />
-                        </Border.Effect>
-                    </Border>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
+    <!-- <Style x:Key="NavigateButtonFocusVisualStyle"> -->
+    <!--     <Setter Property="Control.Template"> -->
+    <!--         <Setter.Value> -->
+    <!--             <ControlTemplate> -->
+    <!--                 <Border BorderBrush="#80000000" Width="32" Margin="-2" BorderThickness="1" CornerRadius="8"> -->
+    <!--                     <Border.Effect> -->
+    <!--                         <DropShadowEffect ShadowDepth="0" BlurRadius="0" Color="#FFFFFF" Opacity="1" RenderingBias="Quality" Direction="0" /> -->
+    <!--                     </Border.Effect> -->
+    <!--                 </Border> -->
+    <!--             </ControlTemplate> -->
+    <!--         </Setter.Value> -->
+    <!--     </Setter> -->
+    <!-- </Style> -->
+
+
     <!--Focusvisual style of ShowAll Button-->
-    <Style x:Key="ShowAllFocusVisualStyle">
-        <Setter Property="Control.Template">
-            <Setter.Value>
-                <ControlTemplate>
-                    <Border BorderBrush="Black" Margin="-1" MinHeight="24" MinWidth="66" BorderThickness="1" CornerRadius="11.5">
-                    </Border>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
+    <!-- <Style x:Key="ShowAllFocusVisualStyle"> -->
+    <!--     <Setter Property="Control.Template"> -->
+    <!--         <Setter.Value> -->
+    <!--             <ControlTemplate> -->
+    <!--                 <Border BorderBrush="Black" Margin="-1" MinHeight="24" MinWidth="66" BorderThickness="1" CornerRadius="11.5"> -->
+    <!--                 </Border> -->
+    <!--             </ControlTemplate> -->
+    <!--         </Setter.Value> -->
+    <!--     </Setter> -->
+    <!-- </Style> -->
+
     <!--ShadowEffect of Showcase Demos-->
     <DropShadowEffect x:Key="ShowcaseDemosShadowEffect" 
                       Color="#0A60FF"
                       BlurRadius="3"
                       ShadowDepth="5"
                       Opacity="0.07"/>
+
     <!--Style of Listview of All Controls-->
     <Style x:Key="ListStyle" TargetType="{x:Type ListViewItem}">
         <Setter Property="Margin" Value="0"/>
@@ -235,55 +241,55 @@
     <Style x:Key="ProductListStyle" TargetType="{x:Type ListViewItem}" BasedOn="{StaticResource ListStyle}">
         <Setter Property="Margin" Value="8,1,8,1"/>
     </Style>
-    <Style x:Key="NavigationButtonStyle" TargetType="{x:Type Button}">
-        <Setter Property="Foreground" Value="#FFFFFF" />
-        <Setter Property="Background" Value="#80000000"/>
-        <Setter Property="BorderBrush" Value="#80ffffff"/>
-        <Setter Property="FocusVisualStyle" Value="{StaticResource NavigateButtonFocusVisualStyle}"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="{x:Type Button}">
-                    <Border
-                        x:Name="border"
-                        Height="50"
-                        Width="28"
-                        Background="{TemplateBinding Background}"
-                        BorderBrush="{TemplateBinding BorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        SnapsToDevicePixels="true">
-                        <ContentPresenter
-                            x:Name="contentPresenter" 
-                            Margin="{TemplateBinding Padding}"
-                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                            Focusable="False"
-                            RecognizesAccessKey="True"
-                            SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="#61000000" />
-                            <Setter Property="Background" Value="Transparent" />
-                            <Setter Property="BorderBrush" Value="Transparent" />
-                        </Trigger>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="#616263"/>
-                            <Setter Property="BorderBrush" Value="Transparent" />
-                        </Trigger>
-                        <Trigger Property="IsPressed" Value="True">
-                            <Setter Property="Background" Value="#616263"/>
-                            <Setter Property="BorderBrush" Value="Transparent" />
-                        </Trigger>
-                        <Trigger Property="IsFocused" Value="True">
-                            <Setter Property="Background" Value="#80000000"/>
-                            <Setter Property="BorderBrush" Value="Transparent" />
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
+    <!-- <Style x:Key="NavigationButtonStyle" TargetType="{x:Type Button}"> -->
+    <!--     <Setter Property="Foreground" Value="#FFFFFF" /> -->
+    <!--     <Setter Property="Background" Value="#80000000"/> -->
+    <!--     <Setter Property="BorderBrush" Value="#80ffffff"/> -->
+    <!--     <Setter Property="FocusVisualStyle" Value="{StaticResource NavigateButtonFocusVisualStyle}"/> -->
+    <!--     <Setter Property="Template"> -->
+    <!--         <Setter.Value> -->
+    <!--             <ControlTemplate TargetType="{x:Type Button}"> -->
+    <!--                 <Border -->
+    <!--                     x:Name="border" -->
+    <!--                     Height="50" -->
+    <!--                     Width="28" -->
+    <!--                     Background="{TemplateBinding Background}" -->
+    <!--                     BorderBrush="{TemplateBinding BorderBrush}" -->
+    <!--                     BorderThickness="1" -->
+    <!--                     CornerRadius="8" -->
+    <!--                     SnapsToDevicePixels="true"> -->
+    <!--                     <ContentPresenter -->
+    <!--                         x:Name="contentPresenter"  -->
+    <!--                         Margin="{TemplateBinding Padding}" -->
+    <!--                         HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" -->
+    <!--                         VerticalAlignment="{TemplateBinding VerticalContentAlignment}" -->
+    <!--                         Focusable="False" -->
+    <!--                         RecognizesAccessKey="True" -->
+    <!--                         SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" /> -->
+    <!--                 </Border> -->
+    <!--                 <ControlTemplate.Triggers> -->
+    <!--                     <Trigger Property="IsEnabled" Value="False"> -->
+    <!--                         <Setter Property="Foreground" Value="#61000000" /> -->
+    <!--                         <Setter Property="Background" Value="Transparent" /> -->
+    <!--                         <Setter Property="BorderBrush" Value="Transparent" /> -->
+    <!--                     </Trigger> -->
+    <!--                     <Trigger Property="IsMouseOver" Value="True"> -->
+    <!--                         <Setter Property="Background" Value="#616263"/> -->
+    <!--                         <Setter Property="BorderBrush" Value="Transparent" /> -->
+    <!--                     </Trigger> -->
+    <!--                     <Trigger Property="IsPressed" Value="True"> -->
+    <!--                         <Setter Property="Background" Value="#616263"/> -->
+    <!--                         <Setter Property="BorderBrush" Value="Transparent" /> -->
+    <!--                     </Trigger> -->
+    <!--                     <Trigger Property="IsFocused" Value="True"> -->
+    <!--                         <Setter Property="Background" Value="#80000000"/> -->
+    <!--                         <Setter Property="BorderBrush" Value="Transparent" /> -->
+    <!--                     </Trigger> -->
+    <!--                 </ControlTemplate.Triggers> -->
+    <!--             </ControlTemplate> -->
+    <!--         </Setter.Value> -->
+    <!--     </Setter> -->
+    <!-- </Style> -->
 
     <ControlTemplate x:Key="ThemeComboTemplate" TargetType="{x:Type syncfusion:ComboBoxAdv}">
         <Grid>
@@ -419,82 +425,84 @@
             </ItemsControl>
         </Grid>
     </ControlTemplate>
-    <ControlTemplate x:Key="MainWindowCloseButtonTemplate">
-        <Border
-            x:Name="closeborder"
-            Width="32"
-            Height="32"
-            Background="Transparent"
-            BorderBrush="Transparent"
-            BorderThickness="0"
-            SnapsToDevicePixels="true">
-            <Grid
-                x:Name="grid"
-                Width="16"
-                Height="16"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                SnapsToDevicePixels="true">
-                <Path
-                    Name="pathButton"
-                    Width="16"
-                    Height="16"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Data="M1.4139423,0L7.0029922,5.5845888 12.592018,0 14.006015,1.4149939 8.4180527,6.9985202 14.006,12.582007 12.591996,13.997001 7.0030056,8.4124444 1.4140122,13.997001 1.5026823E-05,12.582007 5.5879484,6.9985092 0,1.4149939z "
-                    Fill="{StaticResource ChromelessWindow.TitleBar.Button.Static.Glyph}"
-                    SnapsToDevicePixels="True"
-                    Stretch="Fill" />
-            </Grid>
-        </Border>
-        <ControlTemplate.Triggers>
-            <Trigger SourceName="closeborder" Property="IsMouseOver" Value="True">
-                <Setter TargetName="closeborder" Property="Background" Value="{StaticResource ChromelessWindow.TitleBar.Button.MouseOver.Background}" />
-            </Trigger>
-            <Trigger Property="Visibility" Value="Visible">
-                <Setter Property="MinHeight" Value="32" />
-                <Setter Property="MinWidth" Value="32" />
-            </Trigger>
-        </ControlTemplate.Triggers>
-    </ControlTemplate>
-    <ControlTemplate x:Key="MainWindowMinimizeButtonTemplate">
-        <Border
-            x:Name="minimizeborder"
-            Width="32"
-            Height="32"
-            Background="Transparent"
-            BorderBrush="Transparent"
-            BorderThickness="0"
-            SnapsToDevicePixels="true">
-            <Grid
-                x:Name="grid"
-                Width="16"
-                Height="16"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                SnapsToDevicePixels="true">
-                <Path
-                    Name="pathButton"
-                    Width="16"
-                    Height="2.3"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Data="M0,0L14,0 14,1.9999999 0,1.9999999z"
-                    Fill="{StaticResource ChromelessWindow.TitleBar.Button.Static.Glyph}"
-                    SnapsToDevicePixels="True"
-                    Stretch="Fill" />
-            </Grid>
-        </Border>
-        <ControlTemplate.Triggers>
-            <Trigger SourceName="minimizeborder" Property="IsMouseOver" Value="True">
-                <Setter TargetName="minimizeborder" Property="Background" Value="{StaticResource ChromelessWindow.TitleBar.Button.MouseOver.Background}" />
-            </Trigger>
-            <Trigger Property="Visibility" Value="Visible">
-                <Setter Property="MinHeight" Value="32" />
-                <Setter Property="MinWidth" Value="32" />
-            </Trigger>
-        </ControlTemplate.Triggers>
-    </ControlTemplate>
+
+
+    <!-- <ControlTemplate x:Key="MainWindowCloseButtonTemplate"> -->
+    <!--     <Border -->
+    <!--         x:Name="closeborder" -->
+    <!--         Width="32" -->
+    <!--         Height="32" -->
+    <!--         Background="Transparent" -->
+    <!--         BorderBrush="Transparent" -->
+    <!--         BorderThickness="0" -->
+    <!--         SnapsToDevicePixels="true"> -->
+    <!--         <Grid -->
+    <!--             x:Name="grid" -->
+    <!--             Width="16" -->
+    <!--             Height="16" -->
+    <!--             HorizontalAlignment="Center" -->
+    <!--             VerticalAlignment="Center" -->
+    <!--             SnapsToDevicePixels="true"> -->
+    <!--             <Path -->
+    <!--                 Name="pathButton" -->
+    <!--                 Width="16" -->
+    <!--                 Height="16" -->
+    <!--                 HorizontalAlignment="Center" -->
+    <!--                 VerticalAlignment="Center" -->
+    <!--                 Data="M1.4139423,0L7.0029922,5.5845888 12.592018,0 14.006015,1.4149939 8.4180527,6.9985202 14.006,12.582007 12.591996,13.997001 7.0030056,8.4124444 1.4140122,13.997001 1.5026823E-05,12.582007 5.5879484,6.9985092 0,1.4149939z " -->
+    <!--                 Fill="{StaticResource ChromelessWindow.TitleBar.Button.Static.Glyph}" -->
+    <!--                 SnapsToDevicePixels="True" -->
+    <!--                 Stretch="Fill" /> -->
+    <!--         </Grid> -->
+    <!--     </Border> -->
+    <!--     <ControlTemplate.Triggers> -->
+    <!--         <Trigger SourceName="closeborder" Property="IsMouseOver" Value="True"> -->
+    <!--             <Setter TargetName="closeborder" Property="Background" Value="{StaticResource ChromelessWindow.TitleBar.Button.MouseOver.Background}" /> -->
+    <!--         </Trigger> -->
+    <!--         <Trigger Property="Visibility" Value="Visible"> -->
+    <!--             <Setter Property="MinHeight" Value="32" /> -->
+    <!--             <Setter Property="MinWidth" Value="32" /> -->
+    <!--         </Trigger> -->
+    <!--     </ControlTemplate.Triggers> -->
+    <!-- </ControlTemplate> -->
+    <!-- <ControlTemplate x:Key="MainWindowMinimizeButtonTemplate"> -->
+    <!--     <Border -->
+    <!--         x:Name="minimizeborder" -->
+    <!--         Width="32" -->
+    <!--         Height="32" -->
+    <!--         Background="Transparent" -->
+    <!--         BorderBrush="Transparent" -->
+    <!--         BorderThickness="0" -->
+    <!--         SnapsToDevicePixels="true"> -->
+    <!--         <Grid -->
+    <!--             x:Name="grid" -->
+    <!--             Width="16" -->
+    <!--             Height="16" -->
+    <!--             HorizontalAlignment="Center" -->
+    <!--             VerticalAlignment="Center" -->
+    <!--             SnapsToDevicePixels="true"> -->
+    <!--             <Path -->
+    <!--                 Name="pathButton" -->
+    <!--                 Width="16" -->
+    <!--                 Height="2.3" -->
+    <!--                 HorizontalAlignment="Center" -->
+    <!--                 VerticalAlignment="Center" -->
+    <!--                 Data="M0,0L14,0 14,1.9999999 0,1.9999999z" -->
+    <!--                 Fill="{StaticResource ChromelessWindow.TitleBar.Button.Static.Glyph}" -->
+    <!--                 SnapsToDevicePixels="True" -->
+    <!--                 Stretch="Fill" /> -->
+    <!--         </Grid> -->
+    <!--     </Border> -->
+    <!--     <ControlTemplate.Triggers> -->
+    <!--         <Trigger SourceName="minimizeborder" Property="IsMouseOver" Value="True"> -->
+    <!--             <Setter TargetName="minimizeborder" Property="Background" Value="{StaticResource ChromelessWindow.TitleBar.Button.MouseOver.Background}" /> -->
+    <!--         </Trigger> -->
+    <!--         <Trigger Property="Visibility" Value="Visible"> -->
+    <!--             <Setter Property="MinHeight" Value="32" /> -->
+    <!--             <Setter Property="MinWidth" Value="32" /> -->
+    <!--         </Trigger> -->
+    <!--     </ControlTemplate.Triggers> -->
+    <!-- </ControlTemplate> -->
 
     <!--Style of ShowAll Button-->
     <Style x:Key="ShowAllButtonTemplate" TargetType="{x:Type Button}">
@@ -618,6 +626,8 @@
             </Trigger>
         </ControlTemplate.Triggers>
     </ControlTemplate>
+
+    
     <ControlTemplate x:Key="ProductsWindowCloseButtonTemplate">
         <Border
             x:Name="closeborder"

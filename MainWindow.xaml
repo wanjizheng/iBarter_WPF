@@ -14,15 +14,20 @@
     WindowStartupLocation="CenterScreen"
     mc:Ignorable="d"
     Icon="Images/iBarterIcon.ico"
-    TitleBarBackground="{Binding TitleBarBackground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-    TitleBarForeground="{Binding TitleBarForeground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
     TitleBarHeight="48"
     TitleFontSize="14"
+
+    TitleBarBackground="{Binding TitleBarBackground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+    TitleBarForeground="{Binding TitleBarForeground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+    CloseButtonTemplate="{DynamicResource ProductsWindowCloseButtonTemplate}"
+    MaximizeButtonTemplate="{DynamicResource ProductsWindowMaximizeButtonTemplate}"
+    MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
+    ResizeBorderThickness="0"
+    RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
     Title="iBarter" Height="868" Width="1254" Loaded="Window_Loaded">
     <syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- <ResourceDictionary Source="/syncfusion.demoscommon.wpf;component/Views/WindowStyle.xaml" /> -->
                 <ResourceDictionary Source="/View/WindowStyle.xaml"></ResourceDictionary>
             </ResourceDictionary.MergedDictionaries>
             <CollectionViewSource x:Key="ThemeList"
@@ -90,13 +95,13 @@
                     <!--Windows Menu-->
                     <MenuItem Header="Windows">
                         <MenuItem x:Name="MenuItem_BarterScanner" Header="Barter Scanner"
-                                  Tag="BarterScanner" Click="OnActivateWindow">
+                                  Tag="BarterScanner" Click="OnActivateWindow" Height="30" Width="180">
                             <MenuItem.Icon>
                                 <Image Source="Images\barter.png" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem x:Name="MenuItem_StorageManagement" Header="Storage Manager"
-                                  Tag="StorageManagement" Click="MenuItem_StorageManagement_Click">
+                                  Tag="StorageManagement" Click="MenuItem_StorageManagement_Click" Height="30" Width="180">
                             <MenuItem.Icon>
                                 <Image Source="Images\storage.png" />
                             </MenuItem.Icon>

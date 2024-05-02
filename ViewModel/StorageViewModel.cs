@@ -16,8 +16,17 @@ using System.Windows.Media;
 
 namespace iBarter.ViewModel {
     public class StorageViewModel : NotificationObject {
-        #region Constructor
+        /// <summary>
+        /// Gets or set the title bar background
+        /// </summary>
+        private Brush titleBarBackground = new SolidColorBrush(Color.FromRgb(43, 87, 154));
 
+        /// <summary>
+        /// Gets or set the title bar foreground
+        /// </summary>
+        private Brush titleBarForeground = new SolidColorBrush(Color.FromRgb(255, 255, 255));
+
+        #region Constructor
         /// <summary>
         /// Initializes a new instance of the <see cref="StorViewModel"/> class.
         /// </summary>
@@ -72,6 +81,28 @@ namespace iBarter.ViewModel {
             }
         }
 
+
+        /// <summary>
+        /// Gets or set the title bar background
+        /// </summary>
+        public Brush TitleBarBackground {
+            get { return titleBarBackground; }
+            set {
+                titleBarBackground = value;
+                this.RaisePropertyChanged("TitleBarBackground");
+            }
+        }
+
+        /// <summary>
+        /// Gets or set the title bar foreground
+        /// </summary>
+        public Brush TitleBarForeground {
+            get { return titleBarForeground; }
+            set {
+                titleBarForeground = value;
+                this.RaisePropertyChanged("TitleBarForeground");
+            }
+        }
         #endregion
 
         #region Method

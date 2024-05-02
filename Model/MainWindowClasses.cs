@@ -1,15 +1,11 @@
-using System;
-using System.Collections.Generic;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-namespace iBarter
-{
+namespace iBarter {
     /// <summary>
     /// Specifies the launch mode of  demo.
     /// </summary>    
-    public enum DemoLauchMode
-    {
+    public enum DemoLauchMode {
         /// <summary>
         /// To load demo inside the sample browser 
         /// </summary>
@@ -24,8 +20,7 @@ namespace iBarter
     /// <summary>
     /// Specifies the sample status
     /// </summary>
-    public enum Tag
-    {
+    public enum Tag {
         /// <summary>
         /// No changes done in your demo
         /// </summary>
@@ -46,8 +41,7 @@ namespace iBarter
     /// <summary>
     /// Determine the whether main window theme should traverse to the your demos in the sample browser
     /// </summary>
-    public enum ThemeMode
-    {
+    public enum ThemeMode {
         /// <summary>
         /// Main window theme will not apply to your demos.
         /// </summary>
@@ -66,8 +60,7 @@ namespace iBarter
     /// <summary>
     /// Provides information about the Products.
     /// </summary>
-    public abstract class ProductDemo
-    {
+    public abstract class ProductDemo {
         private object listViewImagePathData;
 
         /// <summary>
@@ -83,8 +76,7 @@ namespace iBarter
         /// <summary>
         /// Gets or set a value of ImagePathData to represent the control in listview.
         /// </summary>
-        public object ListViewImagePathData
-        {
+        public object ListViewImagePathData {
             get { return listViewImagePathData; }
             set { listViewImagePathData = value; }
         }
@@ -93,7 +85,7 @@ namespace iBarter
         /// Gets or set a value of HeaderImageSource which represents the ProductCategory in ListView.
         /// </summary>
         public BitmapImage HeaderImageSource { get; set; }
-       
+
         /// <summary>
         /// Gets or sets the control description
         /// </summary>
@@ -126,16 +118,12 @@ namespace iBarter
         /// <summary>
         /// Gets or sets DemoLaunchMode which denotes whether to load Product demos inside sample browser or in child window.
         /// </summary>
-        public DemoLauchMode DemoLauchMode
-        {
-            get
-            {
+        public DemoLauchMode DemoLauchMode {
+            get {
                 return demoLauchMode;
             }
-            set
-            {
-                if (demoLauchMode != value)
-                {
+            set {
+                if (demoLauchMode != value) {
                     this.demoLauchMode = value;
                 }
             }
@@ -151,8 +139,7 @@ namespace iBarter
     /// <summary>
     /// Provides information about the product demos.
     /// </summary>
-    public class DemoInfo
-    {
+    public class DemoInfo {
         /// <summary>
         /// Gets or sets the sample's whatsnew description.
         /// </summary>
@@ -187,20 +174,15 @@ namespace iBarter
         /// Specify your sample title which is displayed in sample browser using this property
         /// </summary>
         private string title = null;
-        public string Title
-        { 
-            get
-            {
-                if (title == null)
-                {
+        public string Title {
+            get {
+                if (title == null) {
                     return SampleName;
                 }
                 return title;
             }
-            set
-            {
-                if (title != value)
-                {
+            set {
+                if (title != value) {
                     this.title = value;
                 }
             }
@@ -227,7 +209,7 @@ namespace iBarter
         /// </summary>
         public DemoLauchMode DemoLauchMode { get; set; }
 
-        private ThemeMode themeMode= ThemeMode.Inherit ;
+        private ThemeMode themeMode = ThemeMode.Inherit;
 
         /// <summary>
         /// Gets or sets the value indicating whether the busy indicator needs to display or not while load the demo.
@@ -237,16 +219,12 @@ namespace iBarter
         /// <summary>
         /// Gets or sets the value determine the whether main window theme should traverse to the your demos in the sample browser
         /// </summary>
-        public ThemeMode ThemeMode
-        {
-            get
-            {
+        public ThemeMode ThemeMode {
+            get {
                 return themeMode;
             }
-            set
-            {
-                if (themeMode != value)
-                {
+            set {
+                if (themeMode != value) {
                     this.themeMode = value;
                 }
             }
@@ -260,11 +238,9 @@ namespace iBarter
         /// <summary>
         /// Gets or sets the value indicating whether the busy indicator needs to display or not while load the demo.
         /// </summary>
-        public bool ShowBusyIndicator
-        {
+        public bool ShowBusyIndicator {
             get { return showBusyIndicator; }
-            set
-            {
+            set {
                 showBusyIndicator = value;
             }
         }
@@ -276,7 +252,7 @@ namespace iBarter
         /// Gets or sets a collection of documentation items.
         /// </summary>
         public List<Documentation> Documentations { get; set; }
-        
+
         /// <summary>
         /// Gets or sets a collection of subdemo items.
         /// </summary>
@@ -286,8 +262,7 @@ namespace iBarter
     /// <summary>
     /// This class represents documentation with content and a page URI.
     /// </summary>
-    public class Documentation
-    {
+    public class Documentation {
         /// <summary>
         /// A property that represents the content or text associated with the link.
         /// </summary>
@@ -301,8 +276,7 @@ namespace iBarter
     /// <summary>
     /// Provide information about the product and product demos.
     /// </summary>
-    public class ProductInfo
-    {
+    public class ProductInfo {
         /// <summary>
         /// Gets or sets the sample name
         /// </summary>
@@ -319,15 +293,13 @@ namespace iBarter
         public DemoInfo ProductDemoInfo { get; set; }
     }
 
-    
-    public class Palette
-    {
+
+    public class Palette {
         private string name;
         /// <summary>
         /// Denotes the palette name
         /// </summary>
-        public string Name
-        {
+        public string Name {
             get { return name; }
             set { name = value; }
         }
@@ -336,8 +308,7 @@ namespace iBarter
         /// <summary>
         /// Denotes the Theme Name
         /// </summary>
-        public string Theme
-        {
+        public string Theme {
             get { return theme; }
             set { theme = value; }
         }
@@ -346,8 +317,7 @@ namespace iBarter
         /// <summary>
         /// Denotes the palette primary background brush
         /// </summary>
-        public Brush PrimaryBackground
-        {
+        public Brush PrimaryBackground {
             get { return primaryBackground; }
             set { primaryBackground = value; }
         }
@@ -356,8 +326,7 @@ namespace iBarter
         /// <summary>
         /// Denotes the palette primary foreground brush
         /// </summary>
-        public Brush PrimaryForeground
-        {
+        public Brush PrimaryForeground {
             get { return primaryForeground; }
             set { primaryForeground = value; }
         }
@@ -366,8 +335,7 @@ namespace iBarter
         /// <summary>
         /// Denotes the palette primay alternate background brush
         /// </summary>
-        public Brush PrimaryBackgroundAlt
-        {
+        public Brush PrimaryBackgroundAlt {
             get { return primaryBackgroundAlt; }
             set { primaryBackgroundAlt = value; }
         }
@@ -376,22 +344,19 @@ namespace iBarter
         /// <summary>
         /// denotes the name to be displayed in the UI
         /// </summary>
-        public string DisplayName
-        {
+        public string DisplayName {
             get { return displayName; }
             set { displayName = value; }
         }
 
     }
 
-    public class Themes
-    {
+    public class Themes {
         private string themeName;
         /// <summary>
         /// Denotes the name of the theme
         /// </summary>
-        public string ThemeName
-        {
+        public string ThemeName {
             get { return themeName; }
             set { themeName = value; }
         }
@@ -400,8 +365,7 @@ namespace iBarter
         /// <summary>
         /// Denotes the Type of the theme
         /// </summary>
-        public string ThemeType
-        {
+        public string ThemeType {
             get { return themeType; }
             set { themeType = value; }
         }
@@ -410,8 +374,7 @@ namespace iBarter
         /// <summary>
         /// Denotes the color to be filled in the ellipse
         /// </summary>
-        public Brush EllipseFill
-        {
+        public Brush EllipseFill {
             get { return ellipsefill; }
             set { ellipsefill = value; }
         }
@@ -420,8 +383,7 @@ namespace iBarter
         /// <summary>
         /// denotes the color to be filled in the stroke of the ellipse
         /// </summary>
-        public Brush EllipseStroke
-        {
+        public Brush EllipseStroke {
             get { return ellipsestroke; }
             set { ellipsestroke = value; }
         }
@@ -429,8 +391,7 @@ namespace iBarter
         /// <summary>
         /// denotes the color to be applied in the path
         /// </summary>
-        public Brush PathFill
-        {
+        public Brush PathFill {
             get { return pathfill; }
             set { pathfill = value; }
         }
@@ -439,8 +400,7 @@ namespace iBarter
         /// <summary>
         /// denotes the name to be displayed in the UI
         /// </summary>
-        public string DisplayName
-        {
+        public string DisplayName {
             get { return displayName; }
             set { displayName = value; }
         }

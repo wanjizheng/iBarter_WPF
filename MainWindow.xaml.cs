@@ -1,12 +1,12 @@
 ﻿using iBarter.View;
 using PureDM.Logging;
-using System.Runtime.InteropServices;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Threading;
 using Syncfusion.SfSkinManager;
 using Syncfusion.Windows.Shared;
+using System.Runtime.InteropServices;
+using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace iBarter {
     /// <summary>
@@ -17,7 +17,6 @@ namespace iBarter {
             InitializeComponent();
             this.DataContext = App.myMainWVM;
             App.myMainWVM.BlurVisibility = Visibility.Visible;
-            SfSkinManager.ApplyStylesOnApplication = true;
             //SfSkinManager.SetTheme(this, new Theme("Windows11Light"));
             this.WindowState = WindowState.Minimized;
 
@@ -29,7 +28,7 @@ namespace iBarter {
             thread.SetApartmentState(ApartmentState.STA); // 设置线程为 STA
             thread.IsBackground = true;
             thread.Start();
-
+            App.myMainWVM.OnSelectedProductChanged();
             //var mapCenterPoint = new MapPoint(14, 21, SpatialReferences.Wgs84);
             //MainMapView.SetViewpoint(new Viewpoint(mapCenterPoint, 52541284));
         }
@@ -156,12 +155,10 @@ namespace iBarter {
                     timer.Start();
                 }
                 else {
-                    App.myCFun.Log("Cannot find the game process.",Brushes.Red);
+                    App.myCFun.Log("Cannot find the game process.", Brushes.Red);
                 }
 
-                //this.Opacity = 100;
-
-                App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
+                SfSkinManager.ApplyStylesOnApplication = true;
                 this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
                 this.WindowState = WindowState.Normal;
                 double screenWidth = SystemParameters.PrimaryScreenWidth;
@@ -170,10 +167,7 @@ namespace iBarter {
                 double windowHeight = this.Height;
                 this.Left = (screenWidth / 2) - (windowWidth / 2);
                 this.Top = (screenHeight / 2) - (windowHeight / 2);
-
-                App.myMainWVM.OnSelectedProductChanged();
-
-
+                App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
             }
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);

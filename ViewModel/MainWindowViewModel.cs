@@ -8,26 +8,17 @@
 
 #endregion
 
+using iBarter.View;
 using Syncfusion.SfSkinManager;
-using Syncfusion.UI.Xaml.NavigationDrawer;
-using Syncfusion.Windows.Controls.Input;
+using Syncfusion.UI.Xaml.Diagram;
 using Syncfusion.Windows.Shared;
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Xml;
-using iBarter.View;
-using Syncfusion.UI.Xaml.Diagram;
 
 namespace iBarter.ViewModel {
     public class MainWindowViewModel : NotificationObject {
@@ -282,11 +273,10 @@ namespace iBarter.ViewModel {
             SelectedPalette = Palettes.Where(x => x.Name.Equals("Default")).ToList<Palette>()[0];
             UpdateTitleBarBackgroundandForeground(selectedthemename);
 
-           
-            //if (ThemeChanged != null) {
-                ThemeChanged();
-            //}
 
+            if (ThemeChanged != null) {
+                ThemeChanged();
+            }
         }
 
 
@@ -308,8 +298,18 @@ namespace iBarter.ViewModel {
         /// </summary>
         /// <param name="selectedTheme">Selected Theme</param>
         private void OnThemeChanged(string selectedTheme) {
-            var productDemosWindow = Application.Current.Windows.OfType<MainWindow>();
-            foreach (var window in productDemosWindow) {
+            var mainWindow = Application.Current.Windows.OfType<MainWindow>();
+            foreach (var window in mainWindow) {
+                SfSkinManager.SetTheme(window, new Theme() { ThemeName = SelectedThemeName });
+            }
+
+            var barterScannerWindow = Application.Current.Windows.OfType<BarterScanner>();
+            foreach (var window in barterScannerWindow) {
+                SfSkinManager.SetTheme(window, new Theme() { ThemeName = SelectedThemeName });
+            }
+
+            var storageWindow = Application.Current.Windows.OfType<StorageManagement>();
+            foreach (var window in storageWindow) {
                 SfSkinManager.SetTheme(window, new Theme() { ThemeName = SelectedThemeName });
             }
 
@@ -340,10 +340,22 @@ namespace iBarter.ViewModel {
             if (selectedTheme == "SystemTheme") {
                 TitleBarBackground = SystemColors.HighlightBrush;
                 TitleBarForeground = SystemColors.HighlightTextBrush;
+
+                App.myStorageVM.TitleBarBackground = SystemColors.HighlightBrush;
+                App.myStorageVM.TitleBarForeground = SystemColors.HighlightTextBrush;
+
+                App.mySVM.TitleBarBackground = SystemColors.HighlightBrush;
+                App.mySVM.TitleBarForeground = SystemColors.HighlightTextBrush;
             }
             else {
                 TitleBarBackground = SelectedPalette.PrimaryBackground;
                 TitleBarForeground = SelectedPalette.PrimaryForeground;
+
+                App.myStorageVM.TitleBarBackground = SelectedPalette.PrimaryBackground;
+                App.myStorageVM.TitleBarForeground = SelectedPalette.PrimaryForeground;
+
+                App.mySVM.TitleBarBackground = SelectedPalette.PrimaryBackground;
+                App.mySVM.TitleBarForeground = SelectedPalette.PrimaryForeground;
             }
         }
 
@@ -388,28 +400,28 @@ namespace iBarter.ViewModel {
             }
         }
 
-//
-//         /// <summary>
-//         /// Method used to excute   <see cref="MainWindow"/> loaded event
-//         /// </summary>
-//         /// <param name="param"></param>
-//         private void WindowLoaded(object param) {
-// #if DEBUG
-//             if (CanAutomate) {
-//                 try {
-//                     BindingErrorAutomation.RunBindingErrorAutomation(this);
-//                 }
-//                 catch (Exception exception) {
-//                     if (this.SelectedProduct != null && this.SelectedSample != null) {
-//                         ErrorLogging.LogError("Product Sample\\" + this.SelectedProduct.Product + "\\" + this.SelectedSample.SampleName + "@@" + exception.Message + " StackTrace: " + exception.StackTrace + " Exception Source: " + exception.Source);
-//                     }
-//                     else if (this.SelectedShowcaseSample != null) {
-//                         ErrorLogging.LogError("Product ShowCase\\" + this.SelectedShowcaseSample.SampleName + "\\" + this.SelectedShowcaseSample.SampleName + "@@" + exception.Message + " StackTrace: " + exception.StackTrace + " Exception Source: " + exception.Source);
-//                     }
-//                 }
-//             }
-// #endif
-//         }
+        //
+        //         /// <summary>
+        //         /// Method used to excute   <see cref="MainWindow"/> loaded event
+        //         /// </summary>
+        //         /// <param name="param"></param>
+        //         private void WindowLoaded(object param) {
+        // #if DEBUG
+        //             if (CanAutomate) {
+        //                 try {
+        //                     BindingErrorAutomation.RunBindingErrorAutomation(this);
+        //                 }
+        //                 catch (Exception exception) {
+        //                     if (this.SelectedProduct != null && this.SelectedSample != null) {
+        //                         ErrorLogging.LogError("Product Sample\\" + this.SelectedProduct.Product + "\\" + this.SelectedSample.SampleName + "@@" + exception.Message + " StackTrace: " + exception.StackTrace + " Exception Source: " + exception.Source);
+        //                     }
+        //                     else if (this.SelectedShowcaseSample != null) {
+        //                         ErrorLogging.LogError("Product ShowCase\\" + this.SelectedShowcaseSample.SampleName + "\\" + this.SelectedShowcaseSample.SampleName + "@@" + exception.Message + " StackTrace: " + exception.StackTrace + " Exception Source: " + exception.Source);
+        //                     }
+        //                 }
+        //             }
+        // #endif
+        //         }
 
         /// <summary>
         /// Checks if the source string contains a search string (ignoring case and spaces) and returns a boolean result.
@@ -459,61 +471,61 @@ namespace iBarter.ViewModel {
         public void OnPaletteChanged(string ThemeName) {
             switch (ThemeName) {
                 case "Windows11Light": {
-                    changePalette("Syncfusion.Themes.Windows11Light.WPF.Windows11LightThemeSettings, Syncfusion.Themes.Windows11Light.WPF", "Syncfusion.Themes.Windows11Light.WPF.Windows11Palette, Syncfusion.Themes.Windows11Light.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.Windows11Light.WPF.Windows11LightThemeSettings, Syncfusion.Themes.Windows11Light.WPF", "Syncfusion.Themes.Windows11Light.WPF.Windows11Palette, Syncfusion.Themes.Windows11Light.WPF", ThemeName);
+                        break;
+                    }
                 case "Windows11Dark": {
-                    changePalette("Syncfusion.Themes.Windows11Dark.WPF.Windows11DarkThemeSettings, Syncfusion.Themes.Windows11Dark.WPF", "Syncfusion.Themes.Windows11Dark.WPF.Windows11Palette, Syncfusion.Themes.Windows11Dark.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.Windows11Dark.WPF.Windows11DarkThemeSettings, Syncfusion.Themes.Windows11Dark.WPF", "Syncfusion.Themes.Windows11Dark.WPF.Windows11Palette, Syncfusion.Themes.Windows11Dark.WPF", ThemeName);
+                        break;
+                    }
                 case "FluentLight": {
-                    changePalette("Syncfusion.Themes.FluentLight.WPF.FluentLightThemeSettings, Syncfusion.Themes.FluentLight.WPF", "Syncfusion.Themes.FluentLight.WPF.FluentPalette, Syncfusion.Themes.FluentLight.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.FluentLight.WPF.FluentLightThemeSettings, Syncfusion.Themes.FluentLight.WPF", "Syncfusion.Themes.FluentLight.WPF.FluentPalette, Syncfusion.Themes.FluentLight.WPF", ThemeName);
+                        break;
+                    }
                 case "FluentDark": {
-                    changePalette("Syncfusion.Themes.FluentDark.WPF.FluentDarkThemeSettings, Syncfusion.Themes.FluentDark.WPF", "Syncfusion.Themes.FluentDark.WPF.FluentPalette, Syncfusion.Themes.FluentDark.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.FluentDark.WPF.FluentDarkThemeSettings, Syncfusion.Themes.FluentDark.WPF", "Syncfusion.Themes.FluentDark.WPF.FluentPalette, Syncfusion.Themes.FluentDark.WPF", ThemeName);
+                        break;
+                    }
                 case "MaterialLight": {
-                    changePalette("Syncfusion.Themes.MaterialLight.WPF.MaterialLightThemeSettings, Syncfusion.Themes.MaterialLight.WPF", "Syncfusion.Themes.MaterialLight.WPF.MaterialPalette, Syncfusion.Themes.MaterialLight.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.MaterialLight.WPF.MaterialLightThemeSettings, Syncfusion.Themes.MaterialLight.WPF", "Syncfusion.Themes.MaterialLight.WPF.MaterialPalette, Syncfusion.Themes.MaterialLight.WPF", ThemeName);
+                        break;
+                    }
                 case "MaterialLightBlue": {
-                    changePalette("Syncfusion.Themes.MaterialLightBlue.WPF.MaterialLightBlueThemeSettings, Syncfusion.Themes.MaterialLightBlue.WPF", "Syncfusion.Themes.MaterialLightBlue.WPF.MaterialPalette, Syncfusion.Themes.MaterialLightBlue.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.MaterialLightBlue.WPF.MaterialLightBlueThemeSettings, Syncfusion.Themes.MaterialLightBlue.WPF", "Syncfusion.Themes.MaterialLightBlue.WPF.MaterialPalette, Syncfusion.Themes.MaterialLightBlue.WPF", ThemeName);
+                        break;
+                    }
                 case "MaterialDark": {
-                    changePalette("Syncfusion.Themes.MaterialDark.WPF.MaterialDarkThemeSettings, Syncfusion.Themes.MaterialDark.WPF", "Syncfusion.Themes.MaterialDark.WPF.MaterialPalette, Syncfusion.Themes.MaterialDark.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.MaterialDark.WPF.MaterialDarkThemeSettings, Syncfusion.Themes.MaterialDark.WPF", "Syncfusion.Themes.MaterialDark.WPF.MaterialPalette, Syncfusion.Themes.MaterialDark.WPF", ThemeName);
+                        break;
+                    }
                 case "MaterialDarkBlue": {
-                    changePalette("Syncfusion.Themes.MaterialDarkBlue.WPF.MaterialDarkBlueThemeSettings, Syncfusion.Themes.MaterialDarkBlue.WPF", "Syncfusion.Themes.MaterialDarkBlue.WPF.MaterialPalette, Syncfusion.Themes.MaterialDarkBlue.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.MaterialDarkBlue.WPF.MaterialDarkBlueThemeSettings, Syncfusion.Themes.MaterialDarkBlue.WPF", "Syncfusion.Themes.MaterialDarkBlue.WPF.MaterialPalette, Syncfusion.Themes.MaterialDarkBlue.WPF", ThemeName);
+                        break;
+                    }
                 case "Office2019Colorful": {
-                    changePalette("Syncfusion.Themes.Office2019Colorful.WPF.Office2019ColorfulThemeSettings, Syncfusion.Themes.Office2019Colorful.WPF", "Syncfusion.Themes.Office2019Colorful.WPF.Office2019Palette, Syncfusion.Themes.Office2019Colorful.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.Office2019Colorful.WPF.Office2019ColorfulThemeSettings, Syncfusion.Themes.Office2019Colorful.WPF", "Syncfusion.Themes.Office2019Colorful.WPF.Office2019Palette, Syncfusion.Themes.Office2019Colorful.WPF", ThemeName);
+                        break;
+                    }
                 case "Office2019Black": {
-                    changePalette("Syncfusion.Themes.Office2019Black.WPF.Office2019BlackThemeSettings, Syncfusion.Themes.Office2019Black.WPF", "Syncfusion.Themes.Office2019Black.WPF.Office2019Palette, Syncfusion.Themes.Office2019Black.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.Office2019Black.WPF.Office2019BlackThemeSettings, Syncfusion.Themes.Office2019Black.WPF", "Syncfusion.Themes.Office2019Black.WPF.Office2019Palette, Syncfusion.Themes.Office2019Black.WPF", ThemeName);
+                        break;
+                    }
                 case "Office2019White": {
-                    changePalette("Syncfusion.Themes.Office2019White.WPF.Office2019WhiteThemeSettings, Syncfusion.Themes.Office2019White.WPF", "Syncfusion.Themes.Office2019White.WPF.Office2019Palette, Syncfusion.Themes.Office2019White.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.Office2019White.WPF.Office2019WhiteThemeSettings, Syncfusion.Themes.Office2019White.WPF", "Syncfusion.Themes.Office2019White.WPF.Office2019Palette, Syncfusion.Themes.Office2019White.WPF", ThemeName);
+                        break;
+                    }
                 case "Office2019DarkGray": {
-                    changePalette("Syncfusion.Themes.Office2019DarkGray.WPF.Office2019DarkGrayThemeSettings, Syncfusion.Themes.Office2019DarkGray.WPF", "Syncfusion.Themes.Office2019DarkGray.WPF.Office2019Palette, Syncfusion.Themes.Office2019DarkGray.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.Office2019DarkGray.WPF.Office2019DarkGrayThemeSettings, Syncfusion.Themes.Office2019DarkGray.WPF", "Syncfusion.Themes.Office2019DarkGray.WPF.Office2019Palette, Syncfusion.Themes.Office2019DarkGray.WPF", ThemeName);
+                        break;
+                    }
                 case "Office2019HighContrast": {
-                    changePalette("Syncfusion.Themes.Office2019HighContrast.WPF.Office2019HighContrastThemeSettings, Syncfusion.Themes.Office2019HighContrast.WPF", "Syncfusion.Themes.Office2019HighContrast.WPF.HighContrastPalette, Syncfusion.Themes.Office2019HighContrast.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.Office2019HighContrast.WPF.Office2019HighContrastThemeSettings, Syncfusion.Themes.Office2019HighContrast.WPF", "Syncfusion.Themes.Office2019HighContrast.WPF.HighContrastPalette, Syncfusion.Themes.Office2019HighContrast.WPF", ThemeName);
+                        break;
+                    }
                 case "Office2019HighContrastWhite": {
-                    changePalette("Syncfusion.Themes.Office2019HighContrastWhite.WPF.Office2019HighContrastWhiteThemeSettings, Syncfusion.Themes.Office2019HighContrastWhite.WPF", "Syncfusion.Themes.Office2019HighContrastWhite.WPF.HighContrastPalette, Syncfusion.Themes.Office2019HighContrastWhite.WPF", ThemeName);
-                    break;
-                }
+                        changePalette("Syncfusion.Themes.Office2019HighContrastWhite.WPF.Office2019HighContrastWhiteThemeSettings, Syncfusion.Themes.Office2019HighContrastWhite.WPF", "Syncfusion.Themes.Office2019HighContrastWhite.WPF.HighContrastPalette, Syncfusion.Themes.Office2019HighContrastWhite.WPF", ThemeName);
+                        break;
+                    }
             }
 
             OnThemeChanged(ThemeName);
@@ -526,9 +538,7 @@ namespace iBarter.ViewModel {
         /// <param name="theme">Name of the selected theme</param>
         private void changePalette(string themeType, string paletteType, string theme) {
             object themeSettings = Activator.CreateInstance(Type.GetType(themeType));
-            if (SelectedPalette == null) {
-                SelectedPalette = Palettes.Where(x => x.Name.Equals("Default")).ToList<Palette>()[0];
-            }
+
             themeSettings.GetType().GetRuntimeProperty("Palette").SetValue(themeSettings, Enum.Parse(Type.GetType(paletteType), SelectedPalette.Name));
             SfSkinManager.RegisterThemeSettings(theme, (IThemeSetting)themeSettings);
         }
