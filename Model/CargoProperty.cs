@@ -35,6 +35,7 @@ namespace iBarter.Model {
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
+#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
             if (App.myfmMain != null) {
@@ -52,6 +53,7 @@ namespace iBarter.Model {
                 SaveData();
             }
         }
+#pragma warning restore CS8625 // Cannot convert null literal to non-nullable reference type.
 
         private void SaveData() {
             try {
