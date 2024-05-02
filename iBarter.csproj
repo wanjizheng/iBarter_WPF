@@ -12,6 +12,7 @@
 	<RuntimeIdentifier>win-x86</RuntimeIdentifier>
 	<PackageIcon>iBarterIcon.ico</PackageIcon>
 	<ApplicationIcon>Images\iBarterIcon.ico</ApplicationIcon>
+	<ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   
 <PropertyGroup Condition="'$(Configuration)'=='Debug'">
