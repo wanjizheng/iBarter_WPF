@@ -32,7 +32,7 @@ There are six buttons on the Planner window, from the left to the right, they ar
 
 Columns in the table are:
 1. Group: Group number.
-2. LV: Beter item level.
+2. LV: Barter item level.
 3. CK: Tick this after you finish it; this will remove the item from the Map.
 4. Eq.: Exchange quantity. The number of times you can barter this item.
 5. No.: Required item number.
