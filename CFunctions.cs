@@ -19,10 +19,26 @@ using SystemColors = System.Drawing.SystemColors;
 
 namespace iBarter {
     public class CFunctions {
+        private static FontType gameFontType = FontType.StrongSword;
+
+        public CFunctions(FontType _font = FontType.StrongSword) {
+            gameFontType = _font;
+        }
+
         public enum Mode {
             DmSoft,
             OpenCV,
             Both
+        }
+
+        public enum FontType {
+            DejaVuSans,
+            StrongSword
+        }
+
+        public FontType GameFont {
+            get { return gameFontType; }
+            set { gameFontType = value; }
         }
 
         public void Log(string _message, Brush _color) {
@@ -60,9 +76,9 @@ namespace iBarter {
         public void downloadMap() {
             try {
                 for (var x = 0; x < 127; x++)
-                    for (var y = 0; y < 127; y++)
-                        DownloadMapImage("https://www.somethinglovely.net/bdo/tiles2/15/" + x + "_" + y + ".jpg",
-                            "D:\\Downloads\\Maps\\" + x + "_" + y + ".jpg", ImageFormat.Jpeg);
+                for (var y = 0; y < 127; y++)
+                    DownloadMapImage("https://www.somethinglovely.net/bdo/tiles2/15/" + x + "_" + y + ".jpg",
+                        "D:\\Downloads\\Maps\\" + x + "_" + y + ".jpg", ImageFormat.Jpeg);
             }
             catch (ExternalException) {
                 // Something is wrong with Format -- Maybe required Format is not 
@@ -98,11 +114,11 @@ namespace iBarter {
             var imageHeights = new ArrayList();
 
             for (var x = 0; x < 127; x++)
-                for (var y = 0; y < 127; y++) {
-                    var img = Image.FromFile(folderName + "\\" + x + "_" + y + ".jpg");
-                    g.DrawImage(img, x * img0.Width, y * img0.Height);
-                    img.Dispose();
-                }
+            for (var y = 0; y < 127; y++) {
+                var img = Image.FromFile(folderName + "\\" + x + "_" + y + ".jpg");
+                g.DrawImage(img, x * img0.Width, y * img0.Height);
+                img.Dispose();
+            }
 
             //img3.Save("E:\\map.jpg",System.Drawing.Imaging.ImageFormat.Jpeg);
 
@@ -371,11 +387,32 @@ namespace iBarter {
             int intY2 = pointPlusAnchor.Y + 60;
             PureDM.PureDM.myDM.Capture(intX1, intY1, intX2, intY2, "barterItems.bmp");
 
+
+            string strParleyPath = "\\Images\\Parley.bmp";
+
+            if (GameFont == FontType.DejaVuSans) {
+                strParleyPath = "\\Images\\Parley2.bmp";
+            }
+
             PointPlus pointPlusParley = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
-                "\\Images\\Parley.bmp", 0.8, CV.Mode.OpenCV, false);
+                strParleyPath, 0.8, CV.Mode.OpenCV, false);
+
+            if (pointPlusParley.IsEmpty) {
+                pointPlusParley = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
+                    "\\Images\\Parley2.bmp", 0.8, CV.Mode.OpenCV, false);
+                GameFont = FontType.DejaVuSans;
+            }
+
+
+            string strRequiredPath = "\\Images\\Required.bmp";
+
+            if (GameFont == FontType.DejaVuSans) {
+                strRequiredPath = "\\Images\\Required2.bmp";
+            }
 
             PointPlus pointPlusRequired = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
-                "\\Images\\Required.bmp", 0.8, CV.Mode.OpenCV, false);
+                strRequiredPath, 0.8, CV.Mode.OpenCV, false);
+
 
             string strParley = PureDM.PureDM.myCV.OCRString(pointPlusParley.X + pointPlusParley.Size.Width,
                 pointPlusParley.Y, pointPlusRequired.X, pointPlusParley.Y + pointPlusParley.Size.Height,
@@ -390,9 +427,15 @@ namespace iBarter {
             catch (Exception e) {
             }
 
+            string strRemainingPath = "\\Images\\Remaining.bmp";
+
+            if (GameFont == FontType.DejaVuSans) {
+                strRemainingPath = "\\Images\\Remaining2.bmp";
+            }
+
             PointPlus pointPlusRemaining = PureDM.PureDM.myCV.FindPicture(0,
                 pointPlusAnchor.Y + pointPlusAnchor.Size.Height, App.myPureDM.WindowWidth, pointPlusAnchor.Y + 60,
-                "\\Images\\Remaining.bmp", 0.8, CV.Mode.OpenCV, false);
+                strRemainingPath, 0.8, CV.Mode.OpenCV, false);
 
 
             string strRemaining = PureDM.PureDM.myCV.OCRString(pointPlusRemaining.X + pointPlusRemaining.Size.Width,
@@ -407,7 +450,7 @@ namespace iBarter {
             }
 
             if (IslandEnum(strIsland) == EnumLists.Island.UnKnown) {
-                App.myCFun.Log("Unknown islands! Double check your result!", Brushes.Red);
+                App.myCFun.Log("Unknown islands! Double check your result! => " + strIsland, Brushes.Red);
             }
 
             //Islands myIslands = new Islands(IslandEnum(strIsland), intParley, intRemaining);
@@ -422,7 +465,7 @@ namespace iBarter {
 
             myBarter.IsLand = myIslands;
 
-            Log("Identified island:" + myIslands.Island, Brushes.OrangeRed);
+            Log("Identified island: " + myIslands.Island, Brushes.OrangeRed);
 
             //List<Thread> listThread = new List<Thread>();
             //////////////////////////////////////////////
@@ -434,8 +477,6 @@ namespace iBarter {
             //         listPointPlus.Add(myPP);
             //     }
             // });
-
-
 
 
             // await Task.Run(() => {

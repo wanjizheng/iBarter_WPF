@@ -214,8 +214,11 @@
     <None Remove="Resources\Images\Items\9492.bmp" />
     <None Remove="Resources\Images\Items\9733.bmp" />
     <None Remove="Resources\Images\Parley.bmp" />
+    <None Remove="Resources\Images\Parley2.bmp" />
     <None Remove="Resources\Images\Remaining.bmp" />
+    <None Remove="Resources\Images\Remaining2.bmp" />
     <None Remove="Resources\Images\Required.bmp" />
+    <None Remove="Resources\Images\Required2.bmp" />
     <None Remove="Resources\Islands.csv" />
     <None Remove="Resources\Items.csv" />
     <None Remove="Resources\Storage.csv" />
@@ -751,10 +754,19 @@
     <Content Include="Resources\Images\Parley.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Images\Parley2.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\Images\Remaining.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Images\Remaining2.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\Images\Required.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Required2.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Resources\Islands.csv">
@@ -775,7 +787,7 @@
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="13.7.0" />
     <PackageReference Include="MaterialDesignThemes" Version="5.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="PureDM" Version="1.1.4" />
+    <PackageReference Include="PureDM" Version="1.1.5" />
     <PackageReference Include="Syncfusion.Licensing" Version="25.1.42" />
     <PackageReference Include="Syncfusion.SfGrid.WPF" Version="25.1.42" />
     <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="25.1.42" />
@@ -793,7 +805,6 @@
     <PackageReference Include="Syncfusion.Themes.Office2019HighContrast.WPF" Version="25.1.42" />
     <PackageReference Include="Syncfusion.Themes.Office2019HighContrastWhite.WPF" Version="25.1.42" />
     <PackageReference Include="Syncfusion.Themes.Office2019White.WPF" Version="25.1.42" />
-    <PackageReference Include="Syncfusion.Themes.Office365.WPF" Version="25.1.42" />
     <PackageReference Include="Syncfusion.Themes.SystemTheme.WPF" Version="25.1.42" />
     <PackageReference Include="Syncfusion.Themes.Windows11Dark.WPF" Version="25.1.42" />
     <PackageReference Include="Syncfusion.Themes.Windows11Light.WPF" Version="25.1.42" />
@@ -853,6 +864,12 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Update="C:\Users\wanjizheng\.nuget\packages\puredm\1.1.4\contentFiles\any\net8.0-windows7.0\libs\DmReg.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="C:\Users\wanjizheng\.nuget\packages\puredm\1.1.5\contentFiles\any\net8.0-windows7.0\libs\dm.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="C:\Users\wanjizheng\.nuget\packages\puredm\1.1.5\contentFiles\any\net8.0-windows7.0\libs\DmReg.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
