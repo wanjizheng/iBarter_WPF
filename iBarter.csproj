@@ -52,6 +52,7 @@
     <None Remove="Resources\Images\Items\4086.bmp" />
     <None Remove="Resources\Images\Items\4207.bmp" />
     <None Remove="Resources\Images\Items\4273.bmp" />
+    <None Remove="Resources\Images\Items\43284.bmp" />
     <None Remove="Resources\Images\Items\4406.bmp" />
     <None Remove="Resources\Images\Items\4408.bmp" />
     <None Remove="Resources\Images\Items\4409.bmp" />
@@ -75,6 +76,7 @@
     <None Remove="Resources\Images\Items\4803.bmp" />
     <None Remove="Resources\Images\Items\4804.bmp" />
     <None Remove="Resources\Images\Items\4805.bmp" />
+    <None Remove="Resources\Images\Items\5005.bmp" />
     <None Remove="Resources\Images\Items\5013.bmp" />
     <None Remove="Resources\Images\Items\5014.bmp" />
     <None Remove="Resources\Images\Items\5301.bmp" />
@@ -87,7 +89,9 @@
     <None Remove="Resources\Images\Items\5814.bmp" />
     <None Remove="Resources\Images\Items\5815.bmp" />
     <None Remove="Resources\Images\Items\5819.bmp" />
+    <None Remove="Resources\Images\Items\5820.bmp" />
     <None Remove="Resources\Images\Items\5829.bmp" />
+    <None Remove="Resources\Images\Items\5831.bmp" />
     <None Remove="Resources\Images\Items\5832.bmp" />
     <None Remove="Resources\Images\Items\5851.bmp" />
     <None Remove="Resources\Images\Items\5852.bmp" />
@@ -268,6 +272,9 @@
     <Content Include="Resources\Images\Items\4273.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Images\Items\43284.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\Images\Items\4406.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
@@ -337,6 +344,9 @@
     <Content Include="Resources\Images\Items\4805.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Images\Items\5005.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\Images\Items\5013.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
@@ -373,7 +383,13 @@
     <Content Include="Resources\Images\Items\5819.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Images\Items\5820.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\Images\Items\5829.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\5831.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Resources\Images\Items\5832.bmp">
@@ -787,7 +803,7 @@
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="13.7.0" />
     <PackageReference Include="MaterialDesignThemes" Version="5.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="PureDM" Version="1.1.5" />
+    <PackageReference Include="PureDM" Version="1.1.6" />
     <PackageReference Include="Syncfusion.Licensing" Version="25.1.42" />
     <PackageReference Include="Syncfusion.SfGrid.WPF" Version="25.1.42" />
     <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="25.1.42" />
@@ -870,6 +886,12 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Update="C:\Users\wanjizheng\.nuget\packages\puredm\1.1.5\contentFiles\any\net8.0-windows7.0\libs\DmReg.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="C:\Users\wanjizheng\.nuget\packages\puredm\1.1.6\contentFiles\any\net8.0-windows7.0\libs\dm.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="C:\Users\wanjizheng\.nuget\packages\puredm\1.1.6\contentFiles\any\net8.0-windows7.0\libs\DmReg.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

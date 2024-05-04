@@ -358,6 +358,8 @@ namespace iBarter.View {
                 }
 
                 UpdateInvChange(myBarter.BarterGroup);
+                App.myfmMain.myShipCargo.UpdateCurrentLV();
+                App.myfmMain.myShipCargo.SaveData();
             }
 
             SaveData();

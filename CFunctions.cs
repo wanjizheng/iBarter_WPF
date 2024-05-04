@@ -501,7 +501,6 @@ namespace iBarter {
             //         listPointPlus.Add(myPP);
             //     }
             // }
-
             foreach (Items item in App.listItems) {
                 PointPlus myPP = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
                     "\\Images\\Items\\" + item.ItemID + ".bmp", 0.4, 0.8, 1, CV.Mode.OpenCV, false);
@@ -569,7 +568,13 @@ namespace iBarter {
             catch (Exception e) {
             }
 
-            string strID2 = listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18);
+            string strID2 = "10";
+            if (listPointPlus.Count == 2) {
+                strID2 = listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18);
+            }
+            else {
+                Log("Cannot identify the second item. Use Crow Coin instead.", Brushes.Red);
+            }
 
             if (strID2 == "800011") {
                 strID2 = "800012";
@@ -766,7 +771,7 @@ namespace iBarter {
             else if (_island.Contains("Orisha")) {
                 return EnumLists.Island.Orisha;
             }
-            else if (_island.Contains("Ostra") || _island.Contains("Dstra")) {
+            else if (_island.Contains("Ostra") || _island.Contains("Dstra") || _island.Contains("Qstra")) {
                 return EnumLists.Island.Ostra;
             }
             else if (_island.Contains("Padix")) {

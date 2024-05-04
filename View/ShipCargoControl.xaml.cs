@@ -154,12 +154,23 @@ namespace iBarter.View {
                 // App.myCargoProperty.CurrentLT += intWeight * barter.TotalItem2ExchangeQuantity;
             }
 
-            ListBox_ShipCargo.ItemsSource = null;
-            ListBox_ShipCargo.Items.Clear();
-            ListBox_ShipCargo.ItemsSource = App.myCVM.CargoDetails;
+            UpdateCargoList();
             // foreach (Barter myCvmCargoDetail in App.myCVM.CargoDetails) {
             //     App.myCFun.Log(myCvmCargoDetail.Item1Name+"=>"+myCvmCargoDetail.TotalItem1ExchangeQuantity,Brushes.Blue);
             // }
+        }
+
+        public void UpdateCargoList() {
+            for (int i = App.myCVM.CargoDetails.Count - 1; i >= 0; i--) {
+                Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == App.myCVM.CargoDetails[i].IsLandName);
+                if (myBarter!= null && (myBarter.ExchangeDone || myBarter.ExchangeQuantity == 0)) {
+                    App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails[i]);
+                }
+            }
+
+            ListBox_ShipCargo.ItemsSource = null;
+            ListBox_ShipCargo.Items.Clear();
+            ListBox_ShipCargo.ItemsSource = App.myCVM.CargoDetails;
         }
 
         private int GetWeight(string _lv) {
