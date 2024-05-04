@@ -16,7 +16,6 @@
     Icon="Images/iBarterIcon.ico"
     TitleBarHeight="48"
     TitleFontSize="14"
-
     TitleBarBackground="{Binding TitleBarBackground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
     TitleBarForeground="{Binding TitleBarForeground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
     CloseButtonTemplate="{DynamicResource ProductsWindowCloseButtonTemplate}"
@@ -24,11 +23,13 @@
     MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
     ResizeBorderThickness="0"
     RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
+    AllowsTransparency="True"
     Title="iBarter" Height="868" Width="1254" Loaded="Window_Loaded">
     <syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="/View/WindowStyle.xaml"></ResourceDictionary>
+                <ResourceDictionary Source="/PresentationFramework.Aero2;component/themes/Aero2.NormalColor.xaml"/>
             </ResourceDictionary.MergedDictionaries>
             <CollectionViewSource x:Key="ThemeList"
                                   Source="{Binding Path=DataContext.ThemeList, ElementName=ThemeList}">
@@ -68,271 +69,275 @@
             </ToggleButton>
         </collections:ArrayList>
     </syncfusion:ChromelessWindow.RightHeaderItemsSource>
-
-    <Grid>
-        <Grid.Resources>
-            <Storyboard x:Key="SlideIn">
-                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+    <Border Background="White" BorderThickness="1" BorderBrush="LightGray">
+        <Border.Effect>
+            <DropShadowEffect ShadowDepth="5" Direction="320" Color="Gray"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.Resources>
+                <Storyboard x:Key="SlideIn">
+                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
                                  From="0" To=" -320"
                                  Duration="0:0:0.3" />
-            </Storyboard>
-            <Storyboard x:Key="SlideOut">
-                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                </Storyboard>
+                <Storyboard x:Key="SlideOut">
+                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
                                  From="-320" To="0"
                                  Duration="0:0:0.3" />
-            </Storyboard>
-        </Grid.Resources>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="8.9*" />
-            <RowDefinition Height="20" />
-        </Grid.RowDefinitions>
-        <Grid x:Name="MenuGrid" Grid.Row="0">
-            <StackPanel>
-                <view:BannerCombo HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="0,5,0,0" />
-                <Menu SnapsToDevicePixels="True" VerticalAlignment="Bottom"
+                </Storyboard>
+            </Grid.Resources>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="8.9*" />
+                <RowDefinition Height="20" />
+            </Grid.RowDefinitions>
+            <Grid x:Name="MenuGrid" Grid.Row="0">
+                <StackPanel>
+                    <view:BannerCombo HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="0,5,0,0" />
+                    <Menu SnapsToDevicePixels="True" VerticalAlignment="Bottom"
                       HorizontalContentAlignment="Stretch">
-                    <!--Windows Menu-->
-                    <MenuItem Header="Windows">
-                        <MenuItem x:Name="MenuItem_BarterScanner" Header="Barter Scanner"
+                        <!--Windows Menu-->
+                        <MenuItem Header="Windows">
+                            <MenuItem x:Name="MenuItem_BarterScanner" Header="Barter Scanner"
                                   Tag="BarterScanner" Click="OnActivateWindow" Height="30" Width="180">
-                            <MenuItem.Icon>
-                                <Image Source="Images\barter.png" />
-                            </MenuItem.Icon>
-                        </MenuItem>
-                        <MenuItem x:Name="MenuItem_StorageManagement" Header="Storage Manager"
+                                <MenuItem.Icon>
+                                    <Image Source="Images\barter.png" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem x:Name="MenuItem_StorageManagement" Header="Storage Manager"
                                   Tag="StorageManagement" Click="MenuItem_StorageManagement_Click" Height="30" Width="180">
-                            <MenuItem.Icon>
-                                <Image Source="Images\storage.png" />
-                            </MenuItem.Icon>
+                                <MenuItem.Icon>
+                                    <Image Source="Images\storage.png" />
+                                </MenuItem.Icon>
+                            </MenuItem>
                         </MenuItem>
-                    </MenuItem>
-                </Menu>
-            </StackPanel>
-        </Grid>
+                    </Menu>
+                </StackPanel>
+            </Grid>
 
-        <syncfusion:DockingManager x:Name="dockingManager_Main" Grid.Row="1"
+            <syncfusion:DockingManager x:Name="dockingManager_Main" Grid.Row="1"
                                    UseDocumentContainer="True" UseNativeFloatWindow="True"
                                    Margin="0,0,0,0"
                                    ActiveWindowChanged="dockingManager_Main_ActiveWindowChanged">
-            <ContentControl x:Name="dockRight_ShipCargo" syncfusion:DockingManager.Header="Ship Cargo"
+                <ContentControl x:Name="dockRight_ShipCargo" syncfusion:DockingManager.Header="Ship Cargo"
                             syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Right"
                             MinWidth="0.3" ScrollViewer.HorizontalScrollBarVisibility="Auto"
                             ScrollViewer.VerticalScrollBarVisibility="Auto"
                             syncfusion:DockingManager.DesiredWidthInDockedMode="300">
-                <view:ShipCargoControl x:Name="myShipCargo"></view:ShipCargoControl>
-            </ContentControl>
-            <ContentControl x:Name="dockBottom" syncfusion:DockingManager.Header="Log"
+                    <view:ShipCargoControl x:Name="myShipCargo"></view:ShipCargoControl>
+                </ContentControl>
+                <ContentControl x:Name="dockBottom" syncfusion:DockingManager.Header="Log"
                             syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Bottom">
-                <RichTextBox x:Name="richTextBox_Log" x:FieldModifier="public" VerticalScrollBarVisibility="Auto"
+                    <RichTextBox x:Name="richTextBox_Log" x:FieldModifier="public" VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Auto">
-                    <RichTextBox.Resources>
-                        <Style TargetType="{x:Type Paragraph}">
-                            <Setter Property="Margin" Value="0" />
-                        </Style>
-                    </RichTextBox.Resources>
-                </RichTextBox>
-            </ContentControl>
-            <!-- <ContentControl x:Name="dockTabbed" syncfusion:DockingManager.Header="Dock Tabbed" -->
-            <!--                 syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Tabbed" -->
-            <!--                 syncfusion:DockingManager.TargetNameInDockedMode="dockBottom" /> -->
-            <!-- <ContentControl x:Name="autoHidden" syncfusion:DockingManager.Header="Auto Hidden" -->
-            <!--                 syncfusion:DockingManager.State="AutoHidden" -->
-            <!--                 syncfusion:DockingManager.SideInDockedMode="Left" /> -->
-            <!-- <ContentControl x:Name="document1" syncfusion:DockingManager.CanDocument="True" -->
-            <!--                 syncfusion:DockingManager.Header="Document1.xaml" -->
-            <!--                 syncfusion:DockingManager.State="Document" /> -->
-            <ContentControl x:Name="document_Planner" syncfusion:DockingManager.CanDocument="True"
+                        <RichTextBox.Resources>
+                            <Style TargetType="{x:Type Paragraph}">
+                                <Setter Property="Margin" Value="0" />
+                            </Style>
+                        </RichTextBox.Resources>
+                    </RichTextBox>
+                </ContentControl>
+                <!-- <ContentControl x:Name="dockTabbed" syncfusion:DockingManager.Header="Dock Tabbed" -->
+                <!--                 syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Tabbed" -->
+                <!--                 syncfusion:DockingManager.TargetNameInDockedMode="dockBottom" /> -->
+                <!-- <ContentControl x:Name="autoHidden" syncfusion:DockingManager.Header="Auto Hidden" -->
+                <!--                 syncfusion:DockingManager.State="AutoHidden" -->
+                <!--                 syncfusion:DockingManager.SideInDockedMode="Left" /> -->
+                <!-- <ContentControl x:Name="document1" syncfusion:DockingManager.CanDocument="True" -->
+                <!--                 syncfusion:DockingManager.Header="Document1.xaml" -->
+                <!--                 syncfusion:DockingManager.State="Document" /> -->
+                <ContentControl x:Name="document_Planner" syncfusion:DockingManager.CanDocument="True"
                             syncfusion:DockingManager.Header="Planner"
                             syncfusion:DockingManager.State="Document">
-                <view:PlannerControl x:Name="myPlannerControl"></view:PlannerControl>
-            </ContentControl>
-            <ContentControl x:Name="document_Map" syncfusion:DockingManager.CanDocument="True"
+                    <view:PlannerControl x:Name="myPlannerControl"></view:PlannerControl>
+                </ContentControl>
+                <ContentControl x:Name="document_Map" syncfusion:DockingManager.CanDocument="True"
                             syncfusion:DockingManager.Header="Map"
                             syncfusion:DockingManager.State="Document">
-                <view:MapControl x:Name="myMapControl" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-            </ContentControl>
+                    <view:MapControl x:Name="myMapControl" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                </ContentControl>
 
-        </syncfusion:DockingManager>
+            </syncfusion:DockingManager>
 
-        <Border BorderBrush="{DynamicResource BorderAlt}"
+            <Border BorderBrush="{DynamicResource BorderAlt}"
                 Margin="0,0,-320,0" x:Name="ThemePanel"
                 HorizontalAlignment="Right" VerticalAlignment="Stretch"
                 BorderThickness="1,0,0,0"
                 Grid.Column="0" Grid.RowSpan="3">
-            <Border.Effect>
-                <DropShadowEffect Direction="180" BlurRadius="20" ShadowDepth="-10" Opacity="0.3" Color="#1F000000" />
-            </Border.Effect>
+                <Border.Effect>
+                    <DropShadowEffect Direction="180" BlurRadius="20" ShadowDepth="-10" Opacity="0.3" Color="#1F000000" />
+                </Border.Effect>
 
-            <Grid Grid.Column="1"
+                <Grid Grid.Column="1"
                   Background="{Binding Path= Background ,RelativeSource={RelativeSource AncestorType=syncfusion:ChromelessWindow}}"
                   x:Name="Theme" HorizontalAlignment="Right" Width="300" VerticalAlignment="Stretch">
 
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="51" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <DockPanel Grid.Row="0">
-                    <Separator DockPanel.Dock="Bottom" />
-                    <Label Margin="16,4,16,4" FontSize="14" DockPanel.Dock="Left" FontWeight="SemiBold"
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="51" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0">
+                        <Separator DockPanel.Dock="Bottom" />
+                        <Label Margin="16,4,16,4" FontSize="14" DockPanel.Dock="Left" FontWeight="SemiBold"
                            VerticalContentAlignment="Center" HorizontalContentAlignment="Left" Content="Themes" />
-                    <Button DockPanel.Dock="Right" x:Name="Close" Width="24" Height="24"
+                        <Button DockPanel.Dock="Right" x:Name="Close" Width="24" Height="24"
                             Style="{DynamicResource WPFGlyphButtonStyle}"
                             Command="{Binding ThemePanelVisibilityCommand}"
                             CommandParameter="{Binding Name ,RelativeSource={RelativeSource Mode=Self}}"
                             HorizontalAlignment="Right" Margin="0,0,5,0">
-                        <Path
+                            <Path
                             Fill="{Binding Path=Foreground, Mode=OneWay, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
                             Data="M11.2919 12.5L12.5 11.2919L7.70805 6.5L12.5 1.70805L11.2919 0.5L6.5 5.29195L1.70805 0.5L0.5 1.70805L5.29195 6.5L0.5 11.2919L1.70805 12.5L6.5 7.70805L11.2919 12.5Z" />
-                    </Button>
-                </DockPanel>
-                <ScrollViewer x:Name="ThemePanelScrollViewer" VerticalScrollBarVisibility="Auto"
+                        </Button>
+                    </DockPanel>
+                    <ScrollViewer x:Name="ThemePanelScrollViewer" VerticalScrollBarVisibility="Auto"
                               Loaded="scrollviewver_Loaded" Grid.Row="1">
-                    <Grid Grid.Row="1">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <ListView Name="ThemeList" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                        <Grid Grid.Row="1">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <ListView Name="ThemeList" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                   ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                   ItemsSource="{Binding Source={StaticResource ThemeList}}" Grid.Row="0"
                                   SelectedItem="{Binding SelectedTheme ,UpdateSourceTrigger=PropertyChanged,Mode=TwoWay}">
-                            <ListView.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel Width="300" HorizontalAlignment='Stretch' ItemWidth="150"
-                                               ItemHeight="32" />
-                                </ItemsPanelTemplate>
-                            </ListView.ItemsPanel>
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="4.2" />
-                                            <ColumnDefinition Width="16" />
-                                            <ColumnDefinition Width="9" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Ellipse Width="16" Grid.Column="1" HorizontalAlignment="Left"
-                                                 VerticalAlignment="Center" Height="16" Fill="{Binding EllipseFill}"
-                                                 Stroke="{Binding EllipseStroke}" />
-                                        <Path Margin="8,0,0,0" Grid.Column="1" HorizontalAlignment="Left"
-                                              VerticalAlignment="Center"
-                                              Data="M0 16C4.41828 16 8 12.4183 8 8C8 3.58172 4.41828 0 0 0L0 16Z"
-                                              Fill="{Binding PathFill}" />
-                                        <TextBlock HorizontalAlignment="Left" VerticalAlignment="Center"
-                                                   Grid.Column="3" FontSize="12" Text="{Binding DisplayName}" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                            <ItemsControl.GroupStyle>
-                                <GroupStyle>
-                                    <GroupStyle.ContainerStyle>
-                                        <Style TargetType="{x:Type GroupItem}">
-                                            <Setter Property="Margin" Value="0" />
-                                            <Setter Property="Template">
-                                                <Setter.Value>
-                                                    <ControlTemplate TargetType="{x:Type GroupItem}">
-                                                        <HeaderedContentControl IsTabStop="False">
-                                                            <HeaderedContentControl.Header>
-                                                                <Border Margin="0,4"
-                                                                        Background="{DynamicResource ContentBackgroundAlt1 }">
-                                                                    <TextBlock
-                                                                        Margin="8,4,16,4"
-                                                                        FontSize="12"
-                                                                        FontWeight="SemiBold"
-                                                                        Text="{Binding Path=Name}" />
-                                                                </Border>
-                                                            </HeaderedContentControl.Header>
-                                                            <HeaderedContentControl.Content>
-                                                                <ItemsPresenter x:Name="ItemsHost" />
-                                                            </HeaderedContentControl.Content>
-                                                        </HeaderedContentControl>
-                                                    </ControlTemplate>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </Style>
-                                    </GroupStyle.ContainerStyle>
-                                </GroupStyle>
-                            </ItemsControl.GroupStyle>
-                        </ListView>
-                        <Grid Grid.Row="1">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="48" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <DockPanel Grid.Column="0">
-                                <Separator
-                                    Visibility="{Binding ColorPaletteVisibility ,Converter={StaticResource BooleanToVisibilityConverter}}"
-                                    Margin="2,2,2,5" DockPanel.Dock="Bottom" />
-                                <Label Content="Choose Palette" Margin="16,0" VerticalAlignment="Center"
-                                       Visibility="{Binding ColorPaletteVisibility, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                       FontWeight="SemiBold" FontSize="14" />
-                            </DockPanel>
-                            <ListView Name="PaletteList" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                      ItemsSource="{Binding  Palettes}"
-                                      Visibility="{Binding ColorPaletteVisibility ,Converter={StaticResource BooleanToVisibilityConverter}}"
-                                      Grid.Row="1"
-                                      SelectedItem="{Binding SelectedPalette ,UpdateSourceTrigger=PropertyChanged,Mode=TwoWay}">
                                 <ListView.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                        <WrapPanel Width="300" ItemWidth="150" ItemHeight="32" />
+                                        <WrapPanel Width="300" HorizontalAlignment='Stretch' ItemWidth="150"
+                                               ItemHeight="32" />
                                     </ItemsPanelTemplate>
                                 </ListView.ItemsPanel>
                                 <ListView.ItemTemplate>
                                     <DataTemplate>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="2" />
+                                                <ColumnDefinition Width="4.2" />
                                                 <ColumnDefinition Width="16" />
                                                 <ColumnDefinition Width="9" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <Ellipse Grid.Column="1" HorizontalAlignment="Left"
-                                                     VerticalAlignment="Center" Width="16" Height="16"
-                                                     Fill="{Binding PrimaryBackgroundAlt}" />
-                                            <Path HorizontalAlignment="Left " Grid.Column="1"
-                                                  VerticalAlignment="Center" Margin="8,0,0,0"
-                                                  Data="M0 16C4.41828 16 8 12.4183 8 8C8 3.58172 4.41828 0 0 0L0 16Z"
-                                                  Fill="{Binding PrimaryBackground}" />
+                                            <Ellipse Width="16" Grid.Column="1" HorizontalAlignment="Left"
+                                                 VerticalAlignment="Center" Height="16" Fill="{Binding EllipseFill}"
+                                                 Stroke="{Binding EllipseStroke}" />
+                                            <Path Margin="8,0,0,0" Grid.Column="1" HorizontalAlignment="Left"
+                                              VerticalAlignment="Center"
+                                              Data="M0 16C4.41828 16 8 12.4183 8 8C8 3.58172 4.41828 0 0 0L0 16Z"
+                                              Fill="{Binding PathFill}" />
                                             <TextBlock HorizontalAlignment="Left" VerticalAlignment="Center"
-                                                       Grid.Column="3" FontSize="12" Text="{Binding DisplayName}" />
+                                                   Grid.Column="3" FontSize="12" Text="{Binding DisplayName}" />
                                         </Grid>
                                     </DataTemplate>
                                 </ListView.ItemTemplate>
+                                <ItemsControl.GroupStyle>
+                                    <GroupStyle>
+                                        <GroupStyle.ContainerStyle>
+                                            <Style TargetType="{x:Type GroupItem}">
+                                                <Setter Property="Margin" Value="0" />
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="{x:Type GroupItem}">
+                                                            <HeaderedContentControl IsTabStop="False">
+                                                                <HeaderedContentControl.Header>
+                                                                    <Border Margin="0,4"
+                                                                        Background="{DynamicResource ContentBackgroundAlt1 }">
+                                                                        <TextBlock
+                                                                        Margin="8,4,16,4"
+                                                                        FontSize="12"
+                                                                        FontWeight="SemiBold"
+                                                                        Text="{Binding Path=Name}" />
+                                                                    </Border>
+                                                                </HeaderedContentControl.Header>
+                                                                <HeaderedContentControl.Content>
+                                                                    <ItemsPresenter x:Name="ItemsHost" />
+                                                                </HeaderedContentControl.Content>
+                                                            </HeaderedContentControl>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </GroupStyle.ContainerStyle>
+                                    </GroupStyle>
+                                </ItemsControl.GroupStyle>
                             </ListView>
+                            <Grid Grid.Row="1">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="48" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <DockPanel Grid.Column="0">
+                                    <Separator
+                                    Visibility="{Binding ColorPaletteVisibility ,Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    Margin="2,2,2,5" DockPanel.Dock="Bottom" />
+                                    <Label Content="Choose Palette" Margin="16,0" VerticalAlignment="Center"
+                                       Visibility="{Binding ColorPaletteVisibility, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                       FontWeight="SemiBold" FontSize="14" />
+                                </DockPanel>
+                                <ListView Name="PaletteList" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                      ItemsSource="{Binding  Palettes}"
+                                      Visibility="{Binding ColorPaletteVisibility ,Converter={StaticResource BooleanToVisibilityConverter}}"
+                                      Grid.Row="1"
+                                      SelectedItem="{Binding SelectedPalette ,UpdateSourceTrigger=PropertyChanged,Mode=TwoWay}">
+                                    <ListView.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Width="300" ItemWidth="150" ItemHeight="32" />
+                                        </ItemsPanelTemplate>
+                                    </ListView.ItemsPanel>
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="2" />
+                                                    <ColumnDefinition Width="16" />
+                                                    <ColumnDefinition Width="9" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Ellipse Grid.Column="1" HorizontalAlignment="Left"
+                                                     VerticalAlignment="Center" Width="16" Height="16"
+                                                     Fill="{Binding PrimaryBackgroundAlt}" />
+                                                <Path HorizontalAlignment="Left " Grid.Column="1"
+                                                  VerticalAlignment="Center" Margin="8,0,0,0"
+                                                  Data="M0 16C4.41828 16 8 12.4183 8 8C8 3.58172 4.41828 0 0 0L0 16Z"
+                                                  Fill="{Binding PrimaryBackground}" />
+                                                <TextBlock HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                       Grid.Column="3" FontSize="12" Text="{Binding DisplayName}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </Grid>
                         </Grid>
-                    </Grid>
-                </ScrollViewer>
+                    </ScrollViewer>
+                </Grid>
+
+                <Border.Style>
+                    <Style TargetType="{x:Type Border}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ThemePanelVisibility}" Value="true">
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard Storyboard="{StaticResource SlideIn}" />
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <BeginStoryboard Storyboard="{StaticResource SlideOut}" />
+                                </DataTrigger.ExitActions>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Border.RenderTransform>
+                    <TranslateTransform />
+                </Border.RenderTransform>
+            </Border>
+
+            <Grid x:Name="StatusBar" Grid.Row="2" Grid.ColumnSpan="2">
+                <StatusBar x:Name="myStatusBar" SnapsToDevicePixels="True" VerticalAlignment="Bottom"
+                       HorizontalContentAlignment="Stretch" Height="20">
+                    <StatusBarItem>
+                        <TextBlock x:Name="statusBarItem_XY" x:FieldModifier="public" />
+                    </StatusBarItem>
+
+                </StatusBar>
             </Grid>
 
-            <Border.Style>
-                <Style TargetType="{x:Type Border}">
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding ThemePanelVisibility}" Value="true">
-                            <DataTrigger.EnterActions>
-                                <BeginStoryboard Storyboard="{StaticResource SlideIn}" />
-                            </DataTrigger.EnterActions>
-                            <DataTrigger.ExitActions>
-                                <BeginStoryboard Storyboard="{StaticResource SlideOut}" />
-                            </DataTrigger.ExitActions>
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </Border.Style>
-            <Border.RenderTransform>
-                <TranslateTransform />
-            </Border.RenderTransform>
-        </Border>
-
-        <Grid x:Name="StatusBar" Grid.Row="2" Grid.ColumnSpan="2">
-            <StatusBar x:Name="myStatusBar" SnapsToDevicePixels="True" VerticalAlignment="Bottom"
-                       HorizontalContentAlignment="Stretch" Height="20">
-                <StatusBarItem>
-                    <TextBlock x:Name="statusBarItem_XY" x:FieldModifier="public" />
-                </StatusBarItem>
-
-            </StatusBar>
         </Grid>
-
-    </Grid>
+    </Border>
 </syncfusion:ChromelessWindow>
