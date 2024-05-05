@@ -101,5 +101,16 @@ namespace iBarter.View {
                 App.myCFun.Log(exception.Message, Brushes.Red);
             }
         }
+
+        private void PinWindow_Click(object sender, RoutedEventArgs e) {
+            if (this.Topmost) {
+                this.Topmost = false;
+                PinWindow.IsChecked = false;
+            }
+            else {
+                this.Topmost = true;
+                PinWindow.IsChecked = true;
+            }
+        }
     }
 }

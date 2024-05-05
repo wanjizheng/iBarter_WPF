@@ -5,6 +5,7 @@
                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                              xmlns:local="clr-namespace:iBarter"
+                             xmlns:collections="clr-namespace:System.Collections;assembly=System.Runtime"
                              mc:Ignorable="d"
                              AllowsTransparency="True" WindowStyle="None"
                              Icon="/Images/barter.png"
@@ -23,6 +24,29 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </syncfusion:ChromelessWindow.Resources>
+    <syncfusion:ChromelessWindow.RightHeaderItemsSource>
+        <collections:ArrayList>
+            <ToggleButton x:Name="PinWindow"
+                      Template="{StaticResource ThemeButton}"
+                      IsChecked="False"
+                      Visibility="Visible"
+                      Margin="0,0,12,0"
+                      Padding="7,4,12,4"
+                      HorizontalContentAlignment="Center"
+                      VerticalContentAlignment="Center" Click="PinWindow_Click">
+                <ToggleButton.Content>
+                    <StackPanel Orientation="Horizontal">
+                        <Image Source="/Images/pin.png" Height="15" Width="15"></Image>
+                    </StackPanel>
+                </ToggleButton.Content>
+                <ToggleButton.Style>
+                    <Style TargetType="{x:Type ToggleButton}">
+                        <Setter Property="Background" Value="Transparent" />
+                    </Style>
+                </ToggleButton.Style>
+            </ToggleButton>
+        </collections:ArrayList>
+    </syncfusion:ChromelessWindow.RightHeaderItemsSource>
     <Grid>
         <StackPanel>
             <syncfusion:ToolBarAdv x:Name="ScannerToolBar">

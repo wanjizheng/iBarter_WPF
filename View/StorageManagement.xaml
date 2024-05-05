@@ -6,6 +6,7 @@
                              xmlns:local="clr-namespace:iBarter.View"
                              xmlns:Syncfusion="http://schemas.syncfusion.com/wpf"
                              xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
+                             xmlns:collections="clr-namespace:System.Collections;assembly=System.Runtime"
                              mc:Ignorable="d"
                              Icon="/Images/storage.png"
                              TitleBarBackground="{Binding TitleBarBackground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -23,6 +24,29 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Syncfusion:ChromelessWindow.Resources>
+    <Syncfusion:ChromelessWindow.RightHeaderItemsSource>
+        <collections:ArrayList>
+            <ToggleButton x:Name="PinWindow"
+                          Template="{StaticResource ThemeButton}"
+                          IsChecked="False"
+                          Visibility="Visible"
+                          Margin="0,0,12,0"
+                          Padding="7,4,12,4"
+                          HorizontalContentAlignment="Center"
+                          VerticalContentAlignment="Center" Click="PinWindow_Click">
+                <ToggleButton.Content>
+                    <StackPanel Orientation="Horizontal">
+                        <Image Source="/Images/pin.png" Height="15" Width="15"></Image>
+                    </StackPanel>
+                </ToggleButton.Content>
+                <ToggleButton.Style>
+                    <Style TargetType="{x:Type ToggleButton}">
+                        <Setter Property="Background" Value="Transparent" />
+                    </Style>
+                </ToggleButton.Style>
+            </ToggleButton>
+        </collections:ArrayList>
+    </Syncfusion:ChromelessWindow.RightHeaderItemsSource>
     <Grid>
         <Grid.Resources>
             <ResourceDictionary>

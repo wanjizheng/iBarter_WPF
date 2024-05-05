@@ -33,6 +33,7 @@
     <None Remove="Images\iBarterMap.png" />
     <None Remove="Images\load.png" />
     <None Remove="Images\new-document.png" />
+    <None Remove="Images\pin.png" />
     <None Remove="Images\refresh.png" />
     <None Remove="Images\save.png" />
     <None Remove="Images\scan.png" />
@@ -904,6 +905,7 @@
     <Resource Include="Images\new-document.png">
       <CopyToOutputDirectory></CopyToOutputDirectory>
     </Resource>
+    <Resource Include="Images\pin.png" />
     <Resource Include="Images\refresh.png" />
     <Resource Include="Images\save.png" />
     <Resource Include="Images\scan.png" />

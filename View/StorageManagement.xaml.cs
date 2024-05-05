@@ -134,5 +134,16 @@ namespace iBarter.View {
         private void DataGrid_Storage_CurrentCellEndEdit(object sender, Syncfusion.UI.Xaml.Grid.CurrentCellEndEditEventArgs e) {
             App.myStorageVM.SaveData();
         }
+
+        private void PinWindow_Click(object sender, System.Windows.RoutedEventArgs e) {
+            if (this.Topmost) {
+                this.Topmost = false;
+                PinWindow.IsChecked = false;
+            }
+            else {
+                this.Topmost = true;
+                PinWindow.IsChecked = true;
+            }
+        }
     }
 }
