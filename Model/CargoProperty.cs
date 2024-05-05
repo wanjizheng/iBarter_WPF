@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Media;
+using Syncfusion.Windows.PropertyGrid;
 
 namespace iBarter.Model {
     public class CargoProperty : INotifyPropertyChanged {
@@ -35,25 +36,26 @@ namespace iBarter.Model {
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
-#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-            if (App.myfmMain != null) {
-                if (CurrentLT > TotalLT - ExtraLT) {
-                    App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Red;
-                    App.myfmMain.myShipCargo.PropertyGrid_Ship.FontWeight = FontWeights.Bold;
-                    App.myfmMain.myShipCargo.PropertyGrid_Ship.ViewBackgroundColor = Brushes.Cyan;
-                }
-                else {
-                    App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Black;
-                    App.myfmMain.myShipCargo.PropertyGrid_Ship.FontWeight = FontWeights.Normal;
-                    App.myfmMain.myShipCargo.PropertyGrid_Ship.ViewBackgroundColor = Brushes.White;
-                }
 
-                SaveData();
-            }
+            Application.Current.Dispatcher.Invoke(() => {
+                if (App.myfmMain != null) {
+                    if (CurrentLT > TotalLT - ExtraLT) {
+                        App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Red;
+                        App.myfmMain.myShipCargo.PropertyGrid_Ship.FontWeight = FontWeights.Bold;
+                        App.myfmMain.myShipCargo.PropertyGrid_Ship.ViewBackgroundColor = Brushes.IndianRed;
+                    }
+                    else {
+                        App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Black;
+                        App.myfmMain.myShipCargo.PropertyGrid_Ship.FontWeight = FontWeights.Normal;
+                        App.myfmMain.myShipCargo.PropertyGrid_Ship.ViewBackgroundColor = Brushes.White;
+                    }
+
+                    SaveData();
+                }
+            });
         }
-#pragma warning restore CS8625 // Cannot convert null literal to non-nullable reference type.
 
         private void SaveData() {
             try {

@@ -157,8 +157,11 @@ namespace iBarter {
                 else {
                     App.myCFun.Log("Cannot find the game process.", Brushes.Red);
                 }
+
+                myShipCargo.RefreshData();
+
                 App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
-                SfSkinManager.ApplyStylesOnApplication = true;
+                //SfSkinManager.ApplyStylesOnApplication = true;
                 this.WindowState = WindowState.Normal;
                 this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
                 double screenWidth = SystemParameters.PrimaryScreenWidth;
@@ -167,6 +170,7 @@ namespace iBarter {
                 double windowHeight = this.Height;
                 this.Left = (screenWidth / 2) - (windowWidth / 2);
                 this.Top = (screenHeight / 2) - (windowHeight / 2);
+                App.myCFun.DownloadMissingIcon();
             }
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);

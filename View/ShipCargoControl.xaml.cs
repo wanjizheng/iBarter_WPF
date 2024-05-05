@@ -16,6 +16,7 @@ namespace iBarter.View {
             InitializeComponent();
             DataContext = App.myCVM;
             //PropertyGrid_Ship.Items = App.myCVM.CargoProperty;
+
             App.myCargoProperty = new CargoProperty();
         }
 

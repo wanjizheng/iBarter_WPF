@@ -134,6 +134,16 @@ namespace iBarter {
 
         #region RefreshItems
 
+        public void DownloadMissingIcon() {
+            foreach (Items item in App.listItems) {
+                string iconPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + item.ItemID + ".bmp";
+
+                if (!File.Exists(iconPath) && item != null && int.Parse(item.ItemID) > 0) {
+                    App.myCFun.RefreshItems(item.ItemID);
+                }
+            }
+        }
+
         public void RefreshItems(string _itemID = "") {
             List<Items> listItems = LoadItemsCSV();
             if (_itemID != null) {
@@ -155,12 +165,19 @@ namespace iBarter {
                 }
 
                 UpdateItemImagesAsync(item.ItemID, strURL);
-                Log(i + "/" + listItems.Count, Brushes.Blue);
+                if (_itemID == "") {
+                    Log(i + "/" + listItems.Count, Brushes.Blue);
+                }
+                else {
+                    Log("Download icon for: " + App.listItems.FirstOrDefault(i => i.ItemID == _itemID), Brushes.Gold);
+                }
+
                 i++;
                 //Thread.Sleep(500);
             }
-
-            Log("Done!", Brushes.Red);
+            if (_itemID == "") {
+                Log("Done!", Brushes.Red);
+            }
         }
 
         private string getBetween(string strSource, string strStart, string strEnd) {
@@ -569,24 +586,25 @@ namespace iBarter {
             }
 
             string strID2 = "10";
+            string strNumber2 = "-1";
             if (listPointPlus.Count == 2) {
                 strID2 = listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18);
+                if (strID2 == "800011") {
+                    strID2 = "800012";
+                }
+                else if (strID2 == "800012") {
+                    strID2 = "800011";
+                }
+
+                strNumber2 = PureDM.PureDM.myCV.OCRString(listPointPlus[1].X,
+                    (int)(listPointPlus[1].Y + (listPointPlus[1].Size.Height * 0.6)),
+                    listPointPlus[1].X + listPointPlus[1].Size.Width, listPointPlus[1].Y + listPointPlus[1].Size.Height,
+                    CV.OCRType.Number, CV.OCRMode.Diff, false, strID2);
             }
             else {
                 Log("Cannot identify the second item. Use Crow Coin instead.", Brushes.Red);
             }
 
-            if (strID2 == "800011") {
-                strID2 = "800012";
-            }
-            else if (strID2 == "800012") {
-                strID2 = "800011";
-            }
-
-            string strNumber2 = PureDM.PureDM.myCV.OCRString(listPointPlus[1].X,
-                (int)(listPointPlus[1].Y + (listPointPlus[1].Size.Height * 0.6)),
-                listPointPlus[1].X + listPointPlus[1].Size.Width, listPointPlus[1].Y + listPointPlus[1].Size.Height,
-                CV.OCRType.Number, CV.OCRMode.Diff, false, strID2);
 
             int intNumber2 = App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemNumber).FirstOrDefault();
             try {

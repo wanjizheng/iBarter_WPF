@@ -12,7 +12,7 @@
         <DataTemplate x:Key="ListBoxTemplate">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="{Binding IsLandName, StringFormat='{}{0}: '}" FontWeight="Bold"
-                VerticalAlignment="Center" />
+                           VerticalAlignment="Center" />
                 <TextBlock Text="{Binding TotalItem1ExchangeQuantity, StringFormat='[{0}]'}" FontWeight="Bold"
                            VerticalAlignment="Center" />
                 <Image Source="{Binding Item1Icon}" />
@@ -23,14 +23,21 @@
                 <StackPanel.ToolTip>
                     <ToolTip>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Item1Name}" FontWeight="Bold" FontStyle="Italic"/>
-                            <TextBlock Text=" => " FontWeight="Bold" FontStyle="Italic"/>
-                            <TextBlock Text="{Binding Item2Name}" FontWeight="Bold" FontStyle="Italic"/>
+                            <TextBlock Text="{Binding Item1Name}" FontWeight="Bold" FontStyle="Italic" />
+                            <TextBlock Text=" => " FontWeight="Bold" FontStyle="Italic" />
+                            <TextBlock Text="{Binding Item2Name}" FontWeight="Bold" FontStyle="Italic" />
                         </StackPanel>
                     </ToolTip>
                 </StackPanel.ToolTip>
             </StackPanel>
         </DataTemplate>
+
+        <Style TargetType="Syncfusion:PropertyGrid" x:Key="PropertyStyle">
+            <Setter Property="Foreground" Value="Black" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="ViewBackgroundColor" Value="White" />
+        </Style>
+
     </Control.Resources>
     <Grid>
         <Grid.RowDefinitions>
@@ -57,8 +64,8 @@
             <ListBox.ItemContainerStyle>
                 <Style TargetType="ListBoxItem">
                     <Setter Property="AllowDrop" Value="True" />
-                    <EventSetter Event="PreviewMouseLeftButtonDown" Handler="ListBoxItem_MouseLeftButtonDown"/>
-                    <EventSetter Event="PreviewMouseRightButtonDown" Handler="ListBoxItem_MouseRightButtonDown"/>
+                    <EventSetter Event="PreviewMouseLeftButtonDown" Handler="ListBoxItem_MouseLeftButtonDown" />
+                    <EventSetter Event="PreviewMouseRightButtonDown" Handler="ListBoxItem_MouseRightButtonDown" />
                 </Style>
             </ListBox.ItemContainerStyle>
         </ListBox>
@@ -68,7 +75,7 @@
                                    ResizeBehavior="PreviousAndNext"
                                    ShowsPreview="True" />
         <Grid Grid.Row="3">
-            <Syncfusion:PropertyGrid x:Name="PropertyGrid_Ship">
+            <Syncfusion:PropertyGrid x:Name="PropertyGrid_Ship" Style="{StaticResource PropertyStyle}">
 
             </Syncfusion:PropertyGrid>
         </Grid>

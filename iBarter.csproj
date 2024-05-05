@@ -85,12 +85,25 @@
     <None Remove="Resources\Images\Items\5802.bmp" />
     <None Remove="Resources\Images\Items\5803.bmp" />
     <None Remove="Resources\Images\Items\5804.bmp" />
+    <None Remove="Resources\Images\Items\5805.bmp" />
     <None Remove="Resources\Images\Items\5806.bmp" />
+    <None Remove="Resources\Images\Items\5807.bmp" />
+    <None Remove="Resources\Images\Items\5809.bmp" />
+    <None Remove="Resources\Images\Items\5810.bmp" />
+    <None Remove="Resources\Images\Items\5812.bmp" />
     <None Remove="Resources\Images\Items\5814.bmp" />
     <None Remove="Resources\Images\Items\5815.bmp" />
     <None Remove="Resources\Images\Items\5819.bmp" />
     <None Remove="Resources\Images\Items\5820.bmp" />
+    <None Remove="Resources\Images\Items\5821.bmp" />
+    <None Remove="Resources\Images\Items\5822.bmp" />
+    <None Remove="Resources\Images\Items\5823.bmp" />
+    <None Remove="Resources\Images\Items\5824.bmp" />
+    <None Remove="Resources\Images\Items\5825.bmp" />
+    <None Remove="Resources\Images\Items\5827.bmp" />
+    <None Remove="Resources\Images\Items\5828.bmp" />
     <None Remove="Resources\Images\Items\5829.bmp" />
+    <None Remove="Resources\Images\Items\5830.bmp" />
     <None Remove="Resources\Images\Items\5831.bmp" />
     <None Remove="Resources\Images\Items\5832.bmp" />
     <None Remove="Resources\Images\Items\5851.bmp" />
@@ -209,7 +222,9 @@
     <None Remove="Resources\Images\Items\800073.bmp" />
     <None Remove="Resources\Images\Items\800074.bmp" />
     <None Remove="Resources\Images\Items\800075.bmp" />
+    <None Remove="Resources\Images\Items\8009.bmp" />
     <None Remove="Resources\Images\Items\8010.bmp" />
+    <None Remove="Resources\Images\Items\8025.bmp" />
     <None Remove="Resources\Images\Items\820138.bmp" />
     <None Remove="Resources\Images\Items\820157.bmp" />
     <None Remove="Resources\Images\Items\9057.bmp" />
@@ -371,7 +386,22 @@
     <Content Include="Resources\Images\Items\5804.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Images\Items\5805.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\Images\Items\5806.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\5807.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\5809.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\5810.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\5812.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Resources\Images\Items\5814.bmp">
@@ -386,7 +416,31 @@
     <Content Include="Resources\Images\Items\5820.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Images\Items\5821.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\5822.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\5823.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\5824.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\5825.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\5827.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\5828.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\Images\Items\5829.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\5830.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Resources\Images\Items\5831.bmp">
@@ -743,7 +797,13 @@
     <Content Include="Resources\Images\Items\800075.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Images\Items\8009.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\Images\Items\8010.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Items\8025.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Resources\Images\Items\820138.bmp">
