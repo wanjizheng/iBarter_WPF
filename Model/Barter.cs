@@ -17,7 +17,7 @@ namespace iBarter {
         public Barter() {
         }
 
-        public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = -1, int _intInv = 0, int _intChange = 0, bool _usingALT = false, bool _calculatedAlready = false, int _totalitem1ExchangeQuantity = -1) {
+        public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = 0, int _intInv = 0, int _intChange = 0, bool _usingALT = false, bool _calculatedAlready = false, int _totalitem1ExchangeQuantity = -1) {
             isLand = _isLand;
 
             item1 = _item1;

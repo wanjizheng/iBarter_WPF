@@ -166,9 +166,9 @@ namespace iBarter.View {
         }
 
         public void Grouping() {
-            int intGroup = 0;
+            int intGroup = 1;
             foreach (Barter barter in App.myPVM.BarterCollection) {
-                barter.BarterGroup = -1;
+                barter.BarterGroup = 0;
             }
 
             foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.Item1.ItemLV.Equals("0"))) {
@@ -188,7 +188,7 @@ namespace iBarter.View {
             }
 
             foreach (Barter barter in App.myPVM.BarterCollection.Where(b =>
-                         b.Item1.ItemLV.Equals("1") && b.BarterGroup == -1)) {
+                         b.Item1.ItemLV.Equals("1") && b.BarterGroup == 0)) {
                 int intLV = 2;
 
                 FindBarterGroup(barter, intLV, intGroup);
@@ -197,7 +197,7 @@ namespace iBarter.View {
             }
 
             foreach (Barter barter in App.myPVM.BarterCollection.Where(b =>
-                         b.Item1.ItemLV.Equals("2") && b.BarterGroup == -1)) {
+                         b.Item1.ItemLV.Equals("2") && b.BarterGroup == 0)) {
                 int intLV = 3;
 
                 FindBarterGroup(barter, intLV, intGroup);
@@ -206,7 +206,7 @@ namespace iBarter.View {
             }
 
             foreach (Barter barter in App.myPVM.BarterCollection.Where(b =>
-                         b.Item1.ItemLV.Equals("3") && b.BarterGroup == -1)) {
+                         b.Item1.ItemLV.Equals("3") && b.BarterGroup == 0)) {
                 int intLV = 4;
 
                 FindBarterGroup(barter, intLV, intGroup);
@@ -252,8 +252,13 @@ namespace iBarter.View {
 
         private void FindBarterGroup(Barter _barter, int _lv, int _group) {
             _barter.BarterGroup = _group;
+            if (_barter.Item2.ItemLV == "-1" || int.Parse(_barter.Item2.ItemLV) <= int.Parse(_barter.Item1.ItemLV)) {
+                _barter.BarterGroup = 0;
+                return;
+            }
+
             Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b =>
-                b.Item1.ItemLV.Equals(Convert.ToString(_lv)) && b.Item1Name.Equals(_barter.Item2Name) && (b.Item2.ItemLV != "-1" || b.Item2Name == "Crow Coin"))!;
+                b.Item1.ItemLV.Equals(Convert.ToString(_lv)) && b.Item1Name.Equals(_barter.Item2Name) && (int.Parse(b.Item2.ItemLV) > int.Parse(b.Item1.ItemLV) || b.Item2Name == "Crow Coin"))!;
             if (myBarter != null) {
                 myBarter.BarterGroup = _group;
                 if (!myBarter.Item1.ItemLV.Equals("5")) {
@@ -548,7 +553,7 @@ namespace iBarter.View {
                     barter.ExchangeDone = false;
                     barter.ExchangeQuantity = 0;
                     barter.InvQuantityChange = barter.InvQuantity;
-                    barter.BarterGroup = -1;
+                    barter.BarterGroup = 0;
                 }
 
                 DataGrid_Planner.SortColumnDescriptions.Clear();

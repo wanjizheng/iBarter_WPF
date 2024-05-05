@@ -24,6 +24,7 @@
     ResizeBorderThickness="0"
     RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
     AllowsTransparency="True"
+    Visibility="Visible"
     Title="iBarter" Height="868" Width="1254" Loaded="Window_Loaded">
     <syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
