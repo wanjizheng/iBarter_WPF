@@ -214,6 +214,12 @@ namespace iBarter.View {
                 intGroup++;
             }
 
+            for (int i = 1; i < intGroup; i++) {
+                if (App.myPVM.BarterCollection.Where(b => b.BarterGroup == i).ToList().Count == 1) {
+                    App.myPVM.BarterCollection.FirstOrDefault(b => b.BarterGroup == i)!.BarterGroup = 0;
+                }
+            }
+
             try {
                 DataGrid_Planner.View.BeginInit();
                 DataGrid_Planner.SortColumnDescriptions.Clear();
@@ -252,7 +258,7 @@ namespace iBarter.View {
 
         private void FindBarterGroup(Barter _barter, int _lv, int _group) {
             _barter.BarterGroup = _group;
-            if (_barter.Item2.ItemLV == "-1" || int.Parse(_barter.Item2.ItemLV) <= int.Parse(_barter.Item1.ItemLV)) {
+            if ((_barter.Item2.ItemLV == "-1" || int.Parse(_barter.Item2.ItemLV) <= int.Parse(_barter.Item1.ItemLV)) && _barter.Item2.ItemName!="Crow Coin") {
                 _barter.BarterGroup = 0;
                 return;
             }
@@ -541,7 +547,7 @@ namespace iBarter.View {
             if (App.myPVM != null) {
                 App.myPVM.BarterCollection.Clear();
             }
-
+            DataGrid_Planner.SortColumnDescriptions.Clear();
             DataGrid_Planner.EndInit();
         }
 
