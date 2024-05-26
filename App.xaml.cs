@@ -2,6 +2,7 @@
 using iBarter.View;
 using iBarter.ViewModel;
 using Syncfusion.Licensing;
+using Syncfusion.SfSkinManager;
 using System.Windows;
 using System.Windows.Navigation;
 
@@ -41,6 +42,8 @@ namespace iBarter {
 
         public App() {
             SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1NBaF5cXmtCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdnWXtec3RcRmRYUUdxWUM=");
+            
+            SfSkinManager.ApplyStylesOnApplication = true;
 
             myCFun = new CFunctions();
             listItems = myCFun.LoadItemsCSV();

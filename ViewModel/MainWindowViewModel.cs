@@ -301,6 +301,8 @@ namespace iBarter.ViewModel {
             var mainWindow = Application.Current.Windows.OfType<MainWindow>();
             foreach (var window in mainWindow) {
                 SfSkinManager.SetTheme(window, new Theme() { ThemeName = SelectedThemeName });
+
+                //SfSkinManager.SetTheme(window.MenuGrid, new Theme() { ThemeName = SelectedThemeName });
             }
 
             var barterScannerWindow = Application.Current.Windows.OfType<BarterScanner>();
@@ -350,6 +352,7 @@ namespace iBarter.ViewModel {
             else {
                 TitleBarBackground = SelectedPalette.PrimaryBackground;
                 TitleBarForeground = SelectedPalette.PrimaryForeground;
+                App.myfmMain.MenuGrid.Background = 
 
                 App.myStorageVM.TitleBarBackground = SelectedPalette.PrimaryBackground;
                 App.myStorageVM.TitleBarForeground = SelectedPalette.PrimaryForeground;
