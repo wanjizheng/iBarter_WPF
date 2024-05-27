@@ -352,7 +352,6 @@ namespace iBarter.ViewModel {
             else {
                 TitleBarBackground = SelectedPalette.PrimaryBackground;
                 TitleBarForeground = SelectedPalette.PrimaryForeground;
-                App.myfmMain.MenuGrid.Background = 
 
                 App.myStorageVM.TitleBarBackground = SelectedPalette.PrimaryBackground;
                 App.myStorageVM.TitleBarForeground = SelectedPalette.PrimaryForeground;
