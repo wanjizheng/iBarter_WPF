@@ -60,7 +60,6 @@ namespace iBarter {
             //mySplashScreen = new SplashScreen();
             myfmMain = new MainWindow();
 
-
             this.ShutdownMode = ShutdownMode.OnMainWindowClose;
         }
 
