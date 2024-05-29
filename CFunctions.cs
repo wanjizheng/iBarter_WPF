@@ -381,7 +381,7 @@ namespace iBarter {
                 return myBarter;
             }
 
-            PointPlus pointPlusEdge = PureDM.PureDM.myCV.FindPicture(Math.Max(0, pointPlusAnchor.X - 300),
+            PointPlus pointPlusEdge = App.myPureDM.CV.FindPicture(Math.Max(0, pointPlusAnchor.X - 300),
                 pointPlusAnchor.Y - 5, pointPlusAnchor.X - 5, pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5,
                 "\\Images\\edge.bmp", 0.8, CV.Mode.OpenCV, false);
 
@@ -391,7 +391,7 @@ namespace iBarter {
 
             //App.dmSoft.Capture(pointPlusEdge.X + pointPlusEdge.Size.Width, pointPlusAnchor.Y - 2, pointPlusAnchor.X - 2, pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5, "island.bmp");
             //Thread.Sleep(100);
-            string strIsland = PureDM.PureDM.myCV.OCRString(pointPlusEdge.X + pointPlusEdge.Size.Width,
+            string strIsland = App.myPureDM.CV.OCRString(pointPlusEdge.X + pointPlusEdge.Size.Width,
                 pointPlusAnchor.Y - 2, pointPlusAnchor.X - 2, pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5);
             myBarter = new Barter();
 
@@ -402,7 +402,7 @@ namespace iBarter {
             int intY1 = pointPlusAnchor.Y - 2;
             int intX2 = pointPlusAnchor.X + 700;
             int intY2 = pointPlusAnchor.Y + 60;
-            PureDM.PureDM.myDM.Capture(intX1, intY1, intX2, intY2, "barterItems.bmp");
+            App.myPureDM.DM.Capture(intX1, intY1, intX2, intY2, "barterItems.bmp");
 
 
             string strParleyPath = "\\Images\\Parley.bmp";
@@ -411,11 +411,11 @@ namespace iBarter {
                 strParleyPath = "\\Images\\Parley2.bmp";
             }
 
-            PointPlus pointPlusParley = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
+            PointPlus pointPlusParley = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2,
                 strParleyPath, 0.8, CV.Mode.OpenCV, false);
 
             if (pointPlusParley.IsEmpty) {
-                pointPlusParley = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
+                pointPlusParley = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2,
                     "\\Images\\Parley2.bmp", 0.8, CV.Mode.OpenCV, false);
                 GameFont = FontType.DejaVuSans;
             }
@@ -427,11 +427,11 @@ namespace iBarter {
                 strRequiredPath = "\\Images\\Required2.bmp";
             }
 
-            PointPlus pointPlusRequired = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
+            PointPlus pointPlusRequired = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2,
                 strRequiredPath, 0.8, CV.Mode.OpenCV, false);
 
 
-            string strParley = PureDM.PureDM.myCV.OCRString(pointPlusParley.X + pointPlusParley.Size.Width,
+            string strParley = App.myPureDM.CV.OCRString(pointPlusParley.X + pointPlusParley.Size.Width,
                 pointPlusParley.Y, pointPlusRequired.X, pointPlusParley.Y + pointPlusParley.Size.Height,
                 CV.OCRType.Number);
 
@@ -450,12 +450,12 @@ namespace iBarter {
                 strRemainingPath = "\\Images\\Remaining2.bmp";
             }
 
-            PointPlus pointPlusRemaining = PureDM.PureDM.myCV.FindPicture(0,
+            PointPlus pointPlusRemaining = App.myPureDM.CV.FindPicture(0,
                 pointPlusAnchor.Y + pointPlusAnchor.Size.Height, App.myPureDM.WindowWidth, pointPlusAnchor.Y + 60,
                 strRemainingPath, 0.8, CV.Mode.OpenCV, false);
 
 
-            string strRemaining = PureDM.PureDM.myCV.OCRString(pointPlusRemaining.X + pointPlusRemaining.Size.Width,
+            string strRemaining = App.myPureDM.CV.OCRString(pointPlusRemaining.X + pointPlusRemaining.Size.Width,
                 pointPlusRemaining.Y, pointPlusRemaining.X + pointPlusRemaining.Size.Width + 30,
                 pointPlusRemaining.Y + pointPlusRemaining.Size.Height + 2, CV.OCRType.Number);
 
@@ -519,7 +519,7 @@ namespace iBarter {
             //     }
             // }
             foreach (Items item in App.listItems) {
-                PointPlus myPP = PureDM.PureDM.myCV.FindPicture(intX1, intY1, intX2, intY2,
+                PointPlus myPP = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2,
                     "\\Images\\Items\\" + item.ItemID + ".bmp", 0.4, 0.8, 1, CV.Mode.OpenCV, false);
                 if (myPP.X != -1 && myPP.Y != -1) {
                     listPointPlus.Add(myPP);
@@ -573,7 +573,7 @@ namespace iBarter {
                 strID1 = "800011";
             }
 
-            string strNumber1 = PureDM.PureDM.myCV.OCRString(listPointPlus[0].X,
+            string strNumber1 = App.myPureDM.CV.OCRString(listPointPlus[0].X,
                 (int)(listPointPlus[0].Y + (listPointPlus[0].Size.Height * 0.6)),
                 listPointPlus[0].X + listPointPlus[0].Size.Width, listPointPlus[0].Y + listPointPlus[0].Size.Height,
                 CV.OCRType.Number, CV.OCRMode.Diff, false, strID1);
@@ -596,7 +596,7 @@ namespace iBarter {
                     strID2 = "800011";
                 }
 
-                strNumber2 = PureDM.PureDM.myCV.OCRString(listPointPlus[1].X,
+                strNumber2 = App.myPureDM.CV.OCRString(listPointPlus[1].X,
                     (int)(listPointPlus[1].Y + (listPointPlus[1].Size.Height * 0.6)),
                     listPointPlus[1].X + listPointPlus[1].Size.Width, listPointPlus[1].Y + listPointPlus[1].Size.Height,
                     CV.OCRType.Number, CV.OCRMode.Diff, false, strID2);
