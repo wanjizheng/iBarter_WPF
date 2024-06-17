@@ -41,7 +41,7 @@ namespace iBarter {
 
 
         public App() {
-            SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1NBaF5cXmtCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdnWXtec3RcRmRYUUdxWUM=");
+            SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1NCaF5cXmZCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdnWXlfd3RTQmBcVER0Xkc=");
             
             SfSkinManager.ApplyStylesOnApplication = true;
 
