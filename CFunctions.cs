@@ -175,6 +175,7 @@ namespace iBarter {
                 i++;
                 //Thread.Sleep(500);
             }
+
             if (_itemID == "") {
                 Log("Done!", Brushes.Red);
             }
@@ -632,256 +633,172 @@ namespace iBarter {
 
 
         public EnumLists.Island IslandEnum(string _island) {
-            if (_island.Contains("Ajir")) {
-                return EnumLists.Island.Ajir;
+            switch (_island) {
+                case string s when s.Contains("Ajir"):
+                    return EnumLists.Island.Ajir;
+                case string s when s.Contains("Albresser"):
+                    return EnumLists.Island.Albresser;
+                case string s when s.Contains("Almai"):
+                    return EnumLists.Island.Almai;
+                case string s when s.Contains("Al-Naha") || s.Contains("AI-Naha") || s.Contains("Al_Naha"):
+                    return EnumLists.Island.Al_Naha;
+                case string s when s.Contains("Ancient"):
+                    return EnumLists.Island.Ancient;
+                case string s when s.Contains("Angie"):
+                    return EnumLists.Island.Angie;
+                case string s when s.Contains("Arakil"):
+                    return EnumLists.Island.Arakil;
+                case string s when s.Contains("Arita"):
+                    return EnumLists.Island.Arita;
+                case string s when s.Contains("Baeza"):
+                    return EnumLists.Island.Baeza;
+                case string s when s.Contains("Balvege"):
+                    return EnumLists.Island.Balvege;
+                case string s when s.Contains("Barater"):
+                    return EnumLists.Island.Barater;
+                case string s when s.Contains("Baremi"):
+                    return EnumLists.Island.Baremi;
+                case string s when s.Contains("Beiruwa"):
+                    return EnumLists.Island.Beiruwa;
+                case string s when s.Contains("Haran") || s.Contains("ShipwreckedHaran'sCarg") || s.Contains("Shipwrecked Haran"):
+                    return EnumLists.Island.Haran;
+                case string s when s.Contains("Carrack"):
+                    return EnumLists.Island.Carrack;
+                case string s when s.Contains("Cholace"):
+                    return EnumLists.Island.Cholace;
+                case string s when s.Contains("Cox Pirates") || s.Contains("Cox_Pirates"):
+                    return EnumLists.Island.Cox_Pirates;
+                case string s when s.Contains("Crow"):
+                    return EnumLists.Island.Crow;
+                case string s when s.Contains("Daton"):
+                    return EnumLists.Island.Daton;
+                case string s when s.Contains("Delinghart"):
+                    return EnumLists.Island.Delinghart;
+                case string s when s.Contains("Derko"):
+                    return EnumLists.Island.Derko;
+                case string s when s.Contains("Duch"):
+                    return EnumLists.Island.Duch;
+                case string s when s.Contains("Dunde"):
+                    return EnumLists.Island.Dunde;
+                case string s when s.Contains("Eberdeen"):
+                    return EnumLists.Island.Eberdeen;
+                case string s when s.Contains("Ephde Rune") || s.Contains("Ephde_Rune") || s.Contains("Ephde"):
+                    return EnumLists.Island.Ephde_Rune;
+                case string s when s.Contains("Esfah"):
+                    return EnumLists.Island.Esfah;
+                case string s when s.Contains("Eveto") || s.Contains("Evelo"):
+                    return EnumLists.Island.Eveto;
+                case string s when s.Contains("Ginburrey"):
+                    return EnumLists.Island.Ginburrey;
+                case string s when s.Contains("Hakoven"):
+                    return EnumLists.Island.Hakoven;
+                case string s when s.Contains("Halmad"):
+                    return EnumLists.Island.Halmad;
+                case string s when s.Contains("Iliya") || s.Contains("liya"):
+                    return EnumLists.Island.Iliya;
+                case string s when s.Contains("Unfinished") || s.Contains("UnfinishedAdriftVessel") || s.Contains("Unfinished Adrift"):
+                    return EnumLists.Island.Unfinished;
+                case string s when s.Contains("Invernen"):
+                    return EnumLists.Island.Invernen;
+                case string s when s.Contains("Kanvera"):
+                    return EnumLists.Island.Kanvera;
+                case string s when s.Contains("Kashuma"):
+                    return EnumLists.Island.Kashuma;
+                case string s when s.Contains("Kuit"):
+                    return EnumLists.Island.Kuit;
+                case string s when s.Contains("Lantinia"):
+                    return EnumLists.Island.Lantinia;
+                case string s when s.Contains("Lema"):
+                    return EnumLists.Island.Lema;
+                case string s when s.Contains("Lerao"):
+                    return EnumLists.Island.Lerao;
+                case string s when s.Contains("Lisz"):
+                    return EnumLists.Island.Lisz;
+                case string s when s.Contains("Louruve"):
+                    return EnumLists.Island.Louruve;
+                case string s when s.Contains("Luivano"):
+                    return EnumLists.Island.Luivano;
+                case string s when s.Contains("Mariveno"):
+                    return EnumLists.Island.Mariveno;
+                case string s when s.Contains("Marka"):
+                    return EnumLists.Island.Marka;
+                case string s when s.Contains("Marlene"):
+                    return EnumLists.Island.Marlene;
+                case string s when s.Contains("Modric"):
+                    return EnumLists.Island.Modric;
+                case string s when s.Contains("Narvo"):
+                    return EnumLists.Island.Narvo;
+                case string s when s.Contains("Netnume"):
+                    return EnumLists.Island.Netnume;
+                case string s when s.Contains("Oben"):
+                    return EnumLists.Island.Oben;
+                case string s when s.Contains("Orffs") || s.Contains("Drffs"):
+                    return EnumLists.Island.Orffs;
+                case string s when s.Contains("Orisha"):
+                    return EnumLists.Island.Orisha;
+                case string s when s.Contains("Ostra") || s.Contains("Dstra") || s.Contains("Qstra"):
+                    return EnumLists.Island.Ostra;
+                case string s when s.Contains("Padix"):
+                    return EnumLists.Island.Padix;
+                case string s when s.Contains("Pakio"):
+                    return EnumLists.Island.Pakio;
+                case string s when s.Contains("Paratama"):
+                    return EnumLists.Island.Paratama;
+                case string s when s.Contains("Pilava"):
+                    return EnumLists.Island.Pilava;
+                case string s when s.Contains("Portanen"):
+                    return EnumLists.Island.Portanen;
+                case string s when s.Contains("Pujara"):
+                    return EnumLists.Island.Pujara;
+                case string s when s.Contains("Racid"):
+                    return EnumLists.Island.Racid;
+                case string s when s.Contains("Rameda"):
+                    return EnumLists.Island.Rameda;
+                case string s when s.Contains("Randis"):
+                    return EnumLists.Island.Randis;
+                case string s when s.Contains("Rickun"):
+                    return EnumLists.Island.Rickun;
+                case string s when s.Contains("Riyed") || s.Contains("Ried"):
+                    return EnumLists.Island.Riyed;
+                case string s when s.Contains("Rosevan"):
+                    return EnumLists.Island.Rosevan;
+                case string s when s.Contains("Serca"):
+                    return EnumLists.Island.Serca;
+                case string s when s.Contains("Shasha"):
+                    return EnumLists.Island.Shasha;
+                case string s when s.Contains("Shirna"):
+                    return EnumLists.Island.Shirna;
+                case string s when s.Contains("Sokota"):
+                    return EnumLists.Island.Sokota;
+                case string s when s.Contains("Staren"):
+                    return EnumLists.Island.Staren;
+                case string s when s.Contains("Taramura"):
+                    return EnumLists.Island.Taramura;
+                case string s when s.Contains("Tashu"):
+                    return EnumLists.Island.Tashu;
+                case string s when s.Contains("Teste"):
+                    return EnumLists.Island.Teste;
+                case string s when s.Contains("Teyamal"):
+                    return EnumLists.Island.Teyamal;
+                case string s when s.Contains("Theonil"):
+                    return EnumLists.Island.Theonil;
+                case string s when s.Contains("Tigris"):
+                    return EnumLists.Island.Tigris;
+                case string s when s.Contains("Tinberra"):
+                    return EnumLists.Island.Tinberra;
+                case string s when s.Contains("Tulu"):
+                    return EnumLists.Island.Tulu;
+                case string s when s.Contains("Wandering"):
+                    return EnumLists.Island.Wandering;
+                case string s when s.Contains("Weita"):
+                    return EnumLists.Island.Weita;
+                case string s when s.Contains("Marine"):
+                    return EnumLists.Island.Marine;
+                case string s when s.Contains("Boa"):
+                    return EnumLists.Island.Boa;
+                default:
+                    return EnumLists.Island.UnKnown;
             }
-            else if (_island.Contains("Albresser")) {
-                return EnumLists.Island.Albresser;
-            }
-            else if (_island.Contains("Almai")) {
-                return EnumLists.Island.Almai;
-            }
-            else if (_island.Contains("Al-Naha") || _island.Contains("AI-Naha") || _island.Contains("Al_Naha")) {
-                return EnumLists.Island.Al_Naha;
-            }
-            else if (_island.Contains("Ancient")) {
-                return EnumLists.Island.Ancient;
-            }
-            else if (_island.Contains("Angie")) {
-                return EnumLists.Island.Angie;
-            }
-            else if (_island.Contains("Arakil")) {
-                return EnumLists.Island.Arakil;
-            }
-            else if (_island.Contains("Arita")) {
-                return EnumLists.Island.Arita;
-            }
-            else if (_island.Contains("Baeza")) {
-                return EnumLists.Island.Baeza;
-            }
-            else if (_island.Contains("Balvege")) {
-                return EnumLists.Island.Balvege;
-            }
-            else if (_island.Contains("Barater")) {
-                return EnumLists.Island.Barater;
-            }
-            else if (_island.Contains("Baremi")) {
-                return EnumLists.Island.Baremi;
-            }
-            else if (_island.Contains("Beiruwa")) {
-                return EnumLists.Island.Beiruwa;
-            }
-            else if (_island.Contains("Haran") || _island.Contains("ShipwreckedHaran'sCarg") ||
-                     _island.Contains("Shipwrecked Haran")) {
-                return EnumLists.Island.Haran;
-            }
-            else if (_island.Contains("Carrack")) {
-                return EnumLists.Island.Carrack;
-            }
-            else if (_island.Contains("Cholace")) {
-                return EnumLists.Island.Cholace;
-            }
-            else if (_island.Contains("Cox Pirates") || _island.Contains("Cox_Pirates")) {
-                return EnumLists.Island.Cox_Pirates;
-            }
-            else if (_island.Contains("Crow")) {
-                return EnumLists.Island.Crow;
-            }
-            else if (_island.Contains("Daton")) {
-                return EnumLists.Island.Daton;
-            }
-            else if (_island.Contains("Delinghart")) {
-                return EnumLists.Island.Delinghart;
-            }
-            else if (_island.Contains("Derko")) {
-                return EnumLists.Island.Derko;
-            }
-            else if (_island.Contains("Duch")) {
-                return EnumLists.Island.Duch;
-            }
-            else if (_island.Contains("Dunde")) {
-                return EnumLists.Island.Dunde;
-            }
-            else if (_island.Contains("Eberdeen")) {
-                return EnumLists.Island.Eberdeen;
-            }
-            else if (_island.Contains("Ephde Rune") || _island.Contains("Ephde_Rune") || _island.Contains("Ephde")) {
-                return EnumLists.Island.Ephde_Rune;
-            }
-            else if (_island.Contains("Esfah")) {
-                return EnumLists.Island.Esfah;
-            }
-            else if (_island.Contains("Eveto") || _island.Contains("Evelo")) {
-                return EnumLists.Island.Eveto;
-            }
-            else if (_island.Contains("Ginburrey")) {
-                return EnumLists.Island.Ginburrey;
-            }
-            else if (_island.Contains("Hakoven")) {
-                return EnumLists.Island.Hakoven;
-            }
-            else if (_island.Contains("Halmad")) {
-                return EnumLists.Island.Halmad;
-            }
-            else if (_island.Contains("Iliya") || _island.Contains("liya")) {
-                return EnumLists.Island.Iliya;
-            }
-            else if (_island.Contains("Unfinished") || _island.Contains("UnfinishedAdriftVessel") ||
-                     _island.Contains("Unfinished Adrift")) {
-                return EnumLists.Island.Unfinished;
-            }
-            else if (_island.Contains("Invernen")) {
-                return EnumLists.Island.Invernen;
-            }
-            else if (_island.Contains("Kanvera")) {
-                return EnumLists.Island.Kanvera;
-            }
-            else if (_island.Contains("Kashuma")) {
-                return EnumLists.Island.Kashuma;
-            }
-            else if (_island.Contains("Kuit")) {
-                return EnumLists.Island.Kuit;
-            }
-            else if (_island.Contains("Lantinia")) {
-                return EnumLists.Island.Lantinia;
-            }
-            else if (_island.Contains("Lema")) {
-                return EnumLists.Island.Lema;
-            }
-            else if (_island.Contains("Lerao")) {
-                return EnumLists.Island.Lerao;
-            }
-            else if (_island.Contains("Lisz")) {
-                return EnumLists.Island.Lisz;
-            }
-            else if (_island.Contains("Louruve")) {
-                return EnumLists.Island.Louruve;
-            }
-            else if (_island.Contains("Luivano")) {
-                return EnumLists.Island.Luivano;
-            }
-            else if (_island.Contains("Mariveno")) {
-                return EnumLists.Island.Mariveno;
-            }
-            else if (_island.Contains("Marka")) {
-                return EnumLists.Island.Marka;
-            }
-            else if (_island.Contains("Marlene")) {
-                return EnumLists.Island.Marlene;
-            }
-            else if (_island.Contains("Modric")) {
-                return EnumLists.Island.Modric;
-            }
-            else if (_island.Contains("Narvo")) {
-                return EnumLists.Island.Narvo;
-            }
-            else if (_island.Contains("Netnume")) {
-                return EnumLists.Island.Netnume;
-            }
-            else if (_island.Contains("Oben")) {
-                return EnumLists.Island.Oben;
-            }
-            else if (_island.Contains("Orffs")) {
-                return EnumLists.Island.Orffs;
-            }
-            else if (_island.Contains("Drffs")) {
-                return EnumLists.Island.Orffs;
-            }
-            else if (_island.Contains("Orisha")) {
-                return EnumLists.Island.Orisha;
-            }
-            else if (_island.Contains("Ostra") || _island.Contains("Dstra") || _island.Contains("Qstra")) {
-                return EnumLists.Island.Ostra;
-            }
-            else if (_island.Contains("Padix")) {
-                return EnumLists.Island.Padix;
-            }
-            else if (_island.Contains("Pakio")) {
-                return EnumLists.Island.Pakio;
-            }
-            else if (_island.Contains("Paratama")) {
-                return EnumLists.Island.Paratama;
-            }
-            else if (_island.Contains("Pilava")) {
-                return EnumLists.Island.Pilava;
-            }
-            else if (_island.Contains("Portanen")) {
-                return EnumLists.Island.Portanen;
-            }
-            else if (_island.Contains("Pujara")) {
-                return EnumLists.Island.Pujara;
-            }
-            else if (_island.Contains("Racid")) {
-                return EnumLists.Island.Racid;
-            }
-            else if (_island.Contains("Rameda")) {
-                return EnumLists.Island.Rameda;
-            }
-            else if (_island.Contains("Randis")) {
-                return EnumLists.Island.Randis;
-            }
-            else if (_island.Contains("Rickun")) {
-                return EnumLists.Island.Rickun;
-            }
-            else if (_island.Contains("Riyed") || _island.Contains("Ried")) {
-                return EnumLists.Island.Riyed;
-            }
-            else if (_island.Contains("Rosevan")) {
-                return EnumLists.Island.Rosevan;
-            }
-            else if (_island.Contains("Serca")) {
-                return EnumLists.Island.Serca;
-            }
-            else if (_island.Contains("Shasha")) {
-                return EnumLists.Island.Shasha;
-            }
-            else if (_island.Contains("Shirna")) {
-                return EnumLists.Island.Shirna;
-            }
-            else if (_island.Contains("Sokota")) {
-                return EnumLists.Island.Sokota;
-            }
-            else if (_island.Contains("Staren")) {
-                return EnumLists.Island.Staren;
-            }
-            else if (_island.Contains("Taramura")) {
-                return EnumLists.Island.Taramura;
-            }
-            else if (_island.Contains("Tashu")) {
-                return EnumLists.Island.Tashu;
-            }
-            else if (_island.Contains("Teste")) {
-                return EnumLists.Island.Teste;
-            }
-            else if (_island.Contains("Teyamal")) {
-                return EnumLists.Island.Teyamal;
-            }
-            else if (_island.Contains("Theonil")) {
-                return EnumLists.Island.Theonil;
-            }
-            else if (_island.Contains("Tigris")) {
-                return EnumLists.Island.Tigris;
-            }
-            else if (_island.Contains("Tinberra")) {
-                return EnumLists.Island.Tinberra;
-            }
-            else if (_island.Contains("Tulu")) {
-                return EnumLists.Island.Tulu;
-            }
-            else if (_island.Contains("Wandering")) {
-                return EnumLists.Island.Wandering;
-            }
-            else if (_island.Contains("Weita")) {
-                return EnumLists.Island.Weita;
-            }
-            else if (_island.Contains("Marine")) {
-                return EnumLists.Island.Marine;
-            }
-            else if (_island.Contains("Boa")) {
-                return EnumLists.Island.Boa;
-            }
-            else
-                return EnumLists.Island.UnKnown;
         }
 
 
