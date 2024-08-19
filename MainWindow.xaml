@@ -335,6 +335,9 @@
                     <StatusBarItem>
                         <TextBlock x:Name="statusBarItem_XY" x:FieldModifier="public" />
                     </StatusBarItem>
+                    <StatusBarItem HorizontalAlignment="Right">
+                        <TextBlock x:Name="statusBarItem_Version" x:FieldModifier="public" Text="Version:" />
+                    </StatusBarItem>
 
                 </StatusBar>
             </Grid>

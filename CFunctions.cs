@@ -452,7 +452,7 @@ namespace iBarter {
 
             PointPlus pointPlusRemaining = App.myPureDM.CV.FindPicture(0,
                 pointPlusAnchor.Y + pointPlusAnchor.Size.Height, App.myPureDM.WindowWidth, pointPlusAnchor.Y + 60,
-                strRemainingPath, 0.8, CV.Mode.OpenCV, false);
+                strRemainingPath, 0.7, CV.Mode.OpenCV, false);
 
 
             string strRemaining = App.myPureDM.CV.OCRString(pointPlusRemaining.X + pointPlusRemaining.Size.Width,
@@ -464,10 +464,11 @@ namespace iBarter {
                 intRemaining = int.Parse(strRemaining);
             }
             catch (Exception e) {
+                Log("Error, cannot identify the remaining number => " + strIsland, Brushes.IndianRed);
             }
 
             if (IslandEnum(strIsland) == EnumLists.Island.UnKnown) {
-                App.myCFun.Log("Unknown islands! Double check your result! => " + strIsland, Brushes.Red);
+                Log("Unknown islands! Double check your result! => " + strIsland, Brushes.Red);
             }
 
             //Islands myIslands = new Islands(IslandEnum(strIsland), intParley, intRemaining);
