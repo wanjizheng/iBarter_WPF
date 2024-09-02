@@ -43,7 +43,7 @@ namespace iBarter {
         public App() {
             SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1NCaF5cXmZCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdnWXlfd3RTQmBcVER0Xkc=");
             
-            SfSkinManager.ApplyStylesOnApplication = true;
+            //SfSkinManager.ApplyStylesOnApplication = true;
 
             myCFun = new CFunctions();
             listItems = myCFun.LoadItemsCSV();
@@ -60,7 +60,7 @@ namespace iBarter {
             //mySplashScreen = new SplashScreen();
             myfmMain = new MainWindow();
 
-            myfmMain.statusBarItem_Version.Text = "Version: Beta_4.0";
+            myfmMain.statusBarItem_Version.Text = "Version: Beta_4.1";
 
             this.ShutdownMode = ShutdownMode.OnMainWindowClose;
         }

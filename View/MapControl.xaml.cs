@@ -576,7 +576,9 @@ namespace iBarter.View {
                 myLabel.Name = "Label_" + _barter.IsLand.IslandsName + "Temp";
             }
 
+            myLabel.UpdateLayout();
             myLabel.Foreground = _brush;
+            //myLabel.Foreground = Brushes.Red;
             myLabel.HorizontalAlignment = HorizontalAlignment.Left;
             myLabel.VerticalAlignment = VerticalAlignment.Top;
             if (_barter.Item1Name != "" && _barter.Item2Name != "") {
@@ -612,6 +614,7 @@ namespace iBarter.View {
                 Line myLine = new Line();
                 myLine.Name = "Line_" + _barter.IsLand.IslandsName;
                 myLine.Stroke = _brush;
+                //myLine.Stroke = Brushes.Red;
                 myLine.StrokeThickness = 1;
 
                 double x = myGrid_Image.ActualWidth / 2;
