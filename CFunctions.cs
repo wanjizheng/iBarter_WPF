@@ -453,7 +453,7 @@ namespace iBarter {
 
             PointPlus pointPlusRemaining = App.myPureDM.CV.FindPicture(0,
                 pointPlusAnchor.Y + pointPlusAnchor.Size.Height, App.myPureDM.WindowWidth, pointPlusAnchor.Y + 60,
-                strRemainingPath, 0.7, CV.Mode.OpenCV, false);
+                strRemainingPath, 0.6, CV.Mode.OpenCV, false);
 
 
             string strRemaining = App.myPureDM.CV.OCRString(pointPlusRemaining.X + pointPlusRemaining.Size.Width,
@@ -623,7 +623,7 @@ namespace iBarter {
                     App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemLV).FirstOrDefault(), intNumber2);
 
             Log(
-                "<" + myIslands.Island + "-" + myIslands.Remaining + "~" + myIslands.Parley + "> Item1: " +
+                "<" + myIslands.Island + " - " + myIslands.Remaining + " ~ " + myIslands.Parley + "> Item1: " +
                 item1.ItemName + "=>" + intNumber1 + " | Item2: " + item2.ItemName + "=>" + intNumber2, Brushes.Blue);
             myBarter.Item1 = item1;
             myBarter.Item2 = item2;
