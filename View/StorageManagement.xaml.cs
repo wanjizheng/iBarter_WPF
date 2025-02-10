@@ -49,11 +49,11 @@ namespace iBarter.View {
                 listItems.Add("Portrait of the Ancient");
                 listItems.Add("102 Year Old Golden Herb");
                 listItems.Add("Golden Fish Scale");
-                listItems.Add("Taxidermied White Caterpillar");
+                listItems.Add("Stuffed White Caterpillar");
                 listItems.Add("Faded Gold Dragon Figurine");
                 listItems.Add("Supreme Gold Candlestick");
                 listItems.Add("Statues Tear");
-                listItems.Add("Taxidermied Morpho Butterfly");
+                listItems.Add("Stuffed Morpho Butterfly");
                 listItems.Add("Azure Quartz");
                 listItems.Add("37 Year Old Herbal Wine");
                 listItems.Add("Octagonal Box");

@@ -124,11 +124,32 @@ namespace iBarter {
                 App.myPureDM = new PureDM.PureDM("wanjizheng1c1f9b855a9f822cbf24afa526dfca3c");
                 App.myPureDM.GetProcessName("BlackDesert64");
                 App.myPureDM.BindMode = 103;
-                App.myPureDM.DisplayMode = "dx.graphic.3d.10plus";
                 // App.myPureDM.MouseMode = "dx.public.active.api|dx.public.active.message|dx.mouse.position.lock.api|dx.mouse.state.api|dx.mouse.api|dx.mouse.focus.input.api|dx.mouse.focus.input.message|dx.mouse.clip.lock.api|dx.mouse.input.lock.api| dx.mouse.cursor";
+
+
+
+
+                App.myPureDM.DisplayMode = "dx.graphic.3d.10plus";
+
+
+
+
+
+
+
+
+
+
                 App.myPureDM.MouseMode = "dx.mouse.position.lock.api|dx.mouse.focus.input.api|dx.mouse.focus.input.message|dx.mouse.clip.lock.api|dx.mouse.state.api|dx.mouse.api|dx.mouse.cursor";
                 App.myPureDM.KeyboardMode = "dx.keypad.input.lock.api|dx.keypad.state.api|dx.keypad.api";
                 App.myPureDM.PublicMode = "dx.public.graphic.protect|dx.public.anti.api|dx.public.km.protect|dx.public.input.ime|dx.public.focus.message";
+
+                // App.myPureDM.DisplayMode = "normal";
+                // App.myPureDM.MouseMode = "normal";
+                // App.myPureDM.KeyboardMode = "normal";
+                // App.myPureDM.PublicMode = "";
+
+
                 // App.mySplashScreen.worker.ReportProgress(50);
                 if ((int)App.myPureDM.Hwnd > 0) {
                     App.myPureDM.DM.SetWindowState((int)App.myPureDM.Hwnd, 1);
