@@ -120,7 +120,7 @@
                     <syncfusion:GridImageColumn HeaderText="Icon" MappingName="Item1Icon" Width="40"
                                                 TextAlignment="Center" AllowEditing="True" />
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Item1"
-                                                            AllowAutoComplete="False"
+                                                            AllowAutoComplete="True"
                                                             AutoGenerateColumns="False"
                                                             DisplayMember="ItemName"
                                                             HeaderText="Item1 Name"

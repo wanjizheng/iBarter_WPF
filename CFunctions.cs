@@ -433,7 +433,7 @@ namespace iBarter {
 
 
             string strParley = App.myPureDM.CV.OCRString(pointPlusParley.X + pointPlusParley.Size.Width,
-                pointPlusParley.Y, pointPlusRequired.X, pointPlusParley.Y + pointPlusParley.Size.Height,
+                pointPlusParley.Y, pointPlusRequired.X + 1, pointPlusParley.Y + pointPlusParley.Size.Height,
                 CV.OCRType.Number);
 
             int intParley = App.listIslands.Where(land => land.Island == IslandEnum(strIsland))
@@ -441,6 +441,9 @@ namespace iBarter {
 
             try {
                 intParley = int.Parse(strParley);
+                if (intParley < 5000) {
+                    intParley = intParley * 10 + 6;
+                }
             }
             catch (Exception e) {
             }
