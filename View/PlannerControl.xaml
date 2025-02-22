@@ -191,7 +191,7 @@
                                                 AllowEditing="False" AllowResizing="True">
                     </syncfusion:GridImageColumn>
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Item"
-                                                            AllowAutoComplete="False"
+                                                            AllowAutoComplete="True"
                                                             AutoGenerateColumns="False"
                                                             DisplayMember="ItemName"
                                                             HeaderText="Item"
@@ -217,7 +217,7 @@
                                                 TextAlignment="Center"
                                                 AllowEditing="False" AllowResizing="True" />
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Exchange"
-                                                            AllowAutoComplete="False"
+                                                            AllowAutoComplete="True"
                                                             AutoGenerateColumns="False"
                                                             DisplayMember="ItemName"
                                                             HeaderText="Exchange"

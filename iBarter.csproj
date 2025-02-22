@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <TargetFramework>net9.0-windows7.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -121,7 +121,7 @@
     <PackageReference Include="Syncfusion.Themes.Windows11Dark.WPF" Version="28.2.6" />
     <PackageReference Include="Syncfusion.Themes.Windows11Light.WPF" Version="28.2.6" />
     <PackageReference Include="Syncfusion.Tools.WPF" Version="28.2.6" />
-    <PackageReference Include="syncfusion.ui.wpf.net" Version="28.2.6" />
+    <PackageReference Include="Syncfusion.UI.WPF.NET" Version="28.2.6" />
     <PackageReference Include="System.Drawing.Common" Version="9.0.2" />
     <PackageReference Include="System.Private.Uri" Version="4.3.2" />
     <PackageReference Include="System.Text.Json" Version="9.0.2" />

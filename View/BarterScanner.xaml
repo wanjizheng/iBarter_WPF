@@ -48,7 +48,12 @@
         </collections:ArrayList>
     </syncfusion:ChromelessWindow.RightHeaderItemsSource>
     <Grid>
-        <StackPanel>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="749*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="0*"/>
+        </Grid.ColumnDefinitions>
+        <StackPanel Grid.ColumnSpan="2">
             <syncfusion:ToolBarAdv x:Name="ScannerToolBar">
                 <syncfusion:ButtonAdv
                     Name="ButtonAdv_Scan"
@@ -120,7 +125,7 @@
                     <syncfusion:GridImageColumn HeaderText="Icon" MappingName="Item1Icon" Width="40"
                                                 TextAlignment="Center" AllowEditing="True" />
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Item1"
-                                                            AllowAutoComplete="True"
+                                                            AllowAutoComplete="True" 
                                                             AutoGenerateColumns="False"
                                                             DisplayMember="ItemName"
                                                             HeaderText="Item1 Name"
@@ -150,7 +155,7 @@
                                                 Width="42">
                     </syncfusion:GridImageColumn>
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Item2"
-                                                            AllowAutoComplete="False"
+                                                            AllowAutoComplete="True"
                                                             AutoGenerateColumns="False"
                                                             DisplayMember="ItemName"
                                                             HeaderText="Item2 Name"
