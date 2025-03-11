@@ -538,6 +538,7 @@ namespace iBarter.View {
                     DataGrid_Planner.BeginInit();
                     App.myPVM.BarterCollection.Clear();
                     DataGrid_Planner.EndInit();
+                    App.myStorageVM.SaveData();
                 }
             }
         }
