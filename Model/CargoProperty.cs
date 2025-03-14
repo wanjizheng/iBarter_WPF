@@ -10,7 +10,7 @@ namespace iBarter.Model {
     public class CargoProperty : INotifyPropertyChanged {
         private double propExtraLT, propTotalLT, doubCurrentLT;
 
-        public CargoProperty(double _extralLT = 2109, double _totalLT = 21500, double _currentLT = 0) {
+        public CargoProperty(double _extralLT = -1, double _totalLT = -1, double _currentLT = 0) {
             propExtraLT = _extralLT;
             propTotalLT = _totalLT;
             doubCurrentLT = _currentLT;
@@ -63,10 +63,12 @@ namespace iBarter.Model {
                     string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "Resources\\myShipProperty_Data.json";
 
                     using (FileStream streamData = new FileStream(strPath_Data, FileMode.Create, FileAccess.Write)) {
-                        string jsonData = JsonConvert.SerializeObject(App.myCargoProperty);
-                        //File.WriteAllText(strPath_Data, jsonData);
-                        byte[] byteArray = System.Text.Encoding.UTF8.GetBytes(jsonData);
-                        streamData.Write(byteArray, 0, byteArray.Length);
+                        if (App.myCargoProperty.TotalLT != -1 && App.myCargoProperty.ExtraLT != -1) {
+                            string jsonData = JsonConvert.SerializeObject(App.myCargoProperty);
+                            //File.WriteAllText(strPath_Data, jsonData);
+                            byte[] byteArray = System.Text.Encoding.UTF8.GetBytes(jsonData);
+                            streamData.Write(byteArray, 0, byteArray.Length);
+                        }
                     }
 
                     //App.myCFun.Log("Saved data.", Brushes.DarkOliveGreen);
