@@ -44,7 +44,7 @@ namespace iBarter.ViewModel {
                 if (App.myStorageVM.StorageCollection.Count > 0) {
                     string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "Resources\\myStorage_Data.json";
 
-                    using (FileStream streamData = new FileStream(strPath_Data, FileMode.Create, FileAccess.Write)) {
+                    using (FileStream streamData = new FileStream(strPath_Data, FileMode.OpenOrCreate, FileAccess.Write)) {
                         App.listStorage.Clear();
                         for (int i = 0; i < App.myStorageVM.StorageCollection.Count; i++) {
                             Items myItem = App.myStorageVM.StorageCollection[i];

@@ -333,11 +333,11 @@ namespace iBarter.View {
                                           "\\Resources\\myPlan_Data.json";
 
                     using (FileStream streamSetting =
-                           new FileStream(strPath_Setting, FileMode.Create, FileAccess.Write)) {
+                           new FileStream(strPath_Setting, FileMode.OpenOrCreate, FileAccess.Write)) {
                         DataGrid_Planner.Serialize(streamSetting);
                     }
 
-                    using (FileStream streamData = new FileStream(strPath_Data, FileMode.Create, FileAccess.Write)) {
+                    using (FileStream streamData = new FileStream(strPath_Data, FileMode.OpenOrCreate, FileAccess.Write)) {
                         App.listBarterPlanner.Clear();
                         for (int i = 0; i < App.myPVM.BarterCollection.Count; i++) {
                             Barter myBarter = App.myPVM.BarterCollection[i];

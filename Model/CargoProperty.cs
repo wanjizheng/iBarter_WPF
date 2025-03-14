@@ -19,19 +19,28 @@ namespace iBarter.Model {
         [Category("CargoProperty"), Description("Extra LT"), DisplayName("ExtraLT")]
         public double ExtraLT {
             get { return propExtraLT; }
-            set { propExtraLT = value; OnPropertyChanged(); }
+            set {
+                propExtraLT = value;
+                OnPropertyChanged();
+            }
         }
 
         [Category("CargoProperty"), Description("Total LT"), DisplayName("TotalLT")]
         public double TotalLT {
             get { return propTotalLT; }
-            set { propTotalLT = value; OnPropertyChanged(); }
+            set {
+                propTotalLT = value;
+                OnPropertyChanged();
+            }
         }
 
         [Category("CargoProperty"), Description("Current LT"), DisplayName("CurrentLT")]
         public double CurrentLT {
             get { return doubCurrentLT; }
-            set { doubCurrentLT = value; OnPropertyChanged(); }
+            set {
+                doubCurrentLT = value;
+                OnPropertyChanged();
+            }
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -62,12 +71,14 @@ namespace iBarter.Model {
                 if (App.myCargoProperty != null) {
                     string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "Resources\\myShipProperty_Data.json";
 
-                    using (FileStream streamData = new FileStream(strPath_Data, FileMode.Create, FileAccess.Write)) {
-                        if (App.myCargoProperty.TotalLT != -1 && App.myCargoProperty.ExtraLT != -1) {
+                    using (FileStream streamData = new FileStream(strPath_Data, FileMode.OpenOrCreate, FileAccess.Write)) {
+                        if (App.myCargoProperty != null && App.myCargoProperty.TotalLT != -1 && App.myCargoProperty.ExtraLT != -1) {
                             string jsonData = JsonConvert.SerializeObject(App.myCargoProperty);
-                            //File.WriteAllText(strPath_Data, jsonData);
-                            byte[] byteArray = System.Text.Encoding.UTF8.GetBytes(jsonData);
-                            streamData.Write(byteArray, 0, byteArray.Length);
+                            if (jsonData.Length > 0) {
+                                //File.WriteAllText(strPath_Data, jsonData);
+                                byte[] byteArray = System.Text.Encoding.UTF8.GetBytes(jsonData);
+                                streamData.Write(byteArray, 0, byteArray.Length);
+                            }
                         }
                     }
 

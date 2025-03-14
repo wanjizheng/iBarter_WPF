@@ -81,11 +81,15 @@ namespace iBarter.View {
 
 
                         ListBox_ShipCargo.EndInit();
-                        strPath_Data = AppDomain.CurrentDomain.BaseDirectory +
-                                       "\\Resources\\myShipProperty_Data.json";
+                        strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "\\Resources\\myShipProperty_Data.json";
                         if (File.Exists(strPath_Data)) {
                             readJsonData = File.ReadAllText(strPath_Data);
-                            App.myCargoProperty = JsonConvert.DeserializeObject<CargoProperty>(readJsonData);
+                            if (readJsonData.Length > 0) {
+                                App.myCargoProperty = JsonConvert.DeserializeObject<CargoProperty>(readJsonData);
+                            }
+                            else {
+                                App.myCargoProperty = new CargoProperty();
+                            }
                         }
                     }
                     catch (Exception exception) {
@@ -99,7 +103,8 @@ namespace iBarter.View {
                     // myCargo.TotalLT = 21500;
                     // myCargo.CurrentLT = 0;
                     // PropertyGrid_Ship.SelectedObject = myCargo;
-                    App.myCargoProperty = new CargoProperty();
+                    if (App.myCargoProperty == null)
+                        App.myCargoProperty = new CargoProperty();
                     //PropertyGrid_Ship.SelectedObject = App.myCargoProperty;
                 }
 
@@ -114,7 +119,7 @@ namespace iBarter.View {
                     string strPath_Data = AppDomain.CurrentDomain.BaseDirectory +
                                           "\\Resources\\myShipCargoItems_Data.json";
 
-                    using (FileStream streamData = new FileStream(strPath_Data, FileMode.Create, FileAccess.Write)) {
+                    using (FileStream streamData = new FileStream(strPath_Data, FileMode.OpenOrCreate, FileAccess.Write)) {
                         App.listCargoItems.Clear();
                         for (int i = 0; i < App.myCVM.CargoDetails.Count; i++) {
                             Barter myItem = App.myCVM.CargoDetails[i];
@@ -125,6 +130,7 @@ namespace iBarter.View {
 
                         string jsonData = JsonConvert.SerializeObject(App.listCargoItems);
                         //File.WriteAllText(strPath_Data, jsonData);
+
                         byte[] byteArray = System.Text.Encoding.UTF8.GetBytes(jsonData);
                         streamData.Write(byteArray, 0, byteArray.Length);
                     }
@@ -164,7 +170,7 @@ namespace iBarter.View {
         public void UpdateCargoList() {
             for (int i = App.myCVM.CargoDetails.Count - 1; i >= 0; i--) {
                 Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == App.myCVM.CargoDetails[i].IsLandName);
-                if (myBarter!= null && (myBarter.ExchangeDone || myBarter.ExchangeQuantity == 0)) {
+                if (myBarter != null && (myBarter.ExchangeDone || myBarter.ExchangeQuantity == 0)) {
                     App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails[i]);
                 }
             }
