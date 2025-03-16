@@ -120,6 +120,7 @@ namespace iBarter.View {
                                           "\\Resources\\myShipCargoItems_Data.json";
 
                     using (FileStream streamData = new FileStream(strPath_Data, FileMode.OpenOrCreate, FileAccess.Write)) {
+                        streamData.SetLength(0);
                         App.listCargoItems.Clear();
                         for (int i = 0; i < App.myCVM.CargoDetails.Count; i++) {
                             Barter myItem = App.myCVM.CargoDetails[i];

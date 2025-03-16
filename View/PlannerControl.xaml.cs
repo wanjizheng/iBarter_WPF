@@ -334,10 +334,12 @@ namespace iBarter.View {
 
                     using (FileStream streamSetting =
                            new FileStream(strPath_Setting, FileMode.OpenOrCreate, FileAccess.Write)) {
+                        streamSetting.SetLength(0);
                         DataGrid_Planner.Serialize(streamSetting);
                     }
 
                     using (FileStream streamData = new FileStream(strPath_Data, FileMode.OpenOrCreate, FileAccess.Write)) {
+                        streamData.SetLength(0);
                         App.listBarterPlanner.Clear();
                         for (int i = 0; i < App.myPVM.BarterCollection.Count; i++) {
                             Barter myBarter = App.myPVM.BarterCollection[i];

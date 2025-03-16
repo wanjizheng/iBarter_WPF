@@ -70,18 +70,18 @@ namespace iBarter.Model {
             try {
                 if (App.myCargoProperty != null) {
                     string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "Resources\\myShipProperty_Data.json";
+                    if (App.myCargoProperty != null && App.myCargoProperty.TotalLT != -1 && App.myCargoProperty.ExtraLT != -1) {
+                        using (FileStream streamData = new FileStream(strPath_Data, FileMode.OpenOrCreate, FileAccess.Write)) {
+                            streamData.SetLength(0);
 
-                    using (FileStream streamData = new FileStream(strPath_Data, FileMode.OpenOrCreate, FileAccess.Write)) {
-                        if (App.myCargoProperty != null && App.myCargoProperty.TotalLT != -1 && App.myCargoProperty.ExtraLT != -1) {
                             string jsonData = JsonConvert.SerializeObject(App.myCargoProperty);
-                            if (jsonData.Length > 0) {
+                            if (jsonData.Length > 3) {
                                 //File.WriteAllText(strPath_Data, jsonData);
                                 byte[] byteArray = System.Text.Encoding.UTF8.GetBytes(jsonData);
                                 streamData.Write(byteArray, 0, byteArray.Length);
                             }
                         }
                     }
-
                     //App.myCFun.Log("Saved data.", Brushes.DarkOliveGreen);
                 }
             }
