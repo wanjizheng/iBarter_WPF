@@ -100,7 +100,7 @@
             <!-- <CheckBox x:Name="CheckBox_ValuePack"  VerticalAlignment="Center" IsChecked="True" Checked="CheckBox_ValuePack_Checked" Unchecked="CheckBox_ValuePack_Unchecked"/> -->
             <!-- <Separator Margin="10,0,0,0" /> -->
             <Label Content="Max LV5:" VerticalAlignment="Center" />
-            <syncfusion:ComboBoxAdv x:Name="ComboBox_LV5Max" SelectedIndex="5">
+            <syncfusion:ComboBoxAdv x:Name="ComboBox_LV5Max" SelectionChanged="ComboBox_LV5Max_SelectionChanged">
                 <syncfusion:RibbonComboBoxItem Content="1" />
                 <syncfusion:RibbonComboBoxItem Content="2" />
                 <syncfusion:RibbonComboBoxItem Content="3" />
@@ -134,7 +134,7 @@
                                    CanMaintainScrollPosition="True"
                                    AllowDrop="False" LiveDataUpdateMode="AllowDataShaping"
                                    CurrentCellEndEdit="DataGrid_Planner_CurrentCellEndEdit"
-                                   CurrentCellValueChanged="DataGrid_Planner_CurrentCellValueChanged">
+                                   CurrentCellValueChanged="DataGrid_Planner_CurrentCellValueChanged" PreviewMouseWheel="DataGrid_Planner_PreviewMouseWheel">
 
                 <!-- <syncfusion:SfDataGrid.SortColumnDescriptions> -->
                 <!--     <syncfusion:SortColumnDescription ColumnName="Item1LV" SortDirection="Ascending" /> -->

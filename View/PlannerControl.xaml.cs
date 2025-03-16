@@ -1,10 +1,12 @@
 ﻿using Newtonsoft.Json;
+using Syncfusion.Pdf.Grid;
 using Syncfusion.UI.Xaml.Grid;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using Brush = System.Windows.Media.Brush;
 
@@ -31,6 +33,7 @@ namespace iBarter.View {
 
             //DataGrid_Planner.SortColumnDescriptions.Add(new SortColumnDescription() { ColumnName = "x:Column_LV", SortDirection = ListSortDirection.Ascending });
             SetupDataGridStyle();
+            LoadSavedComboBoxValue();
         }
 
         private void SetupDataGridStyle() {
@@ -258,7 +261,7 @@ namespace iBarter.View {
 
         private void FindBarterGroup(Barter _barter, int _lv, int _group) {
             _barter.BarterGroup = _group;
-            if ((_barter.Item2.ItemLV == "-1" || int.Parse(_barter.Item2.ItemLV) <= int.Parse(_barter.Item1.ItemLV)) && _barter.Item2.ItemName!="Crow Coin") {
+            if ((_barter.Item2.ItemLV == "-1" || int.Parse(_barter.Item2.ItemLV) <= int.Parse(_barter.Item1.ItemLV)) && _barter.Item2.ItemName != "Crow Coin") {
                 _barter.BarterGroup = 0;
                 return;
             }
@@ -285,7 +288,7 @@ namespace iBarter.View {
             if (File.Exists(strPath_Setting) && File.Exists(strPath_Data)) {
                 try {
                     using (var file = File.Open(strPath_Setting, FileMode.Open)) {
-                        //DataGrid_Planner.Deserialize(file);
+                        DataGrid_Planner.Deserialize(file);
                     }
                 }
                 catch (Exception exception) {
@@ -327,11 +330,9 @@ namespace iBarter.View {
         public void SaveData() {
             try {
                 if (App.myPVM.BarterCollection.Count > 0) {
-                    string strPath_Setting = AppDomain.CurrentDomain.BaseDirectory +
-                                             "\\Resources\\myPlan_Setting.xml";
-                    string strPath_Data = AppDomain.CurrentDomain.BaseDirectory +
-                                          "\\Resources\\myPlan_Data.json";
-
+                    string strPath_Setting = AppDomain.CurrentDomain.BaseDirectory + "\\Resources\\myPlan_Setting.xml";
+                    string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "\\Resources\\myPlan_Data.json";
+                    
                     using (FileStream streamSetting =
                            new FileStream(strPath_Setting, FileMode.OpenOrCreate, FileAccess.Write)) {
                         streamSetting.SetLength(0);
@@ -550,6 +551,7 @@ namespace iBarter.View {
             if (App.myPVM != null) {
                 App.myPVM.BarterCollection.Clear();
             }
+
             DataGrid_Planner.SortColumnDescriptions.Clear();
             DataGrid_Planner.EndInit();
         }
@@ -584,6 +586,40 @@ namespace iBarter.View {
 
         private void CheckBox_ValuePack_Unchecked(object sender, RoutedEventArgs e) {
             UpdateParley();
+        }
+
+        private double zoomFactor = 1.0;
+        private const double ZoomStep = 0.1;
+        private const double MinZoom = 0.5;
+        private const double MaxZoom = 2.0;
+
+        private void DataGrid_Planner_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e) {
+            if (Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)) {
+                // 计算缩放比例
+                zoomFactor += (e.Delta > 0) ? ZoomStep : -ZoomStep;
+                zoomFactor = Math.Max(MinZoom, Math.Min(MaxZoom, zoomFactor));
+
+                // 应用缩放到SfDataGrid
+                DataGrid_Planner.LayoutTransform = new ScaleTransform(zoomFactor, zoomFactor);
+
+                e.Handled = true; // 标记事件已处理，避免默认滚动行为
+            }
+        }
+
+        private void ComboBox_LV5Max_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
+            if (ComboBox_LV5Max.SelectedItem != null) {
+                // 保存选中的值
+                Properties.Settings.Default.SelectedComboBoxValue = ComboBox_LV5Max.SelectedIndex;
+                Properties.Settings.Default.Save();
+            }
+        }
+
+        private void LoadSavedComboBoxValue() {
+            // 读取存储的值
+            int savedValue = Properties.Settings.Default.SelectedComboBoxValue;
+            if (savedValue!=null) {
+                ComboBox_LV5Max.SelectedIndex = savedValue;
+            }
         }
     }
 }
