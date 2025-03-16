@@ -151,6 +151,7 @@ namespace iBarter.View {
             }
 
             App.myCargoProperty.CurrentLT = 0;
+            App.myCargoProperty.InitialLT = 0;
             List<Barter> myList = (List<Barter>)App.myCVM.CargoDetails.ToList();
             myList.Sort((b1, b2) => { return int.Parse(b1.Item1.ItemLV).CompareTo(int.Parse(b2.Item1.ItemLV)); });
 
@@ -161,6 +162,9 @@ namespace iBarter.View {
                 //
                 // App.myCargoProperty.CurrentLT += intWeight * barter.TotalItem2ExchangeQuantity;
             }
+
+            App.myCargoProperty.CurrentLT += App.myCargoProperty.ExtraLT;
+            App.myCargoProperty.InitialLT += App.myCargoProperty.ExtraLT;
 
             UpdateCargoList();
             // foreach (Barter myCvmCargoDetail in App.myCVM.CargoDetails) {
@@ -210,6 +214,7 @@ namespace iBarter.View {
                 b.Item1.ItemLV.Equals(Convert.ToString(_lv + 1)) && b.Item1Name.Equals(_barter.Item2Name) && b.CalculatedAlready == false)!;
             if (myBarter != null) {
                 App.myCargoProperty.CurrentLT += (_barter.TotalItem2ExchangeQuantity - myBarter.TotalItem1ExchangeQuantity) * GetWeight(_barter.Item2.ItemLV);
+                App.myCargoProperty.InitialLT += _barter.TotalItem1ExchangeQuantity * GetWeight(_barter.Item1.ItemLV);
                 _barter.CalculatedAlready = true;
                 if (!myBarter.Item1.ItemLV.Equals("5")) {
                     IdentifyChain(myBarter, ++_lv);
@@ -218,6 +223,7 @@ namespace iBarter.View {
             else {
                 if (!_barter.CalculatedAlready) {
                     App.myCargoProperty.CurrentLT += GetWeight(_barter.Item2.ItemLV) * _barter.TotalItem2ExchangeQuantity;
+                    App.myCargoProperty.InitialLT += GetWeight(_barter.Item1.ItemLV) * _barter.TotalItem1ExchangeQuantity;
                     _barter.CalculatedAlready = true;
                     Barter barterTemp = App.myCVM.CargoDetails.FirstOrDefault(b => b.Item2Name.Equals(_barter.Item1Name) && b.CalculatedAlready == true);
                     if (barterTemp != null) {
@@ -234,6 +240,7 @@ namespace iBarter.View {
             if (App.myCVM != null) {
                 App.myCVM.CargoDetails.Clear();
                 App.myCargoProperty.CurrentLT = 0;
+                App.myCargoProperty.InitialLT = 0;
                 UpdateCurrentLV();
                 SaveData();
             }
@@ -268,7 +275,6 @@ namespace iBarter.View {
             }
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);
-                ;
             }
         }
     }

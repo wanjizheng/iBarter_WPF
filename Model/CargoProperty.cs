@@ -8,12 +8,13 @@ using Syncfusion.Windows.PropertyGrid;
 
 namespace iBarter.Model {
     public class CargoProperty : INotifyPropertyChanged {
-        private double propExtraLT, propTotalLT, doubCurrentLT;
+        private double propExtraLT, propTotalLT, doubCurrentLT, doubInitialLT;
 
-        public CargoProperty(double _extralLT = -1, double _totalLT = -1, double _currentLT = 0) {
+        public CargoProperty(double _extralLT = -1, double _totalLT = -1, double _currentLT = 0, double _initialLT = 0) {
             propExtraLT = _extralLT;
             propTotalLT = _totalLT;
             doubCurrentLT = _currentLT;
+            doubInitialLT = _initialLT;
         }
 
         [Category("CargoProperty"), Description("Extra LT"), DisplayName("ExtraLT")]
@@ -43,6 +44,15 @@ namespace iBarter.Model {
             }
         }
 
+        [Category("CargoProperty"), Description("Initial LT"), DisplayName("InitialLT")]
+        public double InitialLT {
+            get { return doubInitialLT; }
+            set {
+                doubInitialLT = value;
+                OnPropertyChanged();
+            }
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) {
@@ -50,10 +60,15 @@ namespace iBarter.Model {
 
             Application.Current.Dispatcher.Invoke(() => {
                 if (App.myfmMain != null) {
-                    if (CurrentLT > TotalLT - ExtraLT) {
+                    if (CurrentLT > TotalLT && CurrentLT <= TotalLT * 1.7 && InitialLT <= TotalLT) {
                         App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Red;
                         App.myfmMain.myShipCargo.PropertyGrid_Ship.FontWeight = FontWeights.Bold;
                         App.myfmMain.myShipCargo.PropertyGrid_Ship.ViewBackgroundColor = Brushes.IndianRed;
+                    }
+                    else if (CurrentLT > TotalLT * 1.7 || InitialLT > TotalLT) {
+                        App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Red;
+                        App.myfmMain.myShipCargo.PropertyGrid_Ship.FontWeight = FontWeights.Bold;
+                        App.myfmMain.myShipCargo.PropertyGrid_Ship.ViewBackgroundColor = Brushes.DarkRed;
                     }
                     else {
                         App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Black;
