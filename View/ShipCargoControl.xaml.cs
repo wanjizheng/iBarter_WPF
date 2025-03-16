@@ -1,4 +1,5 @@
-﻿using iBarter.Model;
+﻿using System.Collections;
+using iBarter.Model;
 using Newtonsoft.Json;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -155,12 +156,45 @@ namespace iBarter.View {
             List<Barter> myList = (List<Barter>)App.myCVM.CargoDetails.ToList();
             myList.Sort((b1, b2) => { return int.Parse(b1.Item1.ItemLV).CompareTo(int.Parse(b2.Item1.ItemLV)); });
 
+            Hashtable htItem1 = new Hashtable();
+            Hashtable htItem2 = new Hashtable();
+
             foreach (Barter barter in myList) {
-                IdentifyChain(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == barter.IsLandName), int.Parse(barter.Item1.ItemLV));
+                //IdentifyChain(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == barter.IsLandName), int.Parse(barter.Item1.ItemLV));
+
+                if (htItem1.ContainsKey(barter.Item1Name)) {
+                    htItem1[barter.Item1Name] = (int)htItem1[barter.Item1Name] + barter.TotalItem1ExchangeQuantity;
+                }
+                else {
+                    htItem1.Add(barter.Item1Name, barter.TotalItem1ExchangeQuantity);
+                }
+
+                if (htItem2.ContainsKey(barter.Item2Name)) {
+                    htItem2[barter.Item2Name] = (int)htItem2[barter.Item2Name] + barter.TotalItem2ExchangeQuantity;
+                }
+                else {
+                    htItem2.Add(barter.Item2Name, barter.TotalItem2ExchangeQuantity);
+                }
 
                 // int intWeight = GetWeight(barter.Item2.ItemLV);
                 //
                 // App.myCargoProperty.CurrentLT += intWeight * barter.TotalItem2ExchangeQuantity;
+            }
+
+            foreach (Barter barter in myList) {
+                if (htItem2.ContainsKey(barter.Item1Name) && (int)htItem2[barter.Item1Name] > barter.TotalItem1ExchangeQuantity) {
+                    int availableQty = (int)htItem2[barter.Item1Name]; 
+                    htItem2[barter.Item1Name] = Math.Max(0, availableQty - barter.TotalItem1ExchangeQuantity);
+
+                    barter.CalculatedAlready = true;
+                    barter.TotalItem1ExchangeQuantity = 0;
+                }
+            }
+
+
+            foreach (Barter barter in myList) {
+                App.myCargoProperty.InitialLT += GetWeight(barter.Item1.ItemLV) * barter.TotalItem1ExchangeQuantity;
+                App.myCargoProperty.CurrentLT += GetWeight(barter.Item2.ItemLV) * (int)htItem2[barter.Item2Name];
             }
 
             App.myCargoProperty.CurrentLT += App.myCargoProperty.ExtraLT;
@@ -210,11 +244,12 @@ namespace iBarter.View {
         }
 
         private void IdentifyChain(Barter _barter, int _lv) {
-            Barter myBarter = App.myCVM.CargoDetails.FirstOrDefault(b =>
-                b.Item1.ItemLV.Equals(Convert.ToString(_lv + 1)) && b.Item1Name.Equals(_barter.Item2Name) && b.CalculatedAlready == false)!;
+            Barter myBarter = App.myCVM.CargoDetails.FirstOrDefault(b => b.Item1.ItemLV.Equals(Convert.ToString(_lv + 1)) && b.Item1Name.Equals(_barter.Item2Name))!;
             if (myBarter != null) {
                 App.myCargoProperty.CurrentLT += (_barter.TotalItem2ExchangeQuantity - myBarter.TotalItem1ExchangeQuantity) * GetWeight(_barter.Item2.ItemLV);
-                App.myCargoProperty.InitialLT += _barter.TotalItem1ExchangeQuantity * GetWeight(_barter.Item1.ItemLV);
+                // App.myCargoProperty.InitialLT += _barter.TotalItem1ExchangeQuantity * GetWeight(_barter.Item1.ItemLV);
+                // Barter myBarter2 = App.myCVM.CargoDetails.FirstOrDefault(b => b.Item2Name.Equals(_barter.Item1Name) && b.CalculatedAlready == false)!;
+                // if (myBarter2 == null)
                 _barter.CalculatedAlready = true;
                 if (!myBarter.Item1.ItemLV.Equals("5")) {
                     IdentifyChain(myBarter, ++_lv);
@@ -223,9 +258,9 @@ namespace iBarter.View {
             else {
                 if (!_barter.CalculatedAlready) {
                     App.myCargoProperty.CurrentLT += GetWeight(_barter.Item2.ItemLV) * _barter.TotalItem2ExchangeQuantity;
-                    App.myCargoProperty.InitialLT += GetWeight(_barter.Item1.ItemLV) * _barter.TotalItem1ExchangeQuantity;
+                    // App.myCargoProperty.InitialLT += GetWeight(_barter.Item1.ItemLV) * _barter.TotalItem1ExchangeQuantity;
                     _barter.CalculatedAlready = true;
-                    Barter barterTemp = App.myCVM.CargoDetails.FirstOrDefault(b => b.Item2Name.Equals(_barter.Item1Name) && b.CalculatedAlready == true);
+                    Barter barterTemp = App.myCVM.CargoDetails.FirstOrDefault(b => b.Item2Name.Equals(_barter.Item1Name));
                     if (barterTemp != null) {
                         _barter.TotalItem1ExchangeQuantity = Math.Max(0, _barter.TotalItem1ExchangeQuantity - barterTemp.TotalItem2ExchangeQuantity);
                     }
