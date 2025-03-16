@@ -126,7 +126,7 @@ namespace iBarter.View {
                             case EnumLists.Island.Rickun:
                                 intParleyTemp = 58180;
                                 break;
-                            case EnumLists.Island.Cox_Pirates:
+                            case EnumLists.Island.Cox_Pirate:
                                 intParleyTemp = 58180;
                                 break;
                             case EnumLists.Island.Wandering:

@@ -892,8 +892,8 @@ namespace iBarter {
                     return EnumLists.Island.Carrack;
                 case string s when s.Contains("Cholace"):
                     return EnumLists.Island.Cholace;
-                case string s when s.Contains("Cox Pirates") || s.Contains("Cox_Pirates"):
-                    return EnumLists.Island.Cox_Pirates;
+                case string s when s.Contains("Cox Pirate") || s.Contains("Cox_Pirate") || s.Contains("Cox"):
+                    return EnumLists.Island.Cox_Pirate;
                 case string s when s.Contains("Crow"):
                     return EnumLists.Island.Crow;
                 case string s when s.Contains("Daton"):

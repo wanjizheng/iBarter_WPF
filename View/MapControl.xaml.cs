@@ -40,7 +40,7 @@ namespace iBarter.View {
             Barter myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
             IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
 
-            myIsland = new Islands(Island.Cox_Pirates, 0, 0);
+            myIsland = new Islands(Island.Cox_Pirate, 0, 0);
             myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
             IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
 

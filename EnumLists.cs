@@ -18,7 +18,7 @@
             Haran,
             Carrack,
             Cholace,
-            Cox_Pirates,
+            Cox_Pirate,
             Crow,
             Daton,
             Delinghart,
