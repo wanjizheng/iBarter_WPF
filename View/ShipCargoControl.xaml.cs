@@ -182,7 +182,7 @@ namespace iBarter.View {
             }
 
             foreach (Barter barter in myList) {
-                if (htItem2.ContainsKey(barter.Item1Name) && (int)htItem2[barter.Item1Name] > barter.TotalItem1ExchangeQuantity) {
+                if (htItem2.ContainsKey(barter.Item1Name) && (int)htItem2[barter.Item1Name] >= barter.TotalItem1ExchangeQuantity) {
                     int availableQty = (int)htItem2[barter.Item1Name]; 
                     htItem2[barter.Item1Name] = Math.Max(0, availableQty - barter.TotalItem1ExchangeQuantity);
 
