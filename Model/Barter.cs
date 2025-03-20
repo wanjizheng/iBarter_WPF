@@ -13,6 +13,7 @@ namespace iBarter {
         private int barterGroup = -1;
         int intChange = 0, intInv = 0;
         private volatile int totalitem1ExchangeQuantity, totalitem2ExchangeQuantity;
+        private bool tofGrouped = false;
 
         public Barter() {
         }
@@ -58,6 +59,11 @@ namespace iBarter {
         public int BarterGroup {
             get { return barterGroup; }
             set { barterGroup = value; }
+        }
+
+        public bool Grouped {
+            get { return tofGrouped; }
+            set { tofGrouped = value; }
         }
 
         public bool ExchangeDone {

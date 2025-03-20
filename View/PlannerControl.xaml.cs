@@ -172,9 +172,10 @@ namespace iBarter.View {
             int intGroup = 1;
             foreach (Barter barter in App.myPVM.BarterCollection) {
                 barter.BarterGroup = 0;
+                barter.Grouped = false;
             }
 
-            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.Item1.ItemLV.Equals("0"))) {
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.Item1.ItemLV.Equals("0") && !b.Grouped)) {
                 int intLV = 1;
                 // do {
                 //     barter.BarterGroup = intGroup;
@@ -190,8 +191,7 @@ namespace iBarter.View {
                 intGroup++;
             }
 
-            foreach (Barter barter in App.myPVM.BarterCollection.Where(b =>
-                         b.Item1.ItemLV.Equals("1") && b.BarterGroup == 0)) {
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.Item1.ItemLV.Equals("1") && b.BarterGroup == 0 && !b.Grouped)) {
                 int intLV = 2;
 
                 FindBarterGroup(barter, intLV, intGroup);
@@ -199,8 +199,7 @@ namespace iBarter.View {
                 intGroup++;
             }
 
-            foreach (Barter barter in App.myPVM.BarterCollection.Where(b =>
-                         b.Item1.ItemLV.Equals("2") && b.BarterGroup == 0)) {
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.Item1.ItemLV.Equals("2") && b.BarterGroup == 0 && !b.Grouped)) {
                 int intLV = 3;
 
                 FindBarterGroup(barter, intLV, intGroup);
@@ -208,15 +207,14 @@ namespace iBarter.View {
                 intGroup++;
             }
 
-            foreach (Barter barter in App.myPVM.BarterCollection.Where(b =>
-                         b.Item1.ItemLV.Equals("3") && b.BarterGroup == 0)) {
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.Item1.ItemLV.Equals("3") && b.BarterGroup == 0 && !b.Grouped)) {
                 int intLV = 4;
 
                 FindBarterGroup(barter, intLV, intGroup);
 
                 intGroup++;
             }
-
+            
             for (int i = 1; i < intGroup; i++) {
                 if (App.myPVM.BarterCollection.Where(b => b.BarterGroup == i).ToList().Count == 1) {
                     App.myPVM.BarterCollection.FirstOrDefault(b => b.BarterGroup == i)!.BarterGroup = 0;
@@ -261,22 +259,34 @@ namespace iBarter.View {
 
         private void FindBarterGroup(Barter _barter, int _lv, int _group) {
             _barter.BarterGroup = _group;
-            if ((_barter.Item2.ItemLV == "-1" || int.Parse(_barter.Item2.ItemLV) <= int.Parse(_barter.Item1.ItemLV)) && _barter.Item2.ItemName != "Crow Coin") {
+
+            int item1Lv = int.Parse(_barter.Item1.ItemLV);
+            int item2Lv = _barter.Item2.ItemLV == "-1" ? -1 : int.Parse(_barter.Item2.ItemLV);
+
+            if ((item2Lv == -1 || item2Lv <= item1Lv) && _barter.Item2.ItemName != "Crow Coin") {
                 _barter.BarterGroup = 0;
+                _barter.Grouped = true;
                 return;
             }
 
-            Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b =>
-                b.Item1.ItemLV.Equals(Convert.ToString(_lv)) && b.Item1Name.Equals(_barter.Item2Name) && (int.Parse(b.Item2.ItemLV) > int.Parse(b.Item1.ItemLV) || b.Item2Name == "Crow Coin"))!;
+            var myBarter = App.myPVM.BarterCollection.FirstOrDefault(b =>
+                !b.Grouped &&
+                b.Item1.ItemLV == _lv.ToString() &&
+                b.Item1Name == _barter.Item2Name &&
+                (int.Parse(b.Item2.ItemLV) > int.Parse(b.Item1.ItemLV) ||
+                 (b.Item2Name == "Crow Coin" && b.Item1Name == _barter.Item2Name)));
+
             if (myBarter != null) {
                 myBarter.BarterGroup = _group;
-                if (!myBarter.Item1.ItemLV.Equals("5")) {
-                    FindBarterGroup(myBarter, ++_lv, _group);
+                myBarter.Grouped = true;
+
+                if (myBarter.Item1.ItemLV != "5") {
+                    FindBarterGroup(myBarter, _lv + 1, _group);
                 }
             }
-            else {
-                //App.myCFun.Log("Error: can't identify the barter group =>" + _barter.IsLandName, Brushes.Red);
-            }
+            // else {
+            //     App.myCFun.Log("Error: can't identify the _barter _group =>" + _barter.IsLandName, Brushes.Red);
+            // }
         }
 
         private void ButtonAdv_Load_Click(object sender, RoutedEventArgs e) {
@@ -332,7 +342,7 @@ namespace iBarter.View {
                 if (App.myPVM.BarterCollection.Count > 0) {
                     string strPath_Setting = AppDomain.CurrentDomain.BaseDirectory + "\\Resources\\myPlan_Setting.xml";
                     string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "\\Resources\\myPlan_Data.json";
-                    
+
                     using (FileStream streamSetting =
                            new FileStream(strPath_Setting, FileMode.OpenOrCreate, FileAccess.Write)) {
                         streamSetting.SetLength(0);
@@ -617,7 +627,7 @@ namespace iBarter.View {
         private void LoadSavedComboBoxValue() {
             // 读取存储的值
             int savedValue = Properties.Settings.Default.SelectedComboBoxValue;
-            if (savedValue!=null) {
+            if (savedValue != null) {
                 ComboBox_LV5Max.SelectedIndex = savedValue;
             }
         }
