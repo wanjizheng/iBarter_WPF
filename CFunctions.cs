@@ -718,6 +718,8 @@ namespace iBarter {
                     intParley = int.Parse(strParley);
                     if (intParley < 5000)
                         intParley = intParley * 10 + 6;
+                    else if (intParley == 215712)
+                        intParley = 21572;
                 }
                 catch {
                 }
