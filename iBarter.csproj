@@ -100,6 +100,7 @@
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.6.0" />
     <PackageReference Include="MaterialDesignThemes" Version="5.2.1" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="PureDM" Version="1.1.15" />
     <PackageReference Include="Syncfusion.Licensing" Version="29.1.37" />
     <PackageReference Include="Syncfusion.SfGrid.WPF" Version="29.1.37" />
     <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="29.1.37" />
@@ -129,10 +130,6 @@
 
   <ItemGroup>
     <Folder Include="Resources\Images\Testing\" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\PureDM\PureDM.csproj" />
   </ItemGroup>
 
   <ItemGroup>
