@@ -353,7 +353,7 @@ namespace iBarter {
 
             List<Task<Barter>> tasks = new List<Task<Barter>>();
 
-            for (int i = 0; i < listAnchors.Count; i++) {
+            for (int i = 0; i < 6; i++) {
                 tasks.Add(IdentifyBarterAsync(listAnchors[i])); // 并行启动异步任务
             }
 
@@ -870,7 +870,7 @@ namespace iBarter {
                     return EnumLists.Island.Almai;
                 case string s when s.Contains("Al-Naha") || s.Contains("AI-Naha") || s.Contains("Al_Naha"):
                     return EnumLists.Island.Al_Naha;
-                case string s when s.Contains("Ancient"):
+                case string s when s.Contains("Ancient") || s.Contains("Shipwrecked Ancie"):
                     return EnumLists.Island.Ancient;
                 case string s when s.Contains("Angie"):
                     return EnumLists.Island.Angie;
@@ -888,9 +888,9 @@ namespace iBarter {
                     return EnumLists.Island.Baremi;
                 case string s when s.Contains("Beiruwa"):
                     return EnumLists.Island.Beiruwa;
-                case string s when s.Contains("Haran") || s.Contains("ShipwreckedHaran'sCarg") || s.Contains("Shipwrecked Haran"):
+                case string s when s.Contains("Haran") || s.Contains("ShipwreckedHaran'sCarg") || s.Contains("Shipwrecked Hara"):
                     return EnumLists.Island.Haran;
-                case string s when s.Contains("Carrack"):
+                case string s when s.Contains("Carrack") || s.Contains("Old Moon Guild"):
                     return EnumLists.Island.Carrack;
                 case string s when s.Contains("Cholace"):
                     return EnumLists.Island.Cholace;
@@ -984,7 +984,7 @@ namespace iBarter {
                     return EnumLists.Island.Rameda;
                 case string s when s.Contains("Randis"):
                     return EnumLists.Island.Randis;
-                case string s when s.Contains("Rickun"):
+                case string s when s.Contains("Rickun") || s.Contains("Ricku"):
                     return EnumLists.Island.Rickun;
                 case string s when s.Contains("Riyed") || s.Contains("Ried"):
                     return EnumLists.Island.Riyed;

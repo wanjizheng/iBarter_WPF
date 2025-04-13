@@ -60,7 +60,7 @@ namespace iBarter {
             //mySplashScreen = new SplashScreen();
             myfmMain = new MainWindow();
 
-            myfmMain.statusBarItem_Version.Text = "Version: Beta_4.3";
+            myfmMain.statusBarItem_Version.Text = "Version: Beta_4.4";
 
             this.ShutdownMode = ShutdownMode.OnMainWindowClose;
         }
