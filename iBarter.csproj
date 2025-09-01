@@ -51,6 +51,7 @@
     <None Remove="Resources\Islands.csv" />
     <None Remove="Resources\Items.csv" />
     <None Remove="Resources\Storage.csv" />
+    <None Remove="tessdata\eng.traineddata" />
     <None Remove="tessdata\eng_best.traineddata" />
   </ItemGroup>
 
@@ -91,6 +92,9 @@
     <Content Include="Resources\Storage.csv">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="tessdata\eng.traineddata">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="tessdata\eng_best.traineddata">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
@@ -127,6 +131,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Resources\Images\Items\" />
     <Folder Include="Resources\Images\Testing\" />
   </ItemGroup>
 
@@ -224,6 +229,9 @@
     <None Update="Resources\Images\Items\10.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Images\Items\4004.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\Images\Items\4007.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -254,9 +262,6 @@
     <None Update="Resources\Images\Items\43284.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Resources\Images\Items\4404.bmp">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <None Update="Resources\Images\Items\4406.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -273,6 +278,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\4494.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\45152.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\45153.bmp">
@@ -294,6 +302,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\4667.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\4671.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\4674.bmp">
