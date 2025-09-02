@@ -1,15 +1,20 @@
-﻿using Emgu.CV.CvEnum;
-using Emgu.CV;
+﻿using Emgu.CV;
+using Emgu.CV.CvEnum;
+using FuzzySharp;
 using ImageMagick;
 using PureDM;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -683,7 +688,7 @@ namespace iBarter {
             int intY1 = pointPlusAnchor.Y - 2;
             int intX2 = pointPlusAnchor.X + 700;
             int intY2 = pointPlusAnchor.Y + 60;
-            App.myPureDM.DM.Capture(intX1, intY1, intX2, intY2, "barterItems.bmp");
+            // App.myPureDM.DM.Capture(intX1, intY1, intX2, intY2, "barterItems.bmp");
 
             // 3. 识别 Parley 数值
             string strParleyPath = (GameFont == FontType.DejaVuSans) ? "\\Images\\Parley2.bmp" : "\\Images\\Parley.bmp";
@@ -752,33 +757,105 @@ namespace iBarter {
             myBarter.IsLand = myIslands;
             Log("Identified island: " + myIslands.Island, Brushes.OrangeRed);
 
+
             // 6. 识别交易物品
+            IdentifyTradeItem:
             List<PointPlus> listPointPlus = new List<PointPlus>();
-            foreach (Items item in App.listItems) {
-                PointPlus myPP = App.myPureDM.CV.FindPicture(
-                    intX1, intY1, intX2, intY2,
-                    "\\Images\\Items\\" + item.ItemID + ".bmp",
-                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true,0.7);
-                if (myPP.X != -1 && myPP.Y != -1 && myPP.X * myPP.Y != 0)
-                    listPointPlus.Add(myPP);
+            string strItem1 = App.myPureDM.CV.OCRString(
+                pointPlusParley.X,
+                pointPlusParley.Y - pointPlusParley.Size.Height,
+                pointPlusRequired.X + 120,
+                pointPlusParley.Y + 1, CV.OCRType.Words, CV.OCRMode.Color);
+
+
+            string strItem2 = App.myPureDM.CV.OCRString(
+                pointPlusParley.X + 376,
+                pointPlusParley.Y - pointPlusParley.Size.Height,
+                pointPlusRequired.X + 376 + 100,
+                pointPlusParley.Y + pointPlusParley.Size.Height, CV.OCRType.Words, CV.OCRMode.Color);
+
+            App.myPureDM.DM.Capture(pointPlusParley.X, pointPlusParley.Y - pointPlusParley.Size.Height,
+                pointPlusRequired.X + 120, pointPlusParley.Y + 1, "myItem1.bmp");
+
+            App.myPureDM.DM.Capture(pointPlusParley.X + 376,
+                pointPlusParley.Y - pointPlusParley.Size.Height,
+                pointPlusRequired.X + 376 + 100,
+                pointPlusParley.Y + pointPlusParley.Size.Height, "myItem2.bmp");
+
+            Items myItems1 = FindMostSimilarItem(strItem1);
+            Items myItems2 = FindMostSimilarItem(strItem2);
+
+
+            PointPlus myPP1 = new PointPlus();
+            if (myItems1 != null)
+                myPP1 = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems1.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+            if (myPP1.X != -1 && myPP1.Y != -1 && myPP1.X * myPP1.Y != 0)
+                listPointPlus.Add(myPP1);
+            else {
+                List<PointPlus> listPointPlus_Temp = new List<PointPlus>();
+                foreach (Items item in App.listItems) {
+                    PointPlus myPP = App.myPureDM.CV.FindPicture(
+                        intX1, intY1, intX2, intY2,
+                        "\\Images\\Items\\" + item.ItemID + ".bmp",
+                        0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+                    if (myPP.X != -1 && myPP.Y != -1 && myPP.X * myPP.Y != 0)
+                        listPointPlus_Temp.Add(myPP);
+                }
+
+                listPointPlus_Temp = PickTwoBest(listPointPlus_Temp);
+                listPointPlus.Add(listPointPlus_Temp[0]);
             }
 
-            if (listPointPlus.Count < 2) {
-                Log("Can't identify items: " + myIslands.Island, Brushes.Red);
-                return myBarter;
+
+            PointPlus myPP2 = new PointPlus();
+
+            if (myItems2 != null)
+                myPP2 = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems2.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+            if (myPP2.X != -1 && myPP2.Y != -1 && myPP2.X * myPP2.Y != 0)
+                listPointPlus.Add(myPP2);
+            else {
+                List<PointPlus> listPointPlus_Temp = new List<PointPlus>();
+                foreach (Items item in App.listItems) {
+                    PointPlus myPP = App.myPureDM.CV.FindPicture(
+                        intX1, intY1, intX2, intY2,
+                        "\\Images\\Items\\" + item.ItemID + ".bmp",
+                        0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+                    if (myPP.X != -1 && myPP.Y != -1 && myPP.X * myPP.Y != 0)
+                        listPointPlus_Temp.Add(myPP);
+                }
+
+                listPointPlus_Temp = PickTwoBest(listPointPlus_Temp);
+                listPointPlus.Add(listPointPlus_Temp[1]);
             }
+
+
+            //
+            // List<PointPlus> listPointPlus = new List<PointPlus>();
+            // foreach (Items item in App.listItems) {
+            //     PointPlus myPP = App.myPureDM.CV.FindPicture(
+            //         intX1, intY1, intX2, intY2,
+            //         "\\Images\\Items\\" + item.ItemID + ".bmp",
+            //         0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true,0.7);
+            //     if (myPP.X != -1 && myPP.Y != -1 && myPP.X * myPP.Y != 0)
+            //         listPointPlus.Add(myPP);
+            // }
+            //
+            // if (listPointPlus.Count < 2) {
+            //     Log("Can't identify items: " + myIslands.Island, Brushes.Red);
+            //     return myBarter;
+            // }
 
 
             // 7. 选取匹配度最高且彼此距离较远的两个物品
-            listPointPlus = PickTwoBest(listPointPlus);
+            // listPointPlus = PickTwoBest(listPointPlus);
             // listPointPlus.Sort((p1, p2) => p1.X.CompareTo(p2.X));
 
             // 8. 识别第一个物品
             string strID1 = listPointPlus[0].ImageID.Substring(14, listPointPlus[0].ImageID.Length - 18);
-            if (strID1 == "800011")
-                strID1 = "800012";
-            else if (strID1 == "800012")
-                strID1 = "800011";
+            // if (strID1 == "800011")
+            //     strID1 = "800012";
+            // else if (strID1 == "800012")
+            //     strID1 = "800011";
             string strNumber1 = App.myPureDM.CV.OCRString(
                 listPointPlus[0].X,
                 (int)(listPointPlus[0].Y + listPointPlus[0].Size.Height * 0.6),
@@ -841,6 +918,89 @@ namespace iBarter {
             return myBarter;
         }
 
+        // 规范化：小写、合并空白、去重音
+        private static string NormalizeBasic(string s) {
+            if (string.IsNullOrWhiteSpace(s)) return string.Empty;
+            s = Regex.Replace(s.Trim().ToLowerInvariant(), @"\s+", " ");
+            var formD = s.Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder(formD.Length);
+            foreach (var ch in formD)
+                if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
+                    sb.Append(ch);
+            return sb.ToString().Normalize(NormalizationForm.FormC);
+        }
+
+        // 切词（英文够用）：按非字母数字分割，保留整词
+        private static HashSet<string> Tokenize(string s) {
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var w in Regex.Split(s, @"[^0-9A-Za-z]+"))
+                if (!string.IsNullOrEmpty(w))
+                    set.Add(w);
+            return set;
+        }
+
+        // 防“前缀吸走”的智能打分：WRatio/TokenSet，并对“无整词重合”重罚
+        private int FuzzyScoreSmart(string a, string b) {
+            if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b)) return 0;
+
+            a = NormalizeBasic(a);
+            b = NormalizeBasic(b);
+
+            if (a == b) return 200; // 精确一致，绝对优先
+
+            var ta = Tokenize(a);
+            var tb = Tokenize(b);
+            int overlap = ta.Intersect(tb).Count();
+
+            // 基础分（0..100）
+            int w = Fuzz.WeightedRatio(a, b);
+            int ts = Fuzz.TokenSetRatio(a, b);
+            int score = Math.Max(w, ts);
+
+            // 规则 1：没有任何整词重合 -> 重罚（解决 silk vs silkworm cocoon）
+            if (ta.Count > 0 && tb.Count > 0 && overlap == 0)
+                score -= 40;
+
+            // 规则 2：候选比查询明显长且没有覆盖所有查询词 -> 长度惩罚（避免长串“含糊带走”）
+            double lenRatio = (double)b.Length / Math.Max(1, a.Length);
+            if (lenRatio > 1.6 && overlap < ta.Count)
+                score -= (int)Math.Min(20, (lenRatio - 1.6) * 20);
+
+            // 规则 3：候选包含所有查询词（整词） -> 小幅加分（stained seagull figurine）
+            if (overlap == ta.Count && ta.Count > 0)
+                score += 10;
+
+            // 限定范围
+            if (score < 0) score = 0;
+            if (score > 100) score = 100;
+            return score;
+        }
+
+        private string RemoveLevelPrefix(string input) {
+            if (string.IsNullOrWhiteSpace(input)) return input;
+            var m = Regex.Match(input, @"^\[Level [1-4]\]\s*");
+            return m.Success ? input.Substring(m.Length) : input;
+        }
+
+        // 只改这一处：用 FuzzyScoreSmart 排序（从高到低）
+        public Items FindMostSimilarItem(string strItem1) {
+            if (string.IsNullOrWhiteSpace(strItem1) || App.listItems == null || App.listItems.Count == 0)
+                return null;
+
+            string processed = NormalizeBasic(RemoveLevelPrefix(strItem1));
+
+            // 精确匹配优先（规范化后）
+            var exact = App.listItems.FirstOrDefault(it =>
+                NormalizeBasic(it.ItemName) == processed);
+            if (exact != null) return exact;
+
+            // 否则按智能分数排序；同分时更短的名字更可能是“精确项”
+            return App.listItems
+                .OrderByDescending(it => FuzzyScoreSmart(processed, it.ItemName))
+                .ThenBy(it => it.ItemName?.Length ?? int.MaxValue)
+                .FirstOrDefault();
+        }
+
         const int minDx = 300;
 
         List<PointPlus> PickTwoBest(List<PointPlus> list) {
@@ -852,7 +1012,10 @@ namespace iBarter {
                 .Where(p => p.X >= 0 && p.Y >= 0 && p.Sim > 0 && p.Size.Width > 0 && p.Size.Height > 0)
                 .ToList();
             if (cand.Count == 0) return res;
-            if (cand.Count == 1) { res.Add(cand[0]); return res; }
+            if (cand.Count == 1) {
+                res.Add(cand[0]);
+                return res;
+            }
 
             // 1) 按 X 升序
             var byX = cand.OrderBy(p => p.X).ToList();
@@ -861,7 +1024,10 @@ namespace iBarter {
             int splitIdx = -1, maxGap = 0;
             for (int i = 0; i < byX.Count - 1; i++) {
                 int gap = byX[i + 1].X - byX[i].X;
-                if (gap >= minDx && gap > maxGap) { maxGap = gap; splitIdx = i; }
+                if (gap >= minDx && gap > maxGap) {
+                    maxGap = gap;
+                    splitIdx = i;
+                }
             }
 
             PointPlus a, b;
@@ -879,12 +1045,21 @@ namespace iBarter {
                 var bySim = cand.OrderByDescending(p => p.Sim).ToList();
                 a = bySim[0];
                 b = (bySim.Count > 1) ? bySim[1] : default;
-                if (Equals(b, default(PointPlus))) { res.Add(a); return res; }
+                if (Equals(b, default(PointPlus))) {
+                    res.Add(a);
+                    return res;
+                }
             }
 
             // 3) 最后仅按 X 排序（左在前右在后），不改变选择结果
-            if (a.X <= b.X) { res.Add(a); res.Add(b); }
-            else { res.Add(b); res.Add(a); }
+            if (a.X <= b.X) {
+                res.Add(a);
+                res.Add(b);
+            }
+            else {
+                res.Add(b);
+                res.Add(a);
+            }
 
             return res;
         }
@@ -988,7 +1163,7 @@ namespace iBarter {
                     return EnumLists.Island.Narvo;
                 case string s when s.Contains("Netnume"):
                     return EnumLists.Island.Netnume;
-                case string s when s.Contains("Oben"):
+                case string s when s.Contains("Oben") || s.Contains("Qben"):
                     return EnumLists.Island.Oben;
                 case string s when s.Contains("Orffs") || s.Contains("Drffs"):
                     return EnumLists.Island.Orffs;
