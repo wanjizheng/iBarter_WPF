@@ -164,7 +164,7 @@ namespace iBarter {
             foreach (var item in listItems) {
                 var strURL = "";
                 using (var httpClient = new HttpClient()) {
-                    using (var response = httpClient.GetAsync("https://bdocodex.com/us/item/" + item.ItemID).Result) {
+                    using (var response = httpClient.GetAsync("https://bdocodex.com/us/item/" + item.ItemID+"/").Result) {
                         using (var content = response.Content) {
                             var result = content.ReadAsStringAsync().Result;
                             strURL = getBetween(result, "<meta property=\"og:image\" content=\"", "\">");
@@ -188,6 +188,7 @@ namespace iBarter {
                 Log("Done!", Brushes.Red);
             }
         }
+
 
         private string getBetween(string strSource, string strStart, string strEnd) {
             if (strSource.Contains(strStart) && strSource.Contains(strEnd)) {
@@ -870,6 +871,10 @@ namespace iBarter {
             catch {
             }
 
+            if (myItems1 != null && myItems1.ItemLV != "0") {
+                intNumber1 = 1;
+            }
+
             // 9. 识别第二个物品
             string strID2 = "10";
             string strNumber2 = "-1";
@@ -897,6 +902,11 @@ namespace iBarter {
             }
             catch {
             }
+
+            if (myItems2 != null && myItems2.ItemLV == "5") {
+                intNumber2 = 1;
+            }
+
 
             // 10. 构造交易物品对象
             Items item1 = new Items(
@@ -1067,7 +1077,7 @@ namespace iBarter {
 
         public EnumLists.Island IslandEnum(string _island) {
             switch (_island) {
-                case string s when s.Contains("Ajir"):
+                case string s when s.Contains("Ajir") || s.Contains("Aji"):
                     return EnumLists.Island.Ajir;
                 case string s when s.Contains("Albresser"):
                     return EnumLists.Island.Albresser;
@@ -1079,7 +1089,7 @@ namespace iBarter {
                     return EnumLists.Island.Ancient;
                 case string s when s.Contains("Angie"):
                     return EnumLists.Island.Angie;
-                case string s when s.Contains("Arakil"):
+                case string s when s.Contains("Arakil") || s.Contains("Araki"):
                     return EnumLists.Island.Arakil;
                 case string s when s.Contains("Arita"):
                     return EnumLists.Island.Arita;
@@ -1127,7 +1137,7 @@ namespace iBarter {
                     return EnumLists.Island.Hakoven;
                 case string s when s.Contains("Halmad"):
                     return EnumLists.Island.Halmad;
-                case string s when s.Contains("Iliya") || s.Contains("liya") || s.Contains("Miya"):
+                case string s when s.Contains("Iliya") || s.Contains("liya") || s.Contains("Miya")||s.Contains("lia"):
                     return EnumLists.Island.Iliya;
                 case string s when s.Contains("Unfinished") || s.Contains("UnfinishedAdriftVessel") || s.Contains("Unfinished Adrift"):
                     return EnumLists.Island.Unfinished;
@@ -1169,7 +1179,7 @@ namespace iBarter {
                     return EnumLists.Island.Orffs;
                 case string s when s.Contains("Orisha"):
                     return EnumLists.Island.Orisha;
-                case string s when s.Contains("Ostra") || s.Contains("Dstra") || s.Contains("Qstra"):
+                case string s when s.Contains("Ostra") || s.Contains("Dstra") || s.Contains("Qstra") || s.Contains("Osta"):
                     return EnumLists.Island.Ostra;
                 case string s when s.Contains("Padix"):
                     return EnumLists.Island.Padix;
@@ -1183,7 +1193,7 @@ namespace iBarter {
                     return EnumLists.Island.Portanen;
                 case string s when s.Contains("Pujara"):
                     return EnumLists.Island.Pujara;
-                case string s when s.Contains("Racid"):
+                case string s when s.Contains("Racid") || s.Contains("Raid"):
                     return EnumLists.Island.Racid;
                 case string s when s.Contains("Rameda"):
                     return EnumLists.Island.Rameda;
@@ -1199,13 +1209,13 @@ namespace iBarter {
                     return EnumLists.Island.Serca;
                 case string s when s.Contains("Shasha"):
                     return EnumLists.Island.Shasha;
-                case string s when s.Contains("Shirna") || s.Contains("Shira"):
+                case string s when s.Contains("Shirna") || s.Contains("Shira") || s.Contains("Shima"):
                     return EnumLists.Island.Shirna;
                 case string s when s.Contains("Sokota"):
                     return EnumLists.Island.Sokota;
                 case string s when s.Contains("Staren"):
                     return EnumLists.Island.Staren;
-                case string s when s.Contains("Taramura"):
+                case string s when s.Contains("Taramura") || s.Contains("Taram"):
                     return EnumLists.Island.Taramura;
                 case string s when s.Contains("Tashu"):
                     return EnumLists.Island.Tashu;
