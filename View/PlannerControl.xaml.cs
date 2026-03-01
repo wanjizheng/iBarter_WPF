@@ -15,6 +15,7 @@ namespace iBarter.View {
     /// Interaction logic for PlannerControl.xaml
     /// </summary>
     public partial class PlannerControl : UserControl {
+       
         public PlannerControl() {
             InitializeComponent();
             this.DataContext = App.myPVM;
@@ -214,42 +215,41 @@ namespace iBarter.View {
 
                 intGroup++;
             }
-            
+
             for (int i = 1; i < intGroup; i++) {
                 if (App.myPVM.BarterCollection.Where(b => b.BarterGroup == i).ToList().Count == 1) {
                     App.myPVM.BarterCollection.FirstOrDefault(b => b.BarterGroup == i)!.BarterGroup = 0;
                 }
             }
 
+            // 初始化分组/排序 —— 必须包在 BeginInit/EndInit 之间
+            DataGrid_Planner.View.BeginInit();
             try {
-                DataGrid_Planner.View.BeginInit();
                 DataGrid_Planner.SortColumnDescriptions.Clear();
                 DataGrid_Planner.GroupColumnDescriptions.Clear();
-                SortColumnDescription mySCD_ItemLV = new SortColumnDescription();
-                mySCD_ItemLV.ColumnName = "Item1LV";
-                mySCD_ItemLV.SortDirection = ListSortDirection.Ascending;
-                DataGrid_Planner.SortColumnDescriptions.Add(mySCD_ItemLV);
-                GroupColumnDescription mySCD_Group = new GroupColumnDescription();
-                mySCD_Group.ColumnName = "BarterGroup";
-                mySCD_Group.SortGroupRecords = true;
 
-                DataGrid_Planner.GroupColumnDescriptions.Add(mySCD_Group);
-                // DataGrid_Planner.GroupColumnDescriptions.Add(
-                //     new GroupColumnDescription() { ColumnName = "BarterGroup" });
-            }
-            catch (Exception exception) {
+                DataGrid_Planner.SortColumnDescriptions.Add(new SortColumnDescription {
+                    ColumnName = "Item1LV",
+                    SortDirection = ListSortDirection.Ascending
+                });
+
+                DataGrid_Planner.GroupColumnDescriptions.Add(new GroupColumnDescription {
+                    ColumnName = "BarterGroup",
+                    // SortGroupRecords = true  // 若确有此属性且你需要再打开；不同版本可能没有
+                });
             }
             finally {
-                DataGrid_Planner.AutoExpandGroups = true;
-                try {
-                    if (intGroup > 0) {
-                        DataGrid_Planner.ExpandAllGroup();
-                    }
-                }
-                catch (Exception e) {
-                }
-
                 DataGrid_Planner.View.EndInit();
+            }
+
+            // 让分组自动展开（可选；开了它一般就不需要手动 ExpandAllGroup）
+            DataGrid_Planner.AutoExpandGroups = true;
+
+            // 若你坚持手动展开，请务必在 EndInit 之后，并做空值保护；或者丢到 Dispatcher
+            if (DataGrid_Planner.View?.TopLevelGroup != null &&
+                DataGrid_Planner.GroupColumnDescriptions.Count > 0 &&
+                DataGrid_Planner.View.Records.Count > 0) {
+                DataGrid_Planner.ExpandAllGroup();
             }
 
             //RefreshDataGrid();
@@ -380,12 +380,12 @@ namespace iBarter.View {
                 if (myBarter.ExchangeQuantity > myBarter.IslandRemaining || myBarter.ExchangeQuantity < 0) {
                     myBarter.ExchangeQuantity = myBarter.IslandRemaining;
                 }
-
+        
                 UpdateInvChange(myBarter.BarterGroup);
                 App.myfmMain.myShipCargo.UpdateCurrentLV();
                 App.myfmMain.myShipCargo.SaveData();
             }
-
+        
             SaveData();
             //RefreshDataGrid();
             DataGrid_Planner.View.Refresh();
@@ -393,6 +393,27 @@ namespace iBarter.View {
             //Grouping();
             UpdateMapControl();
         }
+
+
+        private void DataGrid_Planner_CurrentCellValueChanged(object sender, CurrentCellValueChangedEventArgs e) {
+            if (e.Column.MappingName == "ExchangeDone") {
+                Barter myBarter = (Barter)e.Record;
+                if (App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName) != null) {
+                    App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName));
+                    App.myfmMain.myShipCargo.UpdateCurrentLV();
+                    App.myfmMain.myShipCargo.SaveData();
+                }
+        
+                SaveData();
+                UpdateParley();
+                UpdateMapControl();
+            }
+            else if (e.Column.MappingName == "UsingALT") {
+                SaveData();
+                UpdateParley();
+            }
+        }
+
 
         private void UpdateInvChange(int _groupNumber) {
             foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.BarterGroup == _groupNumber).OrderBy(b => b.Item1LV)) {
@@ -414,24 +435,6 @@ namespace iBarter.View {
             }
         }
 
-        private void DataGrid_Planner_CurrentCellValueChanged(object sender, CurrentCellValueChangedEventArgs e) {
-            if (e.Column.MappingName == "ExchangeDone") {
-                Barter myBarter = (Barter)e.Record;
-                if (App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName) != null) {
-                    App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName));
-                    App.myfmMain.myShipCargo.UpdateCurrentLV();
-                    App.myfmMain.myShipCargo.SaveData();
-                }
-
-                SaveData();
-                UpdateParley();
-                UpdateMapControl();
-            }
-            else if (e.Column.MappingName == "UsingALT") {
-                SaveData();
-                UpdateParley();
-            }
-        }
 
         private void UpdateMapControl() {
             for (int i = App.myfmMain.myMapControl.Grid_MapMain.Children.Count - 1; i > 0; i--) {

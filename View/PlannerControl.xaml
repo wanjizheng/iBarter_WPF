@@ -66,8 +66,8 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 IconWidth="26" IconHeight="26"
-                Label="Scan"
-                ToolTip="Scan"
+                Label="Groupping"
+                ToolTip="Groupping"
                 SizeMode="Small"
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/refresh.png" Click="ButtonAdv_Refresh_Click" />

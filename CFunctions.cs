@@ -1,15 +1,20 @@
-﻿using Emgu.CV.CvEnum;
-using Emgu.CV;
+﻿using Emgu.CV;
+using Emgu.CV.CvEnum;
+using FuzzySharp;
 using ImageMagick;
 using PureDM;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -166,6 +171,10 @@ namespace iBarter {
                         }
                     }
                 }
+
+                // if (strURL == "") {
+                //     strURL = "https://bdocodex.com/items/new_icon/03_etc/07_productmaterial/0000" + item.ItemID + ".webp";
+                // }
 
                 UpdateItemImagesAsync(item.ItemID, strURL);
                 if (_itemID == "") {
@@ -353,17 +362,9 @@ namespace iBarter {
 
             List<Task<Barter>> tasks = new List<Task<Barter>>();
 
-            for (int i = 0; i < 6; i++) {
-                tasks.Add(IdentifyBarterAsync(listAnchors[i])); // 并行启动异步任务
-            }
+            for (int i = 0; i < Math.Min(6, listAnchors.Count); i++) {
+                var myBarter = IdentifyBarterAsync(listAnchors[i]); // 一个一个来
 
-            // 等待所有任务完成
-            Barter[] results = await Task.WhenAll(tasks);
-
-
-            // 按照原始顺序处理结果
-            for (int i = 0; i < results.Length; i++) {
-                Barter myBarter = results[i];
                 if (myBarter.IsLand != null && myBarter.Item1 != null && myBarter.Item2 != null &&
                     App.listBarterScanner.FirstOrDefault(b => b.IsLand.Island.ToString().Equals(myBarter.IsLand.Island.ToString())) == null) {
                     App.listBarterScanner.Add(myBarter);
@@ -659,210 +660,427 @@ namespace iBarter {
         //     return myBarter;
         // }
 
-        private async Task<Barter> IdentifyBarterAsync(PointPlus _pp) {
-            return await Task.Run(() => {
-                // 检查锚点是否有效
-                if (_pp.X == -1 || _pp.Y == -1)
-                    return (Barter)null;
-                PointPlus pointPlusAnchor = _pp;
-                Barter myBarter = new Barter();
+        private Barter IdentifyBarterAsync(PointPlus _pp) {
+            // 检查锚点是否有效
+            if (_pp.X == -1 || _pp.Y == -1)
+                return (Barter)null;
+            PointPlus pointPlusAnchor = _pp;
+            Barter myBarter = new Barter();
 
-                // 1. 查找边缘图片以确定岛屿信息
-                PointPlus pointPlusEdge = App.myPureDM.CV.FindPicture(
-                    Math.Max(0, pointPlusAnchor.X - 300),
-                    pointPlusAnchor.Y - 5,
-                    pointPlusAnchor.X - 5,
-                    pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5,
-                    "\\Images\\edge.bmp",
-                    0.8,
-                    CV.Mode.OpenCV,
-                    false);
-                if (pointPlusEdge.X == -1 || pointPlusEdge.Y == -1)
-                    return (Barter)null;
+            // 1. 查找边缘图片以确定岛屿信息
+            PointPlus pointPlusEdge = App.myPureDM.CV.FindPicture(
+                Math.Max(0, pointPlusAnchor.X - 300),
+                pointPlusAnchor.Y - 5,
+                pointPlusAnchor.X - 5,
+                pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5,
+                "\\Images\\edge.bmp",
+                0.8,
+                CV.Mode.OpenCV,
+                false);
+            if (pointPlusEdge.X == -1 || pointPlusEdge.Y == -1)
+                return (Barter)null;
 
-                // 通过 OCR 识别岛屿名称
-                string strIsland = App.myPureDM.CV.OCRString(
-                    pointPlusEdge.X + pointPlusEdge.Size.Width,
-                    pointPlusAnchor.Y - 2,
-                    pointPlusAnchor.X - 2,
-                    pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5);
+            // 通过 OCR 识别岛屿名称
+            string strIsland = App.myPureDM.CV.OCRString(
+                pointPlusEdge.X + pointPlusEdge.Size.Width,
+                pointPlusAnchor.Y - 2,
+                pointPlusAnchor.X - 2,
+                pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5);
 
-                // 2. 捕获交易物品区域截图
-                int intX1 = pointPlusAnchor.X + pointPlusAnchor.Size.Width + 1;
-                int intY1 = pointPlusAnchor.Y - 2;
-                int intX2 = pointPlusAnchor.X + 700;
-                int intY2 = pointPlusAnchor.Y + 60;
-                App.myPureDM.DM.Capture(intX1, intY1, intX2, intY2, "barterItems.bmp");
+            // 2. 捕获交易物品区域截图
+            int intX1 = pointPlusAnchor.X + pointPlusAnchor.Size.Width + 1;
+            int intY1 = pointPlusAnchor.Y - 2;
+            int intX2 = pointPlusAnchor.X + 700;
+            int intY2 = pointPlusAnchor.Y + 60;
+            // App.myPureDM.DM.Capture(intX1, intY1, intX2, intY2, "barterItems.bmp");
 
-                // 3. 识别 Parley 数值
-                string strParleyPath = (GameFont == FontType.DejaVuSans) ? "\\Images\\Parley2.bmp" : "\\Images\\Parley.bmp";
-                PointPlus pointPlusParley = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, strParleyPath, 0.8, CV.Mode.OpenCV, false);
-                if (pointPlusParley.IsEmpty) {
-                    pointPlusParley = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Parley2.bmp", 0.8, CV.Mode.OpenCV, false);
-                    GameFont = FontType.DejaVuSans;
-                }
+            // 3. 识别 Parley 数值
+            string strParleyPath = (GameFont == FontType.DejaVuSans) ? "\\Images\\Parley2.bmp" : "\\Images\\Parley.bmp";
+            PointPlus pointPlusParley = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, strParleyPath, 0.8, CV.Mode.OpenCV, false);
+            if (pointPlusParley.IsEmpty) {
+                pointPlusParley = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Parley2.bmp", 0.8, CV.Mode.OpenCV, false);
+                GameFont = FontType.DejaVuSans;
+            }
 
-                string strRequiredPath = (GameFont == FontType.DejaVuSans) ? "\\Images\\Required2.bmp" : "\\Images\\Required.bmp";
-                PointPlus pointPlusRequired = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, strRequiredPath, 0.8, CV.Mode.OpenCV, false);
-                string strParley = App.myPureDM.CV.OCRString(
-                    pointPlusParley.X + pointPlusParley.Size.Width,
-                    pointPlusParley.Y,
-                    pointPlusRequired.X + 1,
-                    pointPlusParley.Y + pointPlusParley.Size.Height,
-                    CV.OCRType.Number);
+            string strRequiredPath = (GameFont == FontType.DejaVuSans) ? "\\Images\\Required2.bmp" : "\\Images\\Required.bmp";
+            PointPlus pointPlusRequired = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, strRequiredPath, 0.8, CV.Mode.OpenCV, false);
+            string strParley = App.myPureDM.CV.OCRString(
+                pointPlusParley.X + pointPlusParley.Size.Width,
+                pointPlusParley.Y,
+                pointPlusRequired.X + 1,
+                pointPlusParley.Y + pointPlusParley.Size.Height,
+                CV.OCRType.Number);
 
-                // 获取岛屿的默认 Parley 值，并尝试解析 OCR 得到的数值
-                int intParley = App.listIslands.Where(land => land.Island == IslandEnum(strIsland))
-                    .Select(land => land.Parley).FirstOrDefault();
-                try {
-                    intParley = int.Parse(strParley);
-                    if (intParley < 5000)
-                        intParley = intParley * 10 + 6;
-                    else if (intParley == 215712)
-                        intParley = 21572;
-                }
-                catch {
-                }
+            // 获取岛屿的默认 Parley 值，并尝试解析 OCR 得到的数值
+            int intParley = App.listIslands.Where(land => land.Island == IslandEnum(strIsland))
+                .Select(land => land.Parley).FirstOrDefault();
+            try {
+                intParley = int.Parse(strParley);
+                if (intParley < 5000)
+                    intParley = intParley * 10 + 6;
+                else if (intParley == 215712)
+                    intParley = 21572;
+            }
+            catch {
+            }
 
-                // 4. 识别剩余交易次数
-                string strRemainingPath = (GameFont == FontType.DejaVuSans) ? "\\Images\\Remaining2.bmp" : "\\Images\\Remaining.bmp";
-                PointPlus pointPlusRemaining = App.myPureDM.CV.FindPicture(
-                    0,
-                    pointPlusAnchor.Y + pointPlusAnchor.Size.Height,
-                    App.myPureDM.WindowWidth,
-                    pointPlusAnchor.Y + 60,
-                    strRemainingPath, 0.6, CV.Mode.OpenCV, false);
-                string strRemaining = App.myPureDM.CV.OCRString(
-                    pointPlusRemaining.X + pointPlusRemaining.Size.Width,
-                    pointPlusRemaining.Y,
-                    pointPlusRemaining.X + pointPlusRemaining.Size.Width + 30,
-                    pointPlusRemaining.Y + pointPlusRemaining.Size.Height + 2,
-                    CV.OCRType.Number);
-                int intRemaining = 0;
-                try {
-                    intRemaining = int.Parse(strRemaining);
-                }
-                catch {
-                    Log("Error, cannot identify the remaining number => " + strIsland, Brushes.IndianRed);
-                }
+            // 4. 识别剩余交易次数
+            string strRemainingPath = (GameFont == FontType.DejaVuSans) ? "\\Images\\Remaining2.bmp" : "\\Images\\Remaining.bmp";
+            PointPlus pointPlusRemaining = App.myPureDM.CV.FindPicture(
+                0,
+                pointPlusAnchor.Y + pointPlusAnchor.Size.Height,
+                App.myPureDM.WindowWidth,
+                pointPlusAnchor.Y + 60,
+                strRemainingPath, 0.6, CV.Mode.OpenCV, false);
+            string strRemaining = App.myPureDM.CV.OCRString(
+                pointPlusRemaining.X + pointPlusRemaining.Size.Width,
+                pointPlusRemaining.Y,
+                pointPlusRemaining.X + pointPlusRemaining.Size.Width + 30,
+                pointPlusRemaining.Y + pointPlusRemaining.Size.Height + 2,
+                CV.OCRType.Number);
+            int intRemaining = 0;
+            try {
+                intRemaining = int.Parse(strRemaining);
+            }
+            catch {
+                Log("Error, cannot identify the remaining number => " + strIsland, Brushes.IndianRed);
+            }
 
-                if (IslandEnum(strIsland) == EnumLists.Island.UnKnown)
-                    Log("Unknown islands! Double check your result! => " + strIsland, Brushes.Red);
+            if (IslandEnum(strIsland) == EnumLists.Island.UnKnown)
+                Log("Unknown islands! Double check your result! => " + strIsland, Brushes.Red);
 
-                // 5. 获取岛屿信息
-                Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == IslandEnum(strIsland).ToString());
-                if (myIslands == null) {
-                    Log("Error, cannot identify the islands information => " + strIsland, Brushes.Red);
-                    return (Barter)null;
-                }
+            // 5. 获取岛屿信息
+            Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == IslandEnum(strIsland).ToString());
+            if (myIslands == null) {
+                Log("Error, cannot identify the islands information => " + strIsland, Brushes.Red);
+                return (Barter)null;
+            }
 
-                myIslands.Parley = intParley;
-                myIslands.Remaining = intRemaining;
-                myBarter.IsLand = myIslands;
-                Log("Identified island: " + myIslands.Island, Brushes.OrangeRed);
+            myIslands.Parley = intParley;
+            myIslands.Remaining = intRemaining;
+            myBarter.IsLand = myIslands;
+            Log("Identified island: " + myIslands.Island, Brushes.OrangeRed);
 
-                // 6. 识别交易物品
-                List<PointPlus> listPointPlus = new List<PointPlus>();
+
+            // 6. 识别交易物品
+            IdentifyTradeItem:
+            List<PointPlus> listPointPlus = new List<PointPlus>();
+            string strItem1 = App.myPureDM.CV.OCRString(
+                pointPlusParley.X,
+                pointPlusParley.Y - pointPlusParley.Size.Height,
+                pointPlusRequired.X + 120,
+                pointPlusParley.Y + 1, CV.OCRType.Words, CV.OCRMode.Color);
+
+
+            string strItem2 = App.myPureDM.CV.OCRString(
+                pointPlusParley.X + 376,
+                pointPlusParley.Y - pointPlusParley.Size.Height,
+                pointPlusRequired.X + 376 + 100,
+                pointPlusParley.Y + pointPlusParley.Size.Height, CV.OCRType.Words, CV.OCRMode.Color);
+
+            App.myPureDM.DM.Capture(pointPlusParley.X, pointPlusParley.Y - pointPlusParley.Size.Height,
+                pointPlusRequired.X + 120, pointPlusParley.Y + 1, "myItem1.bmp");
+
+            App.myPureDM.DM.Capture(pointPlusParley.X + 376,
+                pointPlusParley.Y - pointPlusParley.Size.Height,
+                pointPlusRequired.X + 376 + 100,
+                pointPlusParley.Y + pointPlusParley.Size.Height, "myItem2.bmp");
+
+            Items myItems1 = FindMostSimilarItem(strItem1);
+            Items myItems2 = FindMostSimilarItem(strItem2);
+
+
+            PointPlus myPP1 = new PointPlus();
+            if (myItems1 != null)
+                myPP1 = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems1.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+            if (myPP1.X != -1 && myPP1.Y != -1 && myPP1.X * myPP1.Y != 0)
+                listPointPlus.Add(myPP1);
+            else {
+                List<PointPlus> listPointPlus_Temp = new List<PointPlus>();
                 foreach (Items item in App.listItems) {
                     PointPlus myPP = App.myPureDM.CV.FindPicture(
                         intX1, intY1, intX2, intY2,
                         "\\Images\\Items\\" + item.ItemID + ".bmp",
-                        0.4, 0.8, 1, CV.Mode.OpenCV, false);
-                    if (myPP.X != -1 && myPP.Y != -1)
-                        listPointPlus.Add(myPP);
+                        0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+                    if (myPP.X != -1 && myPP.Y != -1 && myPP.X * myPP.Y != 0)
+                        listPointPlus_Temp.Add(myPP);
                 }
 
-                if (listPointPlus.Count < 2) {
-                    Log("Can't identify items: " + myIslands.Island, Brushes.Red);
-                    return myBarter;
+                listPointPlus_Temp = PickTwoBest(listPointPlus_Temp);
+                listPointPlus.Add(listPointPlus_Temp[0]);
+            }
+
+
+            PointPlus myPP2 = new PointPlus();
+
+            if (myItems2 != null)
+                myPP2 = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems2.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+            if (myPP2.X != -1 && myPP2.Y != -1 && myPP2.X * myPP2.Y != 0)
+                listPointPlus.Add(myPP2);
+            else {
+                List<PointPlus> listPointPlus_Temp = new List<PointPlus>();
+                foreach (Items item in App.listItems) {
+                    PointPlus myPP = App.myPureDM.CV.FindPicture(
+                        intX1, intY1, intX2, intY2,
+                        "\\Images\\Items\\" + item.ItemID + ".bmp",
+                        0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+                    if (myPP.X != -1 && myPP.Y != -1 && myPP.X * myPP.Y != 0)
+                        listPointPlus_Temp.Add(myPP);
                 }
 
+                listPointPlus_Temp = PickTwoBest(listPointPlus_Temp);
+                listPointPlus.Add(listPointPlus_Temp[1]);
+            }
 
-                // 7. 选取匹配度最高且彼此距离较远的两个物品
-                listPointPlus.Sort((p1, p2) => p1.Sim.CompareTo(p2.Sim));
-                List<PointPlus> selectedPoints = new List<PointPlus>();
-                for (int i = listPointPlus.Count - 1; i >= 0 && selectedPoints.Count < 2; i--) {
-                    PointPlus candidate = listPointPlus[i];
-                    if (selectedPoints.Count == 0 || selectedPoints.All(pp => Math.Abs(pp.X - candidate.X) >= 300))
-                        selectedPoints.Add(candidate);
+
+            //
+            // List<PointPlus> listPointPlus = new List<PointPlus>();
+            // foreach (Items item in App.listItems) {
+            //     PointPlus myPP = App.myPureDM.CV.FindPicture(
+            //         intX1, intY1, intX2, intY2,
+            //         "\\Images\\Items\\" + item.ItemID + ".bmp",
+            //         0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true,0.7);
+            //     if (myPP.X != -1 && myPP.Y != -1 && myPP.X * myPP.Y != 0)
+            //         listPointPlus.Add(myPP);
+            // }
+            //
+            // if (listPointPlus.Count < 2) {
+            //     Log("Can't identify items: " + myIslands.Island, Brushes.Red);
+            //     return myBarter;
+            // }
+
+
+            // 7. 选取匹配度最高且彼此距离较远的两个物品
+            // listPointPlus = PickTwoBest(listPointPlus);
+            // listPointPlus.Sort((p1, p2) => p1.X.CompareTo(p2.X));
+
+            // 8. 识别第一个物品
+            string strID1 = listPointPlus[0].ImageID.Substring(14, listPointPlus[0].ImageID.Length - 18);
+            // if (strID1 == "800011")
+            //     strID1 = "800012";
+            // else if (strID1 == "800012")
+            //     strID1 = "800011";
+            string strNumber1 = App.myPureDM.CV.OCRString(
+                listPointPlus[0].X,
+                (int)(listPointPlus[0].Y + listPointPlus[0].Size.Height * 0.6),
+                listPointPlus[0].X + listPointPlus[0].Size.Width,
+                listPointPlus[0].Y + listPointPlus[0].Size.Height,
+                CV.OCRType.Number, CV.OCRMode.Diff, false, strID1);
+            int intNumber1 = App.listItems.Where(i => i.ItemID == strID1)
+                .Select(i => i.ItemNumber).FirstOrDefault();
+            try {
+                intNumber1 = int.Parse(strNumber1);
+            }
+            catch {
+            }
+
+            if (myItems1 != null && myItems1.ItemLV != "0") {
+                intNumber1 = 1;
+            }
+
+            // 9. 识别第二个物品
+            string strID2 = "10";
+            string strNumber2 = "-1";
+            if (listPointPlus.Count == 2) {
+                strID2 = listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18);
+                if (strID2 == "800011")
+                    strID2 = "800012";
+                else if (strID2 == "800012")
+                    strID2 = "800011";
+                strNumber2 = App.myPureDM.CV.OCRString(
+                    listPointPlus[1].X,
+                    (int)(listPointPlus[1].Y + listPointPlus[1].Size.Height * 0.6),
+                    listPointPlus[1].X + listPointPlus[1].Size.Width,
+                    listPointPlus[1].Y + listPointPlus[1].Size.Height,
+                    CV.OCRType.Number, CV.OCRMode.Diff, false, strID2);
+            }
+            else {
+                Log("Cannot identify the second item. Use Crow Coin instead.", Brushes.Red);
+            }
+
+            int intNumber2 = App.listItems.Where(i => i.ItemID == strID2)
+                .Select(i => i.ItemNumber).FirstOrDefault();
+            try {
+                intNumber2 = int.Parse(strNumber2);
+            }
+            catch {
+            }
+
+            if (myItems2 != null && myItems2.ItemLV == "5") {
+                intNumber2 = 1;
+            }
+
+
+            // 10. 构造交易物品对象
+            Items item1 = new Items(
+                App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemName).FirstOrDefault(),
+                strID1,
+                App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemLV).FirstOrDefault(),
+                intNumber1);
+            Items item2 = new Items(
+                App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemName).FirstOrDefault(),
+                strID2,
+                App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemLV).FirstOrDefault(),
+                intNumber2);
+
+            Log($"<{myIslands.Island} - {myIslands.Remaining} ~ {myIslands.Parley}> Item1: {item1.ItemName} => {intNumber1} | Item2: {item2.ItemName} => {intNumber2}", Brushes.Blue);
+
+            myBarter.Item1 = item1;
+            myBarter.Item2 = item2;
+
+            return myBarter;
+        }
+
+        // 规范化：小写、合并空白、去重音
+        private static string NormalizeBasic(string s) {
+            if (string.IsNullOrWhiteSpace(s)) return string.Empty;
+            s = Regex.Replace(s.Trim().ToLowerInvariant(), @"\s+", " ");
+            var formD = s.Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder(formD.Length);
+            foreach (var ch in formD)
+                if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
+                    sb.Append(ch);
+            return sb.ToString().Normalize(NormalizationForm.FormC);
+        }
+
+        // 切词（英文够用）：按非字母数字分割，保留整词
+        private static HashSet<string> Tokenize(string s) {
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var w in Regex.Split(s, @"[^0-9A-Za-z]+"))
+                if (!string.IsNullOrEmpty(w))
+                    set.Add(w);
+            return set;
+        }
+
+        // 防“前缀吸走”的智能打分：WRatio/TokenSet，并对“无整词重合”重罚
+        private int FuzzyScoreSmart(string a, string b) {
+            if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b)) return 0;
+
+            a = NormalizeBasic(a);
+            b = NormalizeBasic(b);
+
+            if (a == b) return 200; // 精确一致，绝对优先
+
+            var ta = Tokenize(a);
+            var tb = Tokenize(b);
+            int overlap = ta.Intersect(tb).Count();
+
+            // 基础分（0..100）
+            int w = Fuzz.WeightedRatio(a, b);
+            int ts = Fuzz.TokenSetRatio(a, b);
+            int score = Math.Max(w, ts);
+
+            // 规则 1：没有任何整词重合 -> 重罚（解决 silk vs silkworm cocoon）
+            if (ta.Count > 0 && tb.Count > 0 && overlap == 0)
+                score -= 40;
+
+            // 规则 2：候选比查询明显长且没有覆盖所有查询词 -> 长度惩罚（避免长串“含糊带走”）
+            double lenRatio = (double)b.Length / Math.Max(1, a.Length);
+            if (lenRatio > 1.6 && overlap < ta.Count)
+                score -= (int)Math.Min(20, (lenRatio - 1.6) * 20);
+
+            // 规则 3：候选包含所有查询词（整词） -> 小幅加分（stained seagull figurine）
+            if (overlap == ta.Count && ta.Count > 0)
+                score += 10;
+
+            // 限定范围
+            if (score < 0) score = 0;
+            if (score > 100) score = 100;
+            return score;
+        }
+
+        private string RemoveLevelPrefix(string input) {
+            if (string.IsNullOrWhiteSpace(input)) return input;
+            var m = Regex.Match(input, @"^\[Level [1-4]\]\s*");
+            return m.Success ? input.Substring(m.Length) : input;
+        }
+
+        // 只改这一处：用 FuzzyScoreSmart 排序（从高到低）
+        public Items FindMostSimilarItem(string strItem1) {
+            if (string.IsNullOrWhiteSpace(strItem1) || App.listItems == null || App.listItems.Count == 0)
+                return null;
+
+            string processed = NormalizeBasic(RemoveLevelPrefix(strItem1));
+
+            // 精确匹配优先（规范化后）
+            var exact = App.listItems.FirstOrDefault(it =>
+                NormalizeBasic(it.ItemName) == processed);
+            if (exact != null) return exact;
+
+            // 否则按智能分数排序；同分时更短的名字更可能是“精确项”
+            return App.listItems
+                .OrderByDescending(it => FuzzyScoreSmart(processed, it.ItemName))
+                .ThenBy(it => it.ItemName?.Length ?? int.MaxValue)
+                .FirstOrDefault();
+        }
+
+        const int minDx = 300;
+
+        List<PointPlus> PickTwoBest(List<PointPlus> list) {
+            var res = new List<PointPlus>();
+            if (list == null || list.Count == 0) return res;
+
+            // 过滤无效候选（可按需调整）
+            var cand = list
+                .Where(p => p.X >= 0 && p.Y >= 0 && p.Sim > 0 && p.Size.Width > 0 && p.Size.Height > 0)
+                .ToList();
+            if (cand.Count == 0) return res;
+            if (cand.Count == 1) {
+                res.Add(cand[0]);
+                return res;
+            }
+
+            // 1) 按 X 升序
+            var byX = cand.OrderBy(p => p.X).ToList();
+
+            // 2) 寻找最大横向间距(≥ MinDx)作为分界
+            int splitIdx = -1, maxGap = 0;
+            for (int i = 0; i < byX.Count - 1; i++) {
+                int gap = byX[i + 1].X - byX[i].X;
+                if (gap >= minDx && gap > maxGap) {
+                    maxGap = gap;
+                    splitIdx = i;
                 }
+            }
 
-                listPointPlus = selectedPoints;
-                listPointPlus.Sort((p1, p2) => p1.X.CompareTo(p2.X));
+            PointPlus a, b;
 
-                // 8. 识别第一个物品
-                string strID1 = listPointPlus[0].ImageID.Substring(14, listPointPlus[0].ImageID.Length - 18);
-                if (strID1 == "800011")
-                    strID1 = "800012";
-                else if (strID1 == "800012")
-                    strID1 = "800011";
-                string strNumber1 = App.myPureDM.CV.OCRString(
-                    listPointPlus[0].X,
-                    (int)(listPointPlus[0].Y + listPointPlus[0].Size.Height * 0.6),
-                    listPointPlus[0].X + listPointPlus[0].Size.Width,
-                    listPointPlus[0].Y + listPointPlus[0].Size.Height,
-                    CV.OCRType.Number, CV.OCRMode.Diff, false, strID1);
-                int intNumber1 = App.listItems.Where(i => i.ItemID == strID1)
-                    .Select(i => i.ItemNumber).FirstOrDefault();
-                try {
-                    intNumber1 = int.Parse(strNumber1);
+            if (splitIdx >= 0) {
+                // 分成左右两组，各取本组 Sim 最大
+                var leftGroup = byX.Take(splitIdx + 1);
+                var rightGroup = byX.Skip(splitIdx + 1);
+
+                a = leftGroup.OrderByDescending(p => p.Sim).First();
+                b = rightGroup.OrderByDescending(p => p.Sim).First();
+            }
+            else {
+                // 分不出来：全局 Top1 + Top2（概率第一、第二）
+                var bySim = cand.OrderByDescending(p => p.Sim).ToList();
+                a = bySim[0];
+                b = (bySim.Count > 1) ? bySim[1] : default;
+                if (Equals(b, default(PointPlus))) {
+                    res.Add(a);
+                    return res;
                 }
-                catch {
-                }
+            }
 
-                // 9. 识别第二个物品
-                string strID2 = "10";
-                string strNumber2 = "-1";
-                if (listPointPlus.Count == 2) {
-                    strID2 = listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18);
-                    if (strID2 == "800011")
-                        strID2 = "800012";
-                    else if (strID2 == "800012")
-                        strID2 = "800011";
-                    strNumber2 = App.myPureDM.CV.OCRString(
-                        listPointPlus[1].X,
-                        (int)(listPointPlus[1].Y + listPointPlus[1].Size.Height * 0.6),
-                        listPointPlus[1].X + listPointPlus[1].Size.Width,
-                        listPointPlus[1].Y + listPointPlus[1].Size.Height,
-                        CV.OCRType.Number, CV.OCRMode.Diff, false, strID2);
-                }
-                else {
-                    Log("Cannot identify the second item. Use Crow Coin instead.", Brushes.Red);
-                }
+            // 3) 最后仅按 X 排序（左在前右在后），不改变选择结果
+            if (a.X <= b.X) {
+                res.Add(a);
+                res.Add(b);
+            }
+            else {
+                res.Add(b);
+                res.Add(a);
+            }
 
-                int intNumber2 = App.listItems.Where(i => i.ItemID == strID2)
-                    .Select(i => i.ItemNumber).FirstOrDefault();
-                try {
-                    intNumber2 = int.Parse(strNumber2);
-                }
-                catch {
-                }
-
-                // 10. 构造交易物品对象
-                Items item1 = new Items(
-                    App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemName).FirstOrDefault(),
-                    strID1,
-                    App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemLV).FirstOrDefault(),
-                    intNumber1);
-                Items item2 = new Items(
-                    App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemName).FirstOrDefault(),
-                    strID2,
-                    App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemLV).FirstOrDefault(),
-                    intNumber2);
-
-                Log($"<{myIslands.Island} - {myIslands.Remaining} ~ {myIslands.Parley}> Item1: {item1.ItemName} => {intNumber1} | Item2: {item2.ItemName} => {intNumber2}", Brushes.Blue);
-
-                myBarter.Item1 = item1;
-                myBarter.Item2 = item2;
-
-                return myBarter;
-            });
+            return res;
         }
 
 
         public EnumLists.Island IslandEnum(string _island) {
             switch (_island) {
-                case string s when s.Contains("Ajir"):
+                case string s when s.Contains("Ajir") || s.Contains("Aji"):
                     return EnumLists.Island.Ajir;
                 case string s when s.Contains("Albresser"):
                     return EnumLists.Island.Albresser;
@@ -874,7 +1092,7 @@ namespace iBarter {
                     return EnumLists.Island.Ancient;
                 case string s when s.Contains("Angie"):
                     return EnumLists.Island.Angie;
-                case string s when s.Contains("Arakil"):
+                case string s when s.Contains("Arakil") || s.Contains("Araki"):
                     return EnumLists.Island.Arakil;
                 case string s when s.Contains("Arita"):
                     return EnumLists.Island.Arita;
@@ -922,7 +1140,7 @@ namespace iBarter {
                     return EnumLists.Island.Hakoven;
                 case string s when s.Contains("Halmad"):
                     return EnumLists.Island.Halmad;
-                case string s when s.Contains("Iliya") || s.Contains("liya"):
+                case string s when s.Contains("Iliya") || s.Contains("liya") || s.Contains("Miya") || s.Contains("lia"):
                     return EnumLists.Island.Iliya;
                 case string s when s.Contains("Unfinished") || s.Contains("UnfinishedAdriftVessel") || s.Contains("Unfinished Adrift"):
                     return EnumLists.Island.Unfinished;
@@ -958,13 +1176,13 @@ namespace iBarter {
                     return EnumLists.Island.Narvo;
                 case string s when s.Contains("Netnume"):
                     return EnumLists.Island.Netnume;
-                case string s when s.Contains("Oben"):
+                case string s when s.Contains("Oben") || s.Contains("Qben"):
                     return EnumLists.Island.Oben;
                 case string s when s.Contains("Orffs") || s.Contains("Drffs"):
                     return EnumLists.Island.Orffs;
                 case string s when s.Contains("Orisha"):
                     return EnumLists.Island.Orisha;
-                case string s when s.Contains("Ostra") || s.Contains("Dstra") || s.Contains("Qstra"):
+                case string s when s.Contains("Ostra") || s.Contains("Dstra") || s.Contains("Qstra") || s.Contains("Osta"):
                     return EnumLists.Island.Ostra;
                 case string s when s.Contains("Padix"):
                     return EnumLists.Island.Padix;
@@ -978,7 +1196,7 @@ namespace iBarter {
                     return EnumLists.Island.Portanen;
                 case string s when s.Contains("Pujara"):
                     return EnumLists.Island.Pujara;
-                case string s when s.Contains("Racid"):
+                case string s when s.Contains("Racid") || s.Contains("Raid"):
                     return EnumLists.Island.Racid;
                 case string s when s.Contains("Rameda"):
                     return EnumLists.Island.Rameda;
@@ -994,13 +1212,13 @@ namespace iBarter {
                     return EnumLists.Island.Serca;
                 case string s when s.Contains("Shasha"):
                     return EnumLists.Island.Shasha;
-                case string s when s.Contains("Shirna"):
+                case string s when s.Contains("Shirna") || s.Contains("Shira") || s.Contains("Shima"):
                     return EnumLists.Island.Shirna;
                 case string s when s.Contains("Sokota"):
                     return EnumLists.Island.Sokota;
                 case string s when s.Contains("Staren"):
                     return EnumLists.Island.Staren;
-                case string s when s.Contains("Taramura"):
+                case string s when s.Contains("Taramura") || s.Contains("Taram"):
                     return EnumLists.Island.Taramura;
                 case string s when s.Contains("Tashu"):
                     return EnumLists.Island.Tashu;

@@ -19,7 +19,7 @@ namespace iBarter {
     ///     Interaction logic for App.xaml
     /// </summary>
     public partial class App : Application {
-        public static global::PureDM.PureDM myPureDM = null!;
+        public static global::PureDM.DmAutomation myPureDM = null!;
         public static CFunctions myCFun = null!;
         public static MainWindow myfmMain = null!;
         public static SplashScreen mySplashScreen = null!;
@@ -41,7 +41,7 @@ namespace iBarter {
 
 
         public App() {
-            SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1NNaF5cXmBCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdmWXxceXRcRGlfWUJzWkJWYUA=");
+            SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JGaF5cXGpCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdmWH1ccnZWQ2NZWERwW0ZWYEs=");
             
             //SfSkinManager.ApplyStylesOnApplication = true;
 

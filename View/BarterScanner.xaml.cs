@@ -2,6 +2,7 @@
 using Syncfusion.Windows.Shared;
 using System.Windows;
 using System.Windows.Media;
+using Syncfusion.UI.Xaml.ScrollAxis;
 
 namespace iBarter.View {
     /// <summary>
@@ -80,6 +81,63 @@ namespace iBarter.View {
 
             App.listBarterScanner.Clear();
             RefreshDataGrid();
+
+
+            // After line 82: scroll Planner grid to the last item
+            Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                var grid = App.myfmMain.myPlannerControl.DataGrid_Planner;
+                
+                if (grid == null) return;
+
+                grid.View.BeginInit();
+                try {
+                    grid.GroupColumnDescriptions.Clear();          // removes column-based grouping
+                    grid.View.GroupDescriptions?.Clear();          // defensive: clears any programmatic group descriptions
+                    grid.AutoExpandGroups = false;                 // optional: disable auto expand
+                }
+                finally {
+                    grid.View.EndInit();
+                }
+                grid.View.Refresh(); // or grid.UpdateLayout();
+
+
+                grid.UpdateLayout();
+
+                var view = grid.View;
+                if (view == null || view.Records.Count == 0) return;
+
+                var lastEntry = (Syncfusion.Data.RecordEntry)view.Records[view.Records.Count - 1];
+                var lastData = lastEntry.Data;
+
+                int rowIndex = grid.ResolveToRowIndex(lastData);
+                if (rowIndex <= 0) return;
+
+                // Pick the first visible column and resolve its visible index
+                Syncfusion.UI.Xaml.Grid.GridColumn firstVisible = null;
+                foreach (var c in grid.Columns) {
+                    if (!c.IsHidden) { firstVisible = c; break; }
+                }
+                if (firstVisible == null && grid.Columns.Count > 0)
+                    firstVisible = grid.Columns[0];
+
+                int colIndex = 1;
+                if (firstVisible != null) {
+                    // Replace this line:
+                    // colIndex = grid.ResolveToGridVisibleColumnIndex(firstVisible.MappingName);
+
+                    // With this line:
+                    colIndex = grid.ResolveToGridVisibleColumnIndex(grid.Columns.IndexOf(firstVisible));
+
+                    if (colIndex < 1) colIndex = 1;
+                }
+
+                var cell = new Syncfusion.UI.Xaml.ScrollAxis.RowColumnIndex(rowIndex, colIndex);
+                grid.MoveCurrentCell(cell);
+                grid.ScrollInView(cell);
+                grid.SelectedItem = lastData; // optional
+            }, System.Windows.Threading.DispatcherPriority.Render);
+
         }
 
         private void BarterScanResults_CurrentCellEndEdit(object sender, CurrentCellEndEditEventArgs e) {
