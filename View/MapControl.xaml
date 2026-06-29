@@ -60,6 +60,9 @@
         <!--     <Rectangle Fill="DarkSlateGray" /> -->
         <!-- </Grid> -->
 
+        <!-- <Grid x:Name="Grid_Hakoven1" Margin="738,148,52,292" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="DarkSlateGray" /> -->
+        <!-- </Grid> -->
 
         <!-- <Grid x:Name="Grid_Ajir" Margin="506,249,284,191" Width="10" Height="10"> -->
         <!--     <Rectangle Fill="Blue" /> -->
