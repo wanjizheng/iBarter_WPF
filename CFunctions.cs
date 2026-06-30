@@ -706,6 +706,15 @@ namespace iBarter {
         //  Phase C — multi-ROI digit vote + sane-range gate.
         //  Phase D — diagnostic dump of the second candidate as
         //            ocr_<id>.bmp; rollback of the prior _full.bmp helper.
+        //  Phase E — cross-scan cache: when 2+ ROIs agree, store the result
+        //            in _ocrCache; on subsequent scans, a 0- or 1-vote OCR
+        //            read falls back to the cached value (instead of
+        //            returning 0 or 1-vote junk). This stabilises per-item
+        //            reads across re-scans despite the OCR engine's small-
+        //            digit and 4-digit-cluster weaknesses.
+        private static readonly System.Collections.Generic.Dictionary<string, int> _ocrCache =
+            new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.Ordinal);
+
         private int TryReadQuantity(PointPlus icon, string strID) {
             int oX = (int)icon.X;
             int oY = (int)icon.Y;
@@ -762,6 +771,28 @@ namespace iBarter {
                 if (kvp.Value > topCount || (kvp.Value == topCount && kvp.Key < picked)) {
                     picked = kvp.Key;
                     topCount = kvp.Value;
+                }
+            }
+
+            // Resolution: 2+ ROIs agreeing = high confidence (cache + return);
+            // 0-1 vote = engine uncertainty, prefer cached value over the
+            // 1-vote guess to avoid contaminating the planner with junk like
+            // "200" for what should be "1000". Returns -1 if no cache either.
+            if (picked > 0 && topCount >= 2) {
+                _ocrCache[strID] = picked;
+            }
+            else if (picked > 0 && topCount < 2) {
+                int cached;
+                if (_ocrCache.TryGetValue(strID, out cached)) {
+                    Log($"OCR qty {strID}: 1-vote={picked} ignored, used cached={cached}", Brushes.Goldenrod);
+                    return cached;
+                }
+            }
+            else if (picked <= 0) {
+                int cached;
+                if (_ocrCache.TryGetValue(strID, out cached)) {
+                    Log($"OCR qty {strID}: no consensus, used cached={cached}", Brushes.Goldenrod);
+                    return cached;
                 }
             }
 
