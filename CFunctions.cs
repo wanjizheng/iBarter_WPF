@@ -1049,9 +1049,18 @@ namespace iBarter {
             if (emguPick > 0) merged[emguPick] = merged.GetValueOrDefault(emguPick, 0) + 1;
             if (diffPick > 0) merged[diffPick] = merged.GetValueOrDefault(diffPick, 0) + 1;
 
+            // Tie-break: when 2+ candidates tie on vote count, prefer the one
+            // with MORE digits (the assumption is OCR noise produces truncated
+            // or merged-digit garbage like '4000' for a '1000' target, while
+            // the correct full read is more often 3+ digits; 1-digit "1" wins
+            // ties against 1-digit garbage). On second tie, prefer smaller.
             int finalPick = -1, finalCount = 0;
             foreach (var kvp in merged) {
-                if (kvp.Value > finalCount || (kvp.Value == finalCount && kvp.Key < finalPick)) {
+                int lenA = kvp.Key.ToString().Length;
+                int lenB = finalPick < 0 ? -1 : finalPick.ToString().Length;
+                if (kvp.Value > finalCount ||
+                    (kvp.Value == finalCount && lenA > lenB) ||
+                    (kvp.Value == finalCount && lenA == lenB && kvp.Key < finalPick)) {
                     finalPick = kvp.Key;
                     finalCount = kvp.Value;
                 }
