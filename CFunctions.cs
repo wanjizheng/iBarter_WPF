@@ -165,6 +165,18 @@ namespace iBarter {
             int i = 1;
             foreach (var item in listItems) {
                 var imageUrl = ResolveBdocodexItemImageUrl(item.ItemID);
+                // Only log + dispatch the download if the URL was actually
+                // resolved - bdocodex sometimes has no image for newly added
+                // LV6/LV7 catalog entries, in which case the log line was
+                // misleading. Log AFTER the URL check so the message tells
+                // the truth: 'no image' or 'caching' rather than always 'downloading'.
+                if (string.IsNullOrEmpty(imageUrl)) {
+                    if (_itemID != "") {
+                        Log("No bdocodex image for: " + item.ItemName + " (" + _itemID + ")", Brushes.OrangeRed);
+                    }
+                    i++;
+                    continue;
+                }
                 UpdateItemImagesAsync(item.ItemID, imageUrl);
                 if (_itemID == "") {
                     Log(i + "/" + listItems.Count, Brushes.Blue);
