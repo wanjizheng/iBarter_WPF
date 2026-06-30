@@ -713,11 +713,15 @@ namespace iBarter {
             int oH = (int)icon.Size.Height;
 
             // (leftFrac, topFrac, rightFrac, bottomFrac) - all relative inside icon.
+            // tf lowered to 0.55 (was 0.60) so we don't clip the top of digits.
+            // bf raised to 0.96 (was 1.00) so we don't grab extra space below
+            // the digits. Candidates widened on the LEFT (lf 0.05-0.50) so 4-digit
+            // numbers like "1000" fit horizontally.
             var candidates = new (double lf, double tf, double rf, double bf)[] {
-                (0.00, 0.60, 1.00, 1.00),  // original behavior: bottom 40%, full width
-                (0.55, 0.65, 1.00, 1.00),  // BR half, deeper crop
-                (0.30, 0.70, 1.00, 1.00),  // 4-digit numbers ("1000") need wider X
-                (0.00, 0.78, 1.00, 1.00),  // very bottom strip only
+                (0.05, 0.55, 1.00, 0.96),  // wide bottom strip - covers 4-digit numbers
+                (0.45, 0.55, 1.00, 0.96),  // right half, captures 2-3 digit numbers
+                (0.55, 0.65, 1.00, 0.96),  // BR quadrant for tight BR position
+                (0.00, 0.80, 1.00, 0.96),  // very bottom strip (safety net)
             };
 
             var votes = new System.Collections.Generic.Dictionary<int, int>();
