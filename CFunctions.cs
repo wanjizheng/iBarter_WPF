@@ -786,8 +786,8 @@ namespace iBarter {
                 pointPlusRequired.X + 376 + 100,
                 pointPlusParley.Y + pointPlusParley.Size.Height, "myItem2.bmp");
 
-            Items myItems1 = FindMostSimilarItem(strItem1);
-            Items myItems2 = FindMostSimilarItem(strItem2);
+            Items myItems1 = FindMostSimilarItem(strItem1, ExtractLevelPrefix(strItem1).lv);
+            Items myItems2 = FindMostSimilarItem(strItem2, ExtractLevelPrefix(strItem2).lv);
 
 
             PointPlus myPP1 = new PointPlus();
@@ -807,7 +807,10 @@ namespace iBarter {
                 }
 
                 listPointPlus_Temp = PickTwoBest(listPointPlus_Temp);
-                listPointPlus.Add(listPointPlus_Temp[0]);
+                if (listPointPlus_Temp.Count >= 1)
+                    listPointPlus.Add(listPointPlus_Temp[0]);
+                else
+                    Log($"PickTwoBest returned no candidates for slot1 (itemID={myItems1?.ItemID}, lv={myItems1?.ItemLV})", Brushes.IndianRed);
             }
 
 
@@ -829,7 +832,12 @@ namespace iBarter {
                 }
 
                 listPointPlus_Temp = PickTwoBest(listPointPlus_Temp);
-                listPointPlus.Add(listPointPlus_Temp[1]);
+                if (listPointPlus_Temp.Count >= 2)
+                    listPointPlus.Add(listPointPlus_Temp[1]);
+                else if (listPointPlus_Temp.Count == 1)
+                    listPointPlus.Add(listPointPlus_Temp[0]);
+                else
+                    Log($"PickTwoBest returned no candidates for slot2 (itemID={myItems2?.ItemID}, lv={myItems2?.ItemLV})", Brushes.IndianRed);
             }
 
 
@@ -906,7 +914,7 @@ namespace iBarter {
             catch {
             }
 
-            if (myItems2 != null && myItems2.ItemLV == "5") {
+            if (myItems2 != null && myItems2.ItemLV != "0") {
                 intNumber2 = 1;
             }
 
@@ -991,12 +999,26 @@ namespace iBarter {
 
         private string RemoveLevelPrefix(string input) {
             if (string.IsNullOrWhiteSpace(input)) return input;
-            var m = Regex.Match(input, @"^\[Level [1-4]\]\s*");
+            var m = Regex.Match(input, @"^\[Level [1-7]\]\s*");
             return m.Success ? input.Substring(m.Length) : input;
         }
 
+        private static readonly Regex LV_PREFIX_RE = new(@"\[Level ([0-9]+)\]", RegexOptions.Compiled);
+
+        // Returns (name without level prefix, expected level string or null)
+        private (string name, string lv) ExtractLevelPrefix(string input) {
+            if (string.IsNullOrWhiteSpace(input)) return (input, null);
+            var m = LV_PREFIX_RE.Match(input);
+            if (!m.Success) return (input, null);
+            string lv = m.Groups[1].Value;
+            string stripped = LV_PREFIX_RE.Replace(input, "").Trim();
+            return (stripped, lv);
+        }
+
         // 只改这一处：用 FuzzyScoreSmart 排序（从高到低）
-        public Items FindMostSimilarItem(string strItem1) {
+        // expectedLv: optional LV string ("1".."7") to constrain candidates so
+        //   [Level 6] OCR text doesn't collide with same-named [Level 5] item.
+        public Items FindMostSimilarItem(string strItem1, string expectedLv = null) {
             if (string.IsNullOrWhiteSpace(strItem1) || App.listItems == null || App.listItems.Count == 0)
                 return null;
 
@@ -1007,8 +1029,12 @@ namespace iBarter {
                 NormalizeBasic(it.ItemName) == processed);
             if (exact != null) return exact;
 
-            // 否则按智能分数排序；同分时更短的名字更可能是“精确项”
-            return App.listItems
+            // 用 LV-aware 过滤避免同名不同 tier 撞库；expectedLv 为空则不过滤
+            IEnumerable<Items> candidates = App.listItems;
+            if (!string.IsNullOrWhiteSpace(expectedLv))
+                candidates = candidates.Where(it => it.ItemLV == expectedLv);
+
+            return candidates
                 .OrderByDescending(it => FuzzyScoreSmart(processed, it.ItemName))
                 .ThenBy(it => it.ItemName?.Length ?? int.MaxValue)
                 .FirstOrDefault();
