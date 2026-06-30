@@ -737,6 +737,117 @@ namespace iBarter {
             }
         }
 
+        // Module-static cache of icon templates keyed by "<id>|<W>x<H>" so we
+        // only read each bmp once per app session and resize per call-site size.
+        private static readonly System.Collections.Generic.Dictionary<string, Image<Bgr, byte>>
+            _tplCache = new System.Collections.Generic.Dictionary<string, Image<Bgr, byte>>(System.StringComparer.Ordinal);
+
+        // Load the icon template from Resources\Images\Items\<id>.bmp. Templates
+        // are the clean icon (no number overlay) downloaded from bdocodex.
+        // Resize to liveSize if needed (the live capture may differ by a
+        // pixel because of UI scaling / AA). Returns null if the bmp is
+        // missing or unreadable.
+        private Image<Bgr, byte> LoadIconTemplate(string itemID, System.Drawing.Size liveSize) {
+            if (string.IsNullOrEmpty(itemID)) return null;
+            string key = itemID + "|" + liveSize.Width + "x" + liveSize.Height;
+            if (_tplCache.TryGetValue(key, out var cached)) return cached;
+            string path = AppDomain.CurrentDomain.BaseDirectory +
+                          "Resources\\Images\\Items\\" + itemID + ".bmp";
+            if (!System.IO.File.Exists(path)) return null;
+            try {
+                var tpl = new Image<Bgr, byte>(path);
+                Image<Bgr, byte> sized = tpl;
+                if (tpl.Size != liveSize) {
+                    var resized = new Image<Bgr, byte>(liveSize);
+                    CvInvoke.Resize(tpl, resized, new System.Drawing.Size(), 0, 0, Inter.Linear);
+                    sized = resized;
+                }
+                _tplCache[key] = sized;
+                return sized;
+            }
+            catch { return null; }
+        }
+
+        // Phase G: subtract icon template from the live capture, leaving ONLY
+        // the digit overlay as bright pixels. The bdocodex template should
+        // match the live icon body byte-for-byte; only the digit pixels differ
+        // meaningfully. Then binarize via Otsu and run Tesseract.
+        //
+        // Target failure mode: the M-variant Phase F read (raw capture) misses
+        // thin-stroke single-digit glyphs ("1") because the icon body's anti-
+        // aliasing noise sits at the same intensity as the digit. With the
+        // template subtracted, AA noise cancels and the digit stands alone.
+        //
+        // Pre-processing chain:
+        //   1. Convert both to gray
+        //   2. GaussianBlur 3x3 sigma 0.5 (suppress AA noise)
+        //   3. AbsDiff (template vs live)
+        //   4. Threshold Otsu (binary bilevel)
+        //   5. Magick 3x upscale + Negate (Tesseract prefers dark text on light bg)
+        //   6. Emgu.Tesseract via GetTesseract()
+        //
+        // Returns -1 on any failure (template missing, Tesseract missing, no
+        // digits matched).
+        private int TryTemplateDiffOcr(string liveBmpPath, string itemID) {
+            if (string.IsNullOrEmpty(itemID)) return -1;
+            if (!System.IO.File.Exists(liveBmpPath)) return -1;
+            var tess = GetTesseract();
+            if (tess == null) return -1;
+
+            try {
+                using (var live = new Image<Bgr, byte>(liveBmpPath)) {
+                    var tpl = LoadIconTemplate(itemID, live.Size);
+                    if (tpl == null) return -1;
+
+                    var liveGray = live.Convert<Gray, byte>();
+                    var tplGray = tpl.Convert<Gray, byte>();
+                    CvInvoke.GaussianBlur(liveGray, liveGray, new System.Drawing.Size(3, 3), 0.5);
+                    CvInvoke.GaussianBlur(tplGray, tplGray, new System.Drawing.Size(3, 3), 0.5);
+
+                    var diff = new Image<Gray, byte>(live.Size);
+                    CvInvoke.AbsDiff(liveGray, tplGray, diff);
+
+                    // Otsu self-tunes the threshold per image - icon-vs-icon
+                    // diffs cluster near zero while digit pixels spike well
+                    // above 30, so Otsu reliably carves the digit out.
+                    try {
+                        CvInvoke.Threshold(diff, diff, 0, 255, ThresholdType.Otsu);
+                    }
+                    catch {
+                        CvInvoke.Threshold(diff, diff, 30, 255, ThresholdType.Binary);
+                    }
+
+                    string diffPath = liveBmpPath.Replace(".bmp", "_diff.bmp");
+                    diff.Save(diffPath);
+
+                    // 3x upscale + Negate via Magick, matching Phase F's M variant
+                    string sharpPath = diffPath.Replace(".bmp", "_sharp.bmp");
+                    try {
+                        using (var mi = new MagickImage(diffPath)) {
+                            mi.Scale(new Percentage(300));
+                            mi.Negate();
+                            mi.Threshold(new Percentage(50));
+                            mi.Write(sharpPath);
+                        }
+                    }
+                    catch { return -1; }
+
+                    using (var img = CvInvoke.Imread(sharpPath, ImreadModes.Grayscale)) {
+                        if (img == null || img.IsEmpty) return -1;
+                        tess.SetImage(img);
+                        tess.Recognize();
+                        string raw = (tess.GetUTF8Text() ?? "").Trim();
+                        Match m = Regex.Match(raw, @"\d{1,4}");
+                        if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
+                            return n;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return -1;
+        }
+
         // Run Emgu.Tesseract directly on a BMP file. The caller is responsible
         // for ensuring the file exists and was captured from a sensible ROI.
         // Returns -1 on any failure (engine unavailable, file missing, no
@@ -851,27 +962,38 @@ namespace iBarter {
             }
             catch { }
 
-            // Phase F: when screen-coords OCR voting is uncertain (votes < 2
-            // OR no consensus at all), hand the captured BMP to direct
-            // Tesseract for a second, possibly more reliable read. Emgu's
-            // psm=10 + digit-whitelist mode is tuned for this exact use
-            // case (small digits on a noisy icon background).
+            // Phase F + G: even when screen-coords voting is uncertain, run
+            // both Emgu paths on the captured BMP. Phase G subtracts the icon
+            // template to cancel the icon-body noise, isolating the digit.
             string bmpPath = AppDomain.CurrentDomain.BaseDirectory + "ocr_" + strID + ".bmp";
             int emguPick = TryEmguOcr(bmpPath);
-            if (emguPick > 0 && (picked <= 0 || topCount < 2)) {
-                Log($"OCR qty {strID}: Emgu={emguPick} (screen votes={string.Join(',', votes.Select(kv => kv.Key + "x" + kv.Value))})", Brushes.Gray);
-                return emguPick;
+            int diffPick = TryTemplateDiffOcr(bmpPath, strID);
+
+            // 3-way merge vote: each phase contributes one vote (Phase A's
+            // screen-coords count is weighted by its topCount, but we collapse
+            // it to 1 vote per parsed value for parity with F/G).
+            var merged = new System.Collections.Generic.Dictionary<int, int>();
+            if (picked > 0) merged[picked] = merged.GetValueOrDefault(picked, 0) + System.Math.Max(1, topCount);
+            if (emguPick > 0) merged[emguPick] = merged.GetValueOrDefault(emguPick, 0) + 1;
+            if (diffPick > 0) merged[diffPick] = merged.GetValueOrDefault(diffPick, 0) + 1;
+
+            int finalPick = -1, finalCount = 0;
+            foreach (var kvp in merged) {
+                if (kvp.Value > finalCount || (kvp.Value == finalCount && kvp.Key < finalPick)) {
+                    finalPick = kvp.Key;
+                    finalCount = kvp.Value;
+                }
             }
 
-            if (picked > 0) {
-                string tally = string.Join(",", votes.Select(kv => kv.Key + "x" + kv.Value));
-                Log($"OCR qty {strID}: picked {picked} (votes={tally})", Brushes.Gray);
+            if (finalPick > 0) {
+                string tally = string.Join(",", merged.Select(kv => kv.Key + "x" + kv.Value));
+                Log($"OCR qty {strID}: picked {finalPick} (votes={tally}; A={picked} F={emguPick} G={diffPick})", Brushes.Gray);
             }
             else {
-                Log($"OCR qty {strID}: no consensus; raw={(bestRaw ?? "")}", Brushes.OrangeRed);
+                Log($"OCR qty {strID}: no consensus; raw={(bestRaw ?? "")} F={emguPick} G={diffPick}", Brushes.OrangeRed);
             }
 
-            return picked;
+            return finalPick;
         }
 
         private Barter IdentifyBarterAsync(PointPlus _pp) {
