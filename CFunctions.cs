@@ -1242,6 +1242,24 @@ namespace iBarter {
                     return EnumLists.Island.Marine;
                 case string s when s.Contains("Boa"):
                     return EnumLists.Island.Boa;
+                case string s when s.Contains("Olvia") || s.Contains("Olvia Coast"):
+                    return EnumLists.Island.Olvia;
+                case string s when s.Contains("Arehaza"):
+                    return EnumLists.Island.Arehaza;
+                case string s when s.Contains("Grandiha") || s.Contains("Grándiha"):
+                    return EnumLists.Island.Grandiha;
+                case string s when s.Contains("Starry Midnight") || s.Contains("Midnight"):
+                    return EnumLists.Island.Midnight;
+                case string s when s.Contains("Haemo") || s.Contains("Haemo Island"):
+                    return EnumLists.Island.Haemo;
+                case string s when s.Contains("Dallae") || s.Contains("Dallae Pier"):
+                    return EnumLists.Island.Dallae;
+                case string s when s.Contains("Epheria Sentry") || s.Contains("Epheria"):
+                    return EnumLists.Island.Epheria;
+                case string s when s.Contains("Sausan Garrison") || s.Contains("Sausan"):
+                    return EnumLists.Island.Sausan;
+                case string s when s.Contains("Sanctuary") || s.Contains("Sanctuary Coastal"):
+                    return EnumLists.Island.Sanctuary;
                 default:
                     return EnumLists.Island.UnKnown;
             }

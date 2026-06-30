@@ -82,6 +82,15 @@
             Wandering,
             Weita,
             Marine,
+            Olvia,
+            Arehaza,
+            Grandiha,
+            Midnight,
+            Haemo,
+            Dallae,
+            Epheria,
+            Sausan,
+            Sanctuary,
             UnKnown
         }
 
