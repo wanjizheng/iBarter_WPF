@@ -1,5 +1,7 @@
 ﻿using Emgu.CV;
 using Emgu.CV.CvEnum;
+using Emgu.CV.OCR;
+using Emgu.CV.Structure;
 using FuzzySharp;
 using ImageMagick;
 using PureDM;
@@ -705,10 +707,73 @@ namespace iBarter {
         //            bitmap cannot be fed back to OCR.
         //  Phase C — multi-ROI digit vote + sane-range gate.
         //  Phase D — diagnostic dump of the second candidate as ocr_<id>.bmp.
+        //  Phase F — direct Emgu.CV.OCR.Tesseract pass on the dumped BMP after
+        //            3x Magick upscale + binarize. Tesseract with a digit-only
+        //            whitelist and psm=10 (single character) tends to be much
+        //            more accurate than PureDM's screen-coords colour-diff OCR
+        //            on the 6-8 px tall BDO digits. Used as a tiebreaker
+        //            prefer-source when screen-coords voting is uncertain.
         //  No cross-scan cache — the on-screen count changes per scan (e.g.
         //  remaining inventory / remaining trades) so a cached value would be
-        //  stale by the next run. Reliability is purely a function of the ROI +
-        //  OCR engine combo in this single pass.
+        //  stale by the next run.
+        private static Tesseract _tess;
+        private static readonly object _tessLock = new object();
+
+        private static Tesseract GetTesseract() {
+            if (_tess != null) return _tess;
+            lock (_tessLock) {
+                if (_tess != null) return _tess;
+                try {
+                    string tessData = AppDomain.CurrentDomain.BaseDirectory + @"tessdata\";
+                    if (!System.IO.Directory.Exists(tessData)) return null;
+                    _tess = new Tesseract(tessData, "eng", OcrEngineMode.Default);
+                    _tess.SetVariable("tessedit_char_whitelist", "0123456789");
+                    _tess.SetVariable("psm", "10"); // 10 = single character; better for tiny digits
+                    return _tess;
+                }
+                catch {
+                    return null;
+                }
+            }
+        }
+
+        // Run Emgu.Tesseract directly on a BMP file. The caller is responsible
+        // for ensuring the file exists and was captured from a sensible ROI.
+        // Returns -1 on any failure (engine unavailable, file missing, no
+        // digits matched).
+        private int TryEmguOcr(string bmpPath) {
+            var tess = GetTesseract();
+            if (tess == null || !System.IO.File.Exists(bmpPath)) return -1;
+
+            // Upscale via Magick before handing to Tesseract - 3x doubles or
+            // triples effective pixel count and is enough for ~6 px tall
+            // BDO digits to reach Tesseract's confidence floor.
+            string sharpPath = bmpPath.Replace(".bmp", "_sharp.bmp");
+            try {
+                using (var mi = new MagickImage(bmpPath)) {
+                    mi.Scale(new Percentage(300));
+                    mi.Threshold(new Percentage(60));
+                    mi.Write(sharpPath);
+                }
+            }
+            catch { return -1; }
+
+            try {
+                using (var img = CvInvoke.Imread(sharpPath, ImreadModes.Grayscale)) {
+                    if (img == null || img.IsEmpty) return -1;
+                    tess.SetImage(img);
+                    tess.Recognize();
+                    string raw = (tess.GetUTF8Text() ?? "").Trim();
+                    Match m = Regex.Match(raw, @"\d{1,4}");
+                    if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
+                        return n;
+                    }
+                }
+            }
+            catch { }
+            return -1;
+        }
+
         private int TryReadQuantity(PointPlus icon, string strID) {
             int oX = (int)icon.X;
             int oY = (int)icon.Y;
@@ -768,7 +833,8 @@ namespace iBarter {
                 }
             }
 
-            // Phase D: dump the second candidate ROI bitmap for the operator.
+            // Phase D: dump the second candidate ROI bitmap for the operator +
+            // for the Phase F Emgu.Tesseract pass below.
             try {
                 var c = candidates[1];
                 int x1 = (int)(oX + oW * c.lf);
@@ -779,19 +845,17 @@ namespace iBarter {
             }
             catch { }
 
-            // Phase B (best-effort): try to upscale via MagickImage. Failure is silent.
-            try {
-                string srcBmp = AppDomain.CurrentDomain.BaseDirectory + "ocr_" + strID + ".bmp";
-                string dstBmp = AppDomain.CurrentDomain.BaseDirectory + "ocr_" + strID + "_scaled.bmp";
-                if (System.IO.File.Exists(srcBmp)) {
-                    using (var mi = new MagickImage(srcBmp)) {
-                        mi.Scale(new Percentage(300));
-                        mi.Threshold(new Percentage(70));
-                        mi.Write(dstBmp);
-                    }
-                }
+            // Phase F: when screen-coords OCR voting is uncertain (votes < 2
+            // OR no consensus at all), hand the captured BMP to direct
+            // Tesseract for a second, possibly more reliable read. Emgu's
+            // psm=10 + digit-whitelist mode is tuned for this exact use
+            // case (small digits on a noisy icon background).
+            string bmpPath = AppDomain.CurrentDomain.BaseDirectory + "ocr_" + strID + ".bmp";
+            int emguPick = TryEmguOcr(bmpPath);
+            if (emguPick > 0 && (picked <= 0 || topCount < 2)) {
+                Log($"OCR qty {strID}: Emgu={emguPick} (screen votes={string.Join(',', votes.Select(kv => kv.Key + "x" + kv.Value))})", Brushes.Gray);
+                return emguPick;
             }
-            catch { }
 
             if (picked > 0) {
                 string tally = string.Join(",", votes.Select(kv => kv.Key + "x" + kv.Value));
