@@ -738,7 +738,11 @@ namespace iBarter {
                     }
                     _tess = new Tesseract(tessDataDir, "eng", OcrEngineMode.Default);
                     _tess.SetVariable("tessedit_char_whitelist", "0123456789");
-                    _tess.SetVariable("psm", "10"); // 10 = single character; better for tiny digits
+                    // psm=10 (single character) throws 'Unable to set psm to 10' on
+                    // some Tesseract 4 LSTM builds. psm=6 (single uniform block
+                    // of text) is the documented safe value for short digit runs
+                    // and is well-supported across Tesseract 4 + LSTM.
+                    _tess.SetVariable("psm", "6");
                     return _tess;
                 }
                 catch (Exception ex) {
@@ -775,7 +779,10 @@ namespace iBarter {
             if (_tplCache.TryGetValue(key, out var cached)) return cached;
             string path = AppDomain.CurrentDomain.BaseDirectory +
                           "Resources\\Images\\Items\\" + itemID + ".bmp";
-            if (!System.IO.File.Exists(path)) return null;
+            if (!System.IO.File.Exists(path)) {
+                TryWriteDebugLog("OCR.G tpl path MISSING: " + path);
+                return null;
+            }
             try {
                 var tpl = new Image<Bgr, byte>(path);
                 Image<Bgr, byte> sized = tpl;
@@ -787,7 +794,10 @@ namespace iBarter {
                 _tplCache[key] = sized;
                 return sized;
             }
-            catch { return null; }
+            catch (Exception ex) {
+                TryWriteDebugLog("OCR.G tpl load fail " + itemID + " " + liveSize + ": " + ex.GetType().Name + " " + ex.Message);
+                return null;
+            }
         }
 
         // Phase G: subtract icon template from the live capture, leaving ONLY
