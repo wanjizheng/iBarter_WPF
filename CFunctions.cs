@@ -958,63 +958,11 @@ namespace iBarter {
             return -1;
         }
 
-        // Run Emgu.Tesseract directly on a BMP file. The caller is responsible
-        // for ensuring the file exists and was captured from a sensible ROI.
-        // Returns -1 on any failure (engine unavailable, file missing, no
-        // digits matched).
-        //
-        // Pre-processing pipeline was selected by a 12-file x 16-variant
-        // benchmark on captured BMPs with operator-supplied ground truth. The
-        // highest-accuracy variant was M: scale 300%, Negate (so light digit
-        // becomes dark on light), threshold 50% binarization. That combo is
-        // 8/12 vs 6/12 for the next-best alternative, and beats all
-        // alternatives on single-digit '1'-class glyphs (which are the hardest
-        // bucket for Tesseract at 6-8 px tall).
-        private int TryEmguOcr(string bmpPath) {
-            var tess = GetTesseract();
-            if (tess == null) {
-                TryWriteDebugLog("OCR.F tess=null");
-                return -1;
-            }
-            if (!System.IO.File.Exists(bmpPath)) {
-                TryWriteDebugLog("OCR.F file missing: " + bmpPath);
-                return -1;
-            }
-
-            string sharpPath = bmpPath.Replace(".bmp", "_sharp.bmp");
-            try {
-                using (var mi = new MagickImage(bmpPath)) {
-                    mi.Scale(new Percentage(300));
-                    mi.Negate();
-                    mi.Threshold(new Percentage(50));
-                    mi.Write(sharpPath);
-                }
-            }
-            catch (Exception ex) {
-                TryWriteDebugLog("OCR.F Magick failed: " + ex.GetType().Name + " " + ex.Message);
-                return -1;
-            }
-
-            try {
-                using (var img = CvInvoke.Imread(sharpPath, Emgu.CV.CvEnum.ImreadModes.Grayscale)) {
-                    if (img == null || img.IsEmpty) {
-                        TryWriteDebugLog("OCR.F imread empty: " + sharpPath);
-                        return -1;
-                    }
-                    tess.SetImage(img);
-                    tess.Recognize();
-                    string raw = (tess.GetUTF8Text() ?? "").Trim();
-                    Match m = Regex.Match(raw, @"\d{1,4}");
-                    if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
-                        return n;
-                    }
-                }
-            }
-            catch (Exception ex) {
-                TryWriteDebugLog("OCR.F tesseract failed: " + ex.GetType().Name + " " + ex.Message);
-            }
-            return -1;
-        }
+        // (Phase F removed - M-variant preprocessing (3x + Negate + 50% threshold)
+// benchmarked at 4/10 on the live barter scan vs Phase R's 6/10 with no
+// preprocessing at all. The threshold + upscale amplified noise as much
+// as it amplified signal for low-contrast icons, and F never uniquely
+// rescued a case where A + R + G already agreed. -1 outcomes stayed -1.)
 
         // Phase R: feed the raw captured bitmap to Tesseract with NO
         // preprocessing. Experimental - checks whether the Magick scale /
@@ -1143,26 +1091,23 @@ namespace iBarter {
             }
             catch { }
 
-            // Phase F + G + R: even when screen-coords voting is uncertain, run
-            // all three Tesseract paths. Phase G subtracts the icon
-            // template to cancel the icon-body noise, isolating the digit.
-            // Phase R skips all preprocessing - checks whether the raw
-            // capture alone is crisp enough for Tesseract.
+            // Phase G + R: even when screen-coords voting is uncertain, run both
+            // remaining Tesseract paths. Phase R skips all preprocessing and
+            // reads the raw capture. Phase G goes through the heavier Magick
+            // pipeline (78% threshold + 5x upscale + morphology close) for
+            // the cases R can't crack.
             // NOTE: DM.Capture writes to <base>/Resources/ but our code needs
             // the explicit Resources prefix when reading back via File.Exists.
             string bmpPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocr_" + strID + ".bmp";
-            int emguPick = TryEmguOcr(bmpPath);
             int rawPick = TryRawOcr(bmpPath);
             string fullIconPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocrf_" + strID + ".bmp";
             int diffPick = TryTemplateDiffOcr(fullIconPath, strID);
 
-            // 4-way merge vote (Phase H PaddleOCR removed): each phase
-            // contributes one vote (Phase A's screen-coords count is
-            // weighted by its topCount, but we collapse it to 1 vote per
-            // parsed value for parity with F/G/R).
+            // 3-way merge vote (Phase F M-variant removed - it scored 4/10 on
+            // the live barter scan and never uniquely rescued a case, while
+            // Phase R raw scored 6/10 with no preprocessing at all):
             var merged = new System.Collections.Generic.Dictionary<int, int>();
             if (picked > 0) merged[picked] = merged.GetValueOrDefault(picked, 0) + System.Math.Max(1, topCount);
-            if (emguPick > 0) merged[emguPick] = merged.GetValueOrDefault(emguPick, 0) + 1;
             if (rawPick > 0) merged[rawPick] = merged.GetValueOrDefault(rawPick, 0) + 1;
             if (diffPick > 0) merged[diffPick] = merged.GetValueOrDefault(diffPick, 0) + 1;
 
@@ -1185,10 +1130,10 @@ namespace iBarter {
 
             if (finalPick > 0) {
                 string tally = string.Join(",", merged.Select(kv => kv.Key + "x" + kv.Value));
-                Log($"OCR qty {strID}: picked {finalPick} (votes={tally}; A={picked} F={emguPick} R={rawPick} G={diffPick})", Brushes.Gray);
+                Log($"OCR qty {strID}: picked {finalPick} (votes={tally}; A={picked} R={rawPick} G={diffPick})", Brushes.Gray);
             }
             else {
-                Log($"OCR qty {strID}: no consensus; raw={(bestRaw ?? "")} F={emguPick} R={rawPick} G={diffPick}", Brushes.OrangeRed);
+                Log($"OCR qty {strID}: no consensus; raw={(bestRaw ?? "")} R={rawPick} G={diffPick}", Brushes.OrangeRed);
             }
 
             return finalPick;
