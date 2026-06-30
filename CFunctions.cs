@@ -278,8 +278,6 @@ namespace iBarter {
             // masquerading as icons.
             try {
                 byte[] head = new byte[12];
-                File.Delete(webpPath);
-                return;
                 int got = 0;
                 using (var fs = File.OpenRead(webpPath)) {
                     while (got < 12) {
