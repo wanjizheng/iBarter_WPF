@@ -296,6 +296,27 @@ namespace iBarter {
             catch {
                 return;
             }
+
+            // Resize webp -> 44x44 grayscale, fill background with a dark pad,
+            // then save the 44x44 .bmp that FindPicture looks for. This stage
+            // was missing from the function (committed in this incomplete
+            // state); restoring it is what actually writes the icon template
+            // to Resources/Images/Items/<id>.bmp.
+            try {
+                string finalBmp = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + _id + ".bmp";
+                using (var bitmap = new MagickImage(webpPath)) {
+                    bitmap.Scale(new Percentage(400));   // upsample
+                    bitmap.Alpha(AlphaOption.Remove);
+                    bitmap.BackgroundColor = new MagickColor(24, 23, 25);
+                    bitmap.Resize(new MagickGeometry(44, 44));
+                    bitmap.Format = MagickFormat.Bmp;
+                    bitmap.Write(finalBmp);
+                }
+                try { System.IO.File.Delete(webpPath); } catch { }
+            }
+            catch (Exception ex) {
+                TryWriteDebugLog("OCR UpdateItemImagesCore bmp write fail " + _id + ": " + ex.GetType().Name + " " + ex.Message);
+            }
         }
 
         public List<Items> LoadItemsCSV() {
