@@ -104,8 +104,6 @@
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.14.0" />
     <PackageReference Include="MaterialDesignThemes" Version="5.3.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="Sdcb.PaddleInference.runtime.win64.mkl" Version="3.3.1" />
-    <PackageReference Include="Sdcb.PaddleOCR" Version="3.3.1" />
     <PackageReference Include="Syncfusion.Licensing" Version="33.2.15" />
     <PackageReference Include="Syncfusion.SfGrid.WPF" Version="33.2.15" />
     <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="33.2.15" />
@@ -796,15 +794,5 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
-
-  <!-- PaddleOCR models: source of truth is tessdata\paddle-models\, copied to bin on every build -->
-  <Target Name="CopyPaddleModels" BeforeTargets="Build">
-    <ItemGroup>
-      <_PaddleModelFiles Include="tessdata\paddle-models\**\*.*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(_PaddleModelFiles)"
-          DestinationFiles="@(_PaddleModelFiles->'$(OutDir)tessdata\paddle-models\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-  </Target>
 
 </Project>

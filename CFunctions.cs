@@ -4,10 +4,6 @@ using Emgu.CV.OCR;
 using Emgu.CV.Structure;
 using FuzzySharp;
 using ImageMagick;
-using OpenCvSharp;
-using Sdcb.PaddleInference;
-using Sdcb.PaddleOCR;
-using Sdcb.PaddleOCR.Models;
 using PureDM;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -1003,113 +999,10 @@ namespace iBarter {
             return -1;
         }
 
-        // Phase H: PaddleOCR (Baidu) on the full-icon BMP. PP-OCRv3 is trained
-        // on small-text Chinese mobile UIs, ID cards, etc. - tuned exactly
-        // for the 6-8 px sub-pixel overlay problem where Tesseract LSTM
-        // collapses to noise. The benchmark against the 12 test BMPs hit
-        // 10/12 vs Tesseract 7/12.
-        //
-        // Tesseract's two existing phases (F + G) stay live as a fallback in
-        // case the paddle inference fails (e.g. native-dll missing on
-        // machines without VC++ runtime, or oneDNN regression on win-x86
-        // paddle 3.x). When PaddleOCR returns -1 the merged vote just
-        // ignores its slot - the existing Tesseract pipeline picks the
-        // winner unchanged.
-        private static PaddleOcrAll _paddle;
-        private static readonly object _paddleLock = new object();
-        // Toggle: keep the PaddleOCR phase live but make the wiring
-        // configurable so a future crash / oneDNN regression on a host
-        // machine can be sidestepped without recompiling.
-        private static bool _paddleEnabled = true;
-
-        // PaddleOCR model locations - English PP-OCRv5 detection +
-        // recognition + Chinese v2 cls (180-degree rotation), kept on disk
-        // under tessdata\paddle-models\ so the build target syncs them to
-        // bin\ automatically. Same layout works in dev (run-from-source)
-        // and after publish (bin\tessdata\paddle-models\...).
-        private static string PaddleModelsRoot {
-            get {
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                return System.IO.Path.Combine(baseDir, "tessdata", "paddle-models");
-            }
-        }
-
-        // Returns the PaddleOcrAll model root, lazy-initialised from the
-        // on-disk inference files. Returns null on any failure (missing
-        // model, bad yml, native-dll load error, etc.) - the merge vote
-        // then ignores the PaddleOCR slot and falls through to Tesseract.
-        //
-        // Sdcb 3.x path-ctor trio:
-        //   - PaddleOcrDetector(string modelDir)
-        //   - PaddleOcrClassifier(string modelDir)
-        //   - RecognizationModel.FromDirectoryV5(string modelDir) +
-        //     PaddleOcrRecognizer(RecognizationModel)
-        // combined via PaddleOcrAll(det, cls, rec) - no FullOcrModel glue,
-        // no NuGet-embedded resources, no network, no extra native hunt.
-        private static PaddleOcrAll GetPaddleOcr() {
-            if (!_paddleEnabled) return null;
-            if (_paddle != null) return _paddle;
-            lock (_paddleLock) {
-                if (_paddle != null) return _paddle;
-                try {
-                    string root = PaddleModelsRoot;
-                    // Source layout (under tessdata\paddle-models\):
-                    //   det\PP-OCRv5_mobile_det_infer\inference.{yml,json,pdiparams}
-                    //   rec\en_PP-OCRv5_mobile_rec_infer\inference.{yml,json,pdiparams}
-                    //   cls\ch_ppocr_mobile_v2.0_cls_infer\inference.{pdiparams,pdiparams.info,pdmodel}
-                    string detDir = System.IO.Path.Combine(root, "det", "PP-OCRv5_mobile_det_infer");
-                    string recDir = System.IO.Path.Combine(root, "rec", "en_PP-OCRv5_mobile_rec_infer");
-                    string clsDir = System.IO.Path.Combine(root, "cls", "ch_ppocr_mobile_v2.0_cls_infer");
-                    if (!System.IO.Directory.Exists(detDir) ||
-                        !System.IO.Directory.Exists(recDir) ||
-                        !System.IO.Directory.Exists(clsDir)) {
-                        TryWriteDebugLog("OCR Paddle: model dir missing at " + root);
-                        return null;
-                    }
-                    var detector = new PaddleOcrDetector(detDir);
-                    var classifier = new PaddleOcrClassifier(clsDir);
-                    var recModel = RecognizationModel.FromDirectoryV5(recDir);
-                    var recognizer = new PaddleOcrRecognizer(recModel);
-                    _paddle = new PaddleOcrAll(detector, classifier, recognizer);
-                    return _paddle;
-                }
-                catch (Exception ex) {
-                    TryWriteDebugLog("OCR Paddle init fail: " + ex.GetType().Name + " " + ex.Message);
-                    return null;
-                }
-            }
-        }
-
-        private int TryPaddleOcr(string bmpPath) {
-            var paddle = GetPaddleOcr();
-            if (paddle == null) return -1;
-            if (!System.IO.File.Exists(bmpPath)) return -1;
-            try {
-                // Sdcb 3.x Run takes OpenCvSharp.Mat - decode the bmp bytes
-                // straight into a Mat. Cv2.ImDecode drops the alpha channel
-                // (BGR) which is exactly what PP-OCRv3's preprocessing wants.
-                byte[] bmpBytes = System.IO.File.ReadAllBytes(bmpPath);
-                using (var mat = OpenCvSharp.Cv2.ImDecode(bmpBytes, OpenCvSharp.ImreadModes.Color)) {
-                    if (mat == null || mat.Empty()) {
-                        TryWriteDebugLog("OCR Paddle imdecode empty: " + bmpPath);
-                        return -1;
-                    }
-                    var result = paddle.Run(mat);
-                    // Concatenate every detected text region, take the longest
-                    // pure-digit substring, parse to int. Usually result has
-                    // 0-2 regions and one of them is "1" / "50" / "1000".
-                    string text = string.Concat(result.Regions.Select(r => r.Text));
-                    Match m = Regex.Match(text, @"\d{1,4}");
-                    if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
-                        return n;
-                    }
-                }
-            }
-            catch (Exception ex) {
-                TryWriteDebugLog("OCR Paddle run fail: " + ex.GetType().Name + " " + ex.Message);
-            }
-            return -1;
-        }
+        // (Phase H PaddleOCR removed - Sdcb only ships win64 native
+        // runtime and iBarter is locked to win-x86 by PureDM's 32-bit
+        // dm.dll, so the merge vote is back to Tesseract F + G + screen-
+        // coords A, just like before the Phase H experiments.)
 
         private int TryReadQuantity(PointPlus icon, string strID) {
             int oX = (int)icon.X;
@@ -1204,19 +1097,14 @@ namespace iBarter {
             string fullIconPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocrf_" + strID + ".bmp";
             int diffPick = TryTemplateDiffOcr(fullIconPath, strID);
 
-            // 4-way merge vote: each phase contributes one vote (Phase A's
-            // screen-coords count is weighted by its topCount, but we collapse
-            // it to 1 vote per parsed value for parity with F/G/H).
-            // Phase H (PaddleOCR) is new - Tesseract-based phases F+G stay
-            // live as a fallback in case PaddleOCR's native dlls are
-            // missing on a particular host.
-            string fullIconPath2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocrf_" + strID + ".bmp";
-            int paddlePick = TryPaddleOcr(fullIconPath2);
+            // 3-way merge vote (Phase H PaddleOCR removed): each phase
+            // contributes one vote (Phase A's screen-coords count is
+            // weighted by its topCount, but we collapse it to 1 vote per
+            // parsed value for parity with F/G).
             var merged = new System.Collections.Generic.Dictionary<int, int>();
             if (picked > 0) merged[picked] = merged.GetValueOrDefault(picked, 0) + System.Math.Max(1, topCount);
             if (emguPick > 0) merged[emguPick] = merged.GetValueOrDefault(emguPick, 0) + 1;
             if (diffPick > 0) merged[diffPick] = merged.GetValueOrDefault(diffPick, 0) + 1;
-            if (paddlePick > 0) merged[paddlePick] = merged.GetValueOrDefault(paddlePick, 0) + 1;
 
             // Tie-break: when 2+ candidates tie on vote count, prefer the one
             // with MORE digits (the assumption is OCR noise produces truncated
@@ -1237,7 +1125,7 @@ namespace iBarter {
 
             if (finalPick > 0) {
                 string tally = string.Join(",", merged.Select(kv => kv.Key + "x" + kv.Value));
-                Log($"OCR qty {strID}: picked {finalPick} (votes={tally}; A={picked} F={emguPick} G={diffPick} H={paddlePick})", Brushes.Gray);
+                Log($"OCR qty {strID}: picked {finalPick} (votes={tally}; A={picked} F={emguPick} G={diffPick})", Brushes.Gray);
             }
             else {
                 Log($"OCR qty {strID}: no consensus; raw={(bestRaw ?? "")} F={emguPick} G={diffPick}", Brushes.OrangeRed);
