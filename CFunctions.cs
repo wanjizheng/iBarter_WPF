@@ -821,6 +821,14 @@ namespace iBarter {
         //
         // Returns -1 on any failure (template missing, Tesseract missing, no
         // digits matched).
+        // Phase G: BR-threshold on the FULL icon capture. Skip the
+        // template-subtraction path entirely - the bdocodex template and the
+        // BDO game render differ enough (different AA, brightness, color) that
+        // the diff was dominated by icon-border differences, not the digit.
+        // BDO's digit overlay is rendered as near-pure white (RGB ~245-255)
+        // on top of a darker icon body (RGB ~30-70). A hard 78% threshold
+        // isolates the digit strokes alone. Magick Scale 3x + Negate produces
+        // a clean dark-on-light bitmap for Tesseract.
         private int TryTemplateDiffOcr(string liveBmpPath, string itemID) {
             if (string.IsNullOrEmpty(itemID)) {
                 TryWriteDebugLog("OCR.G itemID empty");
@@ -836,69 +844,39 @@ namespace iBarter {
                 return -1;
             }
 
+            string sharpPath = liveBmpPath.Replace(".bmp", "_sharp.bmp");
             try {
-                using (var live = new Image<Bgr, byte>(liveBmpPath)) {
-                    var tpl = LoadIconTemplate(itemID, live.Size);
-                    if (tpl == null) {
-                        TryWriteDebugLog("OCR.G tpl missing for " + itemID + " size=" + live.Size);
-                        return -1;
-                    }
-
-                    var liveGray = live.Convert<Gray, byte>();
-                    var tplGray = tpl.Convert<Gray, byte>();
-                    CvInvoke.GaussianBlur(liveGray, liveGray, new System.Drawing.Size(3, 3), 0.5);
-                    CvInvoke.GaussianBlur(tplGray, tplGray, new System.Drawing.Size(3, 3), 0.5);
-
-                    var diff = new Image<Gray, byte>(live.Size);
-                    CvInvoke.AbsDiff(liveGray, tplGray, diff);
-
-                    // Otsu self-tunes the threshold per image - icon-vs-icon
-                    // diffs cluster near zero while digit pixels spike well
-                    // above 30, so Otsu reliably carves the digit out.
-                    try {
-                        CvInvoke.Threshold(diff, diff, 0, 255, ThresholdType.Otsu);
-                    }
-                    catch (Exception ex) {
-                        TryWriteDebugLog("OCR.G Otsu fail fallback fixed: " + ex.GetType().Name);
-                        CvInvoke.Threshold(diff, diff, 30, 255, ThresholdType.Binary);
-                    }
-
-                    string diffPath = liveBmpPath.Replace(".bmp", "_diff.bmp");
-                    diff.Save(diffPath);
-
-                    // 3x upscale + Negate via Magick, matching Phase F's M variant
-                    string sharpPath = diffPath.Replace(".bmp", "_sharp.bmp");
-                    try {
-                        using (var mi = new MagickImage(diffPath)) {
-                            mi.Scale(new Percentage(300));
-                            mi.Negate();
-                            mi.Threshold(new Percentage(50));
-                            mi.Write(sharpPath);
-                        }
-                    }
-                    catch (Exception ex) {
-                        TryWriteDebugLog("OCR.G Magick fail: " + ex.GetType().Name + " " + ex.Message);
-                        return -1;
-                    }
-
-                    using (var img = CvInvoke.Imread(sharpPath, ImreadModes.Grayscale)) {
-                        if (img == null || img.IsEmpty) {
-                            TryWriteDebugLog("OCR.G imread empty: " + sharpPath);
-                            return -1;
-                        }
-                        tess.SetImage(img);
-                        tess.Recognize();
-                        string raw = (tess.GetUTF8Text() ?? "").Trim();
-                        Match m = Regex.Match(raw, @"\d{1,4}");
-                        if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
-                            return n;
-                        }
-                        TryWriteDebugLog("OCR.G tesseract no digits: raw='" + raw + "'");
-                    }
+                using (var mi = new MagickImage(liveBmpPath)) {
+                    mi.ColorSpace = ColorSpace.Gray;
+                    mi.Threshold(new Percentage(78));
+                    mi.Scale(new Percentage(300));
+                    mi.Negate();
+                    mi.Write(sharpPath);
                 }
             }
             catch (Exception ex) {
-                TryWriteDebugLog("OCR.G outer fail: " + ex.GetType().Name + " " + ex.Message);
+                TryWriteDebugLog("OCR.G Magick fail: " + ex.GetType().Name + " " + ex.Message);
+                return -1;
+            }
+
+            try {
+                using (var img = CvInvoke.Imread(sharpPath, ImreadModes.Grayscale)) {
+                    if (img == null || img.IsEmpty) {
+                        TryWriteDebugLog("OCR.G imread empty: " + sharpPath);
+                        return -1;
+                    }
+                    tess.SetImage(img);
+                    tess.Recognize();
+                    string raw = (tess.GetUTF8Text() ?? "").Trim();
+                    Match m = Regex.Match(raw, @"\d{1,4}");
+                    if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
+                        return n;
+                    }
+                    TryWriteDebugLog("OCR.G tesseract no digits: raw='" + raw + "'");
+                }
+            }
+            catch (Exception ex) {
+                TryWriteDebugLog("OCR.G tesseract fail: " + ex.GetType().Name + " " + ex.Message);
             }
             return -1;
         }
