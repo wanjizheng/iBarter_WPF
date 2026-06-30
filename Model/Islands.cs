@@ -1,7 +1,9 @@
-﻿using System.Windows;
+﻿using Syncfusion.Windows.Shared;
+using System.ComponentModel;
+using System.Windows;
 
 namespace iBarter {
-    public class Islands {
+    public class Islands : NotificationObject {
         private EnumLists.Island enumIsland;
         private int intParley = 0;
         private int intRemaining;
@@ -23,7 +25,10 @@ namespace iBarter {
 
                 return myThickness;
             }
-            set { myThickness = value; }
+            set {
+                myThickness = value;
+                RaisePropertyChanged("IslandsThickness");
+            }
         }
 
         public EnumLists.Island Island {
@@ -39,12 +44,16 @@ namespace iBarter {
             get { return intParley; }
             set {
                 intParley = value;
+                RaisePropertyChanged("Parley");
             }
         }
 
         public int Remaining {
             get { return intRemaining; }
-            set { intRemaining = value; }
+            set {
+                intRemaining = value;
+                RaisePropertyChanged("Remaining");
+            }
         }
 
 

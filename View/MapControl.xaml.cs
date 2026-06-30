@@ -31,6 +31,11 @@ namespace iBarter.View {
 
             myTimer.Interval = TimeSpan.FromMilliseconds(100);
             myTimer.Tick += TimerOnTick;
+            // Stop the timer when the control unloads so the tick handler and
+            // dispatcher hook don't outlive the live tab.
+            this.Unloaded += (_, _) => {
+                if (myTimer != null && myTimer.IsEnabled) myTimer.Stop();
+            };
             myTimer.Start();
         }
 
