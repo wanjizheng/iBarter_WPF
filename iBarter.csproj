@@ -104,6 +104,8 @@
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.14.0" />
     <PackageReference Include="MaterialDesignThemes" Version="5.3.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="OpenCvSharp4" Version="4.11.0.20250507" />
+    <PackageReference Include="Sdcb.PaddleOCR" Version="2.7.3" />
     <PackageReference Include="Syncfusion.Licensing" Version="33.2.15" />
     <PackageReference Include="Syncfusion.SfGrid.WPF" Version="33.2.15" />
     <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="33.2.15" />
