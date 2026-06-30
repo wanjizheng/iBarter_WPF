@@ -738,11 +738,10 @@ namespace iBarter {
                     }
                     _tess = new Tesseract(tessDataDir, "eng", OcrEngineMode.Default);
                     _tess.SetVariable("tessedit_char_whitelist", "0123456789");
-                    // psm=10 (single character) throws 'Unable to set psm to 10' on
-                    // some Tesseract 4 LSTM builds. psm=6 (single uniform block
-                    // of text) is the documented safe value for short digit runs
-                    // and is well-supported across Tesseract 4 + LSTM.
-                    _tess.SetVariable("psm", "6");
+                    // psm SetVariable throws 'Unable to set psm to X' on the
+                    // Emgu.CV.OCR.Tesseract 4 + LSTM build shipped here. Default
+                    // psm 3 (fully automatic) handles short digit runs well
+                    // once the digit whitelist above is in effect.
                     return _tess;
                 }
                 catch (Exception ex) {
@@ -788,7 +787,9 @@ namespace iBarter {
                 Image<Bgr, byte> sized = tpl;
                 if (tpl.Size != liveSize) {
                     var resized = new Image<Bgr, byte>(liveSize);
-                    CvInvoke.Resize(tpl, resized, new System.Drawing.Size(), 0, 0, Inter.Linear);
+                    // CvInvoke.Resize with dsize=Size(0,0) + fx=0,fy=0 throws
+                    // 'inv_scale_x > 0' - we must pass the actual target size.
+                    CvInvoke.Resize(tpl, resized, liveSize, 0.0, 0.0, Inter.Linear);
                     sized = resized;
                 }
                 _tplCache[key] = sized;
