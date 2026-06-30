@@ -170,7 +170,10 @@ namespace iBarter {
                     Log(i + "/" + listItems.Count, Brushes.Blue);
                 }
                 else {
-                    Log("Download icon for: " + App.listItems.FirstOrDefault(i => i.ItemID == _itemID), Brushes.Gold);
+                    // Use the local foreach 'item' - its ToString() was the
+                    // class name 'iBarter.Items' because Items never
+                    // overrode ToString(), masking the actual name.
+                    Log("Download icon for: " + item.ItemName + " (" + _itemID + ")", Brushes.Gold);
                 }
 
                 i++;
@@ -229,6 +232,16 @@ namespace iBarter {
             if (string.IsNullOrEmpty(_url)) return;
             if (!Uri.TryCreate(_url, UriKind.Absolute, out Uri parsed) || !BdocodexImageHosts.Contains(parsed.Host))
                 return;
+            // Skip the whole pipeline if the BMP is already on disk - the icon
+            // doesn't change between sessions. This is the actual fix for the
+            // 'Download icon for: iBarter.Items' log spam at startup: the
+            // caller used to call RefreshItems blindly for every catalog item,
+            // and the missing File.Exists check here meant every item got a
+            // bdocodex webp re-downloaded and a 44x44 bmp overwritten.
+            string finalBmp = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + _id + ".bmp";
+            if (System.IO.File.Exists(finalBmp)) {
+                return;
+            }
             // Off-UI-thread so a hung host does not freeze the scan button.
             Task.Run(() => UpdateItemImagesCore(_id, _url));
         }
