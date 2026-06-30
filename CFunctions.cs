@@ -910,7 +910,6 @@ namespace iBarter {
             //
             // Returns -1 on any failure (engine unavailable, file missing, no
             // digits matched).
-            string sharpPath = liveBmpPath.Replace(".bmp", "_sharp.bmp");
             try {
                 using (var mi = new MagickImage(liveBmpPath)) {
                     mi.ColorSpace = ColorSpace.Gray;
@@ -927,51 +926,45 @@ namespace iBarter {
                         Iterations = 1,
                     };
                     mi.Morphology(morph);
-                    // Crop to bottom-right quadrant BEFORE write so the
-                    // saved _sharp.bmp on disk matches what Tesseract
-                    // actually sees. BDO anchors the digit overlay at
-                    // the bottom-right corner of the icon; the
-                    // upper-left of the preprocessed 220x220 still
-                    // contains residual icon body curve pixels that
-                    // confuse Tesseract on close-call cases.
-                    // 25% crop from each side keeps the bottom-right
-                    // 75% x 75% - safe area for the digit (the digit
-                    // at original (25-44, 25-44) on a 44x44 icon maps
-                    // to (125-220, 125-220) after 5x scale).
+                    // Crop to bottom-right quadrant. BDO anchors the
+                    // digit overlay at the bottom-right corner of the
+                    // icon; the upper-left of the preprocessed 220x220
+                    // still contains residual icon body curve pixels that
+                    // confuse Tesseract on close-call cases. 25% crop from
+                    // each side keeps the bottom-right 75% x 75% - the
+                    // digit at original (25-44, 25-44) on a 44x44 icon
+                    // maps to (125-220, 125-220) after 5x scale.
                     int cropX = (int)(mi.Width / 4);
                     int cropY = (int)(mi.Height / 4);
                     int cropW = (int)(mi.Width - cropX);
                     int cropH = (int)(mi.Height - cropY);
                     mi.Crop(new MagickGeometry(cropX, cropY, (uint)cropW, (uint)cropH));
-                    mi.Write(sharpPath);
+                    // Skip the disk write + CvInvoke.Imread round-trip -
+                    // stream the MagickImage through MemoryStream -> Bitmap
+                    // -> Mat -> Tesseract. Saves ~30-50ms per G invocation
+                    // vs the disk round-trip. (If you need the cropped
+                    // preprocess for debugging, uncomment mi.Write(sharpPath)
+                    // and the CvInvoke.Imread line below.)
+                    using (var ms = new System.IO.MemoryStream()) {
+                        mi.Write(ms, MagickFormat.Bmp);
+                        ms.Position = 0;
+                        using (var bitmap = new System.Drawing.Bitmap(ms))
+                        using (var mat = bitmap.ToMat()) {
+                            tess.SetImage(mat);
+                            tess.Recognize();
+                            string raw = (tess.GetUTF8Text() ?? "").Trim();
+                            Match m = Regex.Match(raw, @"\d{1,4}");
+                            if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
+                                return n;
+                            }
+                            TryWriteDebugLog("OCR.G tesseract no digits: raw='" + raw + "'");
+                        }
+                    }
                 }
             }
             catch (Exception ex) {
                 TryWriteDebugLog("OCR.G Magick fail: " + ex.GetType().Name + " " + ex.Message);
                 return -1;
-            }
-
-            try {
-                using (var img = CvInvoke.Imread(sharpPath, Emgu.CV.CvEnum.ImreadModes.Grayscale)) {
-                    if (img == null || img.IsEmpty) {
-                        TryWriteDebugLog("OCR.G imread empty: " + sharpPath);
-                        return -1;
-                    }
-                    // The sharp.bmp on disk is already cropped to the
-                    // bottom-right quadrant (Magick Crop above), so just
-                    // feed it straight to Tesseract.
-                    tess.SetImage(img);
-                    tess.Recognize();
-                    string raw = (tess.GetUTF8Text() ?? "").Trim();
-                    Match m = Regex.Match(raw, @"\d{1,4}");
-                    if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
-                        return n;
-                    }
-                    TryWriteDebugLog("OCR.G tesseract no digits: raw='" + raw + "'");
-                }
-            }
-            catch (Exception ex) {
-                TryWriteDebugLog("OCR.G tesseract fail: " + ex.GetType().Name + " " + ex.Message);
             }
             return -1;
         }
@@ -1033,9 +1026,11 @@ namespace iBarter {
             int oH = (int)icon.Size.Height;
 
             // (leftFrac, topFrac, rightFrac, bottomFrac) - all relative inside icon.
-            // 4-digit "1000" digit tail touches icon-right edge, so rf must
-            //      stay at 1.00 (full icon width). bf pulls in slightly so we
-            //      don't crop the digit top.
+            // Reduced from 4 ROIs to 2 for ~2.4s/scan speedup (each ROI is
+            // one Capture + one OCR call, ~100ms each). The 2 we keep are
+            // the widest + the medium which covers both 4-digit ("1000") and
+            // 1-digit ("1") layouts. The right-half and bottom-strip safety
+            // nets were rarely decisive in the 12-item benchmark.
             // lf widened to -0.30 on the widest candidate (~13 px outside
             //      icon-left edge) so the leftmost "1" of "1000" isn't
             //      clipped.
@@ -1045,9 +1040,7 @@ namespace iBarter {
             //      digit bleed out of the result.
             var candidates = new (double lf, double tf, double rf, double bf)[] {
                 (-0.30, 0.40, 1.00, 0.98),   // widest - extends far left, full right
-                (-0.10, 0.50, 1.00, 0.98),   // medium width
-                ( 0.50, 0.55, 1.00, 0.96),   // right half, tight Y
-                ( 0.00, 0.78, 1.00, 0.96),   // bottom strip safety net
+                (-0.10, 0.50, 1.00, 0.98),   // medium width - generates ocr_<id>.bmp
             };
 
             var votes = new System.Collections.Generic.Dictionary<int, int>();
