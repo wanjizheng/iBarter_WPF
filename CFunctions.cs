@@ -874,8 +874,8 @@ namespace iBarter {
             string sharpPath = liveBmpPath.Replace(".bmp", "_sharp.bmp");
             try {
                 using (var mi = new MagickImage(liveBmpPath)) {
-                    int w = mi.Width;
-                    int h = mi.Height;
+                    int w = (int)mi.Width;
+                    int h = (int)mi.Height;
                     int cropX = (int)(w * 0.50);
                     int cropY = (int)(h * 0.60);
                     int cropW = (int)(w * 0.50) + 8;   // a few pixels past right edge
@@ -884,7 +884,7 @@ namespace iBarter {
                     if (cropH < 8) cropH = 8;
                     if (cropX + cropW > w) cropW = w - cropX;
                     if (cropY + cropH > h) cropH = h - cropY;
-                    mi.Crop(new System.Drawing.Rectangle(cropX, cropY, cropW, cropH));
+                    mi.Crop(cropX, cropY, cropW, cropH);
                     mi.ColorSpace = ColorSpace.Gray;
                     mi.Threshold(new Percentage(70));
                     // 5x scale: a "1" that's 1-2 px on the icon becomes
