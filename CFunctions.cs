@@ -1005,8 +1005,8 @@ namespace iBarter {
 
         private static readonly Regex LV_PREFIX_RE = new(@"\[Level ([0-9]+)\]", RegexOptions.Compiled);
 
-        // Returns (name without level prefix, expected level string or null)
-        private (string name, string lv) ExtractLevelPrefix(string input) {
+        // Returns (name without level prefix, expected level string or null if no [Level N] prefix found)
+        private (string name, string? lv) ExtractLevelPrefix(string input) {
             if (string.IsNullOrWhiteSpace(input)) return (input, null);
             var m = LV_PREFIX_RE.Match(input);
             if (!m.Success) return (input, null);

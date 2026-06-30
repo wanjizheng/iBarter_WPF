@@ -34,5 +34,29 @@ namespace iBarter.Properties {
                 this["SelectedComboBoxValue"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int SelectedComboBoxValueLV6 {
+            get {
+                return ((int)(this["SelectedComboBoxValueLV6"]));
+            }
+            set {
+                this["SelectedComboBoxValueLV6"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int SelectedComboBoxValueLV7 {
+            get {
+                return ((int)(this["SelectedComboBoxValueLV7"]));
+            }
+            set {
+                this["SelectedComboBoxValueLV7"] = value;
+            }
+        }
     }
 }

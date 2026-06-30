@@ -15,7 +15,9 @@ namespace iBarter.View {
     /// Interaction logic for PlannerControl.xaml
     /// </summary>
     public partial class PlannerControl : UserControl {
-       
+        // Highest barter item LV in the game; chain recursion stops one step before reaching this.
+        private const int MAX_BARTER_LV = 7;
+
         public PlannerControl() {
             InitializeComponent();
             this.DataContext = App.myPVM;
@@ -216,6 +218,25 @@ namespace iBarter.View {
                 intGroup++;
             }
 
+            // LV4 and LV5 seeds: previously only LV0..LV3 were seeds, so LV4/LV5/LV6/LV7
+            // barters were only ever reached as chain tails. Adding them as seeds lets a
+            // chain start at any LV tier and walk upward.
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.Item1.ItemLV.Equals("4") && b.BarterGroup == 0 && !b.Grouped)) {
+                int intLV = 5;
+
+                FindBarterGroup(barter, intLV, intGroup);
+
+                intGroup++;
+            }
+
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.Item1.ItemLV.Equals("5") && b.BarterGroup == 0 && !b.Grouped)) {
+                int intLV = 6;
+
+                FindBarterGroup(barter, intLV, intGroup);
+
+                intGroup++;
+            }
+
             for (int i = 1; i < intGroup; i++) {
                 if (App.myPVM.BarterCollection.Where(b => b.BarterGroup == i).ToList().Count == 1) {
                     App.myPVM.BarterCollection.FirstOrDefault(b => b.BarterGroup == i)!.BarterGroup = 0;
@@ -280,7 +301,7 @@ namespace iBarter.View {
                 myBarter.BarterGroup = _group;
                 myBarter.Grouped = true;
 
-                if (myBarter.Item1.ItemLV != "5") {
+                if (int.TryParse(myBarter.Item1.ItemLV, out int nextLv) && nextLv < MAX_BARTER_LV) {
                     FindBarterGroup(myBarter, _lv + 1, _group);
                 }
             }
@@ -431,6 +452,12 @@ namespace iBarter.View {
 
                 if (barter.Item1.ItemLV == "5" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex + 1) {
                     barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex + 1;
+                }
+                else if (barter.Item1.ItemLV == "6" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex + 1) {
+                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex + 1;
+                }
+                else if (barter.Item1.ItemLV == "7" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex + 1) {
+                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex + 1;
                 }
             }
         }
@@ -627,12 +654,30 @@ namespace iBarter.View {
             }
         }
 
-        private void LoadSavedComboBoxValue() {
-            // 读取存储的值
-            int savedValue = Properties.Settings.Default.SelectedComboBoxValue;
-            if (savedValue != null) {
-                ComboBox_LV5Max.SelectedIndex = savedValue;
+        private void ComboBox_LV6Max_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
+            if (ComboBox_LV6Max.SelectedItem != null) {
+                Properties.Settings.Default.SelectedComboBoxValueLV6 = ComboBox_LV6Max.SelectedIndex;
+                Properties.Settings.Default.Save();
             }
+        }
+
+        private void ComboBox_LV7Max_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
+            if (ComboBox_LV7Max.SelectedItem != null) {
+                Properties.Settings.Default.SelectedComboBoxValueLV7 = ComboBox_LV7Max.SelectedIndex;
+                Properties.Settings.Default.Save();
+            }
+        }
+
+        private void LoadSavedComboBoxValue() {
+            int savedValue = Properties.Settings.Default.SelectedComboBoxValue;
+            if (savedValue >= 0 && savedValue < ComboBox_LV5Max.Items.Count)
+                ComboBox_LV5Max.SelectedIndex = savedValue;
+            savedValue = Properties.Settings.Default.SelectedComboBoxValueLV6;
+            if (savedValue >= 0 && savedValue < ComboBox_LV6Max.Items.Count)
+                ComboBox_LV6Max.SelectedIndex = savedValue;
+            savedValue = Properties.Settings.Default.SelectedComboBoxValueLV7;
+            if (savedValue >= 0 && savedValue < ComboBox_LV7Max.Items.Count)
+                ComboBox_LV7Max.SelectedIndex = savedValue;
         }
     }
 }

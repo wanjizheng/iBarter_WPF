@@ -13,6 +13,9 @@ namespace iBarter.View {
     /// Interaction logic for ShipCargoControl.xaml
     /// </summary>
     public partial class ShipCargoControl : System.Windows.Controls.UserControl {
+        // Highest barter item LV in the game; IdentifyChain recursion stops one step before reaching this.
+        private const int MAX_BARTER_LV = 7;
+
         public ShipCargoControl() {
             InitializeComponent();
             DataContext = App.myCVM;
@@ -219,6 +222,7 @@ namespace iBarter.View {
             ListBox_ShipCargo.ItemsSource = App.myCVM.CargoDetails;
         }
 
+        // LT weights: LV1=100, LV2=800, LV3=900, LV4=1000, LV5=1000, LV6=2000, LV7=2000
         private int GetWeight(string _lv) {
             int intWeight = 0;
             switch (_lv) {
@@ -234,6 +238,10 @@ namespace iBarter.View {
                 case "4":
                 case "5":
                     intWeight = 1000;
+                    break;
+                case "6":
+                case "7":
+                    intWeight = 2000;
                     break;
                 default:
                     intWeight = 0;
@@ -251,7 +259,8 @@ namespace iBarter.View {
                 // Barter myBarter2 = App.myCVM.CargoDetails.FirstOrDefault(b => b.Item2Name.Equals(_barter.Item1Name) && b.CalculatedAlready == false)!;
                 // if (myBarter2 == null)
                 _barter.CalculatedAlready = true;
-                if (!myBarter.Item1.ItemLV.Equals("5")) {
+                // Stop when next-bar LV reaches MAX_BARTER_LV (so LV6/LV7 chains walk; LV7 is leaf).
+                if (int.TryParse(myBarter.Item1.ItemLV, out int nextLv) && nextLv < MAX_BARTER_LV) {
                     IdentifyChain(myBarter, ++_lv);
                 }
             }

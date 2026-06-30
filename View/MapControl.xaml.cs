@@ -15,6 +15,10 @@ namespace iBarter.View {
     /// Interaction logic for MapControl.xaml
     /// </summary>
     public partial class MapControl : UserControl {
+        // Highest barter item LV to render on the map. 7 keeps every catalog tier visible
+        // after the LV6/LV7 extension; lower this if you want to hide high-tier pins.
+        private const int MAX_MAP_LV = 7;
+
         public List<Grid> listGrid_Islands = new List<Grid>();
         private List<Label> listLabels = null;
         private List<Grid> listImages = null;
@@ -534,7 +538,12 @@ namespace iBarter.View {
             listGrid_Islands = new List<Grid>();
 
             InitTempGrid();
-            foreach (Barter myBarter in App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0)) {
+            // Filter barters by completeness + LV ceiling. With MAX_MAP_LV=7 (post Phase
+            // A+B), every legitimate barter in the catalog is shown; the hook is in
+            // place for future tier filtering without touching this site again.
+            foreach (Barter myBarter in App.myPVM.BarterCollection.Where(b =>
+                b.ExchangeDone == false && b.ExchangeQuantity > 0 &&
+                (!int.TryParse(b.Item1?.ItemLV, out int lv) || lv <= MAX_MAP_LV))) {
                 ButtonInitialisation(myBarter, GetBursh(myBarter));
             }
         }
