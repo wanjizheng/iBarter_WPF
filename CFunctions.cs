@@ -766,6 +766,20 @@ namespace iBarter {
             }
             catch { }
 
+            // Phase D+: also dump the FULL icon rectangle plus a small outer
+            // padding so the user can see where the count overlay actually
+            // sits relative to our candidate ROIs. Saved as
+            // "ocr_<id>_full.bmp"; render it side-by-side with ocr_<id>.bmp
+            // in any image viewer to diagnose a miscrop.
+            try {
+                int fx1 = oX - 12;
+                int fy1 = oY - 12;
+                int fx2 = oX + oW + 60;
+                int fy2 = oY + oH + 30;
+                App.myPureDM.DM.Capture(fx1, fy1, fx2, fy2, "ocr_" + strID + "_full.bmp");
+            }
+            catch { }
+
             // Phase B: best-effort upscaled debug artifact via MagickImage. We can
             // not feed it back into PureDM's screen-based OCR; the file is purely
             // a visual aid for the operator + future bitmap-accepting OCR engines.
