@@ -1001,12 +1001,11 @@ namespace iBarter {
             return -1;
         }
 
-        // Phase H: PaddleOCR (Baidu) on the full-icon BMP. PP-OCRv4 is trained
+        // Phase H: PaddleOCR (Baidu) on the full-icon BMP. PP-OCRv3 is trained
         // on small-text Chinese mobile UIs, ID cards, etc. - tuned exactly
         // for the 6-8 px sub-pixel overlay problem where Tesseract LSTM
         // collapses to noise. The benchmark against the 12 test BMPs hit
-        // 10/12 vs Tesseract 7/12 (the prior win-loss share: Tesseract still
-        // leads 0/0 because PaddleOCR is strictly better on this workload).
+        // 10/12 vs Tesseract 7/12.
         //
         // Tesseract's two existing phases (F + G) stay live as a fallback in
         // case the paddle inference fails (e.g. native-dll missing on
@@ -1021,21 +1020,41 @@ namespace iBarter {
         // machine can be sidestepped without recompiling.
         private static bool _paddleEnabled = true;
 
+        // PaddleOCR model URL templates - English PP-OCRv3 mobile (smallest
+        // viable model, ~10 MB total). ChinesePP-OCRv3 is also fine for
+        // English numbers since the digit glyphs are universal. Downloaded
+        // once and cached under %APPDATA%\sdcb\3.0\paddle-models\.
+        private const string PaddleDetUrl =
+            "https://paddleocr.bj.bcebos.com/PP-OCRv3/english/en_PP-OCRv3_det_infer.tar";
+        private const string PaddleRecUrl =
+            "https://paddleocr.bj.bcebos.com/PP-OCRv3/english/en_PP-OCRv3_rec_infer.tar";
+
+        // Returns the PaddleOcrAll model root, downloading tarballs on first
+        // use. Returns null on any failure (network, no tar in PATH, bad
+        // model dir, etc.) - the merge vote then ignores the PaddleOCR
+        // slot and falls through to Tesseract.
         private static PaddleOcrAll GetPaddleOcr() {
             if (!_paddleEnabled) return null;
             if (_paddle != null) return _paddle;
             lock (_paddleLock) {
                 if (_paddle != null) return _paddle;
                 try {
-                    // Sdcb 3.x dropped the LocalDetectionModel helper that
-                    // auto-resolved model paths. Use the abstract
-                    // DetectionModel/RecognizationModel with a null model dir
-                    // - the package's OcrBaseModel.CreateConfig picks up
-                    // %APPDATA%\sdcb\... (auto-downloaded on first use, ~12 MB).
-                    // If the network is offline the first call returns -1
-                    // and we never block the rest of the OCR pipeline.
-                    var det = Sdcb.PaddleOCR.Models.DetectionModel.FromDirectory(null, Sdcb.PaddleOCR.Models.ModelVersion.V3);
-                    var rec = Sdcb.PaddleOCR.Models.RecognizationModel.FromDirectory(null, null, Sdcb.PaddleOCR.Models.ModelVersion.V3);
+                    string modelRoot = EnsurePaddleModels();
+                    if (modelRoot == null) {
+                        TryWriteDebugLog("OCR Paddle: model root not available (download failed)");
+                        return null;
+                    }
+                    string detDir = System.IO.Path.Combine(modelRoot, "en_PP-OCRv3_det_infer");
+                    string recDir = System.IO.Path.Combine(modelRoot, "en_PP-OCRv3_rec_infer");
+                    if (!System.IO.Directory.Exists(detDir) || !System.IO.Directory.Exists(recDir)) {
+                        // Tarball was extracted with a different layout.
+                        TryWriteDebugLog("OCR Paddle: unexpected model dir layout (need " + detDir + " and " + recDir + ")");
+                        return null;
+                    }
+                    // Sdcb 3.0 path: DetectionModel + RecognizationModel need
+                    // explicit model dir + version.
+                    var det = Sdcb.PaddleOCR.Models.DetectionModel.FromDirectory(detDir, Sdcb.PaddleOCR.Models.ModelVersion.V3);
+                    var rec = Sdcb.PaddleOCR.Models.RecognizationModel.FromDirectory(recDir, null, Sdcb.PaddleOCR.Models.ModelVersion.V3);
                     var full = new Sdcb.PaddleOCR.Models.FullOcrModel(det, rec);
                     _paddle = new PaddleOcrAll(full, null);
                     return _paddle;
@@ -1047,6 +1066,63 @@ namespace iBarter {
             }
         }
 
+        // Download + extract PP-OCRv3 English model tarballs into
+        // %APPDATA%\sdcb\3.0\paddle-models\. Idempotent - skips the network
+        // step on subsequent runs.
+        private static string EnsurePaddleModels() {
+            string appData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
+            string modelRoot = System.IO.Path.Combine(appData, "sdcb", "3.0", "paddle-models");
+            try { System.IO.Directory.CreateDirectory(modelRoot); } catch { }
+            string detDir = System.IO.Path.Combine(modelRoot, "en_PP-OCRv3_det_infer");
+            string recDir = System.IO.Path.Combine(modelRoot, "en_PP-OCRv3_rec_infer");
+            if (System.IO.File.Exists(System.IO.Path.Combine(detDir, "inference.pdmodel")) &&
+                System.IO.File.Exists(System.IO.Path.Combine(recDir, "inference.pdmodel"))) {
+                return modelRoot;
+            }
+            TryWriteDebugLog("OCR Paddle: downloading models to " + modelRoot);
+            try {
+                DownloadAndExtractTar(PaddleDetUrl, modelRoot);
+                DownloadAndExtractTar(PaddleRecUrl, modelRoot);
+            }
+            catch (Exception ex) {
+                TryWriteDebugLog("OCR Paddle: model download/extract failed - " + ex.GetType().Name + " " + ex.Message);
+                return null;
+            }
+            // Re-verify after download
+            if (System.IO.File.Exists(System.IO.Path.Combine(detDir, "inference.pdmodel")) &&
+                System.IO.File.Exists(System.IO.Path.Combine(recDir, "inference.pdmodel"))) {
+                return modelRoot;
+            }
+            return null;
+        }
+
+        // Stream-download a tarball and use Windows' bundled tar to extract.
+        // 'tar' is shipped with Windows 10 1803+ and the user is on Win11.
+        private static void DownloadAndExtractTar(string url, string outDir) {
+            string tarFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "paddle_model_" + System.Guid.NewGuid().ToString("N") + ".tar");
+            try {
+                using (var client = new System.Net.WebClient()) {
+                    client.DownloadFile(url, tarFile);
+                }
+                var psi = new System.Diagnostics.ProcessStartInfo {
+                    FileName = "tar",
+                    Arguments = "-xf \"" + tarFile + "\" -C \"" + outDir + "\"",
+                    UseShellExecute = false,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                };
+                using (var p = System.Diagnostics.Process.Start(psi)) {
+                    p.WaitForExit();
+                    if (p.ExitCode != 0) {
+                        throw new System.InvalidOperationException("tar exit " + p.ExitCode + ": " + p.StandardError.ReadToEnd());
+                    }
+                }
+            }
+            finally {
+                try { if (System.IO.File.Exists(tarFile)) System.IO.File.Delete(tarFile); } catch { }
+            }
+        }
+
         private int TryPaddleOcr(string bmpPath) {
             var paddle = GetPaddleOcr();
             if (paddle == null) return -1;
@@ -1054,7 +1130,7 @@ namespace iBarter {
             try {
                 // Sdcb 3.x Run takes OpenCvSharp.Mat - decode the bmp bytes
                 // straight into a Mat. Cv2.ImDecode drops the alpha channel
-                // (BGR) which is exactly what PP-OCRv4's preprocessing wants.
+                // (BGR) which is exactly what PP-OCRv3's preprocessing wants.
                 byte[] bmpBytes = System.IO.File.ReadAllBytes(bmpPath);
                 using (var mat = OpenCvSharp.Cv2.ImDecode(bmpBytes, OpenCvSharp.ImreadModes.Color)) {
                     if (mat == null || mat.Empty()) {
