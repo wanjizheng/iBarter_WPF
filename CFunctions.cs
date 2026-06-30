@@ -713,20 +713,21 @@ namespace iBarter {
             int oH = (int)icon.Size.Height;
 
             // (leftFrac, topFrac, rightFrac, bottomFrac) - all relative inside icon.
-            // lf of the widest candidate goes NEGATIVE 20% to capture ~9 px
-            //      left of icon-left edge (a "1" leftmost digit of "1000" sits
-            //      flush against icon-left boundary).
-            // tf lowered to 0.45-0.50 so digit tops (especially small
-            //      6-8 px tall digits like "10") aren't clipped.
-            // rf pulled in to 0.95 so the ROI never reaches icon's right
-            //      edge (which abuts the "[Level N] ... required" text and
-            //      picks up Parley digits).
-            // bf stays 0.96 - small padding to drop blank bottom strip.
+            // 4-digit "1000" digit tail touches icon-right edge, so rf must
+            //      stay at 1.00 (full icon width). bf pulls in slightly so we
+            //      don't crop the digit top.
+            // lf widened to -0.30 on the widest candidate (~13 px outside
+            //      icon-left edge) so the leftmost "1" of "1000" isn't
+            //      clipped.
+            // tf lowered to 0.40-0.50 - go up to roughly the icon's vertical
+            //      mid to give the OCR engine more pixel rows.
+            // 9999 cap + bounded ROI keep parley "10,432" style neighbour
+            //      digit bleed out of the result.
             var candidates = new (double lf, double tf, double rf, double bf)[] {
-                (-0.20, 0.45, 0.95, 0.96),   // widest full-width bottom strip
-                (-0.05, 0.55, 0.95, 0.96),   // narrower, deeper into icon
-                ( 0.50, 0.55, 0.95, 0.96),   // right half - catches 2-3 digit at BR
-                ( 0.00, 0.75, 0.95, 0.96),   // bottom-only safety net
+                (-0.30, 0.40, 1.00, 0.98),   // widest - extends far left, full right
+                (-0.10, 0.50, 1.00, 0.98),   // medium width
+                ( 0.50, 0.55, 1.00, 0.96),   // right half, tight Y
+                ( 0.00, 0.78, 1.00, 0.96),   // bottom strip safety net
             };
 
             var votes = new System.Collections.Generic.Dictionary<int, int>();
