@@ -205,6 +205,12 @@ namespace iBarter {
                     case "5":
                         strLV = "[Level 5]";
                         break;
+                    case "6":
+                        strLV = "[Level 6]";
+                        break;
+                    case "7":
+                        strLV = "[Level 7]";
+                        break;
                     default:
                         strLV = "[Misc]";
                         break;
