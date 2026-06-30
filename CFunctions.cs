@@ -875,7 +875,7 @@ namespace iBarter {
             try {
                 using (var mi = new MagickImage(liveBmpPath)) {
                     mi.ColorSpace = ColorSpace.Gray;
-                    mi.Threshold(new Percentage(85));
+                    mi.Threshold(new Percentage(78));
                     mi.Scale(new Percentage(500));
                     mi.Negate();
                     mi.Write(sharpPath);
