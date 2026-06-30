@@ -726,7 +726,7 @@ namespace iBarter {
                 try {
                     string tessData = AppDomain.CurrentDomain.BaseDirectory + @"tessdata\";
                     if (!System.IO.Directory.Exists(tessData)) {
-                        System.Console.WriteLine($"[OCR] tessdata MISSING: '{tessData}' base='{AppDomain.CurrentDomain.BaseDirectory}'");
+                        TryWriteDebugLog($"[OCR] tessdata MISSING: '{tessData}' base='{AppDomain.CurrentDomain.BaseDirectory}'");
                         return null;
                     }
                     _tess = new Tesseract(tessData, "eng", OcrEngineMode.Default);
@@ -735,10 +735,21 @@ namespace iBarter {
                     return _tess;
                 }
                 catch (Exception ex) {
-                    System.Console.WriteLine($"[OCR] tess init fail: {ex.GetType().Name} {ex.Message}");
+                    TryWriteDebugLog($"[OCR] tess init fail: {ex.GetType().Name} {ex.Message}");
                     return null;
                 }
             }
+        }
+
+        // Lightweight file logger for static helpers (Log is an instance method
+        // that needs a UI thread, which we don't have here). Writes one line at
+        // a time to a known location the operator can inspect.
+        private static void TryWriteDebugLog(string message) {
+            try {
+                string p = AppDomain.CurrentDomain.BaseDirectory + @"ocr_debug.log";
+                System.IO.File.AppendAllText(p, DateTime.Now.ToString("HH:mm:ss.fff") + " " + message + Environment.NewLine);
+            }
+            catch { }
         }
 
         // Module-static cache of icon templates keyed by "<id>|<W>x<H>" so we
@@ -794,16 +805,16 @@ namespace iBarter {
         // digits matched).
         private int TryTemplateDiffOcr(string liveBmpPath, string itemID) {
             if (string.IsNullOrEmpty(itemID)) {
-                Log($"OCR.G itemID empty", Brushes.OrangeRed);
+                TryWriteDebugLog("OCR.G itemID empty");
                 return -1;
             }
             if (!System.IO.File.Exists(liveBmpPath)) {
-                Log($"OCR.G live missing: {liveBmpPath}", Brushes.OrangeRed);
+                TryWriteDebugLog("OCR.G live missing: " + liveBmpPath);
                 return -1;
             }
             var tess = GetTesseract();
             if (tess == null) {
-                Log($"OCR.G tess=null", Brushes.OrangeRed);
+                TryWriteDebugLog("OCR.G tess=null");
                 return -1;
             }
 
@@ -811,7 +822,7 @@ namespace iBarter {
                 using (var live = new Image<Bgr, byte>(liveBmpPath)) {
                     var tpl = LoadIconTemplate(itemID, live.Size);
                     if (tpl == null) {
-                        Log($"OCR.G tpl missing for {itemID} size={live.Size}", Brushes.OrangeRed);
+                        TryWriteDebugLog("OCR.G tpl missing for " + itemID + " size=" + live.Size);
                         return -1;
                     }
 
@@ -830,7 +841,7 @@ namespace iBarter {
                         CvInvoke.Threshold(diff, diff, 0, 255, ThresholdType.Otsu);
                     }
                     catch (Exception ex) {
-                        Log($"OCR.G Otsu fail fallback fixed: {ex.GetType().Name}", Brushes.OrangeRed);
+                        TryWriteDebugLog("OCR.G Otsu fail fallback fixed: " + ex.GetType().Name);
                         CvInvoke.Threshold(diff, diff, 30, 255, ThresholdType.Binary);
                     }
 
@@ -848,13 +859,13 @@ namespace iBarter {
                         }
                     }
                     catch (Exception ex) {
-                        Log($"OCR.G Magick fail: {ex.GetType().Name} {ex.Message}", Brushes.OrangeRed);
+                        TryWriteDebugLog("OCR.G Magick fail: " + ex.GetType().Name + " " + ex.Message);
                         return -1;
                     }
 
                     using (var img = CvInvoke.Imread(sharpPath, ImreadModes.Grayscale)) {
                         if (img == null || img.IsEmpty) {
-                            Log($"OCR.G imread empty: {sharpPath}", Brushes.OrangeRed);
+                            TryWriteDebugLog("OCR.G imread empty: " + sharpPath);
                             return -1;
                         }
                         tess.SetImage(img);
@@ -864,12 +875,12 @@ namespace iBarter {
                         if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
                             return n;
                         }
-                        Log($"OCR.G tesseract no digits: raw='{raw}'", Brushes.OrangeRed);
+                        TryWriteDebugLog("OCR.G tesseract no digits: raw='" + raw + "'");
                     }
                 }
             }
             catch (Exception ex) {
-                Log($"OCR.G outer fail: {ex.GetType().Name} {ex.Message}", Brushes.OrangeRed);
+                TryWriteDebugLog("OCR.G outer fail: " + ex.GetType().Name + " " + ex.Message);
             }
             return -1;
         }
@@ -889,11 +900,11 @@ namespace iBarter {
         private int TryEmguOcr(string bmpPath) {
             var tess = GetTesseract();
             if (tess == null) {
-                Log($"OCR.F tess=null (tessdata missing)", Brushes.OrangeRed);
+                TryWriteDebugLog("OCR.F tess=null");
                 return -1;
             }
             if (!System.IO.File.Exists(bmpPath)) {
-                Log($"OCR.F file missing: {bmpPath}", Brushes.OrangeRed);
+                TryWriteDebugLog("OCR.F file missing: " + bmpPath);
                 return -1;
             }
 
@@ -907,14 +918,14 @@ namespace iBarter {
                 }
             }
             catch (Exception ex) {
-                Log($"OCR.F Magick failed: {ex.GetType().Name} {ex.Message}", Brushes.OrangeRed);
+                TryWriteDebugLog("OCR.F Magick failed: " + ex.GetType().Name + " " + ex.Message);
                 return -1;
             }
 
             try {
                 using (var img = CvInvoke.Imread(sharpPath, ImreadModes.Grayscale)) {
                     if (img == null || img.IsEmpty) {
-                        Log($"OCR.F imread empty: {sharpPath}", Brushes.OrangeRed);
+                        TryWriteDebugLog("OCR.F imread empty: " + sharpPath);
                         return -1;
                     }
                     tess.SetImage(img);
@@ -927,7 +938,7 @@ namespace iBarter {
                 }
             }
             catch (Exception ex) {
-                Log($"OCR.F tesseract failed: {ex.GetType().Name} {ex.Message}", Brushes.OrangeRed);
+                TryWriteDebugLog("OCR.F tesseract failed: " + ex.GetType().Name + " " + ex.Message);
             }
             return -1;
         }
