@@ -726,7 +726,7 @@ namespace iBarter {
                 try {
                     string tessData = AppDomain.CurrentDomain.BaseDirectory + @"tessdata\";
                     if (!System.IO.Directory.Exists(tessData)) {
-                        Log($"OCR tessdata MISSING: '{tessData}' base='{AppDomain.CurrentDomain.BaseDirectory}'", Brushes.OrangeRed);
+                        System.Console.WriteLine($"[OCR] tessdata MISSING: '{tessData}' base='{AppDomain.CurrentDomain.BaseDirectory}'");
                         return null;
                     }
                     _tess = new Tesseract(tessData, "eng", OcrEngineMode.Default);
@@ -735,7 +735,7 @@ namespace iBarter {
                     return _tess;
                 }
                 catch (Exception ex) {
-                    Log($"OCR tess init fail: {ex.GetType().Name} {ex.Message}", Brushes.OrangeRed);
+                    System.Console.WriteLine($"[OCR] tess init fail: {ex.GetType().Name} {ex.Message}");
                     return null;
                 }
             }
