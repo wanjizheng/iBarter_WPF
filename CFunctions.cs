@@ -693,6 +693,104 @@ namespace iBarter {
         //     return myBarter;
         // }
 
+        // Reads the quantity overlay ("50") at the icon's bottom-right corner.
+        // Strategy:
+        //   Phase A — try multiple candidate ROIs that include both inside-icon
+        //             bottom-right and a sliver extending past the icon's right
+        //             and bottom edges (the overlay can sit outside the icon
+        //             depending on UI mods / DPI).
+        //   Phase B — once captured, dump the bitmap to the base directory and
+        //             write a MagickImage-upscaled (3x) copy beside it for
+        //             offline / future bit-input OCR integration. (PureDM's CV
+        //             OCRString only reads screen coords, so we can't feed the
+        //             upscaled bitmap back in directly — but the file is a
+        //             useful artifact for debugging + future engines.)
+        //   Phase C — digit-only regex + sane-range gate; pick the most-voted
+        //             parsed int; ties broken by preferring the larger value
+        //             (more-specific match). Returns -1 if no consensus.
+        //   Phase D — saves a diagnostic BMP of the second candidate ROI to
+        //             BaseDirectory\ocr_<itemID>.bmp and logs the vote / raw
+        //             strings so the user can tweak ROI offsets empirically.
+        private int TryReadQuantity(PointPlus icon, string strID) {
+            int oX = (int)icon.X;
+            int oY = (int)icon.Y;
+            int oW = (int)icon.Size.Width;
+            int oH = (int)icon.Size.Height;
+
+            // (leftFrac, topFrac, rightEdgeFrac, bottomEdgeFrac, rightExtend, bottomExtend)
+            var candidates = new (double lf, double tf, double rf, double bf, int rext, int bext)[] {
+                (0.65, 0.78, 1.00, 1.00, 40, 15),  // primary: BR corner + 40/15 px
+                (0.55, 0.72, 1.00, 1.00, 50, 18),  // a bit wider / lower for tiny icons
+                (0.50, 0.80, 1.00, 1.00, 60, 20),  // widest for low-DPI cases
+                (0.70, 0.75, 1.00, 1.00, 45, 12),  // tight BR only
+            };
+
+            var votes = new System.Collections.Generic.Dictionary<int, int>();
+            string bestRaw = null;
+
+            foreach (var c in candidates) {
+                int x1 = (int)(oX + oW * c.lf);
+                int y1 = (int)(oY + oH * c.tf);
+                int x2 = (int)(oX + oW * c.rf) + c.rext;
+                int y2 = (int)(oY + oH * c.bf) + c.bext;
+                try {
+                    string raw = App.myPureDM.CV.OCRString(x1, y1, x2, y2,
+                        CV.OCRType.Number, CV.OCRMode.Diff, false, strID) ?? "";
+                    Match m = Regex.Match(raw, @"\d{1,5}");
+                    if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 100000) {
+                        votes.TryGetValue(n, out int prev);
+                        votes[n] = prev + 1;
+                        if (bestRaw == null || raw.Length > bestRaw.Length) bestRaw = raw;
+                    }
+                }
+                catch { /* one ROI miss shouldn't take the whole call down */ }
+            }
+
+            // Vote: pick the most-agreed value; ties => pick larger value.
+            int picked = -1, topCount = 0;
+            foreach (var kvp in votes) {
+                if (kvp.Value > topCount || (kvp.Value == topCount && kvp.Key > picked)) {
+                    picked = kvp.Key;
+                    topCount = kvp.Value;
+                }
+            }
+
+            // Phase D: dump the second candidate ROI bitmap for offline inspection.
+            try {
+                var c = candidates[1];
+                int x1 = (int)(oX + oW * c.lf);
+                int y1 = (int)(oY + oH * c.tf);
+                int x2 = (int)(oX + oW * c.rf) + c.rext;
+                int y2 = (int)(oY + oH * c.bf) + c.bext;
+                App.myPureDM.DM.Capture(x1, y1, x2, y2, "ocr_" + strID + ".bmp");
+            }
+            catch { }
+
+            // Phase B: best-effort upscaled debug artifact via MagickImage. We can
+            // not feed it back into PureDM's screen-based OCR; the file is purely
+            // a visual aid for the operator + future bitmap-accepting OCR engines.
+            try {
+                string srcBmp = AppDomain.CurrentDomain.BaseDirectory + "ocr_" + strID + ".bmp";
+                string dstBmp = AppDomain.CurrentDomain.BaseDirectory + "ocr_" + strID + "_scaled.bmp";
+                using (var mi = new MagickImage(srcBmp)) {
+                    mi.Scale(new Percentage(300));   // 3x upscale
+                    mi.Threshold(new Percentage(70)); // binarize so small digits pop
+                    mi.Write(dstBmp);
+                }
+            }
+            catch { }
+
+            if (picked > 0) {
+                string tally = string.Join(",", votes.Select(kv => kv.Key + "x" + kv.Value));
+                Log($"OCR qty {strID}: picked {picked} (votes={tally})", Brushes.Gray);
+            }
+            else {
+                Log($"OCR qty {strID}: no consensus; raw={(bestRaw ?? "")}", Brushes.OrangeRed);
+            }
+
+            return picked;
+        }
+
         private Barter IdentifyBarterAsync(PointPlus _pp) {
             // 检查锚点是否有效
             if (_pp.X == -1 || _pp.Y == -1)
@@ -901,46 +999,37 @@ namespace iBarter {
             //     strID1 = "800012";
             // else if (strID1 == "800012")
             //     strID1 = "800011";
-            string strNumber1 = App.myPureDM.CV.OCRString(
-                listPointPlus[0].X,
-                (int)(listPointPlus[0].Y + listPointPlus[0].Size.Height * 0.6),
-                listPointPlus[0].X + listPointPlus[0].Size.Width,
-                listPointPlus[0].Y + listPointPlus[0].Size.Height,
-                CV.OCRType.Number, CV.OCRMode.Diff, false, strID1);
-            int intNumber1 = App.listItems.Where(i => i.ItemID == strID1)
-                .Select(i => i.ItemNumber).FirstOrDefault();
-            try {
-                intNumber1 = int.Parse(strNumber1);
-            }
-            catch {
+            // Multi-ROI voting for the bottom-right "50" overlay (Phase A+C+D).
+            int intNumber1 = TryReadQuantity(listPointPlus[0], strID1);
+            if (intNumber1 <= 0) {
+                // OCR failed to agree - fall back to the CSV-default quantity and
+                // log so this case is visible.
+                intNumber1 = App.listItems.Where(i => i.ItemID == strID1)
+                    .Select(i => i.ItemNumber).FirstOrDefault();
+                if (intNumber1 > 0)
+                    Log($"OCR qty {strID1} fallback CSV={intNumber1}", Brushes.OrangeRed);
             }
 
             // 9. 识别第二个物品
             string strID2 = "10";
-            string strNumber2 = "-1";
+            int intNumber2 = -1;
             if (listPointPlus.Count == 2) {
                 strID2 = listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18);
                 if (strID2 == "800011")
                     strID2 = "800012";
                 else if (strID2 == "800012")
                     strID2 = "800011";
-                strNumber2 = App.myPureDM.CV.OCRString(
-                    listPointPlus[1].X,
-                    (int)(listPointPlus[1].Y + listPointPlus[1].Size.Height * 0.6),
-                    listPointPlus[1].X + listPointPlus[1].Size.Width,
-                    listPointPlus[1].Y + listPointPlus[1].Size.Height,
-                    CV.OCRType.Number, CV.OCRMode.Diff, false, strID2);
+                intNumber2 = TryReadQuantity(listPointPlus[1], strID2);
             }
             else {
                 Log("Cannot identify the second item. Use Crow Coin instead.", Brushes.Red);
             }
 
-            int intNumber2 = App.listItems.Where(i => i.ItemID == strID2)
-                .Select(i => i.ItemNumber).FirstOrDefault();
-            try {
-                intNumber2 = int.Parse(strNumber2);
-            }
-            catch {
+            if (intNumber2 <= 0) {
+                intNumber2 = App.listItems.Where(i => i.ItemID == strID2)
+                    .Select(i => i.ItemNumber).FirstOrDefault();
+                if (intNumber2 > 0)
+                    Log($"OCR qty {strID2} fallback CSV={intNumber2}", Brushes.OrangeRed);
             }
 
             // Note (commit-history): the legacy `if (ItemLV != "0") intNumberX = 1;` override
