@@ -1053,9 +1053,13 @@ namespace iBarter {
                 if (_paddle != null) return _paddle;
                 try {
                     string root = PaddleModelsRoot;
-                    string detDir = System.IO.Path.Combine(root, "PP-OCRv5_mobile_det_infer");
-                    string recDir = System.IO.Path.Combine(root, "en_PP-OCRv5_mobile_rec_infer");
-                    string clsDir = System.IO.Path.Combine(root, "ch_ppocr_mobile_v2.0_cls_infer");
+                    // Source layout (under tessdata\paddle-models\):
+                    //   det\PP-OCRv5_mobile_det_infer\inference.{yml,json,pdiparams}
+                    //   rec\en_PP-OCRv5_mobile_rec_infer\inference.{yml,json,pdiparams}
+                    //   cls\ch_ppocr_mobile_v2.0_cls_infer\inference.{pdiparams,pdiparams.info,pdmodel}
+                    string detDir = System.IO.Path.Combine(root, "det", "PP-OCRv5_mobile_det_infer");
+                    string recDir = System.IO.Path.Combine(root, "rec", "en_PP-OCRv5_mobile_rec_infer");
+                    string clsDir = System.IO.Path.Combine(root, "cls", "ch_ppocr_mobile_v2.0_cls_infer");
                     if (!System.IO.Directory.Exists(detDir) ||
                         !System.IO.Directory.Exists(recDir) ||
                         !System.IO.Directory.Exists(clsDir)) {
