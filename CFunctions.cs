@@ -877,26 +877,19 @@ namespace iBarter {
         // on top of a darker icon body (RGB ~30-70). A hard 78% threshold
         // isolates the digit strokes alone. Magick Scale 3x + Negate produces
         // a clean dark-on-light bitmap for Tesseract.
-        private int TryTemplateDiffOcr(string liveBmpPath, string itemID) {
-            if (string.IsNullOrEmpty(itemID)) {
-                TryWriteDebugLog("OCR.G itemID empty");
-                return -1;
-            }
-            if (!System.IO.File.Exists(liveBmpPath)) {
-                TryWriteDebugLog("OCR.G live missing: " + liveBmpPath);
-                return -1;
-            }
+        private int TryTemplateDiffOcr(int x1, int y1, int x2, int y2) {
             var tess = GetTesseract();
             if (tess == null) {
                 TryWriteDebugLog("OCR.G tess=null");
                 return -1;
             }
 
-            // Phase G: full-icon BR-threshold (NO crop). Earlier BR-crop
-            // variants clipped the leftmost '1' of multi-digit overlays like
-            // '1000' (the crop started at x=22 on a 44x44 icon, but '1000'
-            // digits span the full width). Use the WHOLE icon and rely on a
-            // hard threshold to keep only the digit pixels.
+            // Phase G: full-icon BR-threshold + bottom-right crop. The
+            // screen rect is captured in-memory via CaptureScreenBytes
+            // (PureDM.GetScreenDataBmp); no disk file is touched at any
+            // point. Magick reads from a MemoryStream, transforms in
+            // memory, and writes the preprocessed bytes back to another
+            // MemoryStream that Bitmap/Mat/Tesseract consume.
             //
             // 1. MagickColorSpace.Gray
             // 2. Threshold(78%) - only the brightest 22% of pixels survive
@@ -907,11 +900,21 @@ namespace iBarter {
             // 4. Negate - dark text on light background (Tesseract-friendly)
             // 5. Morphology Close - 3x3 Square kernel closes 1-px gaps left
             //    by the upscale so '5'/'9'/'0' stay closed contours.
+            // 6. Crop bottom-right 75% x 75% - the digit at original
+            //    (25-44, 25-44) on a 44x44 icon maps to (125-220, 125-220)
+            //    after 5x scale; this crop isolates it from residual
+            //    icon body curve pixels in the upper-left.
             //
-            // Returns -1 on any failure (engine unavailable, file missing, no
-            // digits matched).
+            // Returns -1 on any failure (engine unavailable, capture failed,
+            // no digits matched).
             try {
-                using (var mi = new MagickImage(liveBmpPath)) {
+                byte[] bmpBytes = CaptureScreenBytes(x1, y1, x2, y2);
+                if (bmpBytes == null) {
+                    TryWriteDebugLog("OCR.G capture failed: " + x1 + "," + y1 + "," + x2 + "," + y2);
+                    return -1;
+                }
+                using (var msIn = new System.IO.MemoryStream(bmpBytes))
+                using (var mi = new MagickImage(msIn)) {
                     mi.ColorSpace = ColorSpace.Gray;
                     mi.Threshold(new Percentage(78));
                     mi.Scale(new Percentage(500));
@@ -939,12 +942,6 @@ namespace iBarter {
                     int cropW = (int)(mi.Width - cropX);
                     int cropH = (int)(mi.Height - cropY);
                     mi.Crop(new MagickGeometry(cropX, cropY, (uint)cropW, (uint)cropH));
-                    // Skip the disk write + CvInvoke.Imread round-trip -
-                    // stream the MagickImage through MemoryStream -> Bitmap
-                    // -> Mat -> Tesseract. Saves ~30-50ms per G invocation
-                    // vs the disk round-trip. (If you need the cropped
-                    // preprocess for debugging, uncomment mi.Write(sharpPath)
-                    // and the CvInvoke.Imread line below.)
                     using (var ms = new System.IO.MemoryStream()) {
                         mi.Write(ms, MagickFormat.Bmp);
                         ms.Position = 0;
@@ -975,6 +972,29 @@ namespace iBarter {
 // as it amplified signal for low-contrast icons, and F never uniquely
 // rescued a case where A + R + G already agreed. -1 outcomes stayed -1.)
 
+        // Capture a screen rect into a managed byte[] via PureDM's
+        // GetScreenDataBmp (returns IntPtr + size, both copied via
+        // Marshal.Copy). Replaces the old DM.Capture + file read pair -
+        // the entire OCR pipeline is now disk-free: Phase A's screen
+        // OCR goes through PureDM.CV directly, Phase R + G capture
+        // screen pixels on demand and feed Tesseract from memory.
+        // Returns null on capture failure (PureDM ret != 1, or 0 size).
+        private static byte[] CaptureScreenBytes(int x1, int y1, int x2, int y2) {
+            if (App.myPureDM == null || App.myPureDM.DM == null) return null;
+            System.IntPtr data = System.IntPtr.Zero;
+            int size = 0;
+            try {
+                int ret = App.myPureDM.DM.GetScreenDataBmp(x1, y1, x2, y2, out data, out size);
+                if (ret != 1 || data == System.IntPtr.Zero || size <= 0) return null;
+                byte[] bytes = new byte[size];
+                System.Runtime.InteropServices.Marshal.Copy(data, bytes, 0, size);
+                return bytes;
+            }
+            catch {
+                return null;
+            }
+        }
+
         // Phase R: feed the raw captured bitmap to Tesseract with NO
         // preprocessing. Experimental - checks whether the Magick scale /
         // negate / threshold pipeline in Phase F + G is actually helping,
@@ -982,23 +1002,26 @@ namespace iBarter {
         // medium-ROI capture to read directly. Compared in the merge vote
         // alongside Phase A (screen-coords), F (M-variant preprocessing)
         // and G (78% threshold + 5x upscale + morphology close).
-        private int TryRawOcr(string bmpPath) {
+        private int TryRawOcr(int x1, int y1, int x2, int y2) {
             var tess = GetTesseract();
             if (tess == null) {
                 TryWriteDebugLog("OCR.R tess=null");
                 return -1;
             }
-            if (!System.IO.File.Exists(bmpPath)) {
-                TryWriteDebugLog("OCR.R file missing: " + bmpPath);
-                return -1;
-            }
             try {
-                using (var img = CvInvoke.Imread(bmpPath, Emgu.CV.CvEnum.ImreadModes.Grayscale)) {
-                    if (img == null || img.IsEmpty) {
-                        TryWriteDebugLog("OCR.R imread empty: " + bmpPath);
+                byte[] bmpBytes = CaptureScreenBytes(x1, y1, x2, y2);
+                if (bmpBytes == null) {
+                    TryWriteDebugLog("OCR.R capture failed: " + x1 + "," + y1 + "," + x2 + "," + y2);
+                    return -1;
+                }
+                using (var ms = new System.IO.MemoryStream(bmpBytes))
+                using (var bitmap = new System.Drawing.Bitmap(ms))
+                using (var mat = bitmap.ToMat()) {
+                    if (mat == null || mat.IsEmpty) {
+                        TryWriteDebugLog("OCR.R mat empty");
                         return -1;
                     }
-                    tess.SetImage(img);
+                    tess.SetImage(mat);
                     tess.Recognize();
                     string raw = (tess.GetUTF8Text() ?? "").Trim();
                     Match m = Regex.Match(raw, @"\d{1,4}");
@@ -1084,47 +1107,36 @@ namespace iBarter {
             // Phase D: dump the second candidate ROI bitmap for the operator +
             // for the Phase F Emgu.Tesseract pass below.
             try {
+                // (Phase A used to DM.Capture the medium ROI to disk here
+                // for Phase R to read. Now both R and G capture from the
+                // screen on demand via GetScreenDataBmp, so this capture
+                // is gone entirely. The coordinates are still useful for
+                // computing the Phase R ROI below.)
                 var c = candidates[1];
                 int x1 = (int)(oX + oW * c.lf);
                 int y1 = (int)(oY + oH * c.tf);
                 int x2 = (int)(oX + oW * c.rf);
                 int y2 = (int)(oY + oH * c.bf);
-                App.myPureDM.DM.Capture(x1, y1, x2, y2, "ocr_" + strID + ".bmp");
+                // Suppress unused-variable warning when DEBUG_WRITE_BMP is off
+                _ = (x1, y1, x2, y2);
             }
             catch { }
 
-            // Phase D-bis (moved inside the conditional Phase G block below) -
-            // capture the FULL ICON rectangle only when G is actually
-            // going to run, so the ~50ms capture cost is skipped on the
-            // common case where R succeeds.
-
-            // Phase R, then conditional Phase G. R is the fast path (raw OCR on the
-            // already-captured ocr_<id>.bmp, ~30ms). G is the slow fallback
-            // (full-icon capture + Magick 78% threshold + 5x scale + Negate +
-            // Morph Close + crop + write sharp.bmp + Imread + Tesseract,
-            // ~150ms) - only worth running when R couldn't read the digit.
-            // On the 12-item benchmark R succeeds ~70% of the time, so skipping
-            // G when R succeeds saves ~150ms x 8-9 items = ~1.2s per scan.
-            // Accuracy is preserved: G uniquely rescued Conch=1 and
-            // Essence=1000, both of which had R=-1.
-            // Phase F (bottom-right crop of the medium ROI) was tried and
-            // removed - it didn't uniquely rescue any case, including
-            // Seagull Figurine (800004) which all 3 OCR phases still miss.
-            // NOTE: DM.Capture writes to <base>/Resources/ but our code needs
-            // the explicit Resources prefix when reading back via File.Exists.
-            string bmpPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocr_" + strID + ".bmp";
-            int rawPick = TryRawOcr(bmpPath);
+            // Phase R + G: full in-memory pipeline. R captures the medium
+            // ROI (candidates[1]) and runs Tesseract raw; G is conditional
+            // and runs the heavier Magick pipeline on the full icon. Both
+            // capture screen pixels via PureDM.GetScreenDataBmp into a
+            // managed byte[] - no disk I/O anywhere in the OCR path.
+            int rawPick = TryRawOcr(
+                (int)(oX + oW * candidates[1].lf),
+                (int)(oY + oH * candidates[1].tf),
+                (int)(oX + oW * candidates[1].rf),
+                (int)(oY + oH * candidates[1].bf));
             int diffPick = -1;
             if (rawPick <= 0) {
                 // Capture full icon + run Magick pipeline only as fallback
-                try {
-                    App.myPureDM.DM.Capture((int)oX, (int)oY,
-                        (int)oX + (int)oW, (int)oY + (int)oH,
-                        "ocrf_" + strID + ".bmp");
-                }
-                catch { }
-                string fullIconPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocrf_" + strID + ".bmp";
-                diffPick = TryTemplateDiffOcr(fullIconPath, strID);
+                diffPick = TryTemplateDiffOcr((int)oX, (int)oY,
+                    (int)oX + (int)oW, (int)oY + (int)oH);
             }
 
             // 3-way merge vote (A screen-coords + R raw + G Magick fallback):
