@@ -857,12 +857,39 @@ namespace iBarter {
                 return -1;
             }
 
+            // Crop to the BR corner where the count overlay lives. BDO renders
+            // the digit at the icon's bottom-right; the icon body's anti-
+            // aliased highlights confuse a global 78% threshold. Cropping
+            // first removes the body entirely so the threshold sees only
+            // digit pixels. Plus 5x Scale (vs 3x) for sub-pixel "1" reads.
+            //
+            // Crop parameters (relative to 44x44 icon, top-left origin):
+            //   left  = 50%  (start at icon-mid)
+            //   top   = 60%  (start at icon-60%-down)
+            //   right = 50%  (extend past icon-right by 50% of width)
+            //   bottom= 50%  (extend past icon-bottom by 50% of height)
+            //
+            // Resulting crop is roughly 22x30 px (wider than tall) at the
+            // icon's bottom-right; scaled 5x = 110x150 for Tesseract.
             string sharpPath = liveBmpPath.Replace(".bmp", "_sharp.bmp");
             try {
                 using (var mi = new MagickImage(liveBmpPath)) {
+                    int w = mi.Width;
+                    int h = mi.Height;
+                    int cropX = (int)(w * 0.50);
+                    int cropY = (int)(h * 0.60);
+                    int cropW = (int)(w * 0.50) + 8;   // a few pixels past right edge
+                    int cropH = (int)(h * 0.40) + 8;   // a few pixels past bottom edge
+                    if (cropW < 8) cropW = 8;
+                    if (cropH < 8) cropH = 8;
+                    if (cropX + cropW > w) cropW = w - cropX;
+                    if (cropY + cropH > h) cropH = h - cropY;
+                    mi.Crop(new System.Drawing.Rectangle(cropX, cropY, cropW, cropH));
                     mi.ColorSpace = ColorSpace.Gray;
-                    mi.Threshold(new Percentage(78));
-                    mi.Scale(new Percentage(300));
+                    mi.Threshold(new Percentage(70));
+                    // 5x scale: a "1" that's 1-2 px on the icon becomes
+                    // 5-10 px on the input bitmap - Tesseract can read.
+                    mi.Scale(new Percentage(500));
                     mi.Negate();
                     mi.Write(sharpPath);
                 }
