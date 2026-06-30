@@ -5,7 +5,9 @@ using Emgu.CV.Structure;
 using FuzzySharp;
 using ImageMagick;
 using OpenCvSharp;
+using Sdcb.PaddleInference;
 using Sdcb.PaddleOCR;
+using Sdcb.PaddleOCR.Models.Local;
 using PureDM;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -1039,24 +1041,12 @@ namespace iBarter {
             lock (_paddleLock) {
                 if (_paddle != null) return _paddle;
                 try {
-                    string modelRoot = EnsurePaddleModels();
-                    if (modelRoot == null) {
-                        TryWriteDebugLog("OCR Paddle: model root not available (download failed)");
-                        return null;
-                    }
-                    string detDir = System.IO.Path.Combine(modelRoot, "en_PP-OCRv3_det_infer");
-                    string recDir = System.IO.Path.Combine(modelRoot, "en_PP-OCRv3_rec_infer");
-                    if (!System.IO.Directory.Exists(detDir) || !System.IO.Directory.Exists(recDir)) {
-                        // Tarball was extracted with a different layout.
-                        TryWriteDebugLog("OCR Paddle: unexpected model dir layout (need " + detDir + " and " + recDir + ")");
-                        return null;
-                    }
-                    // Sdcb 3.0 path: DetectionModel + RecognizationModel need
-                    // explicit model dir + version.
-                    var det = Sdcb.PaddleOCR.Models.DetectionModel.FromDirectory(detDir, Sdcb.PaddleOCR.Models.ModelVersion.V3);
-                    var rec = Sdcb.PaddleOCR.Models.RecognizationModel.FromDirectory(recDir, null, Sdcb.PaddleOCR.Models.ModelVersion.V3);
-                    var full = new Sdcb.PaddleOCR.Models.FullOcrModel(det, rec);
-                    _paddle = new PaddleOcrAll(full, null);
+                    // 3.3.1 path: LocalFullModels.EnglishV5 is a static
+                    // FullOcrModel property pointing at the bundled
+                    // English PP-OCRv5 model weights inside the NuGet
+                    // package (Sdcb.PaddleOCR.Models.Local). No download,
+                    // no AppData path, no PaddlePaddle native-dll hunt.
+                    _paddle = new PaddleOcrAll(LocalFullModels.EnglishV5, PaddleDevice.Mkldnn());
                     return _paddle;
                 }
                 catch (Exception ex) {
@@ -1068,7 +1058,10 @@ namespace iBarter {
 
         // Download + extract PP-OCRv3 English model tarballs into
         // %APPDATA%\sdcb\3.0\paddle-models\. Idempotent - skips the network
-        // step on subsequent runs.
+        // step on subsequent runs. (Legacy path - 3.3.1 doesn't need this
+        // since LocalFullModels.EnglishV3 bundles the model directly. Kept
+        // here in case we want to fall back to a custom-det/rec pair in
+        // the future. Not called by GetPaddleOcr() anymore.)
         private static string EnsurePaddleModels() {
             string appData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
             string modelRoot = System.IO.Path.Combine(appData, "sdcb", "3.0", "paddle-models");
