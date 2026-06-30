@@ -713,15 +713,19 @@ namespace iBarter {
             int oH = (int)icon.Size.Height;
 
             // (leftFrac, topFrac, rightFrac, bottomFrac) - all relative inside icon.
-            // tf lowered to 0.55 (was 0.60) so we don't clip the top of digits.
-            // bf raised to 0.96 (was 1.00) so we don't grab extra space below
-            // the digits. Candidates widened on the LEFT (lf 0.05-0.50) so 4-digit
-            // numbers like "1000" fit horizontally.
+            // lf of the widest candidate goes NEGATIVE (-0.05) so we capture a
+            //      2-3 px sliver beyond icon's left edge (catches "1000" whose
+            //      leftmost "1" digit may butt against icon-left boundary).
+            // tf 0.55 / 0.65 / 0.80 keeps top clear of clipped digits.
+            // rf kept at 1.00 - extension right WOULD capture neighbouring
+            //      "[Level N] ... required" text and pick up its Parley digits
+            //      (which is what produced '141' false positives earlier).
+            // bf 0.96 stops short of icon bottom edge to drop blank padding.
             var candidates = new (double lf, double tf, double rf, double bf)[] {
-                (0.05, 0.55, 1.00, 0.96),  // wide bottom strip - covers 4-digit numbers
-                (0.45, 0.55, 1.00, 0.96),  // right half, captures 2-3 digit numbers
-                (0.55, 0.65, 1.00, 0.96),  // BR quadrant for tight BR position
-                (0.00, 0.80, 1.00, 0.96),  // very bottom strip (safety net)
+                (-0.05, 0.55, 1.00, 0.96),  // widest: full width + a little left wing
+                (0.45, 0.55, 1.00, 0.96),   // right half, captures 2-3 digit counts
+                (0.55, 0.65, 1.00, 0.96),   // tight BR quadrant
+                (0.00, 0.80, 1.00, 0.96),   // very bottom strip safety net
             };
 
             var votes = new System.Collections.Generic.Dictionary<int, int>();
@@ -735,8 +739,11 @@ namespace iBarter {
                 try {
                     string raw = App.myPureDM.CV.OCRString(x1, y1, x2, y2,
                         CV.OCRType.Number, CV.OCRMode.Diff, false, strID) ?? "";
-                    Match m = Regex.Match(raw, @"\d{1,5}");
-                    if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 100000) {
+                    // Cap at 4 digits and < 10000 - values >= 10000 mean we almost
+                    // certainly picked up neighbouring row text (Parley "10,432",
+                    // IslandRemaining, etc). Drop those as garbage.
+                    Match m = Regex.Match(raw, @"\d{1,4}");
+                    if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
                         votes.TryGetValue(n, out int prev);
                         votes[n] = prev + 1;
                         if (bestRaw == null || raw.Length > bestRaw.Length) bestRaw = raw;
@@ -745,10 +752,12 @@ namespace iBarter {
                 catch { /* single ROI miss should not kill the call */ }
             }
 
-            // Vote: most-agreed wins, ties favor larger value.
+            // Vote: most-agreed wins; ties favour SMALLER value - icon overlay
+            // counts are typically small (1..9999) and the false positives from
+            // neighbouring text lean high, so smaller is safer on tie.
             int picked = -1, topCount = 0;
             foreach (var kvp in votes) {
-                if (kvp.Value > topCount || (kvp.Value == topCount && kvp.Key > picked)) {
+                if (kvp.Value > topCount || (kvp.Value == topCount && kvp.Key < picked)) {
                     picked = kvp.Key;
                     topCount = kvp.Value;
                 }
