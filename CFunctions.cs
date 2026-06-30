@@ -927,6 +927,22 @@ namespace iBarter {
                         Iterations = 1,
                     };
                     mi.Morphology(morph);
+                    // Crop to bottom-right quadrant BEFORE write so the
+                    // saved _sharp.bmp on disk matches what Tesseract
+                    // actually sees. BDO anchors the digit overlay at
+                    // the bottom-right corner of the icon; the
+                    // upper-left of the preprocessed 220x220 still
+                    // contains residual icon body curve pixels that
+                    // confuse Tesseract on close-call cases.
+                    // 25% crop from each side keeps the bottom-right
+                    // 75% x 75% - safe area for the digit (the digit
+                    // at original (25-44, 25-44) on a 44x44 icon maps
+                    // to (125-220, 125-220) after 5x scale).
+                    int cropX = (int)(mi.Width / 4);
+                    int cropY = (int)(mi.Height / 4);
+                    int cropW = (int)(mi.Width - cropX);
+                    int cropH = (int)(mi.Height - cropY);
+                    mi.Crop(new MagickGeometry(cropX, cropY, (uint)cropW, (uint)cropH));
                     mi.Write(sharpPath);
                 }
             }
@@ -941,35 +957,17 @@ namespace iBarter {
                         TryWriteDebugLog("OCR.G imread empty: " + sharpPath);
                         return -1;
                     }
-                    // Crop to the bottom-right quadrant of the preprocessed
-                    // sharp.bmp. The 78% threshold filters out most of the
-                    // icon body AA but the upper-left of the icon still
-                    // contains residual curve pixels; BDO anchors the digit
-                    // overlay at the bottom-right, so cropping to that
-                    // region before Tesseract removes the noise that
-                    // confuses it on close-call cases (e.g. Seagull
-                    // Figurine 800004 where the full 220x220 preprocessed
-                    // image is dominated by the seagull sculpture outline).
-                    //
-                    // 25%/25% crop keeps the bottom-right 75% x 75% of the
-                    // scaled (220x220) image. The digit sits inside this
-                    // safe area (original (25-44, 25-44) on a 44x44 icon
-                    // maps to (125-220, 125-220) after 5x scale).
-                    int cropX = img.Width / 4;
-                    int cropY = img.Height / 4;
-                    int cropW = img.Width - cropX;
-                    int cropH = img.Height - cropY;
-                    var rect = new System.Drawing.Rectangle(cropX, cropY, cropW, cropH);
-                    using (var cropped = new Emgu.CV.Mat(img, rect)) {
-                        tess.SetImage(cropped);
-                        tess.Recognize();
-                        string raw = (tess.GetUTF8Text() ?? "").Trim();
-                        Match m = Regex.Match(raw, @"\d{1,4}");
-                        if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
-                            return n;
-                        }
-                        TryWriteDebugLog("OCR.G tesseract no digits: raw='" + raw + "'");
+                    // The sharp.bmp on disk is already cropped to the
+                    // bottom-right quadrant (Magick Crop above), so just
+                    // feed it straight to Tesseract.
+                    tess.SetImage(img);
+                    tess.Recognize();
+                    string raw = (tess.GetUTF8Text() ?? "").Trim();
+                    Match m = Regex.Match(raw, @"\d{1,4}");
+                    if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
+                        return n;
                     }
+                    TryWriteDebugLog("OCR.G tesseract no digits: raw='" + raw + "'");
                 }
             }
             catch (Exception ex) {
