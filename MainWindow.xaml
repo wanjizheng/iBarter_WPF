@@ -111,6 +111,12 @@
                                     <Image Source="Images\storage.png" />
                                 </MenuItem.Icon>
                             </MenuItem>
+                            <MenuItem x:Name="MenuItem_OCRTrainingData" Header="OCR Training Data"
+                                  Tag="OCRTrainingData" Click="MenuItem_OCRTrainingData_Click" Height="30" Width="180">
+                                <MenuItem.Icon>
+                                    <Image Source="Images\scan.png" />
+                                </MenuItem.Icon>
+                            </MenuItem>
                         </MenuItem>
                     </Menu>
                 </StackPanel>

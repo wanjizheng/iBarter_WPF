@@ -25,6 +25,7 @@ namespace iBarter {
         public static SplashScreen mySplashScreen = null!;
         public static BarterScanner myBarterScanner = null!;
         public static StorageManagement myStorageManagement = null!;
+        public static TrainingDataWindow myTrainingDataWindow = null!;
         public static List<Islands> listIslands = null!;
         public static List<Items> listItems = null!;
         public static List<Items> listStorage = null;
