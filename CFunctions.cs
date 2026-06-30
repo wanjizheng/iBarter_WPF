@@ -7,7 +7,7 @@ using ImageMagick;
 using OpenCvSharp;
 using Sdcb.PaddleInference;
 using Sdcb.PaddleOCR;
-using Sdcb.PaddleOCR.Models.Local;
+using Sdcb.PaddleOCR.Models;
 using PureDM;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -1022,97 +1022,57 @@ namespace iBarter {
         // machine can be sidestepped without recompiling.
         private static bool _paddleEnabled = true;
 
-        // PaddleOCR model URL templates - English PP-OCRv3 mobile (smallest
-        // viable model, ~10 MB total). ChinesePP-OCRv3 is also fine for
-        // English numbers since the digit glyphs are universal. Downloaded
-        // once and cached under %APPDATA%\sdcb\3.0\paddle-models\.
-        private const string PaddleDetUrl =
-            "https://paddleocr.bj.bcebos.com/PP-OCRv3/english/en_PP-OCRv3_det_infer.tar";
-        private const string PaddleRecUrl =
-            "https://paddleocr.bj.bcebos.com/PP-OCRv3/english/en_PP-OCRv3_rec_infer.tar";
+        // PaddleOCR model locations - English PP-OCRv5 detection +
+        // recognition + Chinese v2 cls (180-degree rotation), kept on disk
+        // under tessdata\paddle-models\ so the build target syncs them to
+        // bin\ automatically. Same layout works in dev (run-from-source)
+        // and after publish (bin\tessdata\paddle-models\...).
+        private static string PaddleModelsRoot {
+            get {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                return System.IO.Path.Combine(baseDir, "tessdata", "paddle-models");
+            }
+        }
 
-        // Returns the PaddleOcrAll model root, downloading tarballs on first
-        // use. Returns null on any failure (network, no tar in PATH, bad
-        // model dir, etc.) - the merge vote then ignores the PaddleOCR
-        // slot and falls through to Tesseract.
+        // Returns the PaddleOcrAll model root, lazy-initialised from the
+        // on-disk inference files. Returns null on any failure (missing
+        // model, bad yml, native-dll load error, etc.) - the merge vote
+        // then ignores the PaddleOCR slot and falls through to Tesseract.
+        //
+        // Sdcb 3.x path-ctor trio:
+        //   - PaddleOcrDetector(string modelDir)
+        //   - PaddleOcrClassifier(string modelDir)
+        //   - RecognizationModel.FromDirectoryV5(string modelDir) +
+        //     PaddleOcrRecognizer(RecognizationModel)
+        // combined via PaddleOcrAll(det, cls, rec) - no FullOcrModel glue,
+        // no NuGet-embedded resources, no network, no extra native hunt.
         private static PaddleOcrAll GetPaddleOcr() {
             if (!_paddleEnabled) return null;
             if (_paddle != null) return _paddle;
             lock (_paddleLock) {
                 if (_paddle != null) return _paddle;
                 try {
-                    // 3.3.1 path: LocalFullModels.EnglishV5 is a static
-                    // FullOcrModel property pointing at the bundled
-                    // English PP-OCRv5 model weights inside the NuGet
-                    // package (Sdcb.PaddleOCR.Models.Local). No download,
-                    // no AppData path, no PaddlePaddle native-dll hunt.
-                    _paddle = new PaddleOcrAll(LocalFullModels.EnglishV5, PaddleDevice.Mkldnn());
+                    string root = PaddleModelsRoot;
+                    string detDir = System.IO.Path.Combine(root, "PP-OCRv5_mobile_det_infer");
+                    string recDir = System.IO.Path.Combine(root, "en_PP-OCRv5_mobile_rec_infer");
+                    string clsDir = System.IO.Path.Combine(root, "ch_ppocr_mobile_v2.0_cls_infer");
+                    if (!System.IO.Directory.Exists(detDir) ||
+                        !System.IO.Directory.Exists(recDir) ||
+                        !System.IO.Directory.Exists(clsDir)) {
+                        TryWriteDebugLog("OCR Paddle: model dir missing at " + root);
+                        return null;
+                    }
+                    var detector = new PaddleOcrDetector(detDir);
+                    var classifier = new PaddleOcrClassifier(clsDir);
+                    var recModel = RecognizationModel.FromDirectoryV5(recDir);
+                    var recognizer = new PaddleOcrRecognizer(recModel);
+                    _paddle = new PaddleOcrAll(detector, classifier, recognizer);
                     return _paddle;
                 }
                 catch (Exception ex) {
                     TryWriteDebugLog("OCR Paddle init fail: " + ex.GetType().Name + " " + ex.Message);
                     return null;
                 }
-            }
-        }
-
-        // Download + extract PP-OCRv3 English model tarballs into
-        // %APPDATA%\sdcb\3.0\paddle-models\. Idempotent - skips the network
-        // step on subsequent runs. (Legacy path - 3.3.1 doesn't need this
-        // since LocalFullModels.EnglishV3 bundles the model directly. Kept
-        // here in case we want to fall back to a custom-det/rec pair in
-        // the future. Not called by GetPaddleOcr() anymore.)
-        private static string EnsurePaddleModels() {
-            string appData = System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
-            string modelRoot = System.IO.Path.Combine(appData, "sdcb", "3.0", "paddle-models");
-            try { System.IO.Directory.CreateDirectory(modelRoot); } catch { }
-            string detDir = System.IO.Path.Combine(modelRoot, "en_PP-OCRv3_det_infer");
-            string recDir = System.IO.Path.Combine(modelRoot, "en_PP-OCRv3_rec_infer");
-            if (System.IO.File.Exists(System.IO.Path.Combine(detDir, "inference.pdmodel")) &&
-                System.IO.File.Exists(System.IO.Path.Combine(recDir, "inference.pdmodel"))) {
-                return modelRoot;
-            }
-            TryWriteDebugLog("OCR Paddle: downloading models to " + modelRoot);
-            try {
-                DownloadAndExtractTar(PaddleDetUrl, modelRoot);
-                DownloadAndExtractTar(PaddleRecUrl, modelRoot);
-            }
-            catch (Exception ex) {
-                TryWriteDebugLog("OCR Paddle: model download/extract failed - " + ex.GetType().Name + " " + ex.Message);
-                return null;
-            }
-            // Re-verify after download
-            if (System.IO.File.Exists(System.IO.Path.Combine(detDir, "inference.pdmodel")) &&
-                System.IO.File.Exists(System.IO.Path.Combine(recDir, "inference.pdmodel"))) {
-                return modelRoot;
-            }
-            return null;
-        }
-
-        // Stream-download a tarball and use Windows' bundled tar to extract.
-        // 'tar' is shipped with Windows 10 1803+ and the user is on Win11.
-        private static void DownloadAndExtractTar(string url, string outDir) {
-            string tarFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "paddle_model_" + System.Guid.NewGuid().ToString("N") + ".tar");
-            try {
-                using (var client = new System.Net.WebClient()) {
-                    client.DownloadFile(url, tarFile);
-                }
-                var psi = new System.Diagnostics.ProcessStartInfo {
-                    FileName = "tar",
-                    Arguments = "-xf \"" + tarFile + "\" -C \"" + outDir + "\"",
-                    UseShellExecute = false,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true,
-                };
-                using (var p = System.Diagnostics.Process.Start(psi)) {
-                    p.WaitForExit();
-                    if (p.ExitCode != 0) {
-                        throw new System.InvalidOperationException("tar exit " + p.ExitCode + ": " + p.StandardError.ReadToEnd());
-                    }
-                }
-            }
-            finally {
-                try { if (System.IO.File.Exists(tarFile)) System.IO.File.Delete(tarFile); } catch { }
             }
         }
 
