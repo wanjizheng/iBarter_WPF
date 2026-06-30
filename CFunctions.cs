@@ -1114,7 +1114,7 @@ namespace iBarter {
                     return EnumLists.Island.Almai;
                 case string s when s.Contains("Al-Naha") || s.Contains("AI-Naha") || s.Contains("Al_Naha"):
                     return EnumLists.Island.Al_Naha;
-                case string s when s.Contains("Ancient") || s.Contains("Shipwrecked Ancie"):
+                case string s when s.Contains("Ancient") || s.Contains("Shipwrecked") && s.Contains("Anci"):
                     return EnumLists.Island.Ancient;
                 case string s when s.Contains("Angie"):
                     return EnumLists.Island.Angie;
