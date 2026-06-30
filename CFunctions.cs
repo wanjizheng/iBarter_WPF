@@ -958,7 +958,10 @@ namespace iBarter {
                                 // runs ColorSpace.Gray above, but Bitmap
                                 // may decode as 32-bit BGRA and ToMat may
                                 // surface it as colour.
-                                Emgu.CV.CvInvoke.CvtColor(src, gray, Emgu.CV.CvEnum.ColorConversion.Bgr2Gray);
+                                Emgu.CV.CvEnum.ColorConversion conv = src.NumberOfChannels == 4
+                                    ? Emgu.CV.CvEnum.ColorConversion.Bgra2Gray
+                                    : Emgu.CV.CvEnum.ColorConversion.Bgr2Gray;
+                                Emgu.CV.CvInvoke.CvtColor(src, gray, conv);
                                 tess.SetImage(gray);
                             }
                             tess.Recognize();
@@ -1035,13 +1038,19 @@ namespace iBarter {
                             TryWriteDebugLog("OCR.R mat empty");
                             return -1;
                         }
-                        // Convert BGR -> Gray before Tesseract. The previous
+                        // Convert to Gray before Tesseract. The previous
                         // CvInvoke.Imread(..., ImreadModes.Grayscale) path
                         // did this implicitly; the new Bitmap -> Mat path
-                        // returns color, which Tesseract reads differently
+                        // returns colour, which Tesseract reads differently
                         // (and worse - 800031 used to give 3, now gives
                         // 173; 9057 used to give -1, now gives 1100).
-                        Emgu.CV.CvInvoke.CvtColor(src, gray, Emgu.CV.CvEnum.ColorConversion.Bgr2Gray);
+                        // PureDM.GetScreenDataBmp returns 32-bit BGRA BMPs,
+                        // so ToMat can yield 4-channel BGRA. Branch on
+                        // channel count to use the right CvtColor code.
+                        Emgu.CV.CvEnum.ColorConversion conv = src.NumberOfChannels == 4
+                            ? Emgu.CV.CvEnum.ColorConversion.Bgra2Gray
+                            : Emgu.CV.CvEnum.ColorConversion.Bgr2Gray;
+                        Emgu.CV.CvInvoke.CvtColor(src, gray, conv);
                         tess.SetImage(gray);
                     }
                     tess.Recognize();
