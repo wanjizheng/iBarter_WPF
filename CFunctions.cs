@@ -694,35 +694,30 @@ namespace iBarter {
         // }
 
         // Reads the quantity overlay ("50") at the icon's bottom-right corner.
-        // Strategy:
-        //   Phase A — try multiple candidate ROIs that include both inside-icon
-        //             bottom-right and a sliver extending past the icon's right
-        //             and bottom edges (the overlay can sit outside the icon
-        //             depending on UI mods / DPI).
-        //   Phase B — once captured, dump the bitmap to the base directory and
-        //             write a MagickImage-upscaled (3x) copy beside it for
-        //             offline / future bit-input OCR integration. (PureDM's CV
-        //             OCRString only reads screen coords, so we can't feed the
-        //             upscaled bitmap back in directly — but the file is a
-        //             useful artifact for debugging + future engines.)
-        //   Phase C — digit-only regex + sane-range gate; pick the most-voted
-        //             parsed int; ties broken by preferring the larger value
-        //             (more-specific match). Returns -1 if no consensus.
-        //   Phase D — saves a diagnostic BMP of the second candidate ROI to
-        //             BaseDirectory\ocr_<itemID>.bmp and logs the vote / raw
-        //             strings so the user can tweak ROI offsets empirically.
+        // All candidates are INSIDE the icon's bounding rectangle (no out-of-icon
+        // extension). The number is rendered as large white digits layered on
+        // top of the icon's BR area; we just need to pick the right crop.
+        //  Phase A — 4 ROI candidates, all bottom-of-icon, varying horizontal
+        //            start (handles 1-, 2-, 3-, 4-digit numbers like "5", "50",
+        //            "100", "1000").
+        //  Phase B — captured BMP is upscaled via MagickImage for the operator;
+        //            PureDM.OCRString reads screen coords so the upscaled
+        //            bitmap cannot be fed back to OCR.
+        //  Phase C — multi-ROI digit vote + sane-range gate.
+        //  Phase D — diagnostic dump of the second candidate as
+        //            ocr_<id>.bmp; rollback of the prior _full.bmp helper.
         private int TryReadQuantity(PointPlus icon, string strID) {
             int oX = (int)icon.X;
             int oY = (int)icon.Y;
             int oW = (int)icon.Size.Width;
             int oH = (int)icon.Size.Height;
 
-            // (leftFrac, topFrac, rightEdgeFrac, bottomEdgeFrac, rightExtend, bottomExtend)
-            var candidates = new (double lf, double tf, double rf, double bf, int rext, int bext)[] {
-                (0.65, 0.78, 1.00, 1.00, 40, 15),  // primary: BR corner + 40/15 px
-                (0.55, 0.72, 1.00, 1.00, 50, 18),  // a bit wider / lower for tiny icons
-                (0.50, 0.80, 1.00, 1.00, 60, 20),  // widest for low-DPI cases
-                (0.70, 0.75, 1.00, 1.00, 45, 12),  // tight BR only
+            // (leftFrac, topFrac, rightFrac, bottomFrac) - all relative inside icon.
+            var candidates = new (double lf, double tf, double rf, double bf)[] {
+                (0.00, 0.60, 1.00, 1.00),  // original behavior: bottom 40%, full width
+                (0.55, 0.65, 1.00, 1.00),  // BR half, deeper crop
+                (0.30, 0.70, 1.00, 1.00),  // 4-digit numbers ("1000") need wider X
+                (0.00, 0.78, 1.00, 1.00),  // very bottom strip only
             };
 
             var votes = new System.Collections.Generic.Dictionary<int, int>();
@@ -731,8 +726,8 @@ namespace iBarter {
             foreach (var c in candidates) {
                 int x1 = (int)(oX + oW * c.lf);
                 int y1 = (int)(oY + oH * c.tf);
-                int x2 = (int)(oX + oW * c.rf) + c.rext;
-                int y2 = (int)(oY + oH * c.bf) + c.bext;
+                int x2 = (int)(oX + oW * c.rf);
+                int y2 = (int)(oY + oH * c.bf);
                 try {
                     string raw = App.myPureDM.CV.OCRString(x1, y1, x2, y2,
                         CV.OCRType.Number, CV.OCRMode.Diff, false, strID) ?? "";
@@ -743,10 +738,10 @@ namespace iBarter {
                         if (bestRaw == null || raw.Length > bestRaw.Length) bestRaw = raw;
                     }
                 }
-                catch { /* one ROI miss shouldn't take the whole call down */ }
+                catch { /* single ROI miss should not kill the call */ }
             }
 
-            // Vote: pick the most-agreed value; ties => pick larger value.
+            // Vote: most-agreed wins, ties favor larger value.
             int picked = -1, topCount = 0;
             foreach (var kvp in votes) {
                 if (kvp.Value > topCount || (kvp.Value == topCount && kvp.Key > picked)) {
@@ -755,41 +750,27 @@ namespace iBarter {
                 }
             }
 
-            // Phase D: dump the second candidate ROI bitmap for offline inspection.
+            // Phase D: dump the second candidate ROI bitmap for the operator.
             try {
                 var c = candidates[1];
                 int x1 = (int)(oX + oW * c.lf);
                 int y1 = (int)(oY + oH * c.tf);
-                int x2 = (int)(oX + oW * c.rf) + c.rext;
-                int y2 = (int)(oY + oH * c.bf) + c.bext;
+                int x2 = (int)(oX + oW * c.rf);
+                int y2 = (int)(oY + oH * c.bf);
                 App.myPureDM.DM.Capture(x1, y1, x2, y2, "ocr_" + strID + ".bmp");
             }
             catch { }
 
-            // Phase D+: also dump the FULL icon rectangle plus a small outer
-            // padding so the user can see where the count overlay actually
-            // sits relative to our candidate ROIs. Saved as
-            // "ocr_<id>_full.bmp"; render it side-by-side with ocr_<id>.bmp
-            // in any image viewer to diagnose a miscrop.
-            try {
-                int fx1 = oX - 12;
-                int fy1 = oY - 12;
-                int fx2 = oX + oW + 60;
-                int fy2 = oY + oH + 30;
-                App.myPureDM.DM.Capture(fx1, fy1, fx2, fy2, "ocr_" + strID + "_full.bmp");
-            }
-            catch { }
-
-            // Phase B: best-effort upscaled debug artifact via MagickImage. We can
-            // not feed it back into PureDM's screen-based OCR; the file is purely
-            // a visual aid for the operator + future bitmap-accepting OCR engines.
+            // Phase B (best-effort): try to upscale via MagickImage. Failure is silent.
             try {
                 string srcBmp = AppDomain.CurrentDomain.BaseDirectory + "ocr_" + strID + ".bmp";
                 string dstBmp = AppDomain.CurrentDomain.BaseDirectory + "ocr_" + strID + "_scaled.bmp";
-                using (var mi = new MagickImage(srcBmp)) {
-                    mi.Scale(new Percentage(300));   // 3x upscale
-                    mi.Threshold(new Percentage(70)); // binarize so small digits pop
-                    mi.Write(dstBmp);
+                if (System.IO.File.Exists(srcBmp)) {
+                    using (var mi = new MagickImage(srcBmp)) {
+                        mi.Scale(new Percentage(300));
+                        mi.Threshold(new Percentage(70));
+                        mi.Write(dstBmp);
+                    }
                 }
             }
             catch { }
