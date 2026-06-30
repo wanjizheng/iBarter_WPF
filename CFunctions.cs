@@ -945,9 +945,22 @@ namespace iBarter {
                     using (var ms = new System.IO.MemoryStream()) {
                         mi.Write(ms, MagickFormat.Bmp);
                         ms.Position = 0;
-                        using (var bitmap = new System.Drawing.Bitmap(ms))
-                        using (var mat = bitmap.ToMat()) {
-                            tess.SetImage(mat);
+                        using (var bitmap = new System.Drawing.Bitmap(ms)) {
+                            using (var src = bitmap.ToMat())
+                            using (var gray = new Emgu.CV.Mat()) {
+                                if (src == null || src.IsEmpty) {
+                                    TryWriteDebugLog("OCR.G mat empty");
+                                    return -1;
+                                }
+                                // BGR -> Gray (matching the previous
+                                // CvInvoke.Imread(ImreadModes.Grayscale)
+                                // behaviour). The Magick pipeline already
+                                // runs ColorSpace.Gray above, but Bitmap
+                                // may decode as 32-bit BGRA and ToMat may
+                                // surface it as colour.
+                                Emgu.CV.CvInvoke.CvtColor(src, gray, Emgu.CV.CvEnum.ColorConversion.Bgr2Gray);
+                                tess.SetImage(gray);
+                            }
                             tess.Recognize();
                             string raw = (tess.GetUTF8Text() ?? "").Trim();
                             Match m = Regex.Match(raw, @"\d{1,4}");
@@ -1015,13 +1028,22 @@ namespace iBarter {
                     return -1;
                 }
                 using (var ms = new System.IO.MemoryStream(bmpBytes))
-                using (var bitmap = new System.Drawing.Bitmap(ms))
-                using (var mat = bitmap.ToMat()) {
-                    if (mat == null || mat.IsEmpty) {
-                        TryWriteDebugLog("OCR.R mat empty");
-                        return -1;
+                using (var bitmap = new System.Drawing.Bitmap(ms)) {
+                    using (var src = bitmap.ToMat())
+                    using (var gray = new Emgu.CV.Mat()) {
+                        if (src == null || src.IsEmpty) {
+                            TryWriteDebugLog("OCR.R mat empty");
+                            return -1;
+                        }
+                        // Convert BGR -> Gray before Tesseract. The previous
+                        // CvInvoke.Imread(..., ImreadModes.Grayscale) path
+                        // did this implicitly; the new Bitmap -> Mat path
+                        // returns color, which Tesseract reads differently
+                        // (and worse - 800031 used to give 3, now gives
+                        // 173; 9057 used to give -1, now gives 1100).
+                        Emgu.CV.CvInvoke.CvtColor(src, gray, Emgu.CV.CvEnum.ColorConversion.Bgr2Gray);
+                        tess.SetImage(gray);
                     }
-                    tess.SetImage(mat);
                     tess.Recognize();
                     string raw = (tess.GetUTF8Text() ?? "").Trim();
                     Match m = Regex.Match(raw, @"\d{1,4}");
