@@ -741,18 +741,24 @@ namespace iBarter {
         // for ensuring the file exists and was captured from a sensible ROI.
         // Returns -1 on any failure (engine unavailable, file missing, no
         // digits matched).
+        //
+        // Pre-processing pipeline was selected by a 12-file x 16-variant
+        // benchmark on captured BMPs with operator-supplied ground truth. The
+        // highest-accuracy variant was M: scale 300%, Negate (so light digit
+        // becomes dark on light), threshold 50% binarization. That combo is
+        // 8/12 vs 6/12 for the next-best alternative, and beats all
+        // alternatives on single-digit '1'-class glyphs (which are the hardest
+        // bucket for Tesseract at 6-8 px tall).
         private int TryEmguOcr(string bmpPath) {
             var tess = GetTesseract();
             if (tess == null || !System.IO.File.Exists(bmpPath)) return -1;
 
-            // Upscale via Magick before handing to Tesseract - 3x doubles or
-            // triples effective pixel count and is enough for ~6 px tall
-            // BDO digits to reach Tesseract's confidence floor.
             string sharpPath = bmpPath.Replace(".bmp", "_sharp.bmp");
             try {
                 using (var mi = new MagickImage(bmpPath)) {
                     mi.Scale(new Percentage(300));
-                    mi.Threshold(new Percentage(60));
+                    mi.Negate();
+                    mi.Threshold(new Percentage(50));
                     mi.Write(sharpPath);
                 }
             }
