@@ -1140,6 +1140,8 @@ namespace iBarter {
                     return EnumLists.Island.Cholace;
                 case string s when s.Contains("Cox Pirate") || s.Contains("Cox_Pirate") || s.Contains("Cox"):
                     return EnumLists.Island.Cox_Pirate;
+                case string s when s.Contains("Crows Nest") || s.Contains("Crow's Nest") || s.Contains("Nest"):
+                    return EnumLists.Island.Crows_Nest;
                 case string s when s.Contains("Crow"):
                     return EnumLists.Island.Crow;
                 case string s when s.Contains("Daton"):
