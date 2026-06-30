@@ -724,17 +724,19 @@ namespace iBarter {
             lock (_tessLock) {
                 if (_tess != null) return _tess;
                 try {
-                    // Tesseract 4 + LSTM mode: if the dataPath argument ends in
-                    // .traineddata it's used as the data file directly. The
-                    // project ships eng_best.traineddata (LSTM-only model,
-                    // 187 MB) - we pass the file path so Tesseract doesn't
-                    // try to find a non-existent eng.traineddata next to it.
-                    string tessDataFile = AppDomain.CurrentDomain.BaseDirectory + @"tessdata\eng_best.traineddata";
-                    if (!System.IO.File.Exists(tessDataFile)) {
-                        TryWriteDebugLog("[OCR] traineddata MISSING: " + tessDataFile);
+                    // Tesseract 4 ctor: TessBaseAPI.Init(dataPath, language, oem).
+                    // dataPath must be a *directory*; Tesseract appends
+                    // "<language>.traineddata" to find the model file. The
+                    // iBarter.csproj <Content> block already copies
+                    // eng.traineddata to the build output, so we just point
+                    // at the directory.
+                    string tessDataDir = AppDomain.CurrentDomain.BaseDirectory + @"tessdata\";
+                    if (!System.IO.Directory.Exists(tessDataDir) ||
+                        !System.IO.File.Exists(tessDataDir + "eng.traineddata")) {
+                        TryWriteDebugLog("[OCR] tessdata MISSING: " + tessDataDir);
                         return null;
                     }
-                    _tess = new Tesseract(tessDataFile, "eng", OcrEngineMode.Default);
+                    _tess = new Tesseract(tessDataDir, "eng", OcrEngineMode.Default);
                     _tess.SetVariable("tessedit_char_whitelist", "0123456789");
                     _tess.SetVariable("psm", "10"); // 10 = single character; better for tiny digits
                     return _tess;

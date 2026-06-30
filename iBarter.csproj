@@ -91,6 +91,9 @@
     <Content Include="Resources\Storage.csv">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="tessdata\eng.traineddata">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="tessdata\eng_best.traineddata">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
