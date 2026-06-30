@@ -290,24 +290,77 @@ namespace iBarter.View {
                 return;
             }
 
-            var myBarter = App.myPVM.BarterCollection.FirstOrDefault(b =>
+            // Pick the next barter at the LV=_lv tier. Old code used FirstOrDefault and
+            // its arbitrary order split chains at branching points: e.g. when 'Headless
+            // Dragon Figurine' could be traded at Halmad (-> Crow Coin, dead-end) or Ajir
+            // (-> Faded Gold Dragon Figurine -> Midnight), the first one in collection
+            // order won, even if a much longer downstream chain existed from the other.
+            // Now we enumerate all candidates, score each by max downstream chain length,
+            // and pick the longest. Crow Coin terminals are tie-broken against non-Crow-Coin.
+            var candidates = App.myPVM.BarterCollection.Where(b =>
                 !b.Grouped &&
                 b.Item1.ItemLV == _lv.ToString() &&
                 b.Item1Name == _barter.Item2Name &&
                 (int.Parse(b.Item2.ItemLV) > int.Parse(b.Item1.ItemLV) ||
-                 (b.Item2Name == "Crow Coin" && b.Item1Name == _barter.Item2Name)));
+                 (b.Item2Name == "Crow Coin" && b.Item1Name == _barter.Item2Name)))
+                .ToList();
 
-            if (myBarter != null) {
-                myBarter.BarterGroup = _group;
-                myBarter.Grouped = true;
-
-                if (int.TryParse(myBarter.Item1.ItemLV, out int nextLv) && nextLv < MAX_BARTER_LV) {
-                    FindBarterGroup(myBarter, _lv + 1, _group);
+            Barter myBarter;
+            if (candidates.Count == 0) {
+                return;
+            }
+            else if (candidates.Count == 1) {
+                myBarter = candidates[0];
+            }
+            else {
+                myBarter = candidates[0];
+                int bestScore = ScoreDownstream(candidates[0], _lv + 1);
+                int bestTb = candidates[0].Item2Name == "Crow Coin" ? 0 : 1;
+                for (int i = 1; i < candidates.Count; i++) {
+                    var c = candidates[i];
+                    int s = ScoreDownstream(c, _lv + 1);
+                    int tb = c.Item2Name == "Crow Coin" ? 0 : 1;
+                    if (s > bestScore || (s == bestScore && tb > bestTb)) {
+                        myBarter = c;
+                        bestScore = s;
+                        bestTb = tb;
+                    }
                 }
             }
-            // else {
-            //     App.myCFun.Log("Error: can't identify the _barter _group =>" + _barter.IsLandName, Brushes.Red);
-            // }
+
+            myBarter.BarterGroup = _group;
+            myBarter.Grouped = true;
+
+            if (int.TryParse(myBarter.Item1.ItemLV, out int nextLv) && nextLv < MAX_BARTER_LV) {
+                FindBarterGroup(myBarter, _lv + 1, _group);
+            }
+        }
+
+        // Pure-function downstream chain scorer: returns the maximum number of
+        // barters reachable from `start` going forward (inclusive). Does NOT mutate
+        // any Barter.Grouped state; safe to call repeatedly for alternative-branch
+        // evaluation in FindBarterGroup. Each branch respects !b.Grouped to avoid
+        // double-counting barters already committed to another chain.
+        private int ScoreDownstream(Barter start, int lv) {
+            if (lv > MAX_BARTER_LV) return 1;
+            int depth = 1;
+            var candidates = App.myPVM.BarterCollection.Where(b =>
+                !b.Grouped &&
+                b.Item1.ItemLV == lv.ToString() &&
+                b.Item1Name == start.Item2Name &&
+                (int.Parse(b.Item2.ItemLV) > int.Parse(b.Item1.ItemLV) ||
+                 (b.Item2Name == "Crow Coin" && b.Item1Name == start.Item2Name)))
+                .ToList();
+
+            if (candidates.Count == 0) return depth;
+
+            int maxSub = 0;
+            foreach (var c in candidates) {
+                int s = ScoreDownstream(c, lv + 1);
+                if (s > maxSub) maxSub = s;
+            }
+
+            return depth + maxSub;
         }
 
         private void ButtonAdv_Load_Click(object sender, RoutedEventArgs e) {

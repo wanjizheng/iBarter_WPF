@@ -155,6 +155,11 @@
         <!-- <Grid x:Name="Grid_Lerao" Margin="634,110,156,330" Width="10" Height="10"> -->
         <!--     <Rectangle Fill="Blue" /> -->
         <!-- </Grid> -->
+        <!-- -->
+        <!-- <Grid x:Name="Grid_Lerao1" Margin="629,55,161,385" Width="10" Height="10"> -->
+        <!--     <Rectangle Fill="Blue" /> -->
+        <!-- </Grid> -->
+
         <!-- <Grid x:Name="Grid_Lisz" Margin="306,288,484,152" Width="10" Height="10"> -->
         <!--     <Rectangle Fill="Blue" /> -->
         <!-- </Grid> -->
