@@ -1032,6 +1032,18 @@ namespace iBarter {
             }
             catch { }
 
+            // Phase D-bis: capture the FULL ICON rectangle for Phase G. The
+            // strip used by Phase A/F is fine for direct OCR but it stretches
+            // the template when we subtract, filling the diff with anti-
+            // aliasing noise. With full-icon capture the template lines up
+            // pixel-for-pixel and the diff cleanly isolates the digit overlay.
+            try {
+                App.myPureDM.DM.Capture((int)oX, (int)oY,
+                    (int)oX + (int)oW, (int)oY + (int)oH,
+                    "ocrf_" + strID + ".bmp");
+            }
+            catch { }
+
             // Phase F + G: even when screen-coords voting is uncertain, run
             // both Emgu paths on the captured BMP. Phase G subtracts the icon
             // template to cancel the icon-body noise, isolating the digit.
@@ -1039,7 +1051,8 @@ namespace iBarter {
             // the explicit Resources prefix when reading back via File.Exists.
             string bmpPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocr_" + strID + ".bmp";
             int emguPick = TryEmguOcr(bmpPath);
-            int diffPick = TryTemplateDiffOcr(bmpPath, strID);
+            string fullIconPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocrf_" + strID + ".bmp";
+            int diffPick = TryTemplateDiffOcr(fullIconPath, strID);
 
             // 3-way merge vote: each phase contributes one vote (Phase A's
             // screen-coords count is weighted by its topCount, but we collapse
