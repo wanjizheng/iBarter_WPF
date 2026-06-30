@@ -965,7 +965,9 @@ namespace iBarter {
             // Phase F + G: even when screen-coords voting is uncertain, run
             // both Emgu paths on the captured BMP. Phase G subtracts the icon
             // template to cancel the icon-body noise, isolating the digit.
-            string bmpPath = AppDomain.CurrentDomain.BaseDirectory + "ocr_" + strID + ".bmp";
+            // NOTE: DM.Capture writes to <base>/Resources/ but our code needs
+            // the explicit Resources prefix when reading back via File.Exists.
+            string bmpPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocr_" + strID + ".bmp";
             int emguPick = TryEmguOcr(bmpPath);
             int diffPick = TryTemplateDiffOcr(bmpPath, strID);
 
