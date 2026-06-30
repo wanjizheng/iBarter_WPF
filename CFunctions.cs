@@ -895,12 +895,19 @@ namespace iBarter {
             // hard threshold to keep only the digit pixels.
             //
             // 1. MagickColorSpace.Gray
-            // 2. Threshold(85%) - only the brightest 15% of pixels survive
+            // 2. Threshold(78%) - only the brightest 22% of pixels survive
             //    (BDO's digit overlay renders as near-pure white ~245; icon
             //    body AA highlights are usually <200)
             // 3. Scale(500%) - 5x upscaling gives a sub-pixel '1' enough
             //    px to be Tesseract-readable (a 1-2 px stroke becomes 5-10 px)
             // 4. Negate - dark text on light background (Tesseract-friendly)
+            // 5. Morphology Close - 3x3 Square kernel closes 1-px gaps left
+            //    by the upscale so '5'/'9'/'0' stay closed contours.
+            //
+            // (Template subtraction was tried here but reverted - BDO's
+            // Resources\Images\Items\<id>.bmp is the same source art the
+            // game renders, so AbsDiff with the live capture yields ~zero
+            // and kills the digit overlay along with the icon body.)
             //
             // Returns -1 on any failure (engine unavailable, file missing, no
             // digits matched).
@@ -911,6 +918,16 @@ namespace iBarter {
                     mi.Threshold(new Percentage(78));
                     mi.Scale(new Percentage(500));
                     mi.Negate();
+                    // Close 1-px gaps in digit strokes after the 5x upscale
+                    // (Tesseract sees '5' / '9' / '0' as broken contours and
+                    // mis-reads them - '5139' can collapse to '130' etc.).
+                    // Square 3x3 kernel fixes axis-aligned breaks in '5' / '0'.
+                    var morph = new MorphologySettings {
+                        Method = MorphologyMethod.Close,
+                        Kernel = Kernel.Square,
+                        Iterations = 1,
+                    };
+                    mi.Morphology(morph);
                     mi.Write(sharpPath);
                 }
             }
@@ -995,6 +1012,45 @@ namespace iBarter {
             }
             catch (Exception ex) {
                 TryWriteDebugLog("OCR.F tesseract failed: " + ex.GetType().Name + " " + ex.Message);
+            }
+            return -1;
+        }
+
+        // Phase R: feed the raw captured bitmap to Tesseract with NO
+        // preprocessing. Experimental - checks whether the Magick scale /
+        // negate / threshold pipeline in Phase F + G is actually helping,
+        // or whether the digit overlay is already crisp enough on the
+        // medium-ROI capture to read directly. Compared in the merge vote
+        // alongside Phase A (screen-coords), F (M-variant preprocessing)
+        // and G (78% threshold + 5x upscale + morphology close).
+        private int TryRawOcr(string bmpPath) {
+            var tess = GetTesseract();
+            if (tess == null) {
+                TryWriteDebugLog("OCR.R tess=null");
+                return -1;
+            }
+            if (!System.IO.File.Exists(bmpPath)) {
+                TryWriteDebugLog("OCR.R file missing: " + bmpPath);
+                return -1;
+            }
+            try {
+                using (var img = CvInvoke.Imread(bmpPath, Emgu.CV.CvEnum.ImreadModes.Grayscale)) {
+                    if (img == null || img.IsEmpty) {
+                        TryWriteDebugLog("OCR.R imread empty: " + bmpPath);
+                        return -1;
+                    }
+                    tess.SetImage(img);
+                    tess.Recognize();
+                    string raw = (tess.GetUTF8Text() ?? "").Trim();
+                    Match m = Regex.Match(raw, @"\d{1,4}");
+                    if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
+                        return n;
+                    }
+                    TryWriteDebugLog("OCR.R tesseract no digits: raw='" + raw + "'");
+                }
+            }
+            catch (Exception ex) {
+                TryWriteDebugLog("OCR.R tesseract fail: " + ex.GetType().Name + " " + ex.Message);
             }
             return -1;
         }
@@ -1087,23 +1143,27 @@ namespace iBarter {
             }
             catch { }
 
-            // Phase F + G: even when screen-coords voting is uncertain, run
-            // both Emgu paths on the captured BMP. Phase G subtracts the icon
+            // Phase F + G + R: even when screen-coords voting is uncertain, run
+            // all three Tesseract paths. Phase G subtracts the icon
             // template to cancel the icon-body noise, isolating the digit.
+            // Phase R skips all preprocessing - checks whether the raw
+            // capture alone is crisp enough for Tesseract.
             // NOTE: DM.Capture writes to <base>/Resources/ but our code needs
             // the explicit Resources prefix when reading back via File.Exists.
             string bmpPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocr_" + strID + ".bmp";
             int emguPick = TryEmguOcr(bmpPath);
+            int rawPick = TryRawOcr(bmpPath);
             string fullIconPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocrf_" + strID + ".bmp";
             int diffPick = TryTemplateDiffOcr(fullIconPath, strID);
 
-            // 3-way merge vote (Phase H PaddleOCR removed): each phase
+            // 4-way merge vote (Phase H PaddleOCR removed): each phase
             // contributes one vote (Phase A's screen-coords count is
             // weighted by its topCount, but we collapse it to 1 vote per
-            // parsed value for parity with F/G).
+            // parsed value for parity with F/G/R).
             var merged = new System.Collections.Generic.Dictionary<int, int>();
             if (picked > 0) merged[picked] = merged.GetValueOrDefault(picked, 0) + System.Math.Max(1, topCount);
             if (emguPick > 0) merged[emguPick] = merged.GetValueOrDefault(emguPick, 0) + 1;
+            if (rawPick > 0) merged[rawPick] = merged.GetValueOrDefault(rawPick, 0) + 1;
             if (diffPick > 0) merged[diffPick] = merged.GetValueOrDefault(diffPick, 0) + 1;
 
             // Tie-break: when 2+ candidates tie on vote count, prefer the one
@@ -1125,10 +1185,10 @@ namespace iBarter {
 
             if (finalPick > 0) {
                 string tally = string.Join(",", merged.Select(kv => kv.Key + "x" + kv.Value));
-                Log($"OCR qty {strID}: picked {finalPick} (votes={tally}; A={picked} F={emguPick} G={diffPick})", Brushes.Gray);
+                Log($"OCR qty {strID}: picked {finalPick} (votes={tally}; A={picked} F={emguPick} R={rawPick} G={diffPick})", Brushes.Gray);
             }
             else {
-                Log($"OCR qty {strID}: no consensus; raw={(bestRaw ?? "")} F={emguPick} G={diffPick}", Brushes.OrangeRed);
+                Log($"OCR qty {strID}: no consensus; raw={(bestRaw ?? "")} F={emguPick} R={rawPick} G={diffPick}", Brushes.OrangeRed);
             }
 
             return finalPick;
