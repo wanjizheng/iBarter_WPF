@@ -78,16 +78,6 @@ namespace iBarter {
             App.myBarterScanner.Show();
         }
 
-        private void MenuItem_OCRTrainingData_Click(object sender, RoutedEventArgs e) {
-            if (App.myTrainingDataWindow != null && App.myTrainingDataWindow.IsLoaded) {
-                App.myTrainingDataWindow.Activate();
-                return;
-            }
-            App.myTrainingDataWindow = new TrainingDataWindow();
-            App.myTrainingDataWindow.Closed += (_, _) => App.myTrainingDataWindow = null;
-            App.myTrainingDataWindow.Show();
-        }
-
         private void Test_Click(object sender, RoutedEventArgs e) {
             // int intX, intY;
             // App.dmSoft.FindPic(0, 0, 1920, 1080, "\\Images\\Items\\800025.png", "", 0.5, 0, out intX, out intY);
