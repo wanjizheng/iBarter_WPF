@@ -1026,11 +1026,9 @@ namespace iBarter {
             int oH = (int)icon.Size.Height;
 
             // (leftFrac, topFrac, rightFrac, bottomFrac) - all relative inside icon.
-            // Reduced from 4 ROIs to 2 for ~2.4s/scan speedup (each ROI is
-            // one Capture + one OCR call, ~100ms each). The 2 we keep are
-            // the widest + the medium which covers both 4-digit ("1000") and
-            // 1-digit ("1") layouts. The right-half and bottom-strip safety
-            // nets were rarely decisive in the 12-item benchmark.
+            // 4-digit "1000" digit tail touches icon-right edge, so rf must
+            //      stay at 1.00 (full icon width). bf pulls in slightly so we
+            //      don't crop the digit top.
             // lf widened to -0.30 on the widest candidate (~13 px outside
             //      icon-left edge) so the leftmost "1" of "1000" isn't
             //      clipped.
@@ -1038,9 +1036,14 @@ namespace iBarter {
             //      mid to give the OCR engine more pixel rows.
             // 9999 cap + bounded ROI keep parley "10,432" style neighbour
             //      digit bleed out of the result.
+            // (Briefly tried reducing to 2 ROIs for speed, but the right-half
+            // and bottom-strip candidates uniquely rescue 3 cases - Pirates=3,
+            // Cotton=10, Raft Toy=1. Keep all 4.)
             var candidates = new (double lf, double tf, double rf, double bf)[] {
                 (-0.30, 0.40, 1.00, 0.98),   // widest - extends far left, full right
-                (-0.10, 0.50, 1.00, 0.98),   // medium width - generates ocr_<id>.bmp
+                (-0.10, 0.50, 1.00, 0.98),   // medium width
+                ( 0.50, 0.55, 1.00, 0.96),   // right half, tight Y
+                ( 0.00, 0.78, 1.00, 0.96),   // bottom strip safety net
             };
 
             var votes = new System.Collections.Generic.Dictionary<int, int>();
