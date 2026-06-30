@@ -869,94 +869,13 @@ namespace iBarter {
         // template-subtraction path entirely - the bdocodex template and the
         // BDO game render differ enough (different AA, brightness, color) that
         // the diff was dominated by icon-border differences, not the digit.
-        // BDO's digit overlay is rendered as near-pure white (RGB ~245-255)
-        // on top of a darker icon body (RGB ~30-70). A hard 78% threshold
-        // isolates the digit strokes alone. Magick Scale 3x + Negate produces
-        // a clean dark-on-light bitmap for Tesseract.
-        private int TryTemplateDiffOcr(string liveBmpPath, string itemID) {
-            if (string.IsNullOrEmpty(itemID)) {
-                TryWriteDebugLog("OCR.G itemID empty");
-                return -1;
-            }
-            if (!System.IO.File.Exists(liveBmpPath)) {
-                TryWriteDebugLog("OCR.G live missing: " + liveBmpPath);
-                return -1;
-            }
-            var tess = GetTesseract();
-            if (tess == null) {
-                TryWriteDebugLog("OCR.G tess=null");
-                return -1;
-            }
-
-            // Phase G: full-icon BR-threshold (NO crop). Earlier BR-crop
-            // variants clipped the leftmost '1' of multi-digit overlays like
-            // '1000' (the crop started at x=22 on a 44x44 icon, but '1000'
-            // digits span the full width). Use the WHOLE icon and rely on a
-            // hard threshold to keep only the digit pixels.
-            //
-            // 1. MagickColorSpace.Gray
-            // 2. Threshold(78%) - only the brightest 22% of pixels survive
-            //    (BDO's digit overlay renders as near-pure white ~245; icon
-            //    body AA highlights are usually <200)
-            // 3. Scale(500%) - 5x upscaling gives a sub-pixel '1' enough
-            //    px to be Tesseract-readable (a 1-2 px stroke becomes 5-10 px)
-            // 4. Negate - dark text on light background (Tesseract-friendly)
-            // 5. Morphology Close - 3x3 Square kernel closes 1-px gaps left
-            //    by the upscale so '5'/'9'/'0' stay closed contours.
-            //
-            // (Template subtraction was tried here but reverted - BDO's
-            // Resources\Images\Items\<id>.bmp is the same source art the
-            // game renders, so AbsDiff with the live capture yields ~zero
-            // and kills the digit overlay along with the icon body.)
-            //
-            // Returns -1 on any failure (engine unavailable, file missing, no
-            // digits matched).
-            string sharpPath = liveBmpPath.Replace(".bmp", "_sharp.bmp");
-            try {
-                using (var mi = new MagickImage(liveBmpPath)) {
-                    mi.ColorSpace = ColorSpace.Gray;
-                    mi.Threshold(new Percentage(78));
-                    mi.Scale(new Percentage(500));
-                    mi.Negate();
-                    // Close 1-px gaps in digit strokes after the 5x upscale
-                    // (Tesseract sees '5' / '9' / '0' as broken contours and
-                    // mis-reads them - '5139' can collapse to '130' etc.).
-                    // Square 3x3 kernel fixes axis-aligned breaks in '5' / '0'.
-                    var morph = new MorphologySettings {
-                        Method = MorphologyMethod.Close,
-                        Kernel = Kernel.Square,
-                        Iterations = 1,
-                    };
-                    mi.Morphology(morph);
-                    mi.Write(sharpPath);
-                }
-            }
-            catch (Exception ex) {
-                TryWriteDebugLog("OCR.G Magick fail: " + ex.GetType().Name + " " + ex.Message);
-                return -1;
-            }
-
-            try {
-                using (var img = CvInvoke.Imread(sharpPath, Emgu.CV.CvEnum.ImreadModes.Grayscale)) {
-                    if (img == null || img.IsEmpty) {
-                        TryWriteDebugLog("OCR.G imread empty: " + sharpPath);
-                        return -1;
-                    }
-                    tess.SetImage(img);
-                    tess.Recognize();
-                    string raw = (tess.GetUTF8Text() ?? "").Trim();
-                    Match m = Regex.Match(raw, @"\d{1,4}");
-                    if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
-                        return n;
-                    }
-                    TryWriteDebugLog("OCR.G tesseract no digits: raw='" + raw + "'");
-                }
-            }
-            catch (Exception ex) {
-                TryWriteDebugLog("OCR.G tesseract fail: " + ex.GetType().Name + " " + ex.Message);
-            }
-            return -1;
-        }
+        // (Phase G removed - the Magick pipeline (78% threshold + 5x scale +
+        // Negate + morphology close) uniquely rescued only 2 cases on the
+        // 12-item benchmark (800020, 9057), at a ~50ms-per-icon cost on
+        // every scan. R's raw OCR covers most of the other successes, and
+        // Seagull Figurine (800004) was unrecoverable regardless. The new
+        // Phase F below replaces it with a faster, smarter bottom-right
+        // crop.)
 
         // (Phase F removed - M-variant preprocessing (3x + Negate + 50% threshold)
 // benchmarked at 4/10 on the live barter scan vs Phase R's 6/10 with no
@@ -999,6 +918,63 @@ namespace iBarter {
             }
             catch (Exception ex) {
                 TryWriteDebugLog("OCR.R tesseract fail: " + ex.GetType().Name + " " + ex.Message);
+            }
+            return -1;
+        }
+
+        // Phase F (re-introduced): take the same Phase A medium-ROI capture
+        // (ocr_<id>.bmp, ~49x21) but crop aggressively to the bottom-right
+        // quadrant before feeding Tesseract. BDO always renders the digit
+        // overlay anchored at the bottom-right corner of the icon; the
+        // upper-left half of the capture is mostly icon body noise that
+        // confuses Tesseract on close-call cases like Seagull Figurine
+        // (800004). No preprocessing - mirrors Phase R's success with raw
+        // reads, just on a tighter crop.
+        //
+        // Default crop = bottom-right 75% of width x bottom 75% of height,
+        // so on a 49x21 capture we keep roughly cols 12..49 x rows 5..21
+        // (a 37x16 strip). Adjustable via the constants below.
+        private const double FCropLeftFrac = 0.25;   // drop this fraction from the LEFT
+        private const double FCropTopFrac = 0.25;    // drop this fraction from the TOP
+        private int TryBottomRightOcr(string bmpPath) {
+            var tess = GetTesseract();
+            if (tess == null) {
+                TryWriteDebugLog("OCR.F tess=null");
+                return -1;
+            }
+            if (!System.IO.File.Exists(bmpPath)) {
+                TryWriteDebugLog("OCR.F file missing: " + bmpPath);
+                return -1;
+            }
+            try {
+                using (var img = CvInvoke.Imread(bmpPath, Emgu.CV.CvEnum.ImreadModes.Grayscale)) {
+                    if (img == null || img.IsEmpty) {
+                        TryWriteDebugLog("OCR.F imread empty: " + bmpPath);
+                        return -1;
+                    }
+                    int cropX = (int)(img.Width * FCropLeftFrac);
+                    int cropY = (int)(img.Height * FCropTopFrac);
+                    int cropW = img.Width - cropX;
+                    int cropH = img.Height - cropY;
+                    if (cropW < 4 || cropH < 4) {
+                        TryWriteDebugLog("OCR.F crop too small: " + cropW + "x" + cropH);
+                        return -1;
+                    }
+                    var rect = new System.Drawing.Rectangle(cropX, cropY, cropW, cropH);
+                    using (var cropped = new Emgu.CV.Mat(img, rect)) {
+                        tess.SetImage(cropped);
+                        tess.Recognize();
+                        string raw = (tess.GetUTF8Text() ?? "").Trim();
+                        Match m = Regex.Match(raw, @"\d{1,4}");
+                        if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
+                            return n;
+                        }
+                        TryWriteDebugLog("OCR.F tesseract no digits: raw='" + raw + "'");
+                    }
+                }
+            }
+            catch (Exception ex) {
+                TryWriteDebugLog("OCR.F tesseract fail: " + ex.GetType().Name + " " + ex.Message);
             }
             return -1;
         }
@@ -1091,25 +1067,26 @@ namespace iBarter {
             }
             catch { }
 
-            // Phase G + R: even when screen-coords voting is uncertain, run both
-            // remaining Tesseract paths. Phase R skips all preprocessing and
-            // reads the raw capture. Phase G goes through the heavier Magick
-            // pipeline (78% threshold + 5x upscale + morphology close) for
-            // the cases R can't crack.
+            // Phase R + F: even when screen-coords voting is uncertain, run both
+            // Tesseract paths. Phase R reads the full medium-ROI capture
+            // unchanged. Phase F crops the bottom-right quadrant of the same
+            // capture (where BDO always anchors the digit overlay) to
+            // suppress the icon body AA noise that R can't shake off on
+            // close-call cases (e.g. Seagull Figurine 800004).
+            // Phase G (Magick 78% threshold + 5x scale + morphology close)
+            // removed - it uniquely rescued only 2 of 12 cases at ~50ms
+            // cost per icon.
             // NOTE: DM.Capture writes to <base>/Resources/ but our code needs
             // the explicit Resources prefix when reading back via File.Exists.
             string bmpPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocr_" + strID + ".bmp";
             int rawPick = TryRawOcr(bmpPath);
-            string fullIconPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocrf_" + strID + ".bmp";
-            int diffPick = TryTemplateDiffOcr(fullIconPath, strID);
+            int brPick = TryBottomRightOcr(bmpPath);
 
-            // 3-way merge vote (Phase F M-variant removed - it scored 4/10 on
-            // the live barter scan and never uniquely rescued a case, while
-            // Phase R raw scored 6/10 with no preprocessing at all):
+            // 3-way merge vote (A screen-coords + R raw + F bottom-right):
             var merged = new System.Collections.Generic.Dictionary<int, int>();
             if (picked > 0) merged[picked] = merged.GetValueOrDefault(picked, 0) + System.Math.Max(1, topCount);
             if (rawPick > 0) merged[rawPick] = merged.GetValueOrDefault(rawPick, 0) + 1;
-            if (diffPick > 0) merged[diffPick] = merged.GetValueOrDefault(diffPick, 0) + 1;
+            if (brPick > 0) merged[brPick] = merged.GetValueOrDefault(brPick, 0) + 1;
 
             // Tie-break: when 2+ candidates tie on vote count, prefer the one
             // with MORE digits (the assumption is OCR noise produces truncated
@@ -1130,10 +1107,10 @@ namespace iBarter {
 
             if (finalPick > 0) {
                 string tally = string.Join(",", merged.Select(kv => kv.Key + "x" + kv.Value));
-                Log($"OCR qty {strID}: picked {finalPick} (votes={tally}; A={picked} R={rawPick} G={diffPick})", Brushes.Gray);
+                Log($"OCR qty {strID}: picked {finalPick} (votes={tally}; A={picked} R={rawPick} F={brPick})", Brushes.Gray);
             }
             else {
-                Log($"OCR qty {strID}: no consensus; raw={(bestRaw ?? "")} R={rawPick} G={diffPick}", Brushes.OrangeRed);
+                Log($"OCR qty {strID}: no consensus; raw={(bestRaw ?? "")} R={rawPick} F={brPick}", Brushes.OrangeRed);
             }
 
             return finalPick;
