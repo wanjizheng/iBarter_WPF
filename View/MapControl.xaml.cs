@@ -117,9 +117,15 @@ namespace iBarter.View {
             listImages = new List<Grid>();
             listLines = new List<Line>();
 
-            for (int i = listGrid_Islands.Count - 1; i > 0; i--) {
+            for (int i = listGrid_Islands.Count - 1; i >= 0; i--) {
                 Grid grid = listGrid_Islands[i];
-                if (App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0 && b.IsLandName == grid.Name.Substring(14, grid.Name.Length - 14)) == null) {
+                // Where(...) returns a non-null IEnumerable, so the legacy check
+                // never fired and stale pins accumulated. Use Any() instead.
+                bool hasActiveBarter = App.myPVM.BarterCollection.Any(b =>
+                    b.ExchangeDone == false &&
+                    b.ExchangeQuantity > 0 &&
+                    b.IsLandName == grid.Name.Substring(14, grid.Name.Length - 14));
+                if (!hasActiveBarter) {
                     listGrid_Islands.Remove(grid);
                 }
             }

@@ -109,13 +109,7 @@ namespace iBarter.ViewModel {
         #region Method
 
         private ObservableCollection<Items> PopulateStorage() {
-            ObservableCollection<Items> itemsList = new ObservableCollection<Items>();
-            List<Items> myList = App.myCFun.LoadItemsCSV();
-            foreach (Items item in myList) {
-                itemsList.Add(item);
-            }
-
-            return itemsList;
+            return new ObservableCollection<Items>(App.listItems);
         }
 
         #endregion

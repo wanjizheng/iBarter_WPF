@@ -237,6 +237,26 @@ namespace iBarter.View {
                 intGroup++;
             }
 
+            // LV6 and LV7 seeds. Previously only LV0..LV5 were seeds, so barters
+            // starting at LV6 (or LV7) without an upstream LV5 (or LV6) chain
+            // would be stranded. Walking the seed loop ensures every catalog tier
+            // gets a group assignment.
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.Item1.ItemLV.Equals("6") && b.BarterGroup == 0 && !b.Grouped)) {
+                int intLV = 7;
+
+                FindBarterGroup(barter, intLV, intGroup);
+
+                intGroup++;
+            }
+
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.Item1.ItemLV.Equals("7") && b.BarterGroup == 0 && !b.Grouped)) {
+                int intLV = 8;
+
+                FindBarterGroup(barter, intLV, intGroup);
+
+                intGroup++;
+            }
+
             for (int i = 1; i < intGroup; i++) {
                 if (App.myPVM.BarterCollection.Where(b => b.BarterGroup == i).ToList().Count == 1) {
                     App.myPVM.BarterCollection.FirstOrDefault(b => b.BarterGroup == i)!.BarterGroup = 0;

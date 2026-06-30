@@ -58,22 +58,34 @@ namespace iBarter {
 
         public int BarterGroup {
             get { return barterGroup; }
-            set { barterGroup = value; }
+            set {
+                barterGroup = value;
+                RaisePropertyChanged("BarterGroup");
+            }
         }
 
         public bool Grouped {
             get { return tofGrouped; }
-            set { tofGrouped = value; }
+            set {
+                tofGrouped = value;
+                RaisePropertyChanged("Grouped");
+            }
         }
 
         public bool ExchangeDone {
             get { return exchangeDone; }
-            set { exchangeDone = value; }
+            set {
+                exchangeDone = value;
+                RaisePropertyChanged("ExchangeDone");
+            }
         }
 
         public bool UsingALT {
             get { return usingALT; }
-            set { usingALT = value; }
+            set {
+                usingALT = value;
+                RaisePropertyChanged("UsingALT");
+            }
         }
 
         public int ExchangeQuantity {
@@ -142,7 +154,7 @@ namespace iBarter {
             get { return IsLand.Remaining; }
             set {
                 IsLand.Remaining = value;
-                RaisePropertyChanged("remainingChange");
+                RaisePropertyChanged("IslandRemaining");
             }
         }
 
@@ -290,12 +302,18 @@ namespace iBarter {
 
                 return intInv;
             }
-            set { intInv = value; }
+            set {
+                intInv = value;
+                RaisePropertyChanged("InvQuantity");
+            }
         }
 
         public int InvQuantityChange {
             get { return intChange; }
-            set { intChange = value; }
+            set {
+                intChange = value;
+                RaisePropertyChanged("InvQuantityChange");
+            }
         }
 
         private void UpdateItem() {

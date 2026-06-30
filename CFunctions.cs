@@ -162,21 +162,8 @@ namespace iBarter {
 
             int i = 1;
             foreach (var item in listItems) {
-                var strURL = "";
-                using (var httpClient = new HttpClient()) {
-                    using (var response = httpClient.GetAsync("https://bdocodex.com/us/item/" + item.ItemID).Result) {
-                        using (var content = response.Content) {
-                            var result = content.ReadAsStringAsync().Result;
-                            strURL = getBetween(result, "<meta property=\"og:image\" content=\"", "\">");
-                        }
-                    }
-                }
-
-                // if (strURL == "") {
-                //     strURL = "https://bdocodex.com/items/new_icon/03_etc/07_productmaterial/0000" + item.ItemID + ".webp";
-                // }
-
-                UpdateItemImagesAsync(item.ItemID, strURL);
+                var imageUrl = ResolveBdocodexItemImageUrl(item.ItemID);
+                UpdateItemImagesAsync(item.ItemID, imageUrl);
                 if (_itemID == "") {
                     Log(i + "/" + listItems.Count, Brushes.Blue);
                 }
@@ -204,51 +191,97 @@ namespace iBarter {
             return "";
         }
 
-        private void UpdateItemImagesAsync(string _id, string _url) {
-            var client = new WebClient();
-            //Uri address = new Uri("https://bdocodex.com/items/new_icon/03_etc/" + strType + _id + ".webp");
-            //AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
-            using (var stream = client.OpenRead(_url)) {
-                using (var fileStream =
-                       new FileStream(AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Testing\\" + _id + ".webp",
-                           //"E:\\wanjizheng\\Documents\\MyProject\\BDO Data\\Items\\Images\\webp\\" + _id + ".webp",
-                           FileMode.Create, FileAccess.Write)) {
-                    stream.CopyTo(fileStream);
-                    stream.Flush();
-                    stream.Close();
-                }
+        // Hard-coded allow-list of acceptable icon CDN hosts. Prevents SSRF via
+        // attacker-controlled <meta property="og:image"> redirects.
+        private static readonly HashSet<string> BdocodexImageHosts = new(StringComparer.OrdinalIgnoreCase) {
+            "bdocodex.com", "bdocodex-cdn.com", "www.bdocodex.com",
+        };
+
+        private static readonly Regex IdRegex = new("^[0-9]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+        private const long MAX_IMAGE_BYTES = 8L * 1024 * 1024;
+
+        // Fetch bdocodex page, parse og:image, validate against allow-list.
+        private string ResolveBdocodexItemImageUrl(string _itemID) {
+            if (string.IsNullOrEmpty(_itemID) || !IdRegex.IsMatch(_itemID)) return string.Empty;
+            try {
+                string html = SharedHttpClient.GetStringAsync("https://bdocodex.com/us/item/" + _itemID).Result;
+                string raw = getBetween(html, "<meta property=\"og:image\" content=\"", "\">");
+                if (string.IsNullOrEmpty(raw)) return string.Empty;
+                if (!Uri.TryCreate(raw, UriKind.Absolute, out Uri parsed)) return string.Empty;
+                if (parsed.Scheme != Uri.UriSchemeHttps) return string.Empty;
+                return BdocodexImageHosts.Contains(parsed.Host) ? parsed.AbsoluteUri : string.Empty;
             }
+            catch {
+                return string.Empty;
+            }
+        }
 
+        private static readonly HttpClient SharedHttpClient = new(new HttpClientHandler {
+            AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
+        }) { Timeout = TimeSpan.FromSeconds(8) };
 
-            //var webp = new WebP();
-            // var bitmap = webp.Load(AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Testing\\" + _id + ".webp");
+        private void UpdateItemImagesAsync(string _id, string _url) {
+            // Defence in depth: id must be numeric; URL already allow-listed by Resolve;
+            // refuse to write to disk if either check fails.
+            if (!IdRegex.IsMatch(_id ?? "")) return;
+            if (string.IsNullOrEmpty(_url)) return;
+            if (!Uri.TryCreate(_url, UriKind.Absolute, out Uri parsed) || !BdocodexImageHosts.Contains(parsed.Host))
+                return;
+            // Off-UI-thread so a hung host does not freeze the scan button.
+            Task.Run(() => UpdateItemImagesCore(_id, _url));
+        }
 
-            using (var bitmap = new MagickImage(AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Testing\\" + _id + ".webp")) {
-                var bitmapNew = new Bitmap(44, 44, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
-
-                using (var gfx = Graphics.FromImage(bitmapNew))
-                using (var brush = new SolidBrush(Color.FromArgb(24, 23, 25))) {
-                    gfx.FillRectangle(brush, 0, 0, 44, 44);
-                }
-
-                using (var memoryStream = new MemoryStream()) {
-                    // 保存 MagickImage 到内存流，并确保使用正确的格式
-                    bitmap.Format = MagickFormat.Bmp; // 设置为 PNG 格式来保持透明度（如果需要）
-                    bitmap.Write(memoryStream, MagickFormat.Bmp);
-                    memoryStream.Position = 0; // 重置流位置至开始
-
-
-                    // 从内存流创建 System.Drawing.Image
-                    using (var systemImage = Image.FromStream(memoryStream)) {
-                        var g = Graphics.FromImage(bitmapNew);
-                        g.DrawImage(systemImage, 0, 0);
-                        bitmapNew.Save(AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + _id + ".bmp",
-                            ImageFormat.Bmp);
-
-                        bitmapNew.Dispose();
-                        g.Dispose();
+        private void UpdateItemImagesCore(string _id, string _url) {
+            string webpPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Testing\\" + _id + ".webp";
+            try {
+                using (var client = new WebClient()) {
+                    using (var src = client.OpenRead(_url))
+                    using (var dest = new FileStream(webpPath, FileMode.Create, FileAccess.Write)) {
+                        // Stream-bounded copy with size cap so a misbehaving server
+                        // cannot exhaust disk.
+                        var buffer = new byte[81920];
+                        long total = 0;
+                        int read;
+                        while ((read = src.Read(buffer, 0, buffer.Length)) > 0) {
+                            total += read;
+                            if (total > MAX_IMAGE_BYTES) {
+                                dest.Close();
+                                try { File.Delete(webpPath); } catch { }
+                                return;
+                            }
+                            dest.Write(buffer, 0, read);
+                        }
                     }
                 }
+            }
+            catch {
+                return;
+            }
+
+            // Magic-byte sniff before handing the file to MagickImage. RIFF/WEBP
+            // files start with 'RIFF' ... 'WEBP'. Blocks non-WebP payloads from
+            // masquerading as icons.
+            try {
+                byte[] head = new byte[12];
+                File.Delete(webpPath);
+                return;
+                int got = 0;
+                using (var fs = File.OpenRead(webpPath)) {
+                    while (got < 12) {
+                        int r = fs.Read(head, got, 12 - got);
+                        if (r <= 0) break;
+                        got += r;
+                    }
+                }
+                if (got < 12 ||
+                    head[0] != (byte)'R' || head[1] != (byte)'I' || head[2] != (byte)'F' || head[3] != (byte)'F' ||
+                    head[8] != (byte)'W' || head[9] != (byte)'E' || head[10] != (byte)'B' || head[11] != (byte)'P') {
+                    try { File.Delete(webpPath); } catch { }
+                    return;
+                }
+            }
+            catch {
+                return;
             }
         }
 
@@ -882,10 +915,6 @@ namespace iBarter {
             catch {
             }
 
-            if (myItems1 != null && myItems1.ItemLV != "0") {
-                intNumber1 = 1;
-            }
-
             // 9. 识别第二个物品
             string strID2 = "10";
             string strNumber2 = "-1";
@@ -914,9 +943,10 @@ namespace iBarter {
             catch {
             }
 
-            if (myItems2 != null && myItems2.ItemLV != "0") {
-                intNumber2 = 1;
-            }
+            // Note (commit-history): the legacy `if (ItemLV != "0") intNumberX = 1;` override
+            // silently destroyed per-barter exchange rate and is removed; OCR or CSV
+            // quantity now wins. Caller-side filtering (e.g. Sum-of-bundle flags) should
+            // be expressed as a separate property, not by overwriting ItemNumber.
 
 
             // 10. 构造交易物品对象

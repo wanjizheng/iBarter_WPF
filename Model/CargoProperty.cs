@@ -58,26 +58,27 @@ namespace iBarter.Model {
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
-            Application.Current.Dispatcher.Invoke(() => {
-                if (App.myfmMain != null) {
-                    if (CurrentLT > TotalLT && CurrentLT <= TotalLT * 1.7 && InitialLT <= TotalLT) {
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Red;
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.FontWeight = FontWeights.Bold;
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.ViewBackgroundColor = Brushes.IndianRed;
-                    }
-                    else if (CurrentLT > TotalLT * 1.7 || InitialLT > TotalLT) {
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Red;
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.FontWeight = FontWeights.Bold;
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.ViewBackgroundColor = Brushes.DarkRed;
-                    }
-                    else {
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Black;
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.FontWeight = FontWeights.Normal;
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.ViewBackgroundColor = Brushes.White;
-                    }
+            Application.Current?.Dispatcher.Invoke(() => {
+                var pg = App.myfmMain?.myShipCargo?.PropertyGrid_Ship;
+                if (pg == null) return;
 
-                    SaveData();
+                if (CurrentLT > TotalLT && CurrentLT <= TotalLT * 1.7 && InitialLT <= TotalLT) {
+                    pg.Foreground = Brushes.Red;
+                    pg.FontWeight = FontWeights.Bold;
+                    pg.ViewBackgroundColor = Brushes.IndianRed;
                 }
+                else if (CurrentLT > TotalLT * 1.7 || InitialLT > TotalLT) {
+                    pg.Foreground = Brushes.Red;
+                    pg.FontWeight = FontWeights.Bold;
+                    pg.ViewBackgroundColor = Brushes.DarkRed;
+                }
+                else {
+                    pg.Foreground = Brushes.Black;
+                    pg.FontWeight = FontWeights.Normal;
+                    pg.ViewBackgroundColor = Brushes.White;
+                }
+
+                SaveData();
             });
         }
 

@@ -39,10 +39,15 @@ namespace iBarter {
         public static ShipCargoViewModel myCVM = null!;
         public static CargoProperty myCargoProperty = null;
 
+        // Single lock guarding all App.list* mutations. Children windows / scanner threads
+        // take this around any read-then-mutate of the shared lists (e.g.
+        // IdentifyBarterAsync on Task.Run worker threads, SaveData on UI threads).
+        public static readonly object _listLock = new object();
+
 
         public App() {
             SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JHaF5cWWdCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdlWXlceXVdR2BZVEJ3W0FWYEo=");
-            
+
             //SfSkinManager.ApplyStylesOnApplication = true;
 
             myCFun = new CFunctions();
@@ -62,7 +67,9 @@ namespace iBarter {
 
             myfmMain.statusBarItem_Version.Text = "Version: Beta_4.4";
 
-            this.ShutdownMode = ShutdownMode.OnMainWindowClose;
+            // OnLastWindowClose so closing MainWindow plus child windows actually exits
+            // the process; OnMainWindowClose used to leave child dialogs running.
+            this.ShutdownMode = ShutdownMode.OnLastWindowClose;
         }
 
         protected override void OnStartup(StartupEventArgs e) {

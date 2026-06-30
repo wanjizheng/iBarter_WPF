@@ -69,9 +69,12 @@ namespace iBarter {
         /// <param name="sender"></param>
         /// <param name="e"></param>
         private void OnActivateWindow(object sender, RoutedEventArgs e) {
-            // var name = (sender as MenuItem).Tag as string;
-            // dockingManager_Main.ActivateWindow(name);
+            if (App.myBarterScanner != null && App.myBarterScanner.IsLoaded) {
+                App.myBarterScanner.Activate();
+                return;
+            }
             App.myBarterScanner = new BarterScanner();
+            App.myBarterScanner.Closed += (_, _) => App.myBarterScanner = null;
             App.myBarterScanner.Show();
         }
 
@@ -205,10 +208,18 @@ namespace iBarter {
         }
 
         private void MenuItem_StorageManagement_Click(object sender, RoutedEventArgs e) {
+            if (App.myStorageManagement != null && App.myStorageManagement.IsLoaded) {
+                if (App.myStorageVM != null) {
+                    App.myStorageVM.StorageCollection.Clear();
+                }
+                App.myStorageManagement.Activate();
+                return;
+            }
             if (App.myStorageVM != null) {
                 App.myStorageVM.StorageCollection.Clear();
             }
             App.myStorageManagement = new StorageManagement();
+            App.myStorageManagement.Closed += (_, _) => App.myStorageManagement = null;
             App.myStorageManagement.Show();
         }
 

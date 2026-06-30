@@ -25,7 +25,7 @@ namespace iBarter {
             get { return strName; }
             set {
                 strName = value;
-                RaisePropertyChanged("NameChange");
+                RaisePropertyChanged("ItemName");
             }
         }
 
@@ -33,7 +33,7 @@ namespace iBarter {
             get { return strID; }
             set {
                 strID = value;
-                RaisePropertyChanged("IDChange");
+                RaisePropertyChanged("ItemID");
             }
         }
 
@@ -43,7 +43,7 @@ namespace iBarter {
                     icon = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + ItemID + ".bmp";
                 }
 
-                if (!File.Exists(icon) && int.Parse(ItemID) > 0) {
+                if (!File.Exists(icon) && int.TryParse(ItemID, out int idNum) && idNum > 0) {
                     App.myCFun.RefreshItems(ItemID);
                     icon = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + ItemID + ".bmp";
                 }
@@ -52,7 +52,7 @@ namespace iBarter {
             }
             set {
                 icon = value;
-                RaisePropertyChanged("IconChange");
+                RaisePropertyChanged("ItemIcon");
             }
         }
 
@@ -60,7 +60,7 @@ namespace iBarter {
             get { return strLV; }
             set {
                 strLV = value;
-                RaisePropertyChanged("LVChange");
+                RaisePropertyChanged("ItemLV");
             }
         }
 
@@ -105,7 +105,7 @@ namespace iBarter {
             get { return intNumber; }
             set {
                 intNumber = value;
-                RaisePropertyChanged("NumberChange");
+                RaisePropertyChanged("ItemNumber");
             }
         }
 
