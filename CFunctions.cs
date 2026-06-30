@@ -713,19 +713,20 @@ namespace iBarter {
             int oH = (int)icon.Size.Height;
 
             // (leftFrac, topFrac, rightFrac, bottomFrac) - all relative inside icon.
-            // lf of the widest candidate goes NEGATIVE (-0.05) so we capture a
-            //      2-3 px sliver beyond icon's left edge (catches "1000" whose
-            //      leftmost "1" digit may butt against icon-left boundary).
-            // tf 0.55 / 0.65 / 0.80 keeps top clear of clipped digits.
-            // rf kept at 1.00 - extension right WOULD capture neighbouring
-            //      "[Level N] ... required" text and pick up its Parley digits
-            //      (which is what produced '141' false positives earlier).
-            // bf 0.96 stops short of icon bottom edge to drop blank padding.
+            // lf of the widest candidate goes NEGATIVE 20% to capture ~9 px
+            //      left of icon-left edge (a "1" leftmost digit of "1000" sits
+            //      flush against icon-left boundary).
+            // tf lowered to 0.45-0.50 so digit tops (especially small
+            //      6-8 px tall digits like "10") aren't clipped.
+            // rf pulled in to 0.95 so the ROI never reaches icon's right
+            //      edge (which abuts the "[Level N] ... required" text and
+            //      picks up Parley digits).
+            // bf stays 0.96 - small padding to drop blank bottom strip.
             var candidates = new (double lf, double tf, double rf, double bf)[] {
-                (-0.05, 0.55, 1.00, 0.96),  // widest: full width + a little left wing
-                (0.45, 0.55, 1.00, 0.96),   // right half, captures 2-3 digit counts
-                (0.55, 0.65, 1.00, 0.96),   // tight BR quadrant
-                (0.00, 0.80, 1.00, 0.96),   // very bottom strip safety net
+                (-0.20, 0.45, 0.95, 0.96),   // widest full-width bottom strip
+                (-0.05, 0.55, 0.95, 0.96),   // narrower, deeper into icon
+                ( 0.50, 0.55, 0.95, 0.96),   // right half - catches 2-3 digit at BR
+                ( 0.00, 0.75, 0.95, 0.96),   // bottom-only safety net
             };
 
             var votes = new System.Collections.Generic.Dictionary<int, int>();
