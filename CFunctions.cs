@@ -1097,25 +1097,20 @@ namespace iBarter {
             }
             catch { }
 
-            // Phase D-bis: capture the FULL ICON rectangle for Phase G. The
-            // strip used by Phase A/F is fine for direct OCR but it stretches
-            // the template when we subtract, filling the diff with anti-
-            // aliasing noise. With full-icon capture the template lines up
-            // pixel-for-pixel and the diff cleanly isolates the digit overlay.
-            try {
-                App.myPureDM.DM.Capture((int)oX, (int)oY,
-                    (int)oX + (int)oW, (int)oY + (int)oH,
-                    "ocrf_" + strID + ".bmp");
-            }
-            catch { }
+            // Phase D-bis (moved inside the conditional Phase G block below) -
+            // capture the FULL ICON rectangle only when G is actually
+            // going to run, so the ~50ms capture cost is skipped on the
+            // common case where R succeeds.
 
-            // Phase R + G: even when screen-coords voting is uncertain, run both
-            // Tesseract paths. Phase R reads the full medium-ROI capture
-            // unchanged. Phase G runs the heavier Magick pipeline (78%
-            // threshold + 5x upscale + morphology close) on the full-icon
-            // capture - slower than R but uniquely rescues a few cases
-            // (Conch=1, Essence=1000) where the icon body AA drowns out
-            // the digit for R's raw read.
+            // Phase R, then conditional Phase G. R is the fast path (raw OCR on the
+            // already-captured ocr_<id>.bmp, ~30ms). G is the slow fallback
+            // (full-icon capture + Magick 78% threshold + 5x scale + Negate +
+            // Morph Close + crop + write sharp.bmp + Imread + Tesseract,
+            // ~150ms) - only worth running when R couldn't read the digit.
+            // On the 12-item benchmark R succeeds ~70% of the time, so skipping
+            // G when R succeeds saves ~150ms x 8-9 items = ~1.2s per scan.
+            // Accuracy is preserved: G uniquely rescued Conch=1 and
+            // Essence=1000, both of which had R=-1.
             // Phase F (bottom-right crop of the medium ROI) was tried and
             // removed - it didn't uniquely rescue any case, including
             // Seagull Figurine (800004) which all 3 OCR phases still miss.
@@ -1123,10 +1118,20 @@ namespace iBarter {
             // the explicit Resources prefix when reading back via File.Exists.
             string bmpPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocr_" + strID + ".bmp";
             int rawPick = TryRawOcr(bmpPath);
-            string fullIconPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocrf_" + strID + ".bmp";
-            int diffPick = TryTemplateDiffOcr(fullIconPath, strID);
+            int diffPick = -1;
+            if (rawPick <= 0) {
+                // Capture full icon + run Magick pipeline only as fallback
+                try {
+                    App.myPureDM.DM.Capture((int)oX, (int)oY,
+                        (int)oX + (int)oW, (int)oY + (int)oH,
+                        "ocrf_" + strID + ".bmp");
+                }
+                catch { }
+                string fullIconPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\ocrf_" + strID + ".bmp";
+                diffPick = TryTemplateDiffOcr(fullIconPath, strID);
+            }
 
-            // 3-way merge vote (A screen-coords + R raw + G Magick):
+            // 3-way merge vote (A screen-coords + R raw + G Magick fallback):
             var merged = new System.Collections.Generic.Dictionary<int, int>();
             if (picked > 0) merged[picked] = merged.GetValueOrDefault(picked, 0) + System.Math.Max(1, topCount);
             if (rawPick > 0) merged[rawPick] = merged.GetValueOrDefault(rawPick, 0) + 1;
