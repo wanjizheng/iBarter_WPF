@@ -789,15 +789,27 @@ namespace iBarter {
         // Returns -1 on any failure (template missing, Tesseract missing, no
         // digits matched).
         private int TryTemplateDiffOcr(string liveBmpPath, string itemID) {
-            if (string.IsNullOrEmpty(itemID)) return -1;
-            if (!System.IO.File.Exists(liveBmpPath)) return -1;
+            if (string.IsNullOrEmpty(itemID)) {
+                Log($"OCR.G itemID empty", Brushes.OrangeRed);
+                return -1;
+            }
+            if (!System.IO.File.Exists(liveBmpPath)) {
+                Log($"OCR.G live missing: {liveBmpPath}", Brushes.OrangeRed);
+                return -1;
+            }
             var tess = GetTesseract();
-            if (tess == null) return -1;
+            if (tess == null) {
+                Log($"OCR.G tess=null", Brushes.OrangeRed);
+                return -1;
+            }
 
             try {
                 using (var live = new Image<Bgr, byte>(liveBmpPath)) {
                     var tpl = LoadIconTemplate(itemID, live.Size);
-                    if (tpl == null) return -1;
+                    if (tpl == null) {
+                        Log($"OCR.G tpl missing for {itemID} size={live.Size}", Brushes.OrangeRed);
+                        return -1;
+                    }
 
                     var liveGray = live.Convert<Gray, byte>();
                     var tplGray = tpl.Convert<Gray, byte>();
@@ -813,7 +825,8 @@ namespace iBarter {
                     try {
                         CvInvoke.Threshold(diff, diff, 0, 255, ThresholdType.Otsu);
                     }
-                    catch {
+                    catch (Exception ex) {
+                        Log($"OCR.G Otsu fail fallback fixed: {ex.GetType().Name}", Brushes.OrangeRed);
                         CvInvoke.Threshold(diff, diff, 30, 255, ThresholdType.Binary);
                     }
 
@@ -830,10 +843,16 @@ namespace iBarter {
                             mi.Write(sharpPath);
                         }
                     }
-                    catch { return -1; }
+                    catch (Exception ex) {
+                        Log($"OCR.G Magick fail: {ex.GetType().Name} {ex.Message}", Brushes.OrangeRed);
+                        return -1;
+                    }
 
                     using (var img = CvInvoke.Imread(sharpPath, ImreadModes.Grayscale)) {
-                        if (img == null || img.IsEmpty) return -1;
+                        if (img == null || img.IsEmpty) {
+                            Log($"OCR.G imread empty: {sharpPath}", Brushes.OrangeRed);
+                            return -1;
+                        }
                         tess.SetImage(img);
                         tess.Recognize();
                         string raw = (tess.GetUTF8Text() ?? "").Trim();
@@ -841,10 +860,13 @@ namespace iBarter {
                         if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
                             return n;
                         }
+                        Log($"OCR.G tesseract no digits: raw='{raw}'", Brushes.OrangeRed);
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) {
+                Log($"OCR.G outer fail: {ex.GetType().Name} {ex.Message}", Brushes.OrangeRed);
+            }
             return -1;
         }
 
@@ -862,7 +884,14 @@ namespace iBarter {
         // bucket for Tesseract at 6-8 px tall).
         private int TryEmguOcr(string bmpPath) {
             var tess = GetTesseract();
-            if (tess == null || !System.IO.File.Exists(bmpPath)) return -1;
+            if (tess == null) {
+                Log($"OCR.F tess=null (tessdata missing)", Brushes.OrangeRed);
+                return -1;
+            }
+            if (!System.IO.File.Exists(bmpPath)) {
+                Log($"OCR.F file missing: {bmpPath}", Brushes.OrangeRed);
+                return -1;
+            }
 
             string sharpPath = bmpPath.Replace(".bmp", "_sharp.bmp");
             try {
@@ -873,11 +902,17 @@ namespace iBarter {
                     mi.Write(sharpPath);
                 }
             }
-            catch { return -1; }
+            catch (Exception ex) {
+                Log($"OCR.F Magick failed: {ex.GetType().Name} {ex.Message}", Brushes.OrangeRed);
+                return -1;
+            }
 
             try {
                 using (var img = CvInvoke.Imread(sharpPath, ImreadModes.Grayscale)) {
-                    if (img == null || img.IsEmpty) return -1;
+                    if (img == null || img.IsEmpty) {
+                        Log($"OCR.F imread empty: {sharpPath}", Brushes.OrangeRed);
+                        return -1;
+                    }
                     tess.SetImage(img);
                     tess.Recognize();
                     string raw = (tess.GetUTF8Text() ?? "").Trim();
@@ -887,7 +922,9 @@ namespace iBarter {
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) {
+                Log($"OCR.F tesseract failed: {ex.GetType().Name} {ex.Message}", Brushes.OrangeRed);
+            }
             return -1;
         }
 
