@@ -198,7 +198,7 @@ namespace iBarter.View {
                     }
                 }
 
-                if (myIslands != null) {
+                if (myIslands != null && myLabel != null && Grid_Image != null) {
                     if (myLabel.ActualWidth != 0 && myLabel.ActualHeight != 0) {
                         myLabel.Width = myLabel.ActualWidth;
                         myLabel.Height = myLabel.ActualHeight;
