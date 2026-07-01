@@ -497,7 +497,7 @@ namespace iBarter.View {
                     App.myfmMain.myShipCargo.UpdateCurrentLV();
                     App.myfmMain.myShipCargo.SaveData();
                 }
-        
+
                 SaveData();
                 UpdateParley();
                 UpdateMapControl();
@@ -508,32 +508,90 @@ namespace iBarter.View {
             }
         }
 
+        private void MenuItem_DeleteRow_Click(object sender, RoutedEventArgs e) {
+            if (sender is not MenuItem menuItem || menuItem.DataContext is not Barter barter) {
+                return;
+            }
+
+            MessageBoxResult result = MessageBox.Show(
+                $"Delete this row ({barter.Item1Name} → {barter.Item2Name})?",
+                "Confirmation",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            if (result != MessageBoxResult.Yes) {
+                return;
+            }
+
+            App.myPVM.BarterCollection.Remove(barter);
+            App.listBarterPlanner.Remove(barter);
+
+            // Sync CargoDetails: previously, ticking ExchangeDone removed the matching
+            // CargoDetail; doing nothing here would leave a stale entry pointing at a
+            // barter that no longer exists.
+            App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == barter.IsLandName));
+            App.myfmMain.myShipCargo.UpdateCurrentLV();
+            App.myfmMain.myShipCargo.SaveData();
+
+            SaveData();
+            UpdateParley();
+            UpdateMapControl();
+        }
+
 
         private void UpdateInvChange(int _groupNumber) {
-            foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.BarterGroup == _groupNumber).OrderBy(b => b.Item1LV)) {
-                if (barter.Item1.ItemLV == "0") {
+            // _groupNumber is kept for backward compatibility with the per-cell
+            // CurrentCellEndEdit caller, but no longer scopes the computation.
+            // The unified formula below correctly handles in-group and cross-group
+            // chains, items consumed by multiple barters, and chain intermediates.
+
+            foreach (string item1Name in App.myPVM.BarterCollection
+                .Select(b => b.Item1Name)
+                .Distinct()
+                .Where(n => !string.IsNullOrEmpty(n))) {
+
+                var consumers = App.myPVM.BarterCollection.Where(b => b.Item1Name == item1Name).ToList();
+                if (consumers.Count == 0) {
                     continue;
                 }
 
-                Barter? myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.BarterGroup == barter.BarterGroup && b.Item2Name.Equals(barter.Item1Name));
-                if (myBarter != null) {
-                    barter.InvQuantityChange = Math.Max(0, myBarter.ExchangeQuantity * myBarter.Item2Number + barter.InvQuantity - barter.ExchangeQuantity * barter.Item1Number);
+                var producers = App.myPVM.BarterCollection.Where(b => b.Item2Name == item1Name).ToList();
+
+                // consumers.First().InvQuantity reads the live 4-city sum via the
+                // Barter.InvQuantity getter (which goes through StorageCollection).
+                int currentTotal = consumers.First().InvQuantity;
+                int totalProduced = producers.Sum(p => p.ExchangeQuantity * p.Item2Number);
+                int totalConsumed = consumers.Sum(c => c.ExchangeQuantity * c.Item1Number);
+                int newValue = Math.Max(0, currentTotal + totalProduced - totalConsumed);
+
+                // LV cap: only apply when the user explicitly selected a max value
+                // (SelectedIndex >= 0). The ComboBoxes default to -1 with no XAML
+                // override, so the previous unconditional cap was clamping every
+                // positive LV5/6/7 InvQuantityChange to -1, which then became 0 via
+                // Math.Max(0, -1) in the Done handler and zeroed the entire plan.
+                int lvMaxIndex = -1;
+                var firstConsumer = consumers.First();
+                if (firstConsumer.Item1 != null) {
+                    if (firstConsumer.Item1.ItemLV == "5") {
+                        lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex;
+                    }
+                    else if (firstConsumer.Item1.ItemLV == "6") {
+                        lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex;
+                    }
+                    else if (firstConsumer.Item1.ItemLV == "7") {
+                        lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex;
+                    }
                 }
-                else {
-                    barter.InvQuantityChange = Math.Max(0, barter.InvQuantity - barter.ExchangeQuantity * barter.Item1Number);
+                if (lvMaxIndex >= 0 && newValue > lvMaxIndex) {
+                    newValue = lvMaxIndex;
                 }
 
-                if (barter.Item1.ItemLV == "5" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex) {
-                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex;
-                }
-                else if (barter.Item1.ItemLV == "6" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex) {
-                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex;
-                }
-                else if (barter.Item1.ItemLV == "7" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex) {
-                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex;
+                // All barters that consume this item share the same post-plan quantity.
+                foreach (var consumer in consumers) {
+                    consumer.InvQuantityChange = newValue;
                 }
             }
         }
+
 
 
         private void UpdateMapControl() {
@@ -638,40 +696,31 @@ namespace iBarter.View {
                 App.myStorageManagement = new StorageManagement();
             }
 
-            // X3: refresh InvQuantityChange for every group before reading it, so the
+            // X3: refresh InvQuantityChange for every barter before reading it, so the
             // values written below reflect the user's current ExchangeQuantity edits
             // rather than whatever was left by the last CurrentCellEndEdit.
-            foreach (int group in App.myPVM.BarterCollection.Select(b => b.BarterGroup).Distinct()) {
-                UpdateInvChange(group);
-            }
+            //
+            // The unified formula in UpdateInvChange correctly handles in-group and
+            // cross-group chains, multi-consumer items, and the LV Max ComboBox bug
+            // (default SelectedIndex = -1 used to clamp every LV5/6/7 item to -1).
+            UpdateInvChange(-1);
 
-            // X5(A): for each storage item, find all barters that consume it (Item1 == name).
-            //   - single consumer (chain intermediate): trust its InvQuantityChange, which
-            //     already includes upstream production via the myBarter lookup in
-            //     UpdateInvChange.
-            //   - multiple consumers (parallel paths sharing the same input): sum their
-            //     ExchangeQuantity * Item1Number and subtract from the current 4-city total.
+            // For each storage item, find barters that consume it (Item1 == name) and
+            // write the post-plan quantity from matching[0].InvQuantityChange, which
+            // UpdateInvChange has already computed via the unified formula. All
+            // consumers of the same item share the same value.
             foreach (Items item in App.myStorageVM.StorageCollection) {
                 var matching = App.myPVM.BarterCollection.Where(b => b.Item1Name == item.ItemName).ToList();
                 if (matching.Count == 0) {
                     continue;
                 }
 
-                int newTarget;
-                if (matching.Count == 1) {
-                    newTarget = Math.Max(0, matching[0].InvQuantityChange);
-                }
-                else {
-                    int currentTotal = item.StorageVeliaQuantity_Velia
-                                     + item.StorageVeliaQuantity_Iliya
-                                     + item.StorageVeliaQuantity_Epheria
-                                     + item.StorageVeliaQuantity_Ancado;
-                    int totalConsumed = matching.Sum(b => b.ExchangeQuantity * b.Item1Number);
-                    newTarget = Math.Max(0, currentTotal - totalConsumed);
-                }
+                int newTarget = Math.Max(0, matching[0].InvQuantityChange);
 
-                // Mirror the LV caps applied inside UpdateInvChange so the multi-consumer
-                // path doesn't exceed the planner's configured max for LV5/6/7 items.
+                // Mirror the LV cap guard from UpdateInvChange so this path is consistent
+                // when matching.Count > 1 (the cap was already applied to InvQuantityChange
+                // in UpdateInvChange; this is defense-in-depth in case the formula ever
+                // changes to bypass UpdateInvChange).
                 int lvMaxIndex = -1;
                 if (item.ItemLV == "5") {
                     lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex;
@@ -682,8 +731,8 @@ namespace iBarter.View {
                 else if (item.ItemLV == "7") {
                     lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex;
                 }
-                if (lvMaxIndex > 0) {
-                    newTarget = Math.Min(newTarget, lvMaxIndex);
+                if (lvMaxIndex >= 0 && newTarget > lvMaxIndex) {
+                    newTarget = lvMaxIndex;
                 }
 
                 // X7: write to whichever city is selected; Velia is a logged fallback for
@@ -715,6 +764,7 @@ namespace iBarter.View {
             DataGrid_Planner.EndInit();
             App.myStorageVM.SaveData();
         }
+
 
 
         private void ButtonAdv_New_Click(object sender, RoutedEventArgs e) {
@@ -781,7 +831,7 @@ namespace iBarter.View {
         private void ComboBox_LV5Max_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
             if (ComboBox_LV5Max.SelectedItem != null) {
                 // 保存选中的值
-                Properties.Settings.Default.SelectedComboBoxValue = ComboBox_LV5Max.SelectedIndex;
+                Properties.Settings.Default.SelectedComboBoxValueLV5 = ComboBox_LV5Max.SelectedIndex;
                 Properties.Settings.Default.Save();
             }
         }
@@ -802,7 +852,7 @@ namespace iBarter.View {
 
 
         private void LoadSavedComboBoxValue() {
-            int savedValue = Properties.Settings.Default.SelectedComboBoxValue;
+            int savedValue = Properties.Settings.Default.SelectedComboBoxValueLV5;
             if (savedValue >= 0 && savedValue < ComboBox_LV5Max.Items.Count)
                 ComboBox_LV5Max.SelectedIndex = savedValue;
             savedValue = Properties.Settings.Default.SelectedComboBoxValueLV6;
