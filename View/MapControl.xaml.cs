@@ -31,8 +31,13 @@ namespace iBarter.View {
 
             myTimer.Interval = TimeSpan.FromMilliseconds(100);
             myTimer.Tick += TimerOnTick;
-            // Stop the timer when the control unloads so the tick handler and
-            // dispatcher hook don't outlive the live tab.
+            // DockingManager unloads the control when its tab is hidden,
+            // so restart the timer on Loaded too - otherwise the auto-
+            // layout (IslandsButtonRearrange) and overlap-avoidance
+            // (AdjustLabels) stop firing after the user switches tabs.
+            this.Loaded += (_, _) => {
+                if (myTimer != null && !myTimer.IsEnabled) myTimer.Start();
+            };
             this.Unloaded += (_, _) => {
                 if (myTimer != null && myTimer.IsEnabled) myTimer.Stop();
             };

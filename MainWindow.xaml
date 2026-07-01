@@ -21,7 +21,7 @@
     CloseButtonTemplate="{DynamicResource ProductsWindowCloseButtonTemplate}"
     MaximizeButtonTemplate="{DynamicResource ProductsWindowMaximizeButtonTemplate}"
     MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
-    ResizeBorderThickness="0"
+    ResizeBorderThickness="4"
     RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
     AllowsTransparency="True"
     Visibility="Visible"
