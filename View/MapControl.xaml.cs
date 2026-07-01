@@ -715,9 +715,12 @@ namespace iBarter.View {
             if (!_barter.IsLand.IslandsName.Contains("Temp")) {
                 Line myLine = new Line();
                 myLine.Name = "Line_" + _barter.IsLand.IslandsName;
-                myLine.Stroke = _brush;
+                // Use the same light-tint derived from the group brush
+                // as the text label, so the connector stays visible on the
+                // dark map background and visually links to its group.
+                myLine.Stroke = LightenForMapBg(_brush);
                 //myLine.Stroke = Brushes.Red;
-                myLine.StrokeThickness = 1;
+                myLine.StrokeThickness = 1.5;
 
                 double x = myGrid_Image.ActualWidth / 2;
                 double y1 = myGrid_Image.ActualHeight;
