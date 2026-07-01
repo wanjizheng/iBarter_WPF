@@ -174,6 +174,13 @@ namespace iBarter.View {
             }
 
             foreach (Grid grid in listGrid_Islands) {
+                // Skip temp placeholders in the reposition loop too -
+                // their islands.IslandsName lookup can NRE because the CSV
+                // name (e.g. Cox_Pirates - plural) does not match the enum/grid
+                // suffix (Cox_Pirate - singular). The cleanup loop above
+                // already keeps them in the list, so we still need to skip
+                // them here to avoid the crash.
+                if (grid.Name.Contains("Temp")) continue;
                 Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == grid.Name.Substring(14, grid.Name.Length - 14));
                 Grid Grid_Image = null;
                 Label myLabel = null;
