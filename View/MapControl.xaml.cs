@@ -108,6 +108,23 @@ namespace iBarter.View {
             myIsland = new Islands(Island.Hakoven, 0, 0);
             myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
             IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            // Top-left / top-right "default displayed" islands added with the LV6/LV7 batch
+            // (Top < 0.21, Left < 0.10 for top-left; Top < 0.21, Left > 0.95 for top-right).
+            // These were registered in EnumLists + Islands.csv but never wired into
+            // InitTempGrid, so they stayed hidden even though they live in the same map
+            // corners as the existing default islands (Carrack, Hakoven, ...).
+            myIsland = new Islands(Island.Dallae, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Haemo, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
+
+            myIsland = new Islands(Island.Arehaza, 0, 0);
+            myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
+            IslandsButtonInitialisation(myBater, Brushes.DarkSlateGray);
         }
 
 
@@ -673,6 +690,12 @@ namespace iBarter.View {
 
                     App.myfmMain.myShipCargo.UpdateCurrentLV();
                     App.myfmMain.myShipCargo.SaveData();
+                    // Re-render map labels so the middle-clicked point
+                    // becomes Bold (or reverts) immediately - without this
+                    // call, the label FontWeight would never update and
+                    // the bold highlight only appeared on the next map
+                    // rebuild (e.g. via UpdateMapControl).
+                    App.myfmMain.myMapControl.IslandsButtonInitialisation();
                 }
             }
         }
