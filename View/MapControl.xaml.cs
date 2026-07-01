@@ -676,10 +676,18 @@ namespace iBarter.View {
             // AND the dim island block. Pick a light tint derived from the
             // caller's brush so the text visually ties back to the block.
             myLabel.Foreground = LightenForMapBg(_brush);
-            // Semi-transparent black panel under the text so it remains
-            // readable over the busy map (textures, other labels, lines).
-            myLabel.Background = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0));
+            // Foreground: light tint of the group colour so the text reads
+            // on the dark navy map background.
+            myLabel.Foreground = LightenForMapBg(_brush);
             //myLabel.Foreground = Brushes.Red;
+            // Background: a semi-transparent black panel under the text so it
+            // remains readable over the busy map (textures, other labels,
+            // lines). Empty-content labels (islands not in any active
+            // barter) get Brushes.Transparent so no dark rectangle shows
+            // up next to the island (that was the "shadow" artifact).
+            myLabel.Background = myLabel.Content == ""
+                ? Brushes.Transparent
+                : new SolidColorBrush(Color.FromArgb(160, 0, 0, 0));
 
             myLabel.HorizontalAlignment = HorizontalAlignment.Left;
             myLabel.VerticalAlignment = VerticalAlignment.Top;
