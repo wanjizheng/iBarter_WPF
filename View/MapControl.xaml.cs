@@ -25,6 +25,22 @@ namespace iBarter.View {
         private List<Line> listLines = null;
         public DispatcherTimer myTimer = new DispatcherTimer();
 
+        // Holds direct references to an island's visual parts (image block,
+        // label, connector line) plus its Islands model and whether it is a
+        // "Temp" placeholder (an island with no active barter, kept on the
+        // map permanently as a position marker). Stashing this on the
+        // container Grid's Tag lets IslandsButtonRearrange reposition every
+        // island - Temp or not - on every resize without re-deriving names
+        // from Grid.Name substrings/suffixes, which was fragile and is what
+        // previously left Temp placeholders "stuck" after a window resize.
+        private class IslandVisual {
+            public Islands Islands;
+            public bool IsTemp;
+            public Grid ImageGrid;
+            public Label Label;
+            public Line Line;
+        }
+
         public MapControl() {
             InitializeComponent();
             //InitTempGrid();
@@ -155,54 +171,38 @@ namespace iBarter.View {
 
             for (int i = listGrid_Islands.Count - 1; i >= 0; i--) {
                 Grid grid = listGrid_Islands[i];
+                IslandVisual visual = grid.Tag as IslandVisual;
                 // Where(...) returns a non-null IEnumerable, so the legacy check
                 // never fired and stale pins accumulated. Use Any() instead.
-                bool hasActiveBarter = App.myPVM.BarterCollection.Any(b =>
+                bool hasActiveBarter = visual != null && App.myPVM.BarterCollection.Any(b =>
                     b.ExchangeDone == false &&
                     b.ExchangeQuantity > 0 &&
-                    b.IsLandName == grid.Name.Substring(14, grid.Name.Length - 14));
+                    b.IsLandName == visual.Islands.IslandsName);
                 if (!hasActiveBarter) {
-                    // Skip temp placeholders - they have a "Temp" suffix on
-                    // their grid name (set by IslandsButtonInitialisation when
-                    // Item1Name is empty). They live in the map permanently
-                    // as position markers and must stay in listGrid_Islands
-                    // so the rearrange loop repositions them on every map
-                    // resize.
-                    if (grid.Name.Contains("Temp")) continue;
+                    // Skip temp placeholders - they live on the map
+                    // permanently as position markers and must stay in
+                    // listGrid_Islands so the rearrange loop repositions
+                    // them on every map resize.
+                    if (visual != null && visual.IsTemp) continue;
                     listGrid_Islands.Remove(grid);
                 }
             }
 
             foreach (Grid grid in listGrid_Islands) {
-                // Temp placeholders have a "Temp" suffix on their child
-                // elements (ImageGrid / Label / Line) so Find* lookups
-                // must include the same suffix. Compute it once from
-                // the grid name to avoid the wrong-suffix bug that left
-                // Temp placeholders at their construction-time positions.
-                bool isTempGrid = grid.Name.Contains("Temp");
-                Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == grid.Name.Substring(14, grid.Name.Length - 14));
-                Grid Grid_Image = null;
-                Label myLabel = null;
-                Line myLine = null;
-                if (myIslands != null) {
-                    string suffix = isTempGrid ? "Temp" : "";
-                    Grid_Image = FindGrid(grid, "GridImage_" + myIslands.IslandsName + suffix);
-                    myLabel = FindLabel(grid, "Label_" + myIslands.IslandsName + suffix);
-                    if (!isTempGrid) {
-                        myLine = FindLine(grid, "Line_" + myIslands.IslandsName);
-                        listLines.Add(myLine);
-                    }
-                }
-                else {
-                    myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName + "Temp" == grid.Name.Substring(14, grid.Name.Length - 14));
-                    // Defensive null check: the lookup can fail when the CSV
-                    // name does not match the enum suffix (e.g. Cox_Pirates
-                    // vs Cox_Pirate). In that case myIslands is null and
-                    // accessing .IslandsName below would NRE.
-                    if (myIslands != null) {
-                        Grid_Image = FindGrid(grid, "GridImage_" + myIslands.IslandsName + "Temp");
-                        myLabel = FindLabel(grid, "Label_" + myIslands.IslandsName + "Temp");
-                    }
+                // Use the IslandVisual stashed on Tag at construction time
+                // instead of re-deriving names from Grid.Name substrings -
+                // that string-matching (including the "Temp" suffix used
+                // for placeholder islands) was fragile and could silently
+                // fail to find the image/label, leaving Temp placeholders
+                // stuck at their construction-time position after a resize.
+                IslandVisual visual = grid.Tag as IslandVisual;
+                if (visual == null) continue;
+
+                Islands myIslands = visual.Islands;
+                Grid Grid_Image = visual.ImageGrid;
+                Label myLabel = visual.Label;
+                if (!visual.IsTemp && visual.Line != null) {
+                    listLines.Add(visual.Line);
                 }
 
                 if (myIslands != null && myLabel != null && Grid_Image != null) {
@@ -669,9 +669,15 @@ namespace iBarter.View {
         }
 
         private void ButtonInitialisation(Barter _barter, Brush _brush) {
+            // Computed once and reused everywhere below instead of
+            // repeating the Item1Name/Item2Name check (and instead of
+            // re-deriving "temp-ness" later from a Name string), so a
+            // Temp placeholder island is unambiguously identified.
+            bool isTemp = !(_barter.Item1Name != "" && _barter.Item2Name != null);
+
             Grid myGrid_Container = new Grid();
 
-            if (_barter.Item1Name != "" && _barter.Item2Name != null) {
+            if (!isTemp) {
                 myGrid_Container.Name = "GridContainer_" + _barter.IsLandName;
                 myGrid_Container.MouseLeftButtonDown += Islands_MouseLeftButtonDown;
                 myGrid_Container.MouseRightButtonDown += Islands_MouseRightButtonDown;
@@ -682,7 +688,7 @@ namespace iBarter.View {
             }
 
             Grid myGrid_Image = new Grid();
-            if (_barter.Item1Name != "" && _barter.Item2Name != null) {
+            if (!isTemp) {
                 myGrid_Image.Name = "GridImage_" + _barter.IsLandName;
             }
             else {
@@ -698,7 +704,7 @@ namespace iBarter.View {
             myRectangle.Fill = _brush;
 
             Label myLabel = new Label();
-            if (_barter.Item1Name != "" && _barter.Item2Name != null) {
+            if (!isTemp) {
                 myLabel.Name = "Label_" + _barter.IsLand.IslandsName;
             }
             else {
@@ -772,9 +778,13 @@ namespace iBarter.View {
             else
                 myLabel.Visibility = Visibility.Collapsed;
 
-
-            if (!_barter.IsLand.IslandsName.Contains("Temp")) {
-                Line myLine = new Line();
+            Line myLine = null;
+            // Bug fix: this used to check _barter.IsLand.IslandsName.Contains("Temp"),
+            // but IslandsName is just the enum name (never has a "Temp" suffix), so
+            // that condition was always true and a connector line got added even to
+            // Temp placeholders (which have no visible label to connect to).
+            if (!isTemp) {
+                myLine = new Line();
                 myLine.Name = "Line_" + _barter.IsLand.IslandsName;
                 // Use the same light-tint derived from the group brush
                 // as the text label, so the connector stays visible on the
@@ -795,6 +805,19 @@ namespace iBarter.View {
                 myGrid_Container.Children.Add(myLine);
             }
 
+            // Stash direct references to this island's visual parts on the
+            // container's Tag. IslandsButtonRearrange reads this instead of
+            // re-parsing Grid.Name substrings/suffixes - that string-based
+            // lookup was fragile and could fail silently, leaving Temp
+            // placeholders (and potentially real islands) stuck at their
+            // construction-time position after a window resize.
+            myGrid_Container.Tag = new IslandVisual {
+                Islands = _barter.IsLand,
+                IsTemp = isTemp,
+                ImageGrid = myGrid_Image,
+                Label = myLabel,
+                Line = myLine
+            };
 
             Grid_MapMain.Children.Add(myGrid_Container);
 
