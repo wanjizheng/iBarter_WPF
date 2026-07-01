@@ -67,9 +67,12 @@ namespace iBarter {
 
             myfmMain.statusBarItem_Version.Text = "Version: Beta_4.4";
 
-            // OnLastWindowClose so closing MainWindow plus child windows actually exits
-            // the process; OnMainWindowClose used to leave child dialogs running.
-            this.ShutdownMode = ShutdownMode.OnLastWindowClose;
+            // OnMainWindowClose: closing the main window exits the entire process
+            // immediately, regardless of whether child windows (BarterScanner,
+            // StorageManagement, SplashScreen, docked panels) are still open.
+            // WPF auto-closes docked children; SplashScreen's background STA
+            // Dispatcher is shut down explicitly in MainWindow_Closing.
+            this.ShutdownMode = ShutdownMode.OnMainWindowClose;
         }
 
         protected override void OnStartup(StartupEventArgs e) {
