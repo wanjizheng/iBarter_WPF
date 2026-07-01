@@ -222,7 +222,11 @@ namespace iBarter.View {
             ListBox_ShipCargo.ItemsSource = App.myCVM.CargoDetails;
         }
 
-        // LT weights: LV1=100, LV2=800, LV3=900, LV4=1000, LV5=1000, LV6=2000, LV7=2000
+        // LT weights by LV (sourced from BDO official news and bdocodex).
+        // LV1=100, LV2=400, LV3=900, LV4=1000, LV5=1000, LV6=2000, LV7=2000.
+        // LV2 was 800 pre-balance but was reduced to 400 by BDO; iBarter
+        // was still shipping the old value, which double-counted LV2
+        // cargo weight in ShipCargoControl.CurrentLT.
         private int GetWeight(string _lv) {
             int intWeight = 0;
             switch (_lv) {
@@ -230,7 +234,7 @@ namespace iBarter.View {
                     intWeight = 100;
                     break;
                 case "2":
-                    intWeight = 800;
+                    intWeight = 400;
                     break;
                 case "3":
                     intWeight = 900;
