@@ -692,12 +692,13 @@ namespace iBarter.View {
             // lines). Empty-content labels (islands not in any active
             // barter) get Brushes.Transparent so no dark rectangle shows
             // up next to the island (that was the "shadow" artifact).
-            myLabel.Background = myLabel.Content == ""
-                ? Brushes.Transparent
-                // 80 = 31% opaque (down from 160/63%) per user feedback
-                // that the panel was too dark. Still gives the light-tint text
-                // a readable background without overwhelming the map.
-                : new SolidColorBrush(Color.FromArgb(80, 0, 0, 0));
+                        // No background panel: the light-tint text colour
+            // (LightenForMapBg) already gives high contrast on the dark
+            // navy map background, so any panel is just visual weight.
+            // The user flagged the dark rectangle next to the label as a
+            // "shadow" artifact - gone entirely. Empty-content labels
+            // also get null so no rectangle renders.
+            myLabel.Background = null;
 
             myLabel.HorizontalAlignment = HorizontalAlignment.Left;
             myLabel.VerticalAlignment = VerticalAlignment.Top;
