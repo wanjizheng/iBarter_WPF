@@ -624,40 +624,98 @@ namespace iBarter.View {
         private void ButtonAdv_Done_Click(object sender, RoutedEventArgs e) {
             MessageBoxResult result = MessageBox.Show("Are you sure you have completed this plan?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
-            if (result == MessageBoxResult.Yes) {
-                if (App.myStorageVM.StorageCollection != null) {
-                    foreach (Items item in App.myStorageVM.StorageCollection) {
-                        if (App.myPVM != null) {
-                            Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.Item1Name == item.ItemName);
-                            if (myBarter != null) {
-                                switch (App.myStorageManagement.ComboBoxAdv_DefaultStorage.SelectedIndex) {
-                                    case 0:
-                                        item.StorageVeliaQuantity_Velia = myBarter.InvQuantityChange;
-                                        break;
-                                    case 1:
-                                        item.StorageVeliaQuantity_Iliya = myBarter.InvQuantityChange;
-                                        break;
-                                    case 2:
-                                        item.StorageVeliaQuantity_Epheria = myBarter.InvQuantityChange;
-                                        break;
-                                    case 3:
-                                        item.StorageVeliaQuantity_Ancado = myBarter.InvQuantityChange;
-                                        break;
-                                }
-                            }
-                        }
-                    }
+            if (result != MessageBoxResult.Yes) {
+                return;
+            }
+
+            if (App.myStorageVM == null || App.myStorageVM.StorageCollection == null || App.myPVM == null) {
+                return;
+            }
+
+            // X4: lazy-init the storage window so a Done click before the user has ever
+            // opened StorageManagement doesn't NRE on ComboBoxAdv_DefaultStorage.
+            if (App.myStorageManagement == null) {
+                App.myStorageManagement = new StorageManagement();
+            }
+
+            // X3: refresh InvQuantityChange for every group before reading it, so the
+            // values written below reflect the user's current ExchangeQuantity edits
+            // rather than whatever was left by the last CurrentCellEndEdit.
+            foreach (int group in App.myPVM.BarterCollection.Select(b => b.BarterGroup).Distinct()) {
+                UpdateInvChange(group);
+            }
+
+            // X5(A): for each storage item, find all barters that consume it (Item1 == name).
+            //   - single consumer (chain intermediate): trust its InvQuantityChange, which
+            //     already includes upstream production via the myBarter lookup in
+            //     UpdateInvChange.
+            //   - multiple consumers (parallel paths sharing the same input): sum their
+            //     ExchangeQuantity * Item1Number and subtract from the current 4-city total.
+            foreach (Items item in App.myStorageVM.StorageCollection) {
+                var matching = App.myPVM.BarterCollection.Where(b => b.Item1Name == item.ItemName).ToList();
+                if (matching.Count == 0) {
+                    continue;
                 }
 
-                if (App.myPVM != null) {
-                    App.listBarterPlanner.Clear();
-                    DataGrid_Planner.BeginInit();
-                    App.myPVM.BarterCollection.Clear();
-                    DataGrid_Planner.EndInit();
-                    App.myStorageVM.SaveData();
+                int newTarget;
+                if (matching.Count == 1) {
+                    newTarget = Math.Max(0, matching[0].InvQuantityChange);
+                }
+                else {
+                    int currentTotal = item.StorageVeliaQuantity_Velia
+                                     + item.StorageVeliaQuantity_Iliya
+                                     + item.StorageVeliaQuantity_Epheria
+                                     + item.StorageVeliaQuantity_Ancado;
+                    int totalConsumed = matching.Sum(b => b.ExchangeQuantity * b.Item1Number);
+                    newTarget = Math.Max(0, currentTotal - totalConsumed);
+                }
+
+                // Mirror the LV caps applied inside UpdateInvChange so the multi-consumer
+                // path doesn't exceed the planner's configured max for LV5/6/7 items.
+                int lvMaxIndex = -1;
+                if (item.ItemLV == "5") {
+                    lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex;
+                }
+                else if (item.ItemLV == "6") {
+                    lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex;
+                }
+                else if (item.ItemLV == "7") {
+                    lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex;
+                }
+                if (lvMaxIndex > 0) {
+                    newTarget = Math.Min(newTarget, lvMaxIndex);
+                }
+
+                // X7: write to whichever city is selected; Velia is a logged fallback for
+                // any unexpected SelectedIndex (e.g. -1 from a cleared combo), so the click
+                // still has a visible effect instead of being silently lost.
+                switch (App.myStorageManagement.ComboBoxAdv_DefaultStorage.SelectedIndex) {
+                    case 0:
+                        item.StorageVeliaQuantity_Velia = newTarget;
+                        break;
+                    case 1:
+                        item.StorageVeliaQuantity_Iliya = newTarget;
+                        break;
+                    case 2:
+                        item.StorageVeliaQuantity_Epheria = newTarget;
+                        break;
+                    case 3:
+                        item.StorageVeliaQuantity_Ancado = newTarget;
+                        break;
+                    default:
+                        App.myCFun.Log("ComboBoxAdv_DefaultStorage.SelectedIndex out of range; defaulting to Velia.", System.Windows.Media.Brushes.Orange);
+                        item.StorageVeliaQuantity_Velia = newTarget;
+                        break;
                 }
             }
+
+            App.listBarterPlanner.Clear();
+            DataGrid_Planner.BeginInit();
+            App.myPVM.BarterCollection.Clear();
+            DataGrid_Planner.EndInit();
+            App.myStorageVM.SaveData();
         }
+
 
         private void ButtonAdv_New_Click(object sender, RoutedEventArgs e) {
             DataGrid_Planner.BeginInit();

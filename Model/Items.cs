@@ -111,22 +111,34 @@ namespace iBarter {
 
         public int StorageVeliaQuantity_Velia {
             get { return intStorage_Velia; }
-            set { intStorage_Velia = value; }
+            set {
+                intStorage_Velia = value;
+                RaisePropertyChanged("StorageVeliaQuantity_Velia");
+            }
         }
 
         public int StorageVeliaQuantity_Iliya {
             get { return intStorage_Iliya; }
-            set { intStorage_Iliya = value; }
+            set {
+                intStorage_Iliya = value;
+                RaisePropertyChanged("StorageVeliaQuantity_Iliya");
+            }
         }
 
         public int StorageVeliaQuantity_Epheria {
             get { return intStorage_Epheria; }
-            set { intStorage_Epheria = value; }
+            set {
+                intStorage_Epheria = value;
+                RaisePropertyChanged("StorageVeliaQuantity_Epheria");
+            }
         }
 
         public int StorageVeliaQuantity_Ancado {
             get { return intStorage_Ancado; }
-            set { intStorage_Ancado = value; }
+            set {
+                intStorage_Ancado = value;
+                RaisePropertyChanged("StorageVeliaQuantity_Ancado");
+            }
         }
     }
 }
