@@ -162,6 +162,13 @@ namespace iBarter.View {
                     b.ExchangeQuantity > 0 &&
                     b.IsLandName == grid.Name.Substring(14, grid.Name.Length - 14));
                 if (!hasActiveBarter) {
+                    // Skip temp placeholders - they have a "Temp" suffix on
+                    // their grid name (set by IslandsButtonInitialisation when
+                    // Item1Name is empty). They live in the map permanently
+                    // as position markers and must stay in listGrid_Islands
+                    // so the rearrange loop repositions them on every map
+                    // resize.
+                    if (grid.Name.Contains("Temp")) continue;
                     listGrid_Islands.Remove(grid);
                 }
             }
