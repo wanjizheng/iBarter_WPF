@@ -526,6 +526,12 @@ namespace iBarter.View {
                 if (barter.Item1.ItemLV == "5" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex + 1) {
                     barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex + 1;
                 }
+                else if (barter.Item1.ItemLV == "6" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex + 1) {
+                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex + 1;
+                }
+                else if (barter.Item1.ItemLV == "7" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex + 1) {
+                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex + 1;
+                }
             }
         }
 
@@ -722,11 +728,31 @@ namespace iBarter.View {
             }
         }
 
+        private void ComboBox_LV6Max_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
+            if (ComboBox_LV6Max.SelectedItem != null) {
+                Properties.Settings.Default.SelectedComboBoxValueLV6 = ComboBox_LV6Max.SelectedIndex;
+                Properties.Settings.Default.Save();
+            }
+        }
+
+        private void ComboBox_LV7Max_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
+            if (ComboBox_LV7Max.SelectedItem != null) {
+                Properties.Settings.Default.SelectedComboBoxValueLV7 = ComboBox_LV7Max.SelectedIndex;
+                Properties.Settings.Default.Save();
+            }
+        }
+
 
         private void LoadSavedComboBoxValue() {
             int savedValue = Properties.Settings.Default.SelectedComboBoxValue;
             if (savedValue >= 0 && savedValue < ComboBox_LV5Max.Items.Count)
                 ComboBox_LV5Max.SelectedIndex = savedValue;
+            savedValue = Properties.Settings.Default.SelectedComboBoxValueLV6;
+            if (savedValue >= 0 && savedValue < ComboBox_LV6Max.Items.Count)
+                ComboBox_LV6Max.SelectedIndex = savedValue;
+            savedValue = Properties.Settings.Default.SelectedComboBoxValueLV7;
+            if (savedValue >= 0 && savedValue < ComboBox_LV7Max.Items.Count)
+                ComboBox_LV7Max.SelectedIndex = savedValue;
         }
     }
 }
