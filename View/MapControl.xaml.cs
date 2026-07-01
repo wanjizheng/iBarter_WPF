@@ -698,7 +698,15 @@ namespace iBarter.View {
             // The user flagged the dark rectangle next to the label as a
             // "shadow" artifact - gone entirely. Empty-content labels
             // also get null so no rectangle renders.
-            myLabel.Background = null;
+            // Re-add a very subtle panel only for labels WITH text.
+            // Empty-content labels stay null (they're Collapsed above so
+            // they don't render at all). Use a lighter alpha (40 = 16%
+            // opaque) to avoid the "shadow" complaint - just enough
+            // background contrast to make the light-tint text readable,
+            // not a heavy block.
+            myLabel.Background = myLabel.Content == ""
+                ? null
+                : new SolidColorBrush(Color.FromArgb(40, 0, 0, 0));
 
             myLabel.HorizontalAlignment = HorizontalAlignment.Left;
             myLabel.VerticalAlignment = VerticalAlignment.Top;
