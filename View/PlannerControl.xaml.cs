@@ -523,14 +523,14 @@ namespace iBarter.View {
                     barter.InvQuantityChange = Math.Max(0, barter.InvQuantity - barter.ExchangeQuantity * barter.Item1Number);
                 }
 
-                if (barter.Item1.ItemLV == "5" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex + 1) {
-                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex + 1;
+                if (barter.Item1.ItemLV == "5" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex) {
+                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex;
                 }
-                else if (barter.Item1.ItemLV == "6" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex + 1) {
-                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex + 1;
+                else if (barter.Item1.ItemLV == "6" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex) {
+                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex;
                 }
-                else if (barter.Item1.ItemLV == "7" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex + 1) {
-                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex + 1;
+                else if (barter.Item1.ItemLV == "7" && barter.InvQuantityChange > App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex) {
+                    barter.InvQuantityChange = App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex;
                 }
             }
         }

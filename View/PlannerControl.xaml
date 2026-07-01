@@ -101,6 +101,7 @@
             <!-- <Separator Margin="10,0,0,0" /> -->
             <Label Content="Max LV5:" VerticalAlignment="Center" />
             <syncfusion:ComboBoxAdv x:Name="ComboBox_LV5Max" SelectionChanged="ComboBox_LV5Max_SelectionChanged">
+                <syncfusion:ComboBoxItemAdv Content="0" />
                 <syncfusion:ComboBoxItemAdv Content="1" />
                 <syncfusion:ComboBoxItemAdv Content="2" />
                 <syncfusion:ComboBoxItemAdv Content="3" />
@@ -114,6 +115,7 @@
             </syncfusion:ComboBoxAdv>
             <Label Content="Max LV6:" VerticalAlignment="Center" />
             <syncfusion:ComboBoxAdv x:Name="ComboBox_LV6Max" SelectionChanged="ComboBox_LV6Max_SelectionChanged">
+                <syncfusion:ComboBoxItemAdv Content="0" />
                 <syncfusion:ComboBoxItemAdv Content="1" />
                 <syncfusion:ComboBoxItemAdv Content="2" />
                 <syncfusion:ComboBoxItemAdv Content="3" />
@@ -127,6 +129,7 @@
             </syncfusion:ComboBoxAdv>
             <Label Content="Max LV7:" VerticalAlignment="Center" />
             <syncfusion:ComboBoxAdv x:Name="ComboBox_LV7Max" SelectionChanged="ComboBox_LV7Max_SelectionChanged">
+                <syncfusion:ComboBoxItemAdv Content="0" />
                 <syncfusion:ComboBoxItemAdv Content="1" />
                 <syncfusion:ComboBoxItemAdv Content="2" />
                 <syncfusion:ComboBoxItemAdv Content="3" />
