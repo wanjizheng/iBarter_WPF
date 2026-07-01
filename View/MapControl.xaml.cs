@@ -188,8 +188,14 @@ namespace iBarter.View {
                 }
                 else {
                     myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName + "Temp" == grid.Name.Substring(14, grid.Name.Length - 14));
-                    Grid_Image = FindGrid(grid, "GridImage_" + myIslands.IslandsName + "Temp");
-                    myLabel = FindLabel(grid, "Label_" + myIslands.IslandsName + "Temp");
+                    // Defensive null check: the lookup can fail when the CSV
+                    // name does not match the enum suffix (e.g. Cox_Pirates
+                    // vs Cox_Pirate). In that case myIslands is null and
+                    // accessing .IslandsName below would NRE.
+                    if (myIslands != null) {
+                        Grid_Image = FindGrid(grid, "GridImage_" + myIslands.IslandsName + "Temp");
+                        myLabel = FindLabel(grid, "Label_" + myIslands.IslandsName + "Temp");
+                    }
                 }
 
                 if (myIslands != null) {
