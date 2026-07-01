@@ -694,7 +694,10 @@ namespace iBarter.View {
             // up next to the island (that was the "shadow" artifact).
             myLabel.Background = myLabel.Content == ""
                 ? Brushes.Transparent
-                : new SolidColorBrush(Color.FromArgb(160, 0, 0, 0));
+                // 80 = 31% opaque (down from 160/63%) per user feedback
+                // that the panel was too dark. Still gives the light-tint text
+                // a readable background without overwhelming the map.
+                : new SolidColorBrush(Color.FromArgb(80, 0, 0, 0));
 
             myLabel.HorizontalAlignment = HorizontalAlignment.Left;
             myLabel.VerticalAlignment = VerticalAlignment.Top;
