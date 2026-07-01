@@ -41,6 +41,9 @@ namespace iBarter.View {
             this.Unloaded += (_, _) => {
                 if (myTimer != null && myTimer.IsEnabled) myTimer.Stop();
             };
+            // Also re-trigger on Grid_MapMain.SizeChanged so islands reposition
+            // immediately on map resize (the timer keeps running as fallback).
+            Grid_MapMain.SizeChanged += (_, _) => IslandsButtonRearrange();
             myTimer.Start();
         }
 
@@ -706,7 +709,9 @@ namespace iBarter.View {
             // not a heavy block.
             myLabel.Background = myLabel.Content == ""
                 ? null
-                : new SolidColorBrush(Color.FromArgb(40, 0, 0, 0));
+                // 80 = 31% opaque (up from 40/16%) per user request for
+                // a slightly darker background for better text readability.
+                : new SolidColorBrush(Color.FromArgb(80, 0, 0, 0));
 
             myLabel.HorizontalAlignment = HorizontalAlignment.Left;
             myLabel.VerticalAlignment = VerticalAlignment.Top;
