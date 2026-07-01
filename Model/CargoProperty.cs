@@ -8,13 +8,14 @@ using Syncfusion.Windows.PropertyGrid;
 
 namespace iBarter.Model {
     public class CargoProperty : INotifyPropertyChanged {
-        private double propExtraLT, propTotalLT, doubCurrentLT, doubInitialLT;
+        private double propExtraLT, propTotalLT, doubCurrentLT, doubInitialLT, doubAfterRunLT;
 
-        public CargoProperty(double _extralLT = -1, double _totalLT = -1, double _currentLT = 0, double _initialLT = 0) {
+        public CargoProperty(double _extralLT = -1, double _totalLT = -1, double _currentLT = 0, double _initialLT = 0, double _afterRunLT = 0) {
             propExtraLT = _extralLT;
             propTotalLT = _totalLT;
             doubCurrentLT = _currentLT;
             doubInitialLT = _initialLT;
+            doubAfterRunLT = _initialLT + _currentLT;
         }
 
         [Category("CargoProperty"), Description("Extra LT"), DisplayName("ExtraLT")]
@@ -53,6 +54,21 @@ namespace iBarter.Model {
             }
         }
 
+        // Total LT on the ship AFTER all CargoDetails exchanges are done:
+        //   = InitialLT  (extra Item1 stock that had to be loaded for
+        //                chain roots - still on the ship because the chain
+        //                consumed them through the barter)
+        //   + CurrentLT (net Item2 leftover after chain consumption)
+        // Total LT of all goods on the ship at run-completion.
+        [Category("CargoProperty"), Description("After-Run LT"), DisplayName("AfterRunLT")]
+        public double AfterRunLT {
+            get { return doubAfterRunLT; }
+            set {
+                doubAfterRunLT = value;
+                OnPropertyChanged();
+            }
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) {
@@ -62,12 +78,12 @@ namespace iBarter.Model {
                 var pg = App.myfmMain?.myShipCargo?.PropertyGrid_Ship;
                 if (pg == null) return;
 
-                if (CurrentLT > TotalLT && CurrentLT <= TotalLT * 1.7 && InitialLT <= TotalLT) {
+                if (AfterRunLT > TotalLT && AfterRunLT <= TotalLT * 1.7 && InitialLT <= TotalLT) {
                     pg.Foreground = Brushes.Red;
                     pg.FontWeight = FontWeights.Bold;
                     pg.ViewBackgroundColor = Brushes.IndianRed;
                 }
-                else if (CurrentLT > TotalLT * 1.7 || InitialLT > TotalLT) {
+                else if (AfterRunLT > TotalLT * 1.7 || InitialLT > TotalLT) {
                     pg.Foreground = Brushes.Red;
                     pg.FontWeight = FontWeights.Bold;
                     pg.ViewBackgroundColor = Brushes.DarkRed;
