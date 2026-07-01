@@ -174,14 +174,21 @@ namespace iBarter.View {
             }
 
             foreach (Grid grid in listGrid_Islands) {
+                // Temp placeholders have a "Temp" suffix on their child
+                // elements (ImageGrid / Label / Line) so Find* lookups
+                // must include the same suffix. Compute it once from
+                // the grid name to avoid the wrong-suffix bug that left
+                // Temp placeholders at their construction-time positions.
+                bool isTempGrid = grid.Name.Contains("Temp");
                 Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == grid.Name.Substring(14, grid.Name.Length - 14));
                 Grid Grid_Image = null;
                 Label myLabel = null;
                 Line myLine = null;
                 if (myIslands != null) {
-                    Grid_Image = FindGrid(grid, "GridImage_" + myIslands.IslandsName);
-                    myLabel = FindLabel(grid, "Label_" + myIslands.IslandsName);
-                    if (!myIslands.IslandsName.Contains("Temp")) {
+                    string suffix = isTempGrid ? "Temp" : "";
+                    Grid_Image = FindGrid(grid, "GridImage_" + myIslands.IslandsName + suffix);
+                    myLabel = FindLabel(grid, "Label_" + myIslands.IslandsName + suffix);
+                    if (!isTempGrid) {
                         myLine = FindLine(grid, "Line_" + myIslands.IslandsName);
                         listLines.Add(myLine);
                     }
