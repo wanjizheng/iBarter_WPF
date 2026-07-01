@@ -230,6 +230,13 @@ namespace iBarter.View {
                         //AdjustLabels(listLabels);
                         listImages.Add(Grid_Image);
                     }
+                    else {
+                        // Empty label (island not in any active CargoDetails
+                        // barter) - collapse it entirely so no empty rectangle
+                        // shows on the map. Setting Visibility = Collapsed
+                        // removes the label from layout and rendering.
+                        myLabel.Visibility = Visibility.Collapsed;
+                    }
                 }
             }
 
