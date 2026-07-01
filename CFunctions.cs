@@ -155,6 +155,14 @@ namespace iBarter {
         }
 
         public void RefreshItems(string _itemID = "") {
+            // Run the HTTP + disk-write loop on a worker thread so the UI
+            // thread stays responsive during bdocodex downloads. Log() already
+            // marshals to the UI thread via Dispatcher.Invoke, so the iteration
+            // can safely run off-thread.
+            System.Threading.Tasks.Task.Run(() => RefreshItemsCore(_itemID));
+        }
+
+        private void RefreshItemsCore(string _itemID) {
             List<Items> listItems = LoadItemsCSV();
             if (_itemID != null) {
                 Items myItem = listItems.Where(i => i.ItemID == _itemID).FirstOrDefault();
@@ -195,6 +203,15 @@ namespace iBarter {
             if (_itemID == "") {
                 Log("Done!", Brushes.Red);
             }
+        }
+
+        // LV5+ items can only ever carry quantity=1 (per the current BDO
+        // barter rules). The main scan loop short-circuits TryReadQuantity
+        // when this returns true, so the OCR + Magick pipeline (and the
+        // CSV-fallback) are skipped entirely - saves ~150-300ms per icon.
+        private static bool IsHighTier(string itemLV) {
+            int lv;
+            return int.TryParse(itemLV, out lv) && lv >= 5;
         }
 
         private string getBetween(string strSource, string strStart, string strEnd) {
@@ -1421,15 +1438,25 @@ namespace iBarter {
             //     strID1 = "800012";
             // else if (strID1 == "800012")
             //     strID1 = "800011";
-            // Multi-ROI voting for the bottom-right "50" overlay (Phase A+C+D).
-            int intNumber1 = TryReadQuantity(listPointPlus[0], strID1);
-            if (intNumber1 <= 0) {
-                // OCR failed to agree - fall back to the CSV-default quantity and
-                // log so this case is visible.
-                intNumber1 = App.listItems.Where(i => i.ItemID == strID1)
-                    .Select(i => i.ItemNumber).FirstOrDefault();
-                if (intNumber1 > 0)
-                    Log($"OCR qty {strID1} fallback CSV={intNumber1}", Brushes.OrangeRed);
+            // Pre-OCR skip for LV5+ items: per BDO barter rules these can
+            // only ever carry quantity 1, so skip the entire Phase A/G/R
+            // OCR pipeline (~150-300ms per icon) and the CSV fallback
+            // lookup. Saves real time on every LV5+ barter item.
+            int intNumber1 = 1;
+            var lv1Item = App.listItems.FirstOrDefault(i => i.ItemID == strID1);
+            if (lv1Item == null || !IsHighTier(lv1Item.ItemLV)) {
+                // Multi-ROI voting for the bottom-right "50" overlay (Phase A+C+D).
+                intNumber1 = TryReadQuantity(listPointPlus[0], strID1);
+                if (intNumber1 <= 0) {
+                    // OCR failed to agree - fall back to the CSV-default quantity and
+                    // log so this case is visible.
+                    intNumber1 = App.listItems.Where(i => i.ItemID == strID1)
+                        .Select(i => i.ItemNumber).FirstOrDefault();
+                    if (intNumber1 > 0)
+                        Log($"OCR qty {strID1} fallback CSV={intNumber1}", Brushes.OrangeRed);
+                }
+            } else {
+                Log($"LV5+ skip OCR for {strID1} ({lv1Item.ItemName}) -> 1", Brushes.Gold);
             }
 
             // 9. 识别第二个物品
@@ -1441,7 +1468,14 @@ namespace iBarter {
                     strID2 = "800012";
                 else if (strID2 == "800012")
                     strID2 = "800011";
-                intNumber2 = TryReadQuantity(listPointPlus[1], strID2);
+                // Same pre-OCR LV5+ skip as for item 1.
+                var lv2Item = App.listItems.FirstOrDefault(i => i.ItemID == strID2);
+                if (lv2Item != null && IsHighTier(lv2Item.ItemLV)) {
+                    intNumber2 = 1;
+                    Log($"LV5+ skip OCR for {strID2} ({lv2Item.ItemName}) -> 1", Brushes.Gold);
+                } else {
+                    intNumber2 = TryReadQuantity(listPointPlus[1], strID2);
+                }
             }
             else {
                 Log("Cannot identify the second item. Use Crow Coin instead.", Brushes.Red);
