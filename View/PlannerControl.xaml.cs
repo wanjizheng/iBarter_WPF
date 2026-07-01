@@ -479,10 +479,10 @@ namespace iBarter.View {
                 App.myfmMain.myShipCargo.UpdateCurrentLV();
                 App.myfmMain.myShipCargo.SaveData();
             }
-        
+
             SaveData();
-            //RefreshDataGrid();
-            DataGrid_Planner.View.Refresh();
+            // View.Refresh() removed: bindings auto-refresh the edited cell,
+            // and the old call forced a full N-row redraw on every keystroke.
             UpdateParley();
             //Grouping();
             UpdateMapControl();
@@ -682,7 +682,8 @@ namespace iBarter.View {
 
                 UpdateParley();
                 SaveData();
-                DataGrid_Planner.View.Refresh();
+                // View.Refresh() removed: full N-row redraw on every
+                // action - needless churn for an action that just toggled booleans.
                 UpdateMapControl();
             }
         }
