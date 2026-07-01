@@ -1309,6 +1309,9 @@ namespace iBarter {
             // 6. 识别交易物品
             IdentifyTradeItem:
             List<PointPlus> listPointPlus = new List<PointPlus>();
+            // OCR the two trade-item labels directly from the screen via
+            // PureDM.CV.OCRString (it captures the rect internally and
+            // returns the recognised text). No disk file is involved.
             string strItem1 = App.myPureDM.CV.OCRString(
                 pointPlusParley.X,
                 pointPlusParley.Y - pointPlusParley.Size.Height,
@@ -1322,13 +1325,10 @@ namespace iBarter {
                 pointPlusRequired.X + 376 + 100,
                 pointPlusParley.Y + pointPlusParley.Size.Height, CV.OCRType.Words, CV.OCRMode.Color);
 
-            App.myPureDM.DM.Capture(pointPlusParley.X, pointPlusParley.Y - pointPlusParley.Size.Height,
-                pointPlusRequired.X + 120, pointPlusParley.Y + 1, "myItem1.bmp");
-
-            App.myPureDM.DM.Capture(pointPlusParley.X + 376,
-                pointPlusParley.Y - pointPlusParley.Size.Height,
-                pointPlusRequired.X + 376 + 100,
-                pointPlusParley.Y + pointPlusParley.Size.Height, "myItem2.bmp");
+            // (Removed two dead DM.Capture writes that produced
+            // myItem1.bmp / myItem2.bmp on disk - the OCR text above
+            // already gave us what we needed; no downstream code ever
+            // read those BMPs.)
 
             Items myItems1 = FindMostSimilarItem(strItem1, ExtractLevelPrefix(strItem1).lv);
             Items myItems2 = FindMostSimilarItem(strItem2, ExtractLevelPrefix(strItem2).lv);
