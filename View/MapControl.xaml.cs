@@ -736,7 +736,10 @@ namespace iBarter.View {
 
             myGrid_Container.Children.Add(myGrid_Image);
             myGrid_Image.Children.Add(myRectangle);
-            myGrid_Container.Children.Add(myLabel);
+            if (myLabel.Content != "")
+                myGrid_Container.Children.Add(myLabel);
+            else
+                myLabel.Visibility = Visibility.Collapsed;
 
 
             if (!_barter.IsLand.IslandsName.Contains("Temp")) {
