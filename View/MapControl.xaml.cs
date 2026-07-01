@@ -41,9 +41,15 @@ namespace iBarter.View {
             this.Unloaded += (_, _) => {
                 if (myTimer != null && myTimer.IsEnabled) myTimer.Stop();
             };
-            // Also re-trigger on Grid_MapMain.SizeChanged so islands reposition
-            // immediately on map resize (the timer keeps running as fallback).
-            Grid_MapMain.SizeChanged += (_, _) => IslandsButtonRearrange();
+            // Also re-trigger on Grid_MapMain.SizeChanged. Defer via
+            // Dispatcher.BeginInvoke at Render priority so the new layout
+            // pass completes first - ActualWidth/Height are still stale at
+            // the SizeChanged callback point and would otherwise position
+            // islands at 0,0 (i.e. top-left = centre of a tiny map). The
+            // timer keeps running as a fallback.
+            Grid_MapMain.SizeChanged += (_, _) =>
+                Dispatcher.BeginInvoke(new Action(IslandsButtonRearrange),
+                    DispatcherPriority.Render);
             myTimer.Start();
         }
 
