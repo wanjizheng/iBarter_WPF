@@ -205,7 +205,23 @@ namespace iBarter.View {
 
                     Grid_Image.Margin = new Thickness(myIslands.IslandsThickness.Left * Grid_MapMain.ActualWidth, myIslands.IslandsThickness.Top * Grid_MapMain.ActualHeight, myIslands.IslandsThickness.Right * Grid_MapMain.ActualWidth, myIslands.IslandsThickness.Bottom * Grid_MapMain.ActualHeight);
 
-                    myLabel.Margin = new Thickness(Grid_Image.Margin.Left - myLabel.ActualWidth / 2, Grid_Image.Margin.Top + Grid_Image.ActualHeight, Grid_Image.Margin.Right - myLabel.ActualWidth, Grid_Image.Margin.Bottom - myLabel.ActualHeight);
+                    // Place the label BELOW the island block by default,
+                    // but flip it ABOVE when the island sits too close
+                    // to the map's bottom edge - otherwise the label gets
+                    // clipped below the map (IslandsThickness.Bottom is
+                    // the gap from the island bottom to the map bottom;
+                    // a small value means the label would overflow).
+                    double labelTop;
+                    if (myIslands.IslandsThickness.Bottom < 0.08) {
+                        // flip: position label above the island block
+                        // (label baseline = top - label height)
+                        labelTop = Grid_Image.Margin.Top - myLabel.ActualHeight;
+                    }
+                    else {
+                        // default: position label below the island block
+                        labelTop = Grid_Image.Margin.Top + Grid_Image.ActualHeight;
+                    }
+                    myLabel.Margin = new Thickness(Grid_Image.Margin.Left - myLabel.ActualWidth / 2, labelTop, Grid_Image.Margin.Right - myLabel.ActualWidth, Grid_Image.Margin.Bottom - myLabel.ActualHeight);
 
 
                     NewMargin(myLabel);
