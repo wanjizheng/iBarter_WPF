@@ -317,9 +317,18 @@ namespace iBarter {
             try {
                 string finalBmp = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + _id + ".bmp";
                 using (var bitmap = new MagickImage(webpPath)) {
+                    // BackgroundColor MUST be assigned BEFORE Alpha(Remove):
+                    //   - Alpha(Remove) flattens transparency onto the current
+                    //     background colour.
+                    //   - If BackgroundColor is still Magick's default (white)
+                    //     when Alpha(Remove) runs, transparent pixels get
+                    //     flattened to white - producing the wrong colour
+                    //     inversion (white-bg icons were unreadable by Tesseract,
+                    //     which is trained on dark-bg / light-text).
+                    // Assign the dark pad first, then flatten alpha, then scale.
+                    bitmap.BackgroundColor = new MagickColor(24, 23, 25);
                     bitmap.Scale(new Percentage(400));   // upsample
                     bitmap.Alpha(AlphaOption.Remove);
-                    bitmap.BackgroundColor = new MagickColor(24, 23, 25);
                     bitmap.Resize(new MagickGeometry(44, 44));
                     bitmap.Format = MagickFormat.Bmp;
                     bitmap.Write(finalBmp);
