@@ -8,14 +8,13 @@ using Syncfusion.Windows.PropertyGrid;
 
 namespace iBarter.Model {
     public class CargoProperty : INotifyPropertyChanged {
-        private double propExtraLT, propTotalLT, doubCurrentLT, doubInitialLT, doubAfterRunLT;
+        private double propExtraLT, propTotalLT, doubCurrentLT, doubInitialLT;
 
-        public CargoProperty(double _extralLT = -1, double _totalLT = -1, double _currentLT = 0, double _initialLT = 0, double _afterRunLT = 0) {
+        public CargoProperty(double _extralLT = -1, double _totalLT = -1, double _currentLT = 0, double _initialLT = 0) {
             propExtraLT = _extralLT;
             propTotalLT = _totalLT;
             doubCurrentLT = _currentLT;
             doubInitialLT = _initialLT;
-            doubAfterRunLT = _initialLT + _currentLT;
         }
 
         [Category("CargoProperty"), Description("Extra LT"), DisplayName("ExtraLT")]
@@ -54,21 +53,6 @@ namespace iBarter.Model {
             }
         }
 
-        // Total LT on the ship AFTER all CargoDetails exchanges are done:
-        //   = InitialLT  (extra Item1 stock that had to be loaded for
-        //                chain roots - still on the ship because the chain
-        //                consumed them through the barter)
-        //   + CurrentLT (net Item2 leftover after chain consumption)
-        // Total LT of all goods on the ship at run-completion.
-        [Category("CargoProperty"), Description("After-Run LT"), DisplayName("AfterRunLT")]
-        public double AfterRunLT {
-            get { return doubAfterRunLT; }
-            set {
-                doubAfterRunLT = value;
-                OnPropertyChanged();
-            }
-        }
-
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) {
@@ -78,22 +62,35 @@ namespace iBarter.Model {
                 var pg = App.myfmMain?.myShipCargo?.PropertyGrid_Ship;
                 if (pg == null) return;
 
-                if (AfterRunLT > TotalLT && AfterRunLT <= TotalLT * 1.7 && InitialLT <= TotalLT) {
-                    pg.Foreground = Brushes.Red;
-                    pg.FontWeight = FontWeights.Bold;
-                    pg.ViewBackgroundColor = Brushes.IndianRed;
-                }
-                else if (AfterRunLT > TotalLT * 1.7 || InitialLT > TotalLT) {
-                    pg.Foreground = Brushes.Red;
-                    pg.FontWeight = FontWeights.Bold;
-                    pg.ViewBackgroundColor = Brushes.DarkRed;
-                }
-                else {
-                    pg.Foreground = Brushes.Black;
-                    pg.FontWeight = FontWeights.Normal;
-                    pg.ViewBackgroundColor = Brushes.White;
-                }
-
+                // UX-researched palette: avoid green (low readability on
+                // both white PropertyGrid and the dark map background);
+                // use blue for safe, orange for warning, crimson for
+                // danger. All three have high contrast on both light
+                // and dark surrounds. AfterRunLT was removed (duplicates
+                // CurrentLT) so this logic now keys off CurrentLT directly.
+                if (CurrentLT > TotalLT && CurrentLT <= TotalLT * 1.7 && InitialLT <= TotalLT) {
+                    // warning group: amber foreground, soft amber
+                    // background (no green, no flat-red clash with the
+                    // map's red island markers)
+                    pg.Foreground = new SolidColorBrush(Color.FromRgb(0xE6, 0x8A, 0x00)); // DarkOrange
+                    pg.FontWeight = FontWeights.SemiBold;
+                    pg.ViewBackgroundColor = new SolidColorBrush(Color.FromRgb(0xFF, 0xE5, 0xCC));
+                }
+                else if (CurrentLT > TotalLT * 1.7 || InitialLT > TotalLT) {
+                    // danger group: crimson foreground, light-pink
+                    // background (clear alert without being garish red)
+                    pg.Foreground = new SolidColorBrush(Color.FromRgb(0xC8, 0x10, 0x2E)); // Crimson
+                    pg.FontWeight = FontWeights.Bold;
+                    pg.ViewBackgroundColor = new SolidColorBrush(Color.FromRgb(0xFF, 0xD6, 0xD6));
+                }
+                else {
+                    // safe group: deep blue (high contrast on both
+                    // PropertyGrid white and the map's dark navy)
+                    pg.Foreground = new SolidColorBrush(Color.FromRgb(0x1E, 0x5A, 0xA8)); // DarkSlateBlue
+                    pg.FontWeight = FontWeights.Normal;
+                    pg.ViewBackgroundColor = new SolidColorBrush(Color.FromRgb(0xF5, 0xF8, 0xFC)); // very light blue
+                }
+
                 SaveData();
             });
         }

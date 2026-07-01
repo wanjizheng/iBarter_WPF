@@ -202,16 +202,6 @@ namespace iBarter.View {
 
             App.myCargoProperty.CurrentLT += App.myCargoProperty.ExtraLT;
             App.myCargoProperty.InitialLT += App.myCargoProperty.ExtraLT;
-            // AfterRunLT = total LT on the ship once every CargoDetails barter
-            // has been executed. Composed of:
-            //   InitialLT = extra Item1 input that had to be loaded because
-            //                they sit outside any upstream chain (still on
-            //                the ship at run-completion because the chain
-            //                consumed them through the barter)
-            // + CurrentLT = net Item2 leftover after chain consumption.
-            App.myCargoProperty.AfterRunLT =
-                App.myCargoProperty.InitialLT + App.myCargoProperty.CurrentLT;
-
             UpdateCargoList();
             // foreach (Barter myCvmCargoDetail in App.myCVM.CargoDetails) {
             //     App.myCFun.Log(myCvmCargoDetail.Item1Name+"=>"+myCvmCargoDetail.TotalItem1ExchangeQuantity,Brushes.Blue);
