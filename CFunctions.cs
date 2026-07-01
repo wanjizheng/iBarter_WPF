@@ -798,12 +798,12 @@ namespace iBarter {
         // Lightweight file logger for static helpers (Log is an instance method
         // that needs a UI thread, which we don't have here). Writes one line at
         // a time to a known location the operator can inspect.
+        // Disabled - the operator no longer needs the log file (scan results
+        // are surfaced via the in-app Log() method). Remove the body to make
+        // every TryWriteDebugLog call a no-op while keeping the call sites
+        // for documentation/grep value.
         private static void TryWriteDebugLog(string message) {
-            try {
-                string p = AppDomain.CurrentDomain.BaseDirectory + @"ocr_debug.log";
-                System.IO.File.AppendAllText(p, DateTime.Now.ToString("HH:mm:ss.fff") + " " + message + Environment.NewLine);
-            }
-            catch { }
+            // no-op: ocr_debug.log disabled
         }
 
         // Module-static cache of icon templates keyed by "<id>|<W>x<H>" so we
