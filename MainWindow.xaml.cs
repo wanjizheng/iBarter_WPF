@@ -2,6 +2,7 @@
 using PureDM.Logging;
 using Syncfusion.SfSkinManager;
 using Syncfusion.Windows.Shared;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -29,8 +30,34 @@ namespace iBarter {
             thread.IsBackground = true;
             thread.Start();
             App.myMainWVM.OnSelectedProductChanged();
+
+            // Without this, closing the main window leaves SplashScreen
+            // open (its Close() is only called inside the game-binding
+            // success branch - on bind failure it never closes), and
+            // App.ShutdownMode = OnLastWindowClose keeps the process
+            // alive for that open SplashScreen. Force-close splash +
+            // shut down its background Dispatcher here regardless.
+            this.Closing += MainWindow_Closing;
             //var mapCenterPoint = new MapPoint(14, 21, SpatialReferences.Wgs84);
             //MainMapView.SetViewpoint(new Viewpoint(mapCenterPoint, 52541284));
+        }
+
+        // Ensure the splash screen and its background STA Dispatcher shut
+        // down when the main window closes - otherwise OnLastWindowClose
+        // sees SplashScreen still open and never exits the process.
+        private void MainWindow_Closing(object? sender, CancelEventArgs e) {
+            try {
+                if (App.mySplashScreen != null && App.mySplashScreen.IsLoaded) {
+                    var splash = App.mySplashScreen;
+                    splash.Dispatcher.Invoke(() => {
+                        try { splash.Close(); } catch { }
+                        // Stop the background Dispatcher.Run() loop so the
+                        // STA thread can unwind.
+                        System.Windows.Threading.Dispatcher.ExitAllFrames();
+                    });
+                }
+            }
+            catch { }
         }
 
         // [DllImport("user32.dll")]
