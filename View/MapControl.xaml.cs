@@ -494,6 +494,41 @@ namespace iBarter.View {
             return null;
         }
 
+        // Return a light-tinted brush derived from the input colour,
+        // so the text label remains readable on the dark map
+        // background regardless of which group colour was passed in.
+        // Strategy: invert lightness (light colours become darker,
+        // dark colours become lighter) so the text contrasts with
+        // both the dark navy map background AND the island block
+        // (which uses the input brush colour directly).
+        private static Brush LightenForMapBg(Brush _brush) {
+            if (_brush is SolidColorBrush scb) {
+                Color c = scb.Color;
+                // Compute perceived lightness, then flip toward 1.0
+                // for dark inputs and 0.0 for light inputs. Target a
+                // brightness that contrasts with both the map (very
+                // dark navy) and the caller's brush (saturated, mid-).
+                double lum = (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255.0;
+                double target;
+                if (lum < 0.5) {
+                    // dark input -> push to a light/pale tint of the
+                    // same hue so it still reads as part of the group
+                    target = Math.Min(1.0, lum + 0.7);
+                }
+                else {
+                    // already-light input -> keep light, push even paler
+                    target = Math.Min(1.0, lum + 0.15);
+                }
+                byte r = (byte)Math.Min(255, (int)(c.R * (target / Math.Max(0.001, lum))));
+                byte g = (byte)Math.Min(255, (int)(c.G * (target / Math.Max(0.001, lum))));
+                byte b = (byte)Math.Min(255, (int)(c.B * (target / Math.Max(0.001, lum))));
+                return new SolidColorBrush(Color.FromRgb(r, g, b));
+            }
+            // Non-SolidColorBrush (e.g. linear gradient) - fall back
+            // to white so the text is always readable.
+            return Brushes.White;
+        }
+
         private Brush GetBursh(Barter _barter) {
             switch (_barter.BarterGroup) {
                 case -1:
@@ -635,8 +670,17 @@ namespace iBarter.View {
             }
 
             myLabel.UpdateLayout();
-            myLabel.Foreground = _brush;
+            // Per-group readable color scheme. The caller passes a brush
+            // (_brush) to colour the island block, but the text label needs
+            // a colour that contrasts with BOTH the dark navy map background
+            // AND the dim island block. Pick a light tint derived from the
+            // caller's brush so the text visually ties back to the block.
+            myLabel.Foreground = LightenForMapBg(_brush);
+            // Semi-transparent black panel under the text so it remains
+            // readable over the busy map (textures, other labels, lines).
+            myLabel.Background = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0));
             //myLabel.Foreground = Brushes.Red;
+
             myLabel.HorizontalAlignment = HorizontalAlignment.Left;
             myLabel.VerticalAlignment = VerticalAlignment.Top;
             if (_barter.Item1Name != "" && _barter.Item2Name != "") {
