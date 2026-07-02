@@ -735,10 +735,41 @@ namespace iBarter.View {
                     newTarget = lvMaxIndex;
                 }
 
-                // X7: write to whichever city is selected; Velia is a logged fallback for
-                // any unexpected SelectedIndex (e.g. -1 from a cleared combo), so the click
-                // still has a visible effect instead of being silently lost.
-                switch (App.myStorageManagement.ComboBoxAdv_DefaultStorage.SelectedIndex) {
+                // Decide which city to update for this item. Pick the city where the item
+                // currently has the largest non-zero stock (Velia → Iliya → Epheria → Ancado on ties),
+                // so we write to the city where the item already 'lives' rather than
+                // scattering it across cities. If the item has no stock anywhere (a brand
+                // new item the user hasn't seeded yet), fall back to ComboBoxAdv_DefaultStorage
+                // as the seed city. A cleared combo (-1) falls back to Velia with a warning.
+                int targetCity = -1;
+                int maxQty = 0;
+                if (item.StorageVeliaQuantity_Velia > maxQty) {
+                    maxQty = item.StorageVeliaQuantity_Velia;
+                    targetCity = 0;
+                }
+                if (item.StorageVeliaQuantity_Iliya > maxQty) {
+                    maxQty = item.StorageVeliaQuantity_Iliya;
+                    targetCity = 1;
+                }
+                if (item.StorageVeliaQuantity_Epheria > maxQty) {
+                    maxQty = item.StorageVeliaQuantity_Epheria;
+                    targetCity = 2;
+                }
+                if (item.StorageVeliaQuantity_Ancado > maxQty) {
+                    maxQty = item.StorageVeliaQuantity_Ancado;
+                    targetCity = 3;
+                }
+
+                if (targetCity == -1) {
+                    int fallback = App.myStorageManagement.ComboBoxAdv_DefaultStorage.SelectedIndex;
+                    if (fallback < 0 || fallback > 3) {
+                        App.myCFun.Log("ComboBoxAdv_DefaultStorage.SelectedIndex out of range; defaulting to Velia.", System.Windows.Media.Brushes.Orange);
+                        fallback = 0;
+                    }
+                    targetCity = fallback;
+                }
+
+                switch (targetCity) {
                     case 0:
                         item.StorageVeliaQuantity_Velia = newTarget;
                         break;
@@ -750,10 +781,6 @@ namespace iBarter.View {
                         break;
                     case 3:
                         item.StorageVeliaQuantity_Ancado = newTarget;
-                        break;
-                    default:
-                        App.myCFun.Log("ComboBoxAdv_DefaultStorage.SelectedIndex out of range; defaulting to Velia.", System.Windows.Media.Brushes.Orange);
-                        item.StorageVeliaQuantity_Velia = newTarget;
                         break;
                 }
             }
