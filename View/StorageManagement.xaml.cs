@@ -113,6 +113,30 @@ namespace iBarter.View {
                 listItems.Add("Naval Ration");
                 listItems.Add("Giant Fish Bone");
                 listItems.Add("Dried Blue Rose");
+                listItems.Add("Bamboo Sap Crate");
+                listItems.Add("Black Rose Bouquet");
+                listItems.Add("Brass Bowl Crate");
+                listItems.Add("Fancy Camel Hide");
+                listItems.Add("Forest Fairy Perfume");
+                listItems.Add("Golden Cactus Bouquet");
+                listItems.Add("Golden Sand Ring");
+                listItems.Add("Hanji Country Wild Berry Crate");
+                listItems.Add("High-quality Ink-scented Box");
+                listItems.Add("Kamasylvian Sculpture");
+                listItems.Add("Miniature Arehaza Lighthouse");
+                listItems.Add("Moonlit Crystal Lamp");
+                listItems.Add("Moonlit Crystal Shard");
+                listItems.Add("Moonshade Aged Wine");
+                listItems.Add("Mossy Silver Log Decoration");
+                listItems.Add("Nampo Persimmon Crate");
+                listItems.Add("Shadow Ornament Mirror");
+                listItems.Add("Sharp Safflower Blade Crate");
+                listItems.Add("Top-Quality Blue Underglaze Porcelain Crate");
+                listItems.Add("Top-Quality Coconut Syrup");
+                listItems.Add("Top-Quality Gamtu Crate");
+                listItems.Add("Traditional Arehazan Tea");
+                listItems.Add("Valencia Sand Shield");
+                listItems.Add("Valencian Desert Fine Sword");
 
                 DataGrid_Storage.BeginInit();
                 for (int i = 0; i < listItems.Count; i++) {
