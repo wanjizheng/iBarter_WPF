@@ -41,119 +41,129 @@ namespace iBarter.View {
                 }
                 //myPlannerControl.DataGrid_Planner.ItemsSource = dataSource;
             }
-            else {
-                List<string> listItems = new List<string>();
-                listItems.Add("Mysterious Rock");
-                listItems.Add("Luxury Patterned Fabric");
-                listItems.Add("Elixir of Youth");
-                listItems.Add("Portrait of the Ancient");
-                listItems.Add("102 Year Old Golden Herb");
-                listItems.Add("Golden Fish Scale");
-                listItems.Add("Stuffed White Caterpillar");
-                listItems.Add("Faded Gold Dragon Figurine");
-                listItems.Add("Supreme Gold Candlestick");
-                listItems.Add("Statues Tear");
-                listItems.Add("Stuffed Morpho Butterfly");
-                listItems.Add("Azure Quartz");
-                listItems.Add("37 Year Old Herbal Wine");
-                listItems.Add("Octagonal Box");
-                listItems.Add("Pirates Key");
-                listItems.Add("Bronze Candlestick");
-                listItems.Add("Headless Dragon Figurine");
-                listItems.Add("Panacea");
-                listItems.Add("Seashell Deco");
-                listItems.Add("Old Chest with Gold Coins");
-                listItems.Add("Boatmans Manual");
-                listItems.Add("Green Salt Lump");
-                listItems.Add("Solidified Lava");
-                listItems.Add("Marine Knights Spear");
-                listItems.Add("Amethyst Fragment");
-                listItems.Add("Opulent Thread Spool");
-                listItems.Add("Stolen Pirate Dagger");
-                listItems.Add("Marine Knights Helm");
-                listItems.Add("Blue Candle Bundle");
-                listItems.Add("Ancient Orders");
-                listItems.Add("Lopters Fishnet");
-                listItems.Add("Rare Herb Pile");
-                listItems.Add("Skull Symbol Carpet");
-                listItems.Add("Weasel Leather Coat");
-                listItems.Add("Gooey Monster Blood");
-                listItems.Add("Round Knife");
-                listItems.Add("Skull Decorated Teacup");
-                listItems.Add("Stalactite Fragment");
-                listItems.Add("Scout Binoculars");
-                listItems.Add("Pirates Supply Box");
-                listItems.Add("Torn Pirate Treasure Map");
-                listItems.Add("Old Hourglass");
-                listItems.Add("Urchin Spine");
-                listItems.Add("Pirate Gold Coin");
-                listItems.Add("Monster Tentacle");
-                listItems.Add("Sea Survival Kit");
-                listItems.Add("Balanced Stone Pagoda");
-                listItems.Add("Narvo Sea Cucumber");
-                listItems.Add("Big Stone Slab");
-                listItems.Add("Supreme Oyster Box");
-                listItems.Add("Conch Shell Ornament");
-                listItems.Add("Filtered Drinking Water");
-                listItems.Add("Opulent Marble");
-                listItems.Add("Pirate Ship Mast");
-                listItems.Add("Cron Castle Gold Coin");
-                listItems.Add("Islanders Lunchbox");
-                listItems.Add("Pirates Gunpowder");
-                listItems.Add("Fertile Soil");
-                listItems.Add("Rakeflower Seed Pouch");
-                listItems.Add("Roa Flower Seed Pouch");
-                listItems.Add("Golden Sand");
-                listItems.Add("Cherry Tree Seed Pouch");
-                listItems.Add("Unidentified Ancient Mural");
-                listItems.Add("Ancient Urn Piece");
-                listItems.Add("Chewy Raw Gizzard");
-                listItems.Add("Raft Toy");
-                listItems.Add("Stained Seagull Figurine");
-                listItems.Add("Naval Ration");
-                listItems.Add("Giant Fish Bone");
-                listItems.Add("Dried Blue Rose");
-                listItems.Add("Bamboo Sap Crate");
-                listItems.Add("Black Rose Bouquet");
-                listItems.Add("Brass Bowl Crate");
-                listItems.Add("Fancy Camel Hide");
-                listItems.Add("Forest Fairy Perfume");
-                listItems.Add("Golden Cactus Bouquet");
-                listItems.Add("Golden Sand Ring");
-                listItems.Add("Hanji Country Wild Berry Crate");
-                listItems.Add("High-quality Ink-scented Box");
-                listItems.Add("Kamasylvian Sculpture");
-                listItems.Add("Miniature Arehaza Lighthouse");
-                listItems.Add("Moonlit Crystal Lamp");
-                listItems.Add("Moonlit Crystal Shard");
-                listItems.Add("Moonshade Aged Wine");
-                listItems.Add("Mossy Silver Log Decoration");
-                listItems.Add("Nampo Persimmon Crate");
-                listItems.Add("Shadow Ornament Mirror");
-                listItems.Add("Sharp Safflower Blade Crate");
-                listItems.Add("Top-Quality Blue Underglaze Porcelain Crate");
-                listItems.Add("Top-Quality Coconut Syrup");
-                listItems.Add("Top-Quality Gamtu Crate");
-                listItems.Add("Traditional Arehazan Tea");
-                listItems.Add("Valencia Sand Shield");
-                listItems.Add("Valencian Desert Fine Sword");
 
-                DataGrid_Storage.BeginInit();
-                for (int i = 0; i < listItems.Count; i++) {
-                    string strName = listItems[i].Replace("'", "").Replace("(", "").Replace(")", "");
-                    Items myItem = App.listItems.FirstOrDefault(i => i.ItemName.Equals(strName));
-                    if (myItem != null) {
+            // Always seed the hardcoded fallback list. The JSON load above
+            // already populated StorageCollection with the user's saved items;
+            // this pass adds any hardcoded items not yet present, so newly-added
+            // items (e.g. the LV6 batch in 2587a5b) become visible to existing
+            // users without forcing them to delete myStorage_Data.json.
+            SeedHardcodedFallback();
+        }
+
+        private void SeedHardcodedFallback() {
+            List<string> listItems = new List<string>();
+            listItems.Add("Mysterious Rock");
+            listItems.Add("Luxury Patterned Fabric");
+            listItems.Add("Elixir of Youth");
+            listItems.Add("Portrait of the Ancient");
+            listItems.Add("102 Year Old Golden Herb");
+            listItems.Add("Golden Fish Scale");
+            listItems.Add("Stuffed White Caterpillar");
+            listItems.Add("Faded Gold Dragon Figurine");
+            listItems.Add("Supreme Gold Candlestick");
+            listItems.Add("Statues Tear");
+            listItems.Add("Stuffed Morpho Butterfly");
+            listItems.Add("Azure Quartz");
+            listItems.Add("37 Year Old Herbal Wine");
+            listItems.Add("Octagonal Box");
+            listItems.Add("Pirates Key");
+            listItems.Add("Bronze Candlestick");
+            listItems.Add("Headless Dragon Figurine");
+            listItems.Add("Panacea");
+            listItems.Add("Seashell Deco");
+            listItems.Add("Old Chest with Gold Coins");
+            listItems.Add("Boatmans Manual");
+            listItems.Add("Green Salt Lump");
+            listItems.Add("Solidified Lava");
+            listItems.Add("Marine Knights Spear");
+            listItems.Add("Amethyst Fragment");
+            listItems.Add("Opulent Thread Spool");
+            listItems.Add("Stolen Pirate Dagger");
+            listItems.Add("Marine Knights Helm");
+            listItems.Add("Blue Candle Bundle");
+            listItems.Add("Ancient Orders");
+            listItems.Add("Lopters Fishnet");
+            listItems.Add("Rare Herb Pile");
+            listItems.Add("Skull Symbol Carpet");
+            listItems.Add("Weasel Leather Coat");
+            listItems.Add("Gooey Monster Blood");
+            listItems.Add("Round Knife");
+            listItems.Add("Skull Decorated Teacup");
+            listItems.Add("Stalactite Fragment");
+            listItems.Add("Scout Binoculars");
+            listItems.Add("Pirates Supply Box");
+            listItems.Add("Torn Pirate Treasure Map");
+            listItems.Add("Old Hourglass");
+            listItems.Add("Urchin Spine");
+            listItems.Add("Pirate Gold Coin");
+            listItems.Add("Monster Tentacle");
+            listItems.Add("Sea Survival Kit");
+            listItems.Add("Balanced Stone Pagoda");
+            listItems.Add("Narvo Sea Cucumber");
+            listItems.Add("Big Stone Slab");
+            listItems.Add("Supreme Oyster Box");
+            listItems.Add("Conch Shell Ornament");
+            listItems.Add("Filtered Drinking Water");
+            listItems.Add("Opulent Marble");
+            listItems.Add("Pirate Ship Mast");
+            listItems.Add("Cron Castle Gold Coin");
+            listItems.Add("Islanders Lunchbox");
+            listItems.Add("Pirates Gunpowder");
+            listItems.Add("Fertile Soil");
+            listItems.Add("Rakeflower Seed Pouch");
+            listItems.Add("Roa Flower Seed Pouch");
+            listItems.Add("Golden Sand");
+            listItems.Add("Cherry Tree Seed Pouch");
+            listItems.Add("Unidentified Ancient Mural");
+            listItems.Add("Ancient Urn Piece");
+            listItems.Add("Chewy Raw Gizzard");
+            listItems.Add("Raft Toy");
+            listItems.Add("Stained Seagull Figurine");
+            listItems.Add("Naval Ration");
+            listItems.Add("Giant Fish Bone");
+            listItems.Add("Dried Blue Rose");
+            listItems.Add("Bamboo Sap Crate");
+            listItems.Add("Black Rose Bouquet");
+            listItems.Add("Brass Bowl Crate");
+            listItems.Add("Fancy Camel Hide");
+            listItems.Add("Forest Fairy Perfume");
+            listItems.Add("Golden Cactus Bouquet");
+            listItems.Add("Golden Sand Ring");
+            listItems.Add("Hanji Country Wild Berry Crate");
+            listItems.Add("High-quality Ink-scented Box");
+            listItems.Add("Kamasylvian Sculpture");
+            listItems.Add("Miniature Arehaza Lighthouse");
+            listItems.Add("Moonlit Crystal Lamp");
+            listItems.Add("Moonlit Crystal Shard");
+            listItems.Add("Moonshade Aged Wine");
+            listItems.Add("Mossy Silver Log Decoration");
+            listItems.Add("Nampo Persimmon Crate");
+            listItems.Add("Shadow Ornament Mirror");
+            listItems.Add("Sharp Safflower Blade Crate");
+            listItems.Add("Top-Quality Blue Underglaze Porcelain Crate");
+            listItems.Add("Top-Quality Coconut Syrup");
+            listItems.Add("Top-Quality Gamtu Crate");
+            listItems.Add("Traditional Arehazan Tea");
+            listItems.Add("Valencia Sand Shield");
+            listItems.Add("Valencian Desert Fine Sword");
+
+            DataGrid_Storage.BeginInit();
+            for (int i = 0; i < listItems.Count; i++) {
+                string strName = listItems[i].Replace("'", "").Replace("(", "").Replace(")", "");
+                Items myItem = App.listItems.FirstOrDefault(i => i.ItemName.Equals(strName));
+                if (myItem != null) {
+                    if (App.myStorageVM.StorageCollection.FirstOrDefault(s => s.ItemName.Equals(myItem.ItemName)) == null) {
                         App.myStorageVM.StorageCollection.Add(myItem);
                     }
-                    else {
-                        App.myCFun.Log("Cannot find the item: " + strName, Brushes.Red);
-                    }
                 }
-                //Items myItems = App.listItems.FirstOrDefault(i => i.ItemName.Equals("Mysterious_Rock"));
-
-                DataGrid_Storage.EndInit();
+                else {
+                    App.myCFun.Log("Cannot find the item: " + strName, Brushes.Red);
+                }
             }
+
+            DataGrid_Storage.EndInit();
         }
+
 
         private void DataGrid_Storage_CurrentCellEndEdit(object sender, Syncfusion.UI.Xaml.Grid.CurrentCellEndEditEventArgs e) {
             App.myStorageVM.SaveData();
