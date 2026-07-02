@@ -69,7 +69,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0"><Label Content="Default Storage:" />
+        <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0"><Label Content="Default Seed City:" />
             <Syncfusion:ComboBoxAdv x:Name="ComboBoxAdv_DefaultStorage" SelectedIndex="1" >
                 <Syncfusion:ComboBoxItemAdv Content="Velia" />
                 <Syncfusion:ComboBoxItemAdv Content="Illiya" />
