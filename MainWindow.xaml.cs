@@ -147,6 +147,13 @@ namespace iBarter {
 
 
         private void Window_Loaded(object sender, RoutedEventArgs e) {
+            // Phase 8 (i18n): sync the language menu's IsChecked marks
+            // with whatever AppLanguage was loaded by LanguageService
+            // InitializeAtStartup (which read it from Properties.Settings
+            // in Phase 1).  The click handlers maintain the marks from
+            // here on; we only seed the initial state.
+            SyncLangCheckmarks();
+
             try {
                 // App.mySplashScreen.worker.ReportProgress(10);
                 Logging.SaveConsoleLog = false;
@@ -296,6 +303,30 @@ namespace iBarter {
                     App.myCFun.Log("[ImportBdocodexNames] failed: " + ex.Message, Brushes.Red);
                 }
             });
+        }
+
+        // Phase 8 (i18n): live language toggle.  Setting
+        // LanguageService.Current = X swaps the active merged dictionary
+        // and raises LanguageChanged; every subscriber (Items.ItemNameDisplay
+        // / ItemTierDisplay, Islands.IslandsNameDisplay, Barter.*NameDisplay
+        // via underlying INPC, and the three View's ApplyLocalizedHeaders
+        // for Syncfusion GridColumn.HeaderText) re-renders in place.  The
+        // setters also persist the choice via Properties.Settings so the
+        // selection survives restart.
+        private void MenuItem_LangEnglish_Click(object sender, RoutedEventArgs e) {
+            iBarter.Localization.LanguageService.Instance.Current = iBarter.Localization.AppLanguage.English;
+            SyncLangCheckmarks();
+        }
+
+        private void MenuItem_LangZhTw_Click(object sender, RoutedEventArgs e) {
+            iBarter.Localization.LanguageService.Instance.Current = iBarter.Localization.AppLanguage.TraditionalChinese;
+            SyncLangCheckmarks();
+        }
+
+        private void SyncLangCheckmarks() {
+            var current = iBarter.Localization.LanguageService.Instance.Current;
+            if (MenuItem_LangEnglish != null) MenuItem_LangEnglish.IsChecked = current == iBarter.Localization.AppLanguage.English;
+            if (MenuItem_LangZhTw != null) MenuItem_LangZhTw.IsChecked = current == iBarter.Localization.AppLanguage.TraditionalChinese;
         }
 
         private void dockingManager_Main_ActiveWindowChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) {

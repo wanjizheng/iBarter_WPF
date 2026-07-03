@@ -126,6 +126,19 @@
                                     <Image Source="Images\refresh.png" />
                                 </MenuItem.Icon>
                             </MenuItem>
+                            <Separator />
+                            <!-- Phase 8 (i18n): live language toggle.  Click swaps
+                                 Application.Resources.MergedDictionaries + raises
+                                 LanguageChanged; model + view layers subscribed to
+                                 that event re-render.  The two siblings carry an
+                                 IsChecked mutual-exclusion maintained in code-behind
+                                 because WPF's two-way IsChecked binding on a static
+                                 enum isn't worth wiring through an IValueConverter
+                                 here (we'd still need a one-shot sync on startup). -->
+                            <MenuItem x:Name="MenuItem_LangEnglish" Header="English"
+                                  IsCheckable="True" Click="MenuItem_LangEnglish_Click" Height="30" Width="180" />
+                            <MenuItem x:Name="MenuItem_LangZhTw" Header="繁體中文"
+                                  IsCheckable="True" Click="MenuItem_LangZhTw_Click" Height="30" Width="180" />
                         </MenuItem>
                     </Menu>
                 </StackPanel>
