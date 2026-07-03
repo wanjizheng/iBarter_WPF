@@ -117,6 +117,15 @@
                                     <Image Source="Images\refresh.png" />
                                 </MenuItem.Icon>
                             </MenuItem>
+                            <!-- Phase 4 (i18n): one-shot author-time tool that rewrites
+                                 Resources/Items.zh-TW.csv from bdocodex.com/tw/item/{id}/.
+                                 Leaves Islands.zh-TW.csv untouched (no per-island page). -->
+                            <MenuItem x:Name="MenuItem_ImportBdocodexNames" Header="Import Bdocodex Names (zh-TW)"
+                                  Tag="ImportBdocodexNames" Click="MenuItem_ImportBdocodexNames_Click" Height="30" Width="280">
+                                <MenuItem.Icon>
+                                    <Image Source="Images\refresh.png" />
+                                </MenuItem.Icon>
+                            </MenuItem>
                         </MenuItem>
                     </Menu>
                 </StackPanel>

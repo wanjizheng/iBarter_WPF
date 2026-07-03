@@ -267,6 +267,37 @@ namespace iBarter {
             });
         }
 
+        // Phase 4 (i18n): one-shot bdocodex.com/tw/item/{id}/ scraper. Hits
+        // every ItemID in App.listItems, extracts the zh-TW H1, and rewrites
+        // Resources/Items.zh-TW.csv.  User-controlled; the user keeps this
+        // menu item around because they occasionally edit Items.csv and want
+        // a re-pull.
+        private void MenuItem_ImportBdocodexNames_Click(object sender, RoutedEventArgs e) {
+            App.myCFun.Log("[ImportBdocodexNames] Starting. This may take ~1 minute.", Brushes.Gold);
+            System.Threading.Tasks.Task.Run(async () => {
+                try {
+                    using var http = new System.Net.Http.HttpClient {
+                        Timeout = System.TimeSpan.FromSeconds(10),
+                    };
+                    http.DefaultRequestHeaders.UserAgent.ParseAdd(
+                        "Mozilla/5.0 (compatible; iBarter/1.0; +tools/ImportBdocodexNames)");
+
+                    string outputPath = System.IO.Path.Combine(
+                        AppDomain.CurrentDomain.BaseDirectory, "Resources", "Items.zh-TW.csv");
+
+                    var importer = new iBarter.Tools.ImportBdocodexNames(
+                        http,
+                        msg => App.myCFun.Log(msg, Brushes.Gray));
+
+                    int rows = await importer.RunAsync(App.listItems, outputPath);
+                    App.myCFun.Log($"[ImportBdocodexNames] Finished. Wrote {rows} rows to {outputPath}.", Brushes.Gold);
+                }
+                catch (Exception ex) {
+                    App.myCFun.Log("[ImportBdocodexNames] failed: " + ex.Message, Brushes.Red);
+                }
+            });
+        }
+
         private void dockingManager_Main_ActiveWindowChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) {
             // if (dockingManager_Main.ActiveWindow.Name == "document_Map") {
             //     myMapControl.IslandsButtonRearrange();
