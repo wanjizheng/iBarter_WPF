@@ -191,11 +191,11 @@ namespace iBarter {
                     // App.mySplashScreen.worker.ReportProgress(90);
                     //int bindResult = App.dmSoft.BindWindowEx((int)App.myHwnd, "dx2", "normal", "normal", "dx.public.km.protect|dx.public.anti.api|dx.public.inject.super|", 101);
                     if (bindResult == 1) {
-                        App.myCFun.Log("Game window binding success!", Brushes.Blue);
+                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Binding.Success"), Brushes.Blue);
                         // App.myPureDM.DM.SetWindowState((int)App.myPureDM.Hwnd, 4); //Maximize the window
                     }
                     else {
-                        App.myCFun.Log("Fail to bind the game window.", Brushes.Red);
+                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Binding.Failed"), Brushes.Red);
                     }
 
                     // App.mySplashScreen.worker.ReportProgress(100);
@@ -206,7 +206,7 @@ namespace iBarter {
                     timer.Start();
                 }
                 else {
-                    App.myCFun.Log("Cannot find the game process.", Brushes.Red);
+                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Binding.NoProcess"), Brushes.Red);
                 }
 
                 myShipCargo.RefreshData();
@@ -255,14 +255,14 @@ namespace iBarter {
         // async so we offload to a worker thread so the click handler
         // returns immediately and the UI log keeps streaming progress.
         private void MenuItem_SyncImages_Click(object sender, RoutedEventArgs e) {
-            App.myCFun.Log("SyncImages: starting...", Brushes.Gold);
+            App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.Starting"), Brushes.Gold);
             System.Threading.Tasks.Task.Run(() => {
                 try {
                     App.myCFun.SyncImages();
-                    App.myCFun.Log("SyncImages: done.", Brushes.Gold);
+                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.Done"), Brushes.Gold);
                 }
                 catch (Exception ex) {
-                    App.myCFun.Log("SyncImages failed: " + ex.Message, Brushes.Red);
+                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.Failed", ex.Message), Brushes.Red);
                 }
             });
         }

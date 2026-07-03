@@ -300,7 +300,7 @@ namespace iBarter.View {
                     Barter myBarter = (Barter)myItem.Content;
                     if (myBarter != null) {
                         Clipboard.SetText(myBarter.Item1Name);
-                        App.myCFun.Log(myBarter.Item1Name + " copied to the clipboard.", Brushes.DarkGreen);
+                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.ShipCargo.CopiedToClipboard", myBarter.Item1NameDisplay), Brushes.DarkGreen);
                     }
                 }
                 catch (Exception exception) {
@@ -316,7 +316,7 @@ namespace iBarter.View {
                     Barter myBarter = (Barter)myItem.Content;
                     if (myBarter != null) {
                         Clipboard.SetText(myBarter.Item2Name);
-                        App.myCFun.Log(myBarter.Item2Name + " copied to the clipboard.", Brushes.DarkGreen);
+                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.ShipCargo.CopiedToClipboard", myBarter.Item2NameDisplay), Brushes.DarkGreen);
                     }
                 }
             }

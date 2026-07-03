@@ -153,4 +153,40 @@
          number itself, which is build-time constant. -->
     <system:String x:Key="str.StatusBar.VersionLabel">Version: </system:String>
 
+    <!-- Phase 7 (i18n): user-visible Log() messages and MessageBox prompts.
+         The placeholders match the .NET string.Format order: {0} {1} etc.
+         OCR-specific messages (qty, island ID, etc.) live under Log.Ocr.*;
+         SyncImages under Log.SyncImages.*; main-window game-binding under
+         Log.Binding.*; scanner under Log.Scanner.*; planner under Log.Planner.*;
+         storage under Log.Storage.*; ship-cargo under Log.ShipCargo.*. -->
+
+    <system:String x:Key="str.Log.Binding.Success">Game window binding success!</system:String>
+    <system:String x:Key="str.Log.Binding.Failed">Fail to bind the game window.</system:String>
+    <system:String x:Key="str.Log.Binding.NoProcess">Cannot find the game process.</system:String>
+
+    <system:String x:Key="str.Log.SyncImages.Starting">SyncImages: starting...</system:String>
+    <system:String x:Key="str.Log.SyncImages.Done">SyncImages: done.</system:String>
+    <system:String x:Key="str.Log.SyncImages.Failed">SyncImages failed: {0}</system:String>
+
+    <system:String x:Key="str.Log.Planner.Loaded">Loaded...</system:String>
+    <system:String x:Key="str.Log.Planner.Saved">Saved...</system:String>
+    <system:String x:Key="str.Log.Planner.DefaultStorageOutOfRange">ComboBoxAdv_DefaultStorage.SelectedIndex out of range; defaulting to Velia.</system:String>
+
+    <system:String x:Key="str.Log.Storage.Loaded">Loaded...</system:String>
+    <system:String x:Key="str.Log.Storage.CannotFindItem">Cannot find the item: {0}</system:String>
+    <system:String x:Key="str.Log.Storage.Saved">Saved data.</system:String>
+
+    <system:String x:Key="str.Log.Scanner.Starting">Start scanning...</system:String>
+    <system:String x:Key="str.Log.Scanner.Done">Done!</system:String>
+    <system:String x:Key="str.Log.Scanner.NoAnchor">Scan: no anchor.bmp found in game window ({0}x{1}). Is the barter screen open?</system:String>
+
+    <system:String x:Key="str.Log.ShipCargo.CopiedToClipboard">{0} copied to the clipboard.</system:String>
+
+    <!-- Phase 7 (i18n): dialog prompts (MessageBox.Show) -->
+    <system:String x:Key="str.Msg.Confirmation.Title">Confirmation</system:String>
+    <system:String x:Key="str.Msg.Planner.DeleteRow">Delete this row ({0} → {1})?</system:String>
+    <system:String x:Key="str.Msg.Planner.DeleteRowMenu">Delete this row</system:String>
+    <system:String x:Key="str.Msg.Planner.DoneConfirm">Are you sure you have completed this plan?</system:String>
+    <system:String x:Key="str.Msg.Planner.CleanConfirm">Are you sure you want to clean this plan?</system:String>
+
 </ResourceDictionary>

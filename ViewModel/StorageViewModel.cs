@@ -60,7 +60,7 @@ namespace iBarter.ViewModel {
                         streamData.Write(byteArray, 0, byteArray.Length);
                     }
 
-                    App.myCFun.Log("Saved data.", Brushes.DarkOliveGreen);
+                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Storage.Saved"), Brushes.DarkOliveGreen);
                 }
             }
             catch (Exception exception) {

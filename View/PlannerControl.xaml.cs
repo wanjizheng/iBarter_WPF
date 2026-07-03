@@ -498,7 +498,7 @@ namespace iBarter.View {
 
                         RefreshDataGrid();
                         //Grouping();
-                        App.myCFun.Log("Loaded...", Brushes.Blue);
+                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Planner.Loaded"), Brushes.Blue);
                     }
                 }
                 catch (Exception exception) {
@@ -513,7 +513,7 @@ namespace iBarter.View {
         }
 
         private void ButtonAdv_Save_Click(object sender, RoutedEventArgs e) {
-            App.myCFun.Log("Saved...", Brushes.Blue);
+            App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Planner.Saved"), Brushes.Blue);
             SaveData();
         }
 
@@ -622,7 +622,7 @@ namespace iBarter.View {
             // multiple rows causes WPF to close the previous one early
             // when the next open is requested.
             ContextMenu cm = new ContextMenu();
-            MenuItem deleteItem = new MenuItem { Header = "Delete this row" };
+            MenuItem deleteItem = new MenuItem { Header = Localization.LanguageService.Instance.Localize("str.Msg.Planner.DeleteRowMenu") };
             deleteItem.Click += MenuItem_DeleteRow_Click;
             cm.Items.Add(deleteItem);
 
@@ -647,8 +647,10 @@ namespace iBarter.View {
             }
 
             MessageBoxResult result = MessageBox.Show(
-                $"Delete this row ({barter.Item1Name} → {barter.Item2Name})?",
-                "Confirmation",
+                Localization.LanguageService.Instance.Localize(
+                    "str.Msg.Planner.DeleteRow",
+                    barter.Item1NameDisplay, barter.Item2NameDisplay),
+                Localization.LanguageService.Instance.Localize("str.Msg.Confirmation.Title"),
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
             if (result != MessageBoxResult.Yes) {
@@ -813,7 +815,10 @@ namespace iBarter.View {
         }
 
         private void ButtonAdv_Done_Click(object sender, RoutedEventArgs e) {
-            MessageBoxResult result = MessageBox.Show("Are you sure you have completed this plan?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            MessageBoxResult result = MessageBox.Show(
+                Localization.LanguageService.Instance.Localize("str.Msg.Planner.DoneConfirm"),
+                Localization.LanguageService.Instance.Localize("str.Msg.Confirmation.Title"),
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
 
             if (result != MessageBoxResult.Yes) {
                 return;
@@ -896,7 +901,7 @@ namespace iBarter.View {
                 if (targetCity == -1) {
                     int fallback = App.myStorageManagement.ComboBoxAdv_DefaultStorage.SelectedIndex;
                     if (fallback < 0 || fallback > 3) {
-                        App.myCFun.Log("ComboBoxAdv_DefaultStorage.SelectedIndex out of range; defaulting to Velia.", System.Windows.Media.Brushes.Orange);
+                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Planner.DefaultStorageOutOfRange"), System.Windows.Media.Brushes.Orange);
                         fallback = 0;
                     }
                     targetCity = fallback;
@@ -938,7 +943,10 @@ namespace iBarter.View {
         }
 
         private void ButtonAdv_Clean_Click(object sender, RoutedEventArgs e) {
-            MessageBoxResult result = MessageBox.Show("Are you sure you want to clean this plan?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            MessageBoxResult result = MessageBox.Show(
+                Localization.LanguageService.Instance.Localize("str.Msg.Planner.CleanConfirm"),
+                Localization.LanguageService.Instance.Localize("str.Msg.Confirmation.Title"),
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
 
             if (result == MessageBoxResult.Yes) {
                 foreach (Barter barter in App.myPVM.BarterCollection) {

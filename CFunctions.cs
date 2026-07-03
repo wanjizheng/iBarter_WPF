@@ -321,7 +321,7 @@ namespace iBarter {
             }
 
             if (_itemID == "") {
-                Log("Done!", Brushes.Red);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.Done"), Brushes.Red);
             }
         }
 
@@ -758,7 +758,7 @@ namespace iBarter {
             // the game but the user may not realise the barter UI must
             // be on screen for anchor.bmp to be found.
             if (listAnchors.Count == 0) {
-                Log("Scan: no anchor.bmp found in game window (" + App.myPureDM.WindowWidth + "x" + App.myPureDM.WindowHeight + "). Is the barter screen open?", Brushes.OrangeRed);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.NoAnchor", App.myPureDM.WindowWidth, App.myPureDM.WindowHeight), Brushes.OrangeRed);
             }
 
 

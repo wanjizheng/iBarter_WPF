@@ -126,4 +126,32 @@
 
     <system:String x:Key="str.StatusBar.VersionLabel">版本：</system:String>
 
+    <system:String x:Key="str.Log.Binding.Success">已成功綁定遊戲視窗！</system:String>
+    <system:String x:Key="str.Log.Binding.Failed">綁定遊戲視窗失敗。</system:String>
+    <system:String x:Key="str.Log.Binding.NoProcess">找不到遊戲進程。</system:String>
+
+    <system:String x:Key="str.Log.SyncImages.Starting">同步圖示：開始中…</system:String>
+    <system:String x:Key="str.Log.SyncImages.Done">同步圖示：完成。</system:String>
+    <system:String x:Key="str.Log.SyncImages.Failed">同步圖示失敗：{0}</system:String>
+
+    <system:String x:Key="str.Log.Planner.Loaded">已載入…</system:String>
+    <system:String x:Key="str.Log.Planner.Saved">已儲存…</system:String>
+    <system:String x:Key="str.Log.Planner.DefaultStorageOutOfRange">預設倉庫下拉選單索引超出範圍，預設為貝利利亞。</system:String>
+
+    <system:String x:Key="str.Log.Storage.Loaded">已載入…</system:String>
+    <system:String x:Key="str.Log.Storage.CannotFindItem">找不到物品：{0}</system:String>
+    <system:String x:Key="str.Log.Storage.Saved">資料已儲存。</system:String>
+
+    <system:String x:Key="str.Log.Scanner.Starting">開始掃描…</system:String>
+    <system:String x:Key="str.Log.Scanner.Done">完成！</system:String>
+    <system:String x:Key="str.Log.Scanner.NoAnchor">掃描：遊戲視窗中找不到 anchor.bmp（{0}x{1}）。請確認交換畫面已開啟。</system:String>
+
+    <system:String x:Key="str.Log.ShipCargo.CopiedToClipboard">{0} 已複製到剪貼簿。</system:String>
+
+    <system:String x:Key="str.Msg.Confirmation.Title">確認</system:String>
+    <system:String x:Key="str.Msg.Planner.DeleteRow">確定要刪除此列（{0} → {1}）？</system:String>
+    <system:String x:Key="str.Msg.Planner.DeleteRowMenu">刪除此列</system:String>
+    <system:String x:Key="str.Msg.Planner.DoneConfirm">確定已完成此計畫嗎？</system:String>
+    <system:String x:Key="str.Msg.Planner.CleanConfirm">確定要清理此計畫嗎？</system:String>
+
 </ResourceDictionary>

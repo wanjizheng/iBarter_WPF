@@ -109,7 +109,7 @@ namespace iBarter.View {
             ButtonAdv_Scan.IsEnabled = false;
 
             try {
-                App.myCFun.Log("Start scanning...", Brushes.Blue);
+                App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.Starting"), Brushes.Blue);
                 //await Task.Run(() => { App.myCFun.SearchBarter(); });
 
                 // Explicit async lambda with inner await guarantees the outer
@@ -125,7 +125,7 @@ namespace iBarter.View {
                 App.myCFun.Log(ex.Message, Brushes.Red);
             }
             finally {
-                App.myCFun.Log("Done!", Brushes.DarkGreen);
+                App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.Done"), Brushes.DarkGreen);
                 ButtonAdv_Scan.IsEnabled = true;
             }
         }

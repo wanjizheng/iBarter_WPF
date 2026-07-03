@@ -60,7 +60,7 @@ namespace iBarter.View {
 
                     DataGrid_Storage.EndInit();
                     //RefreshDataGrid();
-                    App.myCFun.Log("Loaded...", Brushes.Blue);
+                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Storage.Loaded"), Brushes.Blue);
                 }
                 catch (Exception exception) {
                     App.myCFun.Log(exception.Message, Brushes.Red);
@@ -183,7 +183,7 @@ namespace iBarter.View {
                     }
                 }
                 else {
-                    App.myCFun.Log("Cannot find the item: " + strName, Brushes.Red);
+                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Storage.CannotFindItem", strName), Brushes.Red);
                 }
             }
 
