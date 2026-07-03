@@ -4,6 +4,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:local="clr-namespace:iBarter"
+             xmlns:loc="clr-namespace:iBarter.Localization"
     xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
     xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:esri="http://schemas.esri.com/arcgis/runtime/2013"
@@ -25,7 +26,7 @@
     RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
     AllowsTransparency="True"
     Visibility="Visible"
-    Title="{DynamicResource str.MainWindow.Title}" Height="868" Width="1254" Loaded="Window_Loaded">
+    Title="{loc:Localize str.MainWindow.Title}" Height="868" Width="1254" Loaded="Window_Loaded">
     <syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -58,7 +59,7 @@
                         <TextBlock Grid.Column="2"
                                    Height="16"
                                    FontSize="12"
-                                   Text="{DynamicResource str.MainWindow.ThemesToggle}"
+                                   Text="{loc:Localize str.MainWindow.ThemesToggle}"
                                    Foreground="{Binding TitleBarForeground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                 </ToggleButton.Content>
@@ -98,20 +99,20 @@
                     <Menu SnapsToDevicePixels="True" VerticalAlignment="Bottom"
                       HorizontalContentAlignment="Stretch">
                         <!--Windows Menu-->
-                        <MenuItem Header="{DynamicResource str.Menu.Windows}">
-                            <MenuItem x:Name="MenuItem_BarterScanner" Header="{DynamicResource str.Menu.BarterScanner}"
+                        <MenuItem Header="{loc:Localize str.Menu.Windows}">
+                            <MenuItem x:Name="MenuItem_BarterScanner" Header="{loc:Localize str.Menu.BarterScanner}"
                                   Tag="BarterScanner" Click="OnActivateWindow" Height="30" Width="180">
                                 <MenuItem.Icon>
                                     <Image Source="Images\barter.png" />
                                 </MenuItem.Icon>
                             </MenuItem>
-                            <MenuItem x:Name="MenuItem_StorageManagement" Header="{DynamicResource str.Menu.StorageManager}"
+                            <MenuItem x:Name="MenuItem_StorageManagement" Header="{loc:Localize str.Menu.StorageManager}"
                                   Tag="StorageManagement" Click="MenuItem_StorageManagement_Click" Height="30" Width="180">
                                 <MenuItem.Icon>
                                     <Image Source="Images\storage.png" />
                                 </MenuItem.Icon>
                             </MenuItem>
-                            <MenuItem x:Name="MenuItem_SyncImages" Header="{DynamicResource str.Menu.SyncImages}"
+                            <MenuItem x:Name="MenuItem_SyncImages" Header="{loc:Localize str.Menu.SyncImages}"
                                   Tag="SyncImages" Click="MenuItem_SyncImages_Click" Height="30" Width="180">
                                 <MenuItem.Icon>
                                     <Image Source="Images\refresh.png" />
@@ -148,14 +149,14 @@
                                    UseDocumentContainer="True" UseNativeFloatWindow="True"
                                    Margin="0,0,0,0"
                                    ActiveWindowChanged="dockingManager_Main_ActiveWindowChanged">
-                <ContentControl x:Name="dockRight_ShipCargo" syncfusion:DockingManager.Header="{DynamicResource str.Dock.ShipCargo}"
+                <ContentControl x:Name="dockRight_ShipCargo" syncfusion:DockingManager.Header="{loc:Localize str.Dock.ShipCargo}"
                             syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Right"
                             MinWidth="0.3" ScrollViewer.HorizontalScrollBarVisibility="Auto"
                             ScrollViewer.VerticalScrollBarVisibility="Auto"
                             syncfusion:DockingManager.DesiredWidthInDockedMode="300">
                     <view:ShipCargoControl x:Name="myShipCargo"></view:ShipCargoControl>
                 </ContentControl>
-                <ContentControl x:Name="dockBottom" syncfusion:DockingManager.Header="{DynamicResource str.Dock.Log}"
+                <ContentControl x:Name="dockBottom" syncfusion:DockingManager.Header="{loc:Localize str.Dock.Log}"
                             syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Bottom">
                     <RichTextBox x:Name="richTextBox_Log" x:FieldModifier="public" VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Auto">
@@ -176,12 +177,12 @@
                 <!--                 syncfusion:DockingManager.Header="Document1.xaml" -->
                 <!--                 syncfusion:DockingManager.State="Document" /> -->
                 <ContentControl x:Name="document_Planner" syncfusion:DockingManager.CanDocument="True"
-                            syncfusion:DockingManager.Header="{DynamicResource str.Dock.Planner}"
+                            syncfusion:DockingManager.Header="{loc:Localize str.Dock.Planner}"
                             syncfusion:DockingManager.State="Document">
                     <view:PlannerControl x:Name="myPlannerControl"></view:PlannerControl>
                 </ContentControl>
                 <ContentControl x:Name="document_Map" syncfusion:DockingManager.CanDocument="True"
-                            syncfusion:DockingManager.Header="{DynamicResource str.Dock.Map}"
+                            syncfusion:DockingManager.Header="{loc:Localize str.Dock.Map}"
                             syncfusion:DockingManager.State="Document">
                     <view:MapControl x:Name="myMapControl" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
                 </ContentControl>
@@ -208,7 +209,7 @@
                     <DockPanel Grid.Row="0">
                         <Separator DockPanel.Dock="Bottom" />
                         <Label Margin="16,4,16,4" FontSize="14" DockPanel.Dock="Left" FontWeight="SemiBold"
-                           VerticalContentAlignment="Center" HorizontalContentAlignment="Left" Content="{DynamicResource str.MainWindow.ThemesPanelHeader}" />
+                           VerticalContentAlignment="Center" HorizontalContentAlignment="Left" Content="{loc:Localize str.MainWindow.ThemesPanelHeader}" />
                         <Button DockPanel.Dock="Right" x:Name="Close" Width="24" Height="24"
                             Style="{DynamicResource WPFGlyphButtonStyle}"
                             Command="{Binding ThemePanelVisibilityCommand}"
@@ -297,7 +298,7 @@
                                     <Separator
                                     Visibility="{Binding ColorPaletteVisibility ,Converter={StaticResource BooleanToVisibilityConverter}}"
                                     Margin="2,2,2,5" DockPanel.Dock="Bottom" />
-                                    <Label Content="{DynamicResource str.MainWindow.ChoosePalette}" Margin="16,0" VerticalAlignment="Center"
+                                    <Label Content="{loc:Localize str.MainWindow.ChoosePalette}" Margin="16,0" VerticalAlignment="Center"
                                        Visibility="{Binding ColorPaletteVisibility, Converter={StaticResource BooleanToVisibilityConverter}}"
                                        FontWeight="SemiBold" FontSize="14" />
                                 </DockPanel>

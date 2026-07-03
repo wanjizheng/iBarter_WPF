@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:iBarter"
+             xmlns:loc="clr-namespace:iBarter.Localization"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         mc:Ignorable="d"
         WindowStyle="None"
@@ -18,7 +19,7 @@
             <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Margin="19,64,0,0">
                 <WrapPanel>
                     <Image Source="Images/iBarterIcon.ico" HorizontalAlignment="Left" Height="50" Width="50"></Image>
-                    <TextBlock Text="{DynamicResource str.Splash.Banner}" FontSize="28" FontWeight="Bold" HorizontalAlignment="Left"
+                    <TextBlock Text="{loc:Localize str.Splash.Banner}" FontSize="28" FontWeight="Bold" HorizontalAlignment="Left"
                                VerticalAlignment="Center" Margin="15 0 0 0">
                     </TextBlock>
                 </WrapPanel>

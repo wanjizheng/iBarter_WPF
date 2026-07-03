@@ -4,6 +4,7 @@
                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                              xmlns:local="clr-namespace:iBarter.View"
+                             xmlns:loc="clr-namespace:iBarter.Localization"
                              xmlns:Syncfusion="http://schemas.syncfusion.com/wpf"
                              xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
                              xmlns:collections="clr-namespace:System.Collections;assembly=System.Runtime"
@@ -69,12 +70,12 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0"><Label Content="{DynamicResource str.Storage.DefaultSeedCity}" />
+        <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0"><Label Content="{loc:Localize str.Storage.DefaultSeedCity}" />
             <Syncfusion:ComboBoxAdv x:Name="ComboBoxAdv_DefaultStorage" SelectedIndex="1" >
-                <Syncfusion:ComboBoxItemAdv Content="{DynamicResource str.Grid.Storage.Col.Velia}" />
-                <Syncfusion:ComboBoxItemAdv Content="{DynamicResource str.Grid.Storage.Col.Iliya}" />
-                <Syncfusion:ComboBoxItemAdv Content="{DynamicResource str.Grid.Storage.Col.Epheria}" />
-                <Syncfusion:ComboBoxItemAdv Content="{DynamicResource str.Grid.Storage.Col.Ancado}" />
+                <Syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Grid.Storage.Col.Velia}" />
+                <Syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Grid.Storage.Col.Iliya}" />
+                <Syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Grid.Storage.Col.Epheria}" />
+                <Syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Grid.Storage.Col.Ancado}" />
             </Syncfusion:ComboBoxAdv>
         </Syncfusion:ToolBarAdv>
         <Syncfusion:SfDataGrid x:Name="DataGrid_Storage" Height="NaN" Width="NaN" AutoGenerateColumns="False"

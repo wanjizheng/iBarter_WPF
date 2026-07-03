@@ -74,6 +74,27 @@ const RE_NAME = /<b[^>]*>(?:<span><\/span>)?([^<]+)<\/b>/;
 // [活動] / [故事圖鑑] are preserved.
 const RE_TIER_PREFIX = /^\[\d+\s*階段\]\s*/;
 
+// Many list rows also lead with one or more tag brackets that the
+// database renders inline: (未使用), [活動], [故事圖鑑], [加工],
+// [貢獻度], [珂賽爾], [1+1], [10펄의 행복], [BDORemastered], etc.
+// Those tags sit *before* the actual item name; for a clean name
+// dump we peel them off iteratively (one pass per leading bracket
+// pair) until what remains no longer starts with [ / （ / 【.
+function stripLeadingTags(s) {
+  while (true) {
+    const before = s;
+    s = s.replace(/^\s*[【\(\[「][^\]）」]*[】\)\]」]\s*/, '');
+    if (s === before) break;
+  }
+  return s.trim();
+}
+
+// Filter: drop any name that still contains Hangul after the prefix
+// strip.  bdocodex's zh-TW view keeps the original Korean rendering
+// for items that haven't been translated yet - the user explicitly
+// asked to delete those, so a final Hangul check is the gate.
+const RE_HANGUL = /[가-힯ㄱ-ㅎㅏ-ㅣ]/;
+
 function fetchUrl(p) {
   return new Promise((resolve, reject) => {
     const req = https.request(
@@ -150,8 +171,18 @@ function extractNames(jsonText, label) {
       // Drop the [N階段] tier prefix on barter items so the bare
       // name ("102年黃金草") survives in the dump and matches the
       // form on the detail page / Phase 4's existing CSV.
-      const stripped = found.replace(RE_TIER_PREFIX, '');
-      names.push(stripped);
+      let cleaned = found.replace(RE_TIER_PREFIX, '');
+      // Peel off generic leading tag brackets ((未使用), [活動],
+      // [1+1], [珂賽爾], etc.) - they sit before the real name.
+      cleaned = stripLeadingTags(cleaned);
+      if (!cleaned) {
+        empty++;
+      } else if (RE_HANGUL.test(cleaned)) {
+        // Untranslated Korean originals - per user request, drop.
+        korean++;
+      } else {
+        names.push(cleaned);
+      }
     } else {
       empty++;
     }

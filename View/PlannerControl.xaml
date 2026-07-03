@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:iBarter"
+             xmlns:loc="clr-namespace:iBarter.Localization"
              xmlns:vm="clr-namespace:iBarter.ViewModel"
              xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
              mc:Ignorable="d"
@@ -32,8 +33,8 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 IconWidth="26" IconHeight="26"
-                Label="{DynamicResource str.Planner.Btn.New}"
-                ToolTip="{DynamicResource str.Planner.Btn.NewTip}"
+                Label="{loc:Localize str.Planner.Btn.New}"
+                ToolTip="{loc:Localize str.Planner.Btn.NewTip}"
                 SizeMode="Small"
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/new-document.png" Click="ButtonAdv_New_Click" />
@@ -43,8 +44,8 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 IconWidth="26" IconHeight="26"
-                Label="{DynamicResource str.Planner.Btn.Save}"
-                ToolTip="{DynamicResource str.Planner.Btn.SaveTip}"
+                Label="{loc:Localize str.Planner.Btn.Save}"
+                ToolTip="{loc:Localize str.Planner.Btn.SaveTip}"
                 SizeMode="Small"
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/save.png" Click="ButtonAdv_Save_Click" />
@@ -54,8 +55,8 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 IconWidth="26" IconHeight="26"
-                Label="{DynamicResource str.Planner.Btn.Load}"
-                ToolTip="{DynamicResource str.Planner.Btn.LoadTip}"
+                Label="{loc:Localize str.Planner.Btn.Load}"
+                ToolTip="{loc:Localize str.Planner.Btn.LoadTip}"
                 SizeMode="Small"
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/load.png" Click="ButtonAdv_Load_Click" />
@@ -66,8 +67,8 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 IconWidth="26" IconHeight="26"
-                Label="{DynamicResource str.Planner.Btn.Groupping}"
-                ToolTip="{DynamicResource str.Planner.Btn.GrouppingTip}"
+                Label="{loc:Localize str.Planner.Btn.Groupping}"
+                ToolTip="{loc:Localize str.Planner.Btn.GrouppingTip}"
                 SizeMode="Small"
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/refresh.png" Click="ButtonAdv_Refresh_Click" />
@@ -77,8 +78,8 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 IconWidth="26" IconHeight="26"
-                Label="{DynamicResource str.Planner.Btn.Clean}"
-                ToolTip="{DynamicResource str.Planner.Btn.CleanTip}"
+                Label="{loc:Localize str.Planner.Btn.Clean}"
+                ToolTip="{loc:Localize str.Planner.Btn.CleanTip}"
                 SizeMode="Small"
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/clean.png" Click="ButtonAdv_Clean_Click" />
@@ -88,18 +89,18 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 IconWidth="26" IconHeight="26"
-                Label="{DynamicResource str.Planner.Btn.Done}"
-                ToolTip="{DynamicResource str.Planner.Btn.DoneTip}"
+                Label="{loc:Localize str.Planner.Btn.Done}"
+                ToolTip="{loc:Localize str.Planner.Btn.DoneTip}"
                 SizeMode="Small"
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/done.png" Click="ButtonAdv_Done_Click" />
             <Separator />
-            <Label x:Name="Label_TotalBarters" Content="{DynamicResource str.Planner.TotalBarters}" VerticalAlignment="Center" />
+            <Label x:Name="Label_TotalBarters" Content="{loc:Localize str.Planner.TotalBarters}" VerticalAlignment="Center" />
             <Separator />
             <!-- <Label Content="Value Pack:" VerticalAlignment="Center" /> -->
             <!-- <CheckBox x:Name="CheckBox_ValuePack"  VerticalAlignment="Center" IsChecked="True" Checked="CheckBox_ValuePack_Checked" Unchecked="CheckBox_ValuePack_Unchecked"/> -->
             <!-- <Separator Margin="10,0,0,0" /> -->
-            <Label Content="{DynamicResource str.Planner.MaxLV5}" VerticalAlignment="Center" />
+            <Label Content="{loc:Localize str.Planner.MaxLV5}" VerticalAlignment="Center" />
             <syncfusion:ComboBoxAdv x:Name="ComboBox_LV5Max" SelectionChanged="ComboBox_LV5Max_SelectionChanged">
                 <syncfusion:ComboBoxItemAdv Content="0" />
                 <syncfusion:ComboBoxItemAdv Content="1" />
@@ -113,7 +114,7 @@
                 <syncfusion:ComboBoxItemAdv Content="9" />
                 <syncfusion:ComboBoxItemAdv Content="10" />
             </syncfusion:ComboBoxAdv>
-            <Label Content="{DynamicResource str.Planner.MaxLV6}" VerticalAlignment="Center" />
+            <Label Content="{loc:Localize str.Planner.MaxLV6}" VerticalAlignment="Center" />
             <syncfusion:ComboBoxAdv x:Name="ComboBox_LV6Max" SelectionChanged="ComboBox_LV6Max_SelectionChanged">
                 <syncfusion:ComboBoxItemAdv Content="0" />
                 <syncfusion:ComboBoxItemAdv Content="1" />
@@ -127,7 +128,7 @@
                 <syncfusion:ComboBoxItemAdv Content="9" />
                 <syncfusion:ComboBoxItemAdv Content="10" />
             </syncfusion:ComboBoxAdv>
-            <Label Content="{DynamicResource str.Planner.MaxLV7}" VerticalAlignment="Center" />
+            <Label Content="{loc:Localize str.Planner.MaxLV7}" VerticalAlignment="Center" />
             <syncfusion:ComboBoxAdv x:Name="ComboBox_LV7Max" SelectionChanged="ComboBox_LV7Max_SelectionChanged">
                 <syncfusion:ComboBoxItemAdv Content="0" />
                 <syncfusion:ComboBoxItemAdv Content="1" />
@@ -145,10 +146,10 @@
             <!-- <Label Content="Alt Level:" VerticalAlignment="Center" /> -->
             <!-- <syncfusion:ComboBoxAdv x:Name="ComboBox_AltLevel" /> -->
             <!-- <Separator Margin="10,0,0,0" /> -->
-            <Label Content="{DynamicResource str.Planner.Parley}" VerticalAlignment="Center" />
+            <Label Content="{loc:Localize str.Planner.Parley}" VerticalAlignment="Center" />
             <Label x:Name="Label_SelectedParley" Content="0" HorizontalAlignment="Right" Margin="0"
                    VerticalAlignment="Center" />
-            <Label Content="{DynamicResource str.Planner.ParleyMax}" HorizontalAlignment="Left" Margin="0" VerticalAlignment="Center" />
+            <Label Content="{loc:Localize str.Planner.ParleyMax}" HorizontalAlignment="Left" Margin="0" VerticalAlignment="Center" />
         </syncfusion:ToolBarAdv>
         <Grid Grid.Row="1">
             <syncfusion:SfDataGrid x:Name="DataGrid_Planner" Height="NaN" Width="NaN"

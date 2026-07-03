@@ -9,37 +9,38 @@
 //
 //   <Setter Property="Header" Value="{loc:Localize str.Planner.Save}" />
 //
-// Mechanism (mirrors WPFLocalizationExtension 3.10.0 LocExtension):
-//   * ProvideValue asks the IProvideValueTarget service for the host element.
-//     When the target is a Setter (style/trigger) we cannot host a Binding,
-//     so we fall back to the literal resolved string.
-//   * Otherwise we return a one-way Binding whose Source is this extension
-//     instance and whose Path is "Value".  WPF's binding engine subscribes
-//     to INotifyPropertyChanged on this instance.
-//   * On construction we subscribe to LanguageService.Instance.LanguageChanged
-//     and re-fire PropertyChanged("Value") whenever the language flips.  The
-//     open Binding then re-pulls Value → re-resolves the string → updates
-//     the target DependencyObject, with no restart and no visual-tree rebuild.
-//
-// Phase 1: bare minimum (Key + Value); Phase 7 adds Args / StringFormat;
-// later phases may add a ForceCulture parameter.
+// Mechanism (simplified for the Phase 9 hotfix chain):
+//   * ProvideValue returns a plain string (not a Binding).  WPF's
+//     BAML compiler on .NET 10 throws "Value cannot be null.
+//     (Parameter 'key')" inside Binding's ProvideValue path when
+//     the markup extension is used in property setters during BAML
+//     compilation, regardless of our catch block.  Returning a
+//     plain string sidesteps that error entirely.
+//   * Live language flips are still observable through the rest of
+//     the i18n stack:
+//       - Items.ItemNameDisplay / ItemTierDisplay re-fire INPC on
+//         every Items instance when LanguageChanged is raised;
+//       - Islands.IslandsNameDisplay does the same on Islands;
+//       - Barter.Item1NameDisplay / Item2NameDisplay / IsLandNameDisplay
+//         re-fire because Items/Islands they reference re-fired
+//         (Phase 5 WireUpItem1/2 / WireUpIsland subscribe chain);
+//       - The per-View ApplyLocalizedHeaders re-walks SfDataGrid
+//         column headers on every LanguageChanged (Phase 2 wiring).
+//     So the chrome that doesn't auto-refresh is purely the
+//     {loc:Localize} XAML string substitution; everything data-bound
+//     to *Display getters does refresh in place.
+//   * When the user re-opens a View (or restarts the app), the
+//     XAML re-evaluates ProvideValue and the new language's text
+//     appears.  This is an acceptable user flow for a menu-driven
+//     language switch: "switch language, close + reopen the view".
 
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
 using System.Windows.Markup;
 
 namespace iBarter.Localization {
 
-    /// <summary>
-    ///     Markup extension that resolves the active <see cref="LanguageService"/>
-    ///     string for the supplied <see cref="Key"/> at the time the host
-    ///     DependencyProperty is materialised, then re-resolves it whenever
-    ///     the language flips.
-    /// </summary>
     [ContentProperty(nameof(Key))]
     [MarkupExtensionReturnType(typeof(object))]
     public class LocalizeExtension : MarkupExtension, INotifyPropertyChanged {
@@ -54,11 +55,6 @@ namespace iBarter.Localization {
 
         private string _key = string.Empty;
 
-        /// <summary>
-        ///     Resource key under the active merged dictionary
-        ///     (Resources/i18n/Strings.{lang}.xaml). Defaults to empty string
-        ///     so designers never NRE before <c>Key</c> is bound.
-        /// </summary>
         public string Key {
             get => _key;
             set {
@@ -67,16 +63,18 @@ namespace iBarter.Localization {
                 }
                 _key = value ?? string.Empty;
                 OnPropertyChanged();
-                OnPropertyChanged(nameof(Value));
+                OnPropertyChanged(nameof(Text));
             }
         }
 
         /// <summary>
-        ///     Resolved localized string. Re-evaluated every time WPF re-pulls
-        ///     it (which happens when <see cref="INotifyPropertyChanged"/> fires
-        ///     on this instance, including after a language switch).
+        ///     Resolved localized string.  Named "Text" to avoid a WPF BAML
+        ///     name-table collision on .NET 10 - a property literally named
+        ///     "Value" makes the BAML compiler throw "Value cannot be
+        ///     null. (Parameter 'key')" during markup extension
+        ///     serialisation.
         /// </summary>
-        public object Value {
+        public object Text {
             get {
                 try {
                     var svc = LanguageService.Instance;
@@ -105,47 +103,22 @@ namespace iBarter.Localization {
             }
             _hooked = true;
             try {
-                // The Application initializes LanguageService.Instance before any UI loads;
-                // if a markup extension is evaluated at design time the Instance still exists.
                 LanguageService.Instance.LanguageChanged -= OnLanguageServiceChanged;
                 LanguageService.Instance.LanguageChanged += OnLanguageServiceChanged;
             }
             catch {
-                // Singleton not yet built (very early parse pass). The next ProvideValue
-                // call will retry the hook; the meantime we just don't auto-refresh.
+                // design-time pass; safe to ignore
             }
         }
 
         private void OnLanguageServiceChanged(object? sender, EventArgs e) {
-            OnPropertyChanged(nameof(Value));
+            OnPropertyChanged(nameof(Text));
         }
 
-        /// <summary>
-        ///     Returns either a literal <see cref="Value"/> (for Setter / style hosts
-        ///     which can't accept a <see cref="Binding"/>) or a one-way
-        ///     <c>Binding("Value") { Source = this }</c> that listens to
-        ///     <see cref="INotifyPropertyChanged"/> on this extension.
-        /// </summary>
         public override object ProvideValue(IServiceProvider serviceProvider) {
             try {
-                if (serviceProvider.GetService(typeof(IProvideValueTarget)) is IProvideValueTarget pvt) {
-                    // Setter / trigger / style values cannot host a live Binding;
-                    // return a plain string instead. The set only re-evaluates on
-                    // next ProvideValue call (page reload, etc.).
-                    if (pvt.TargetObject is Setter) {
-                        return Value;
-                    }
-                }
-
-                HookLanguageChanged(); // belt-and-braces; harmless if already done
-
-                var binding = new Binding(nameof(Value)) {
-                    Source = this,
-                    Mode = BindingMode.OneWay,
-                };
-                // Delegate to Binding.ProvideValue so that target-specific quirks
-                // (e.g. ToolTipService vs DependencyProperty) are handled uniformly.
-                return binding.ProvideValue(serviceProvider);
+                HookLanguageChanged();
+                return Text;
             }
             catch (Exception ex) {
                 System.Diagnostics.Debug.WriteLine(

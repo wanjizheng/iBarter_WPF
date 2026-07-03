@@ -4,6 +4,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="clr-namespace:iBarter.View"
+    xmlns:loc="clr-namespace:iBarter.Localization"
     xmlns:Syncfusion="http://schemas.syncfusion.com/wpf" x:Class="iBarter.View.ShipCargoControl"
     xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
     mc:Ignorable="d"
@@ -53,8 +54,8 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 IconWidth="26" IconHeight="26"
-                Label="{DynamicResource str.ShipCargo.Btn.Clean}"
-                ToolTip="{DynamicResource str.ShipCargo.Btn.CleanTip}"
+                Label="{loc:Localize str.ShipCargo.Btn.Clean}"
+                ToolTip="{loc:Localize str.ShipCargo.Btn.CleanTip}"
                 SizeMode="Small"
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/clean.png" Click="ButtonAdv_Clean_Click" />
