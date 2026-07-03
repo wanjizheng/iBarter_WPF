@@ -111,6 +111,18 @@
     <Content Include="Resources\Items.zh-TW.csv">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <!-- Phase 1 (i18n): WPF XAML resource dictionaries.  We mark them as
+         <Content> with CopyToOutputDirectory=PreserveNewest so the original
+         .xaml text is copied to bin (rather than getting Page-compiled
+         into embedded BAML).  Loading via pack:// then parses the .xaml
+         with the runtime XAML reader, which is robust against the
+         clr-namespace+System.String edge case on .NET 10. -->
+    <Content Include="Resources\i18n\Strings.en-US.xaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\i18n\Strings.zh-TW.xaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="tessdata\eng.traineddata">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
