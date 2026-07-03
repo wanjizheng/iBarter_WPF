@@ -83,7 +83,12 @@ namespace iBarter {
             //mySplashScreen = new SplashScreen();
             myfmMain = new MainWindow();
 
-            myfmMain.statusBarItem_Version.Text = "Version: Beta_4.4";
+            // Phase 6 (i18n): the "Version: " prefix is now a resource key
+            // so the status-bar label flips with the active language; the
+            // version number itself ("Beta_4.4") stays as a build-time
+            // constant so the localized prefix and the version string can
+            // concatenate in any culture.
+            myfmMain.statusBarItem_Version.Text = iBarter.Localization.LanguageService.Instance.Localize("str.StatusBar.VersionLabel") + "Beta_4.4";
 
             // OnMainWindowClose: closing the main window exits the entire process
             // immediately, regardless of whether child windows (BarterScanner,

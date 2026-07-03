@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using iBarter.Localization;
 using static iBarter.EnumLists;
 using Grid = System.Windows.Controls.Grid;
 using RowColumnIndex = Syncfusion.UI.Xaml.ScrollAxis.RowColumnIndex;
@@ -748,7 +749,20 @@ namespace iBarter.View {
             myLabel.HorizontalAlignment = HorizontalAlignment.Left;
             myLabel.VerticalAlignment = VerticalAlignment.Top;
             if (_barter.Item1Name != "" && _barter.Item2Name != "") {
-                myLabel.Content = "[" + _barter.Item1Number * _barter.ExchangeQuantity + "] " + _barter.Item1Name + " => " + _barter.Item2Name + " [" + _barter.Item2Number * _barter.ExchangeQuantity + "]";
+                // Phase 6 (i18n): label format lives in the resource dictionary
+                // (str.Map.LabelFormat) so it can flip to a different layout
+                // in another language.  For now both en-US and zh-TW share
+                // the same shape ("[{0}] {1} => {2} [{3}]") because the
+                // arrow is a visual symbol; item names flip independently
+                // via Barter.Item1NameDisplay / Item2NameDisplay.
+                string fmt = Localization.LanguageService.Instance?.Localize("str.Map.LabelFormat")
+                              ?? "[{0}] {1} => {2} [{3}]";
+                myLabel.Content = string.Format(
+                    fmt,
+                    _barter.Item1Number * _barter.ExchangeQuantity,
+                    _barter.Item1NameDisplay,
+                    _barter.Item2NameDisplay,
+                    _barter.Item2Number * _barter.ExchangeQuantity);
             }
             else {
                 myLabel.Content = "";

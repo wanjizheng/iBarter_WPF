@@ -109,4 +109,21 @@
     <system:String x:Key="str.ShipCargo.Btn.Clean">清理</system:String>
     <system:String x:Key="str.ShipCargo.Btn.CleanTip">移除已完成的船貨列</system:String>
 
+    <!-- Phase 6 (i18n): Item tier labels.  zh-TW keeps the [brackets] pattern
+         from en-US so users familiar with the English UI recognise the
+         markers; the level token ([一般]/[Lv 1] etc.) is translated. -->
+    <system:String x:Key="str.ItemTier.Basic">[一般物品]</system:String>
+    <system:String x:Key="str.ItemTier.Lv1">[等級 1]</system:String>
+    <system:String x:Key="str.ItemTier.Lv2">[等級 2]</system:String>
+    <system:String x:Key="str.ItemTier.Lv3">[等級 3]</system:String>
+    <system:String x:Key="str.ItemTier.Lv4">[等級 4]</system:String>
+    <system:String x:Key="str.ItemTier.Lv5">[等級 5]</system:String>
+    <system:String x:Key="str.ItemTier.Lv6">[等級 6]</system:String>
+    <system:String x:Key="str.ItemTier.Lv7">[等級 7]</system:String>
+    <system:String x:Key="str.ItemTier.Misc">[其他]</system:String>
+
+    <system:String x:Key="str.Map.LabelFormat">[{0}] {1} =&gt; {2} [{3}]</system:String>
+
+    <system:String x:Key="str.StatusBar.VersionLabel">版本：</system:String>
+
 </ResourceDictionary>

@@ -48,6 +48,7 @@ namespace iBarter {
 
         private void OnLanguageChanged(object? sender, System.EventArgs e) {
             RaisePropertyChanged("ItemNameDisplay");
+            RaisePropertyChanged("ItemTierDisplay");
         }
 
         public string ItemName {
@@ -173,6 +174,42 @@ namespace iBarter {
                 }
 
                 return strLV;
+            }
+        }
+
+        /// <summary>
+        ///     Phase 6 (i18n): localized variant of <see cref="ItemTier"/>.
+        ///     Returns the resource-string equivalent of the English tier
+        ///     marker (e.g. en-US '[Level 5]' or zh-TW '[等級 5]').  Falls
+        ///     back to <see cref="ItemTier"/> if the LanguageService lookup
+        ///     is unavailable (design-time) or the matching key is missing
+        ///     (developer error).  The Storage grid binds to this via
+        ///     <c>MappingName="ItemTierDisplay"</c> so its Tier column flips
+        ///     with the rest of the UI on language switch.
+        /// </summary>
+        public string ItemTierDisplay {
+            get {
+                string key = ItemLV switch {
+                    "0" => "str.ItemTier.Basic",
+                    "1" => "str.ItemTier.Lv1",
+                    "2" => "str.ItemTier.Lv2",
+                    "3" => "str.ItemTier.Lv3",
+                    "4" => "str.ItemTier.Lv4",
+                    "5" => "str.ItemTier.Lv5",
+                    "6" => "str.ItemTier.Lv6",
+                    "7" => "str.ItemTier.Lv7",
+                    _  => "str.ItemTier.Misc",
+                };
+                try {
+                    var svc = Localization.LanguageService.Instance;
+                    if (svc != null) {
+                        return svc.Localize(key);
+                    }
+                }
+                catch {
+                    // fall through
+                }
+                return ItemTier;
             }
         }
 

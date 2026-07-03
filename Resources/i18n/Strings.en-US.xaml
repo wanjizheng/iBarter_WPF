@@ -129,4 +129,28 @@
     <system:String x:Key="str.ShipCargo.Btn.Clean">Clean</system:String>
     <system:String x:Key="str.ShipCargo.Btn.CleanTip">Remove finished cargo rows</system:String>
 
+    <!-- Phase 6 (i18n): Item tier labels shown in the Storage grid Tier column
+         and the BarterPlanner LV column.  Keyed by ItemLV integer (0..7)
+         plus an "8" sentinel for the unrecognised-LV bucket. -->
+    <system:String x:Key="str.ItemTier.Basic">[Basic Item]</system:String>
+    <system:String x:Key="str.ItemTier.Lv1">[Level 1]</system:String>
+    <system:String x:Key="str.ItemTier.Lv2">[Level 2]</system:String>
+    <system:String x:Key="str.ItemTier.Lv3">[Level 3]</system:String>
+    <system:String x:Key="str.ItemTier.Lv4">[Level 4]</system:String>
+    <system:String x:Key="str.ItemTier.Lv5">[Level 5]</system:String>
+    <system:String x:Key="str.ItemTier.Lv6">[Level 6]</system:String>
+    <system:String x:Key="str.ItemTier.Lv7">[Level 7]</system:String>
+    <system:String x:Key="str.ItemTier.Misc">[Misc]</system:String>
+
+    <!-- Phase 6 (i18n): on-map label template shown above each barter pin.
+         Placeholders: {0}=Item1 quantity, {1}=Item1 name (localized via
+         ItemNameDisplay), {2}=Item2 name (localized), {3}=Item2 quantity.
+         The '=>' arrow is kept as a visual symbol regardless of language. -->
+    <system:String x:Key="str.Map.LabelFormat">[{0}] {1} =&gt; {2} [{3}]</system:String>
+
+    <!-- Phase 6 (i18n): status-bar text appended to the version string
+         (e.g. "Version: Beta_4.4").  Localized separately from the version
+         number itself, which is build-time constant. -->
+    <system:String x:Key="str.StatusBar.VersionLabel">Version: </system:String>
+
 </ResourceDictionary>

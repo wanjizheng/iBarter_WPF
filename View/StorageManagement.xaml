@@ -71,10 +71,10 @@
         </Grid.RowDefinitions>
         <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0"><Label Content="{DynamicResource str.Storage.DefaultSeedCity}" />
             <Syncfusion:ComboBoxAdv x:Name="ComboBoxAdv_DefaultStorage" SelectedIndex="1" >
-                <Syncfusion:ComboBoxItemAdv Content="Velia" />
-                <Syncfusion:ComboBoxItemAdv Content="Illiya" />
-                <Syncfusion:ComboBoxItemAdv Content="Epheria" />
-                <Syncfusion:ComboBoxItemAdv Content="Ancado" />
+                <Syncfusion:ComboBoxItemAdv Content="{DynamicResource str.Grid.Storage.Col.Velia}" />
+                <Syncfusion:ComboBoxItemAdv Content="{DynamicResource str.Grid.Storage.Col.Iliya}" />
+                <Syncfusion:ComboBoxItemAdv Content="{DynamicResource str.Grid.Storage.Col.Epheria}" />
+                <Syncfusion:ComboBoxItemAdv Content="{DynamicResource str.Grid.Storage.Col.Ancado}" />
             </Syncfusion:ComboBoxAdv>
         </Syncfusion:ToolBarAdv>
         <Syncfusion:SfDataGrid x:Name="DataGrid_Storage" Height="NaN" Width="NaN" AutoGenerateColumns="False"
@@ -92,7 +92,7 @@
                                    AllowEditing="False" ColumnSizer="Auto"/>
                 <Syncfusion:GridImageColumn HeaderText="Icon" MappingName="ItemIcon" Width="40"
                                     TextAlignment="Center" AllowEditing="False" />
-                <Syncfusion:GridTextColumn HeaderText="Tier" Width="70" MappingName="ItemTier"
+                <Syncfusion:GridTextColumn HeaderText="Tier" Width="70" MappingName="ItemTierDisplay"
                                    AllowEditing="False" AllowResizing="True"/>
                 <Syncfusion:GridTextColumn HeaderText="Velia" MappingName="StorageVeliaQuantity_Velia"
                                            AllowEditing="True" AllowResizing="True"/>
