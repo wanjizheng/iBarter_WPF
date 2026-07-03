@@ -143,6 +143,8 @@ namespace iBarter.Localization {
             }
         }
 
+        private static ResourceDictionary? _installedLanguageDictionary;
+
         private static void ApplyMergedDictionary(AppLanguage value) {
             try {
                 var app = Application.Current;
@@ -167,13 +169,20 @@ namespace iBarter.Localization {
                     return;
                 }
 
-                // Parse the .xaml manually with System.Xml.Linq so we don't have to
-                // rely on WPF's XAML reader understanding the clr-namespace
-                // declaration for System.String on .NET 10.  Each <sys:String
-                // x:Key="...">value</sys:String> becomes a plain System.String
-                // entry in a fresh ResourceDictionary; the XAML reader's quirks
-                // (mscorlib vs System.Private.CoreLib, XAML 2009 mode, etc.)
-                // are completely sidestepped.
+                // Parse the .xaml manually with System.Xml.Linq so we don't have
+                // to rely on WPF's XAML reader understanding the clr-namespace
+                // declaration for System.String on .NET 10.  Each <String
+                // x:Key="...">value</String> becomes a plain System.String
+                // entry in a fresh ResourceDictionary.
+                //
+                // IMPORTANT: do NOT set `dict.Source = ...`.  Assigning a
+                // non-null Source to a ResourceDictionary causes WPF to invoke
+                // its built-in XAML loader (WpfXamlLoader.Load) on the URI,
+                // which then fails on <sys:String> for the same
+                // clr-namespace reason - throwing XamlObjectWriterException
+                // at startup.  We bypass that entirely by populating the
+                // dictionary in code; the XAML file is just our on-disk
+                // backing store.
                 ResourceDictionary dict = new ResourceDictionary();
                 try {
                     XDocument doc = XDocument.Load(resolvedPath, LoadOptions.None);
@@ -182,9 +191,6 @@ namespace iBarter.Localization {
                         var keyAttr = el.Attribute("Key");
                         if (keyAttr is null) continue;
                         string key = keyAttr.Value;
-                        // text content may include the leading whitespace;
-                        // the previous WPF XAML reader trimmed it via the
-                        // XamlTypeConverter, so we mirror that.
                         string text = (el.Value ?? string.Empty).Trim();
                         if (string.IsNullOrEmpty(key)) continue;
                         dict[key] = text;
@@ -198,30 +204,20 @@ namespace iBarter.Localization {
 
                 var merged = app.Resources.MergedDictionaries;
 
-                // Remove any dictionaries we previously installed (recognised
-                // by a private tag we control - ResourceDictionary doesn't have
-                // a free-form tag, so we use a recognizable source key on the
-                // dictionary we install: a sentinel comment isn't possible, but
-                // the dictionaries we install have a `Source` of null and a
-                // single root tag we can check via reflection.  Simpler: just
-                // clear all merged dictionaries that came from us by Source=null
-                // sentinel - we use an empty Source and stash a tag-like key
-                // in a custom property.
-                // For simplicity we mark our entries with a sentinel source
-                // string (we set dict.Source to a Uri with a fragment that
-                // identifies us).  The WPF XAML reader ignores it but our
-                // own installer can find and remove.
-                dict.Source = new Uri(
-                    $"pack://application:,,,/Resources/i18n/{fileName}#iBarterLanguageService");
-
-                for (int i = merged.Count - 1; i >= 0; i--) {
-                    var src = merged[i].Source?.OriginalString;
-                    if (src is not null && src.Contains("/i18n/Strings.", StringComparison.OrdinalIgnoreCase)) {
-                        merged.RemoveAt(i);
+                // Remove the previous install (if any) by reference equality
+                // with the static field; do NOT iterate by Source - other
+                // merged dictionaries (WindowStyle, Aero2, etc.) have their
+                // own Sources that we must not touch.
+                if (_installedLanguageDictionary is not null) {
+                    for (int i = merged.Count - 1; i >= 0; i--) {
+                        if (ReferenceEquals(merged[i], _installedLanguageDictionary)) {
+                            merged.RemoveAt(i);
+                        }
                     }
                 }
 
                 merged.Add(dict);
+                _installedLanguageDictionary = dict;
             }
             catch (Exception ex) {
                 System.Diagnostics.Debug.WriteLine(

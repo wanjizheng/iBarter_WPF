@@ -66,6 +66,14 @@ const QUERIES = [
 // user asked for what's on bdocodex).
 const RE_NAME = /<b[^>]*>(?:<span><\/span>)?([^<]+)<\/b>/;
 
+// Barter items on the bdocodex list view come out as
+// "[5階段]102年黃金草" - the [N階段] is the item's tier/level
+// metadata bolted onto the H1 by the list renderer.  The detail page
+// strips it, and Phase 4's existing importer strips it too, so we
+// strip it here for consistency.  Pure-CJK, non-tier brackets like
+// [活動] / [故事圖鑑] are preserved.
+const RE_TIER_PREFIX = /^\[\d+\s*階段\]\s*/;
+
 function fetchUrl(p) {
   return new Promise((resolve, reject) => {
     const req = https.request(
@@ -139,7 +147,11 @@ function extractNames(jsonText, label) {
       }
     }
     if (found) {
-      names.push(found);
+      // Drop the [N階段] tier prefix on barter items so the bare
+      // name ("102年黃金草") survives in the dump and matches the
+      // form on the detail page / Phase 4's existing CSV.
+      const stripped = found.replace(RE_TIER_PREFIX, '');
+      names.push(stripped);
     } else {
       empty++;
     }
