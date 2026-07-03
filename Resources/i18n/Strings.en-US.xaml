@@ -1,0 +1,23 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:system="clr-namespace:System;assembly=mscorlib">
+
+    <!--
+        iBarter English (default) UI strings.
+
+        Phase 1: scaffolding only. Keys will be added in subsequent phases:
+          * Phase 2: main menu, dock headers, splash, banner, status-bar labels.
+          * Phase 3: zh-TW equivalents (this file is the master).
+          * Phase 5: tier labels ([Level N]).
+          * Phase 6: every user-visible Log(...) format string + MessageBox text.
+          * Phase 8: language-menu labels themselves (English / 繁體中文).
+
+        Key naming convention:  str.<Area>.<SubArea>.<Key>  all dot-separated.
+        Examples:  str.Menu.Windows, str.Planner.Col.Island, str.Log.SyncImagesDone.
+
+        A single placeholder key is kept so we can verify the lookup and live
+        switch mechanics at design time. Remove after Phase 2 ships more keys.
+    -->
+    <system:String x:Key="str.i18n.placeholder">i18n scaffolding active (en-US)</system:String>
+
+</ResourceDictionary>

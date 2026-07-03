@@ -58,5 +58,22 @@ namespace iBarter.Properties {
                 this["SelectedComboBoxValueLV7"] = value;
             }
         }
+
+        // AppLanguage: persisted active language selection for the
+        // iBarter.Localization.LanguageService singleton (added Phase 1 of
+        // the i18n refactor). Values: 0 = English, 1 = TraditionalChinese.
+        // The SettingsSingleFileGenerator is regenerating this file as the
+        // .settings side gains keys; this stub is hand-maintained for now.
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int AppLanguage {
+            get {
+                return ((int)(this["AppLanguage"]));
+            }
+            set {
+                this["AppLanguage"] = value;
+            }
+        }
     }
 }

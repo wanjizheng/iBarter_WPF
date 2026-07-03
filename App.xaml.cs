@@ -1,4 +1,5 @@
-﻿using iBarter.Model;
+﻿using iBarter.Localization;
+using iBarter.Model;
 using iBarter.View;
 using iBarter.ViewModel;
 using Syncfusion.Licensing;
@@ -49,6 +50,13 @@ namespace iBarter {
             SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JHaF5cWWdCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdlWXlceXVdR2BZVEJ3W0FWYEo=");
 
             //SfSkinManager.ApplyStylesOnApplication = true;
+
+            // Phase 1 (i18n): install the active language merged dictionary
+            // (Strings.en-US.xaml or Strings.zh-TW.xaml) BEFORE any UI loads so
+            // every DynamicResource lookup during InitializeComponent sees the
+            // correct dictionary. Phase 8 adds the user-facing "Language" menu
+            // that lets the user switch live.
+            LanguageService.Instance.InitializeAtStartup();
 
             myCFun = new CFunctions();
             listItems = myCFun.LoadItemsCSV();

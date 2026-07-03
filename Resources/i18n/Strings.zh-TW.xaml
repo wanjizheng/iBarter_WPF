@@ -1,0 +1,19 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:system="clr-namespace:System;assembly=mscorlib">
+
+    <!--
+        iBarter Traditional Chinese (zh-TW, 繁體中文) UI strings.
+
+        Phase 1: scaffolding only - English placeholders so the lookup path
+        resolves cleanly when the user toggles language. Real translations
+        are added in Phase 3 once all keys are present in Strings.en-US.xaml
+        (translators get the master then fill this side, missing-key detection
+        via StringDiffCheck).
+
+        Key naming:  identical to Strings.en-US.xaml. Lookup goes through
+        LanguageService which swaps this dictionary in/out of MergedDictionaries.
+    -->
+    <system:String x:Key="str.i18n.placeholder">i18n 框架已啟用（繁體中文）</system:String>
+
+</ResourceDictionary>
