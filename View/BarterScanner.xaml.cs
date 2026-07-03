@@ -36,7 +36,14 @@ namespace iBarter.View {
                 App.myCFun.Log("Start scanning...", Brushes.Blue);
                 //await Task.Run(() => { App.myCFun.SearchBarter(); });
 
-                await Task.Run(() => App.myCFun.IdentifyRoutes());
+                // Explicit async lambda with inner await guarantees the outer
+                // Task.Run waits for IdentifyRoutes() to actually finish, even
+                // if overload resolution picks the Func<Task> wrapper that
+                // unwraps the inner task (instead of the Func<TResult> one
+                // that wouldn't). Previously a closed scanner window
+                // (App.myBarterScanner == null) would NRE inside the scan,
+                // get swallowed, and log "Done!" instantly with no scan.
+                await Task.Run(async () => await App.myCFun.IdentifyRoutes());
             }
             catch (Exception ex) {
                 App.myCFun.Log(ex.Message, Brushes.Red);

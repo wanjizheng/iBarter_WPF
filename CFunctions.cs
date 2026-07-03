@@ -146,11 +146,108 @@ namespace iBarter {
 
         public void DownloadMissingIcon() {
             foreach (Items item in App.listItems) {
+                if (item == null) continue;
+                // Guard against the same FormatException that previously
+                // killed the loop at the first non-numeric ID row (the
+                // famous "Gold Bar 1,000G" case): if LoadItemsCSV ever
+                // returns a row whose ID isn't parseable, skip it instead
+                // of throwing out of the foreach. Same pattern as
+                // Items.ItemIcon.
+                if (!int.TryParse(item.ItemID, out int idNum) || idNum <= 0) continue;
                 string iconPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + item.ItemID + ".bmp";
-
-                if (!File.Exists(iconPath) && item != null && int.Parse(item.ItemID) > 0) {
-                    App.myCFun.RefreshItems(item.ItemID);
+                if (!File.Exists(iconPath)) {
+                    try {
+                        App.myCFun.RefreshItems(item.ItemID);
+                    }
+                    catch (Exception ex) {
+                        // One bad item should never block the remaining 273
+                        // - the previous behaviour was an unhandled throw
+                        // out of DownloadMissingIcon, which silently left
+                        // every subsequent item un-downloaded.
+                        Log("Skip icon " + item.ItemID + " (" + item.ItemName + "): " + ex.Message, Brushes.OrangeRed);
+                    }
                 }
+            }
+        }
+
+        // Strict two-way sync between Items.csv and Resources/Images/Items:
+        //   1. For each ID in the CSV that has no bmp on disk -> queue a
+        //      bdocodex download via the existing RefreshItems pipeline.
+        //   2. For each .bmp on disk whose stem is NOT a CSV ID -> delete
+        //      it (those icons are orphaned; the catalog no longer
+        //      references them).
+        // Deletions are synchronous so the user sees the cleanup
+        // immediately; downloads are fire-and-forget (Task.Run in
+        // RefreshItems) and complete in the background, with the in-app
+        // Log showing per-item progress.
+        public void SyncImages() {
+            string imgDir = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items";
+            if (!System.IO.Directory.Exists(imgDir)) {
+                Log("SyncImages: image folder missing: " + imgDir, Brushes.Red);
+                return;
+            }
+
+            // Build the set of valid IDs from the freshly-loaded CSV (NOT
+            // the stale App.listItems - the user might have edited the
+            // CSV between sessions and we want the on-disk state to match
+            // the file on disk, not the in-memory snapshot from startup).
+            var csvIds = new HashSet<string>(StringComparer.Ordinal);
+            int skipped = 0;
+            var csvItems = LoadItemsCSV();
+            foreach (var it in csvItems) {
+                if (it != null && !string.IsNullOrEmpty(it.ItemID)
+                    && System.Text.RegularExpressions.Regex.IsMatch(it.ItemID, "^[0-9]+$")) {
+                    csvIds.Add(it.ItemID);
+                }
+                else {
+                    skipped++;
+                }
+            }
+            Log($"SyncImages: CSV has {csvIds.Count} valid IDs ({skipped} skipped)", Brushes.Gray);
+
+            // Phase 1: queue downloads for missing bmps.
+            int toDownload = 0;
+            foreach (var id in csvIds) {
+                string iconPath = Path.Combine(imgDir, id + ".bmp");
+                if (!File.Exists(iconPath)) {
+                    try {
+                        RefreshItems(id);
+                        toDownload++;
+                    }
+                    catch (Exception ex) {
+                        Log("SyncImages: download fail " + id + ": " + ex.Message, Brushes.OrangeRed);
+                    }
+                }
+            }
+            Log($"SyncImages: queued {toDownload} download(s)", Brushes.Blue);
+
+            // Phase 2: delete orphaned bmps (stem not in CSV). Run sync
+            // here so the user gets an immediate "deleted N" line in the
+            // log instead of having to wait for the async downloads to
+            // finish first.
+            int deleted = 0;
+            var deletedNames = new List<string>();
+            foreach (var path in System.IO.Directory.EnumerateFiles(imgDir, "*.bmp")) {
+                string stem = Path.GetFileNameWithoutExtension(path);
+                if (!csvIds.Contains(stem)) {
+                    try {
+                        File.Delete(path);
+                        deleted++;
+                        if (deletedNames.Count < 20) deletedNames.Add(stem);
+                    }
+                    catch (Exception ex) {
+                        Log("SyncImages: delete fail " + path + ": " + ex.Message, Brushes.OrangeRed);
+                    }
+                }
+            }
+            if (deleted > 0) {
+                string preview = deletedNames.Count > 0
+                    ? " (" + string.Join(", ", deletedNames) + (deleted > deletedNames.Count ? ", ..." : "") + ")"
+                    : "";
+                Log($"SyncImages: deleted {deleted} orphan(s){preview}", Brushes.Blue);
+            }
+            else {
+                Log("SyncImages: no orphans to delete", Brushes.Gray);
             }
         }
 
@@ -164,14 +261,37 @@ namespace iBarter {
 
         private void RefreshItemsCore(string _itemID) {
             List<Items> listItems = LoadItemsCSV();
-            if (_itemID != null) {
+            if (!string.IsNullOrEmpty(_itemID)) {
                 Items myItem = listItems.Where(i => i.ItemID == _itemID).FirstOrDefault();
+                // If the CSV has been edited since startup (or the ID was
+                // never in the CSV to begin with), myItem is null and the
+                // old code added it to a 1-element list - which then NRE'd
+                // on the first `item.ItemID` access below. Bail out with a
+                // visible log instead.
+                if (myItem == null) {
+                    Log("RefreshItemsCore: ID not in Items.csv: " + _itemID, Brushes.OrangeRed);
+                    return;
+                }
                 listItems.Clear();
                 listItems.Add(myItem);
             }
 
             int i = 1;
             foreach (var item in listItems) {
+                // Short-circuit on cached icons. UpdateItemImagesAsync already
+                // has this guard, but only at the disk-write site, so the
+                // bdocodex HTTP fetch + 'Download icon for: ...' log line in
+                // this method still ran on every startup for every item that
+                // the caller (Item1Icon / Item2Icon / DownloadMissingIcon)
+                // hadn't already filtered out. Put the guard here too so the
+                // log message actually matches reality: either we are
+                // downloading (bmp missing) or we are not (bmp present).
+                string cachedBmp = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + item.ItemID + ".bmp";
+                if (System.IO.File.Exists(cachedBmp)) {
+                    i++;
+                    continue;
+                }
+
                 var imageUrl = ResolveBdocodexItemImageUrl(item.ItemID);
                 // Only log + dispatch the download if the URL was actually
                 // resolved - bdocodex sometimes has no image for newly added
@@ -357,25 +477,93 @@ namespace iBarter {
             }
         }
 
+        // Quote-aware single-line CSV split. Returns the fields of one line
+        // with surrounding double-quotes stripped and embedded `""` (escaped
+        // quote) collapsed to a single `"`. Replaces the old `line.Split(',')`
+        // which silently broke on names like `"Gold Bar 1,000G"` by stuffing
+        // `000G"` into the ID column - that bogus ID then crashed any caller
+        // doing `int.Parse(item.ItemID)` (DownloadMissingIcon, Item1Icon,
+        // Item2Icon), killing the loop partway through the catalog.
+        private static List<string> SplitCsvLine(string line) {
+            var fields = new List<string>();
+            if (line == null) return fields;
+            var sb = new StringBuilder(line.Length);
+            bool inQuotes = false;
+            for (int i = 0; i < line.Length; i++) {
+                char c = line[i];
+                if (inQuotes) {
+                    if (c == '"') {
+                        // Doubled quote inside a quoted field = literal '"'.
+                        if (i + 1 < line.Length && line[i + 1] == '"') {
+                            sb.Append('"');
+                            i++;
+                        }
+                        else {
+                            inQuotes = false;
+                        }
+                    }
+                    else {
+                        sb.Append(c);
+                    }
+                }
+                else {
+                    if (c == ',') {
+                        fields.Add(sb.ToString());
+                        sb.Clear();
+                    }
+                    else if (c == '"' && sb.Length == 0) {
+                        // Opening quote only if it starts the field - this
+                        // keeps a stray '"' mid-field from being treated as
+                        // a quote delimiter.
+                        inQuotes = true;
+                    }
+                    else {
+                        sb.Append(c);
+                    }
+                }
+            }
+            fields.Add(sb.ToString());
+            return fields;
+        }
+
         public List<Items> LoadItemsCSV() {
             var listItems = new List<Items>();
-            using (var reader = new StreamReader(AppDomain.CurrentDomain.BaseDirectory +
-                                                 "\\Resources\\Items.csv")) {
+            string csvPath = AppDomain.CurrentDomain.BaseDirectory + "\\Resources\\Items.csv";
+            if (!System.IO.File.Exists(csvPath)) {
+                Log("Items.csv not found: " + csvPath, Brushes.Red);
+                return listItems;
+            }
+            using (var reader = new StreamReader(csvPath)) {
+                int lineNo = 0;
                 while (!reader.EndOfStream) {
+                    lineNo++;
                     var line = reader.ReadLine();
-                    var results = line.Split(',');
-                    var strName = results[0].Replace("'", "").Replace("(", "").Replace(")", "");
-                    var strID = results[1];
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    var results = SplitCsvLine(line);
+                    // Schema: Name, ID, LV, Number. Anything else is malformed.
+                    if (results.Count < 4) {
+                        Log($"Items.csv line {lineNo} skipped (expected 4 columns, got {results.Count}): {line}", Brushes.OrangeRed);
+                        continue;
+                    }
+                    var strName = results[0].Replace("'", "").Replace("(", "").Replace(")", "").Trim();
+                    var strID = results[1].Trim();
+
+                    // Validate ID is numeric up front - downstream callers
+                    // (DownloadMissingIcon / ItemIcon getters) parse it with
+                    // int.Parse; a non-numeric ID would throw and abort the
+                    // whole refresh loop.
+                    if (!System.Text.RegularExpressions.Regex.IsMatch(strID, "^[0-9]+$")) {
+                        Log($"Items.csv line {lineNo} skipped (non-numeric ID '{strID}'): {strName}", Brushes.OrangeRed);
+                        continue;
+                    }
 
                     int intNumber = -1;
-                    try {
-                        intNumber = int.Parse(results[3]);
-                    }
-                    catch (Exception e) {
-                        Log("Error:" + e.Message, Brushes.Red);
+                    if (!int.TryParse(results[3].Trim(), out intNumber)) {
+                        Log($"Items.csv line {lineNo} bad number '{results[3]}': {strName}", Brushes.OrangeRed);
+                        intNumber = -1;
                     }
 
-                    var myItems = new Items(strName, results[1], results[2], intNumber);
+                    var myItems = new Items(strName, strID, results[2].Trim(), intNumber);
                     listItems.Add(myItems);
                 }
             }
@@ -440,6 +628,17 @@ namespace iBarter {
 
             listAnchors.Sort((p1, p2) => { return p1.Y.CompareTo(p2.Y); });
 
+            // Surface a clear warning instead of silently looping zero times
+            // and logging "Done!" with no scan work. The two most common
+            // causes are (a) the barter screen is not visible in the bound
+            // game window, or (b) the user minimized / covered the game
+            // window after pressing Planner's Done, which doesn't touch
+            // the game but the user may not realise the barter UI must
+            // be on screen for anchor.bmp to be found.
+            if (listAnchors.Count == 0) {
+                Log("Scan: no anchor.bmp found in game window (" + App.myPureDM.WindowWidth + "x" + App.myPureDM.WindowHeight + "). Is the barter screen open?", Brushes.OrangeRed);
+            }
+
 
             // for (int i = 0; i < listAnchors.Count; i++) {
             //     // Thread myThread = new Thread(() => {
@@ -503,7 +702,15 @@ namespace iBarter {
             //     }
             // });
 
-            App.myBarterScanner.RefreshDataGrid();
+            // RefreshDataGrid NRE'd silently in the "instant Done" case after
+            // the user closed the scanner window mid-scan (App.myBarterScanner
+            // is reset to null by the Closed handler). Guard the call so the
+            // loop results still land in App.listBarterScanner for the next
+            // time the user reopens the window, and so a null window never
+            // turns into a silent jump to "Done!".
+            if (App.myBarterScanner != null) {
+                App.myBarterScanner.RefreshDataGrid();
+            }
         }
 
         // private async Task<Barter> IdentifyBarterAsync(PointPlus _pp) {

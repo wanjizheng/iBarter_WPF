@@ -1,4 +1,5 @@
-﻿using Syncfusion.Windows.Shared;
+﻿using Newtonsoft.Json;
+using Syncfusion.Windows.Shared;
 using System.IO;
 
 namespace iBarter {
@@ -37,6 +38,16 @@ namespace iBarter {
             }
         }
 
+        // Don't persist the absolute path - the icon location is always
+        // BaseDirectory/Resources/Items/<id>.bmp, so the path is rebuilt by
+        // the getter on the next access. Persisting it (a) hard-codes
+        // whichever directory iBarter happened to run from at save-time into
+        // the JSON, breaking icon resolution when the program is later run
+        // from a different path (e.g. C:\Users\...\OneDrive\Desktop\iBarter\
+        // one day and E:\wanjizheng\MyProject\iBarter\ the next), and
+        // (b) made File.Exists return false on the stale path, which
+        // cascaded into spurious bdocodex downloads at startup.
+        [JsonIgnore]
         public string ItemIcon {
             get {
                 if (icon == null || !icon.Contains(ItemID)) {

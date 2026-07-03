@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Weavers xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="FodyWeavers.xsd">
+  <Costura>
+    <!-- Embed native DLLs (without .dll extension) into the main assembly. -->
+    <Unmanaged32Assemblies>
+      Magick.Native-Q16-x86
+      cvextern
+      libusb-1.0
+      opencv_videoio_ffmpeg4130
+      concrt140
+      msvcp140
+      msvcp140_1
+      msvcp140_2
+      msvcp140_atomic_wait
+      msvcp140_codecvt_ids
+      vcruntime140
+    </Unmanaged32Assemblies>
+  </Costura>
+</Weavers>
+

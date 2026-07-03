@@ -1,4 +1,5 @@
 ﻿using iBarter.View;
+using Newtonsoft.Json;
 using Syncfusion.Windows.Shared;
 using System.IO;
 
@@ -232,14 +233,31 @@ namespace iBarter {
             }
         }
 
+        // See Items.ItemIcon for why this is [JsonIgnore]d. Persisting the
+        // absolute path in myShipCargoItems_Data.json bakes whichever
+        // BaseDirectory the program happened to be running from at save-time
+        // into the JSON; on the next run from a different directory the stale
+        // path fails File.Exists, which makes the getter call RefreshItems,
+        // which spams 'Download icon for: ...' and runs a bdocodex fetch
+        // even though the bmp is sitting on disk at the new BaseDirectory.
+        [JsonIgnore]
         public string Item1Icon {
             get {
                 if (icon1 == null || !icon1.Contains(Item1.ItemID)) {
                     icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
                 }
 
-                if (!File.Exists(icon1) && item1 != null && int.Parse(Item1.ItemID) > 0) {
-                    App.myCFun.RefreshItems(item1.ItemID);
+                if (!File.Exists(icon1) && item1 != null && int.TryParse(Item1.ItemID, out int id1) && id1 > 0) {
+                    try {
+                        App.myCFun.RefreshItems(item1.ItemID);
+                    }
+                    catch (Exception ex) {
+                        // One bad item shouldn't take down the whole
+                        // getter - the previous int.Parse(...) would throw
+                        // FormatException out of a property accessor and
+                        // blank the Barter UI.
+                        System.Diagnostics.Debug.WriteLine("Item1Icon refresh fail " + item1.ItemID + ": " + ex.Message);
+                    }
                 }
 
                 return icon1;
@@ -271,14 +289,21 @@ namespace iBarter {
             }
         }
 
+        // See Item1Icon / Items.ItemIcon for why this is [JsonIgnore]d.
+        [JsonIgnore]
         public string Item2Icon {
             get {
                 if (icon2 == null || !icon2.Contains(Item2.ItemID)) {
                     icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
                 }
 
-                if (!File.Exists(icon2) && item2 != null && int.Parse(Item2.ItemID) > 0) {
-                    App.myCFun.RefreshItems(item2.ItemID);
+                if (!File.Exists(icon2) && item2 != null && int.TryParse(Item2.ItemID, out int id2) && id2 > 0) {
+                    try {
+                        App.myCFun.RefreshItems(item2.ItemID);
+                    }
+                    catch (Exception ex) {
+                        System.Diagnostics.Debug.WriteLine("Item2Icon refresh fail " + item2.ItemID + ": " + ex.Message);
+                    }
                 }
 
                 return icon2;

@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -508,8 +509,55 @@ namespace iBarter.View {
             }
         }
 
+        private Barter _rightClickedBarter;
+
+        private void DataGrid_Planner_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e) {
+            // Walk up the visual tree from the hit point to find the row
+            // (VirtualizingCellsControl). Its DataContext is the underlying
+            // Barter record. We stash it on a field so the ContextMenu's
+            // Click handler — which lives in a separate visual-tree subtree —
+            // can read it back.
+            DependencyObject current = e.OriginalSource as DependencyObject;
+            while (current != null && current != DataGrid_Planner) {
+                if (current is VirtualizingCellsControl vcc && vcc.DataContext is Barter b) {
+                    _rightClickedBarter = b;
+                    ShowRowContextMenu();
+                    e.Handled = true;
+                    return;
+                }
+                current = VisualTreeHelper.GetParent(current);
+            }
+
+            // Click landed on a header / summary row — no menu.
+            _rightClickedBarter = null;
+        }
+
+        private void ShowRowContextMenu() {
+            // Build a fresh ContextMenu each time. Reusing one across
+            // multiple rows causes WPF to close the previous one early
+            // when the next open is requested.
+            ContextMenu cm = new ContextMenu();
+            MenuItem deleteItem = new MenuItem { Header = "Delete this row" };
+            deleteItem.Click += MenuItem_DeleteRow_Click;
+            cm.Items.Add(deleteItem);
+
+            cm.PlacementTarget = DataGrid_Planner;
+            cm.Placement = PlacementMode.MousePoint;
+            cm.IsOpen = true;
+        }
+
         private void MenuItem_DeleteRow_Click(object sender, RoutedEventArgs e) {
-            if (sender is not MenuItem menuItem || menuItem.DataContext is not Barter barter) {
+            // Prefer the row we stashed from PreviewMouseRightButtonDown;
+            // fall back to the MenuItem's DataContext in case the menu was
+            // opened some other way.
+            Barter barter = _rightClickedBarter;
+            _rightClickedBarter = null;
+
+            if (barter == null && sender is MenuItem mi && mi.DataContext is Barter b) {
+                barter = b;
+            }
+
+            if (barter == null) {
                 return;
             }
 
@@ -525,9 +573,9 @@ namespace iBarter.View {
             App.myPVM.BarterCollection.Remove(barter);
             App.listBarterPlanner.Remove(barter);
 
-            // Sync CargoDetails: previously, ticking ExchangeDone removed the matching
-            // CargoDetail; doing nothing here would leave a stale entry pointing at a
-            // barter that no longer exists.
+            // Sync CargoDetails: when the user ticks ExchangeDone the
+            // matching CargoDetail is removed; do the same here so we
+            // don't leave a stale entry pointing at a deleted barter.
             App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == barter.IsLandName));
             App.myfmMain.myShipCargo.UpdateCurrentLV();
             App.myfmMain.myShipCargo.SaveData();

@@ -163,7 +163,8 @@
                                    CanMaintainScrollPosition="True"
                                    AllowDrop="False" LiveDataUpdateMode="AllowDataShaping"
                                    CurrentCellEndEdit="DataGrid_Planner_CurrentCellEndEdit"
-                                   CurrentCellValueChanged="DataGrid_Planner_CurrentCellValueChanged" PreviewMouseWheel="DataGrid_Planner_PreviewMouseWheel">
+                                   CurrentCellValueChanged="DataGrid_Planner_CurrentCellValueChanged" PreviewMouseWheel="DataGrid_Planner_PreviewMouseWheel"
+                                   PreviewMouseRightButtonDown="DataGrid_Planner_PreviewMouseRightButtonDown">
 
                 <!-- <syncfusion:SfDataGrid.SortColumnDescriptions> -->
                 <!--     <syncfusion:SortColumnDescription ColumnName="Item1LV" SortDirection="Ascending" /> -->

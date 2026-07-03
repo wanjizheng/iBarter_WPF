@@ -26,12 +26,12 @@ namespace iBarter.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("0")]
-        public int SelectedComboBoxValue {
+        public int SelectedComboBoxValueLV5 {
             get {
-                return ((int)(this["SelectedComboBoxValue"]));
+                return ((int)(this["SelectedComboBoxValueLV5"]));
             }
             set {
-                this["SelectedComboBoxValue"] = value;
+                this["SelectedComboBoxValueLV5"] = value;
             }
         }
 

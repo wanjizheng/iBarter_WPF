@@ -250,6 +250,23 @@ namespace iBarter {
             App.myStorageManagement.Show();
         }
 
+        // Strict sync between Items.csv and Resources/Images/Items/*.bmp.
+        // CFunctions.SyncImages handles the actual work; downloads are
+        // async so we offload to a worker thread so the click handler
+        // returns immediately and the UI log keeps streaming progress.
+        private void MenuItem_SyncImages_Click(object sender, RoutedEventArgs e) {
+            App.myCFun.Log("SyncImages: starting...", Brushes.Gold);
+            System.Threading.Tasks.Task.Run(() => {
+                try {
+                    App.myCFun.SyncImages();
+                    App.myCFun.Log("SyncImages: done.", Brushes.Gold);
+                }
+                catch (Exception ex) {
+                    App.myCFun.Log("SyncImages failed: " + ex.Message, Brushes.Red);
+                }
+            });
+        }
+
         private void dockingManager_Main_ActiveWindowChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) {
             // if (dockingManager_Main.ActiveWindow.Name == "document_Map") {
             //     myMapControl.IslandsButtonRearrange();
