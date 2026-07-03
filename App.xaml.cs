@@ -51,12 +51,15 @@ namespace iBarter {
 
             //SfSkinManager.ApplyStylesOnApplication = true;
 
-            // Phase 1 (i18n): install the active language merged dictionary
-            // (Strings.en-US.xaml or Strings.zh-TW.xaml) BEFORE any UI loads so
-            // every DynamicResource lookup during InitializeComponent sees the
-            // correct dictionary. Phase 8 adds the user-facing "Language" menu
-            // that lets the user switch live.
-            LanguageService.Instance.InitializeAtStartup();
+            // Don't initialise the i18n dictionary here.  In WPF the static
+            // Application.Current is set during the base() Application ctor,
+            // and Application.Current.Resources is populated by the App.xaml
+            // <Application.Resources> block via the auto-generated
+            // InitializeComponent call.  Both run during App's ctor before
+            // its body, so calling InitializeAtStartup() here is fine in
+            // theory.  We move it to OnStartup (Phase 9 fix) so the order
+            // is unambiguous: the dict is in MergedDictionaries before
+            // base.OnStartup triggers MainWindow's first render.
 
             myCFun = new CFunctions();
             listItems = myCFun.LoadItemsCSV();
@@ -99,6 +102,11 @@ namespace iBarter {
         }
 
         protected override void OnStartup(StartupEventArgs e) {
+            // Phase 9 (i18n): install the i18n dictionary before
+            // base.OnStartup so every {DynamicResource str.X} lookup
+            // during MainWindow's first measure / layout pass finds
+            // the right value.
+            iBarter.Localization.LanguageService.Instance.InitializeAtStartup();
             base.OnStartup(e);
 
             myfmMain.Show();
