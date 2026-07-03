@@ -1150,6 +1150,27 @@ namespace iBarter {
             }
         }
 
+        // Phase 9 (i18n): returns the Tesseract/PureDM language code to use
+        // for the active UI language.  Default path is the existing
+        // eng_best (faster, more accurate for English UI text).  zh-TW
+        // switches to chi_tra, loaded from tessdata/chi_tra.traineddata
+        // (Phase 9 added it to the build output).  Both PureDM.CV.OCRString
+        // and our local Tesseract engine consume the same code, so we get
+        // parity between PureDM's main recognizer and our backup
+        // digit-only engine without a per-call site branch.
+        private static string CurrentOcrLanguage() {
+            try {
+                if (iBarter.Localization.LanguageService.Instance?.Current
+                    == iBarter.Localization.AppLanguage.TraditionalChinese) {
+                    return "chi_tra";
+                }
+            }
+            catch {
+                // design-time / pre-startup; fall through to English
+            }
+            return "eng_best";
+        }
+
         // Lightweight file logger for static helpers (Log is an instance method
         // that needs a UI thread, which we don't have here). Writes one line at
         // a time to a known location the operator can inspect.
@@ -1465,7 +1486,7 @@ namespace iBarter {
                 int y2 = (int)(oY + oH * c.bf);
                 try {
                     string raw = App.myPureDM.CV.OCRString(x1, y1, x2, y2,
-                        CV.OCRType.Number, CV.OCRMode.Diff, false, strID) ?? "";
+                        CV.OCRType.Number, CV.OCRMode.Diff, false, strID, CurrentOcrLanguage()) ?? "";
                     // Cap at 4 digits and < 10000 - values >= 10000 mean we almost
                     // certainly picked up neighbouring row text (Parley "10,432",
                     // IslandRemaining, etc). Drop those as garbage.
@@ -1584,7 +1605,8 @@ namespace iBarter {
                 pointPlusEdge.X + pointPlusEdge.Size.Width,
                 pointPlusAnchor.Y - 2,
                 pointPlusAnchor.X - 2,
-                pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5);
+                pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5,
+                CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage());
 
             // 2. 捕获交易物品区域截图
             int intX1 = pointPlusAnchor.X + pointPlusAnchor.Size.Width + 1;
@@ -1608,7 +1630,7 @@ namespace iBarter {
                 pointPlusParley.Y,
                 pointPlusRequired.X + 1,
                 pointPlusParley.Y + pointPlusParley.Size.Height,
-                CV.OCRType.Number);
+                CV.OCRType.Number, CV.OCRMode.Binary, false, "", CurrentOcrLanguage());
 
             // 获取岛屿的默认 Parley 值，并尝试解析 OCR 得到的数值
             int intParley = App.listIslands.Where(land => land.Island == IslandEnum(strIsland))
@@ -1636,7 +1658,7 @@ namespace iBarter {
                 pointPlusRemaining.Y,
                 pointPlusRemaining.X + pointPlusRemaining.Size.Width + 30,
                 pointPlusRemaining.Y + pointPlusRemaining.Size.Height + 2,
-                CV.OCRType.Number);
+                CV.OCRType.Number, CV.OCRMode.Binary, false, "", CurrentOcrLanguage());
             int intRemaining = 0;
             try {
                 intRemaining = int.Parse(strRemaining);
@@ -1671,7 +1693,7 @@ namespace iBarter {
                 pointPlusParley.X,
                 pointPlusParley.Y - pointPlusParley.Size.Height,
                 pointPlusRequired.X + 120,
-                pointPlusParley.Y + 1, CV.OCRType.Words, CV.OCRMode.Color);
+                pointPlusParley.Y + 1, CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage());
 
 
             string strItem2 = App.myPureDM.CV.OCRString(
@@ -1944,6 +1966,61 @@ namespace iBarter {
                 .FirstOrDefault();
         }
 
+        // Phase 9 (i18n): dual-catalog item matching.  Same as the legacy
+        // FindMostSimilarItem, but scores each candidate against BOTH the
+        // canonical English ItemName AND the sidecar zh-TW ItemNameZhTw
+        // (whichever is non-empty), and uses the higher of the two.  This
+        // makes Chinese-game OCR (which produces e.g. "黃金草" for
+        // 102 Year Old Golden Herb) match correctly without abandoning
+        // English-game users.
+        //
+        // Active-language selection is the same script-detection trick
+        // IslandEnumSmart uses: a CJK codepoint in the input biases the
+        // initial scorer toward ItemNameZhTw; absent that, the input is
+        // assumed English and we still try the zh-TW column as a
+        // cross-fallback so e.g. an English OCR misread of "Aloe" still
+        // matches 蘆薈 (item with empty English name in some rows).
+        public Items FindMostSimilarItemZhTwAware(string strItem1, string expectedLv = null) {
+            if (string.IsNullOrWhiteSpace(strItem1) || App.listItems == null || App.listItems.Count == 0)
+                return null;
+
+            string processed = NormalizeBasic(RemoveLevelPrefix(strItem1));
+            if (string.IsNullOrEmpty(processed)) {
+                return FindMostSimilarItem(strItem1, expectedLv);
+            }
+
+            // First, exact match against EITHER name (case-insensitive after
+            // NormalizeBasic).  An English OCR result might exactly equal
+            // an item's English canonical; a Chinese OCR result might
+            // exactly equal its zh-TW sidecar entry.  Both win.
+            foreach (var it in App.listItems) {
+                if (NormalizeBasic(it.ItemName) == processed) return it;
+                if (!string.IsNullOrWhiteSpace(it.ItemNameZhTw)
+                    && NormalizeBasic(it.ItemNameZhTw) == processed) {
+                    return it;
+                }
+            }
+
+            // LV filter
+            IEnumerable<Items> candidates = App.listItems;
+            if (!string.IsNullOrWhiteSpace(expectedLv))
+                candidates = candidates.Where(it => it.ItemLV == expectedLv);
+
+            return candidates
+                .Select(it => new {
+                    Item = it,
+                    Score = Math.Max(
+                        FuzzyScoreSmart(processed, it.ItemName ?? string.Empty),
+                        string.IsNullOrEmpty(it.ItemNameZhTw)
+                            ? 0
+                            : FuzzyScoreSmart(processed, it.ItemNameZhTw)),
+                })
+                .OrderByDescending(x => x.Score)
+                .ThenBy(x => (x.Item.ItemName ?? string.Empty).Length)
+                .Select(x => x.Item)
+                .FirstOrDefault();
+        }
+
         const int minDx = 300;
 
         List<PointPlus> PickTwoBest(List<PointPlus> list) {
@@ -2194,6 +2271,335 @@ namespace iBarter {
                     return EnumLists.Island.Sanctuary;
                 default:
                     return EnumLists.Island.UnKnown;
+            }
+        }
+
+        // Phase 9 (i18n): dual-catalog island identification.  Builds an
+        // English + zh-TW name catalog at first call (lazy), runs the
+        // existing dead-code StringSimilarityMatcher over the active
+        // language's catalog, and falls back to the other on miss.  Final
+        // fallback is the existing hand-written switch via the original
+        // IslandEnum() (so no behaviour change for English-game users on
+        // an unrecognised island).
+        //
+        // The active-language catalog is selected by checking whether the
+        // input contains any CJK Unified Ideograph (>= 0x4E00).  We do
+        // not depend on LanguageService here because OCR output is the
+        // authoritative signal of which game client produced it: a Chinese
+        // client with the English UI selected still OCRs Chinese, and
+        // a French/screenshot-only client OCRs whatever the screenshot
+        // contains.
+        public EnumLists.Island IslandEnumSmart(string _island, int minScore = 70) {
+            if (string.IsNullOrWhiteSpace(_island)) {
+                return EnumLists.Island.UnKnown;
+            }
+
+            bool isCjk = false;
+            foreach (var ch in _island) {
+                if (ch >= 0x4E00 && ch <= 0x9FFF) {
+                    isCjk = true;
+                    break;
+                }
+            }
+
+            if (_zhTwIslandMatcher == null || _englishIslandMatcher == null) {
+                BuildIslandMatchers();
+            }
+
+            iBarter.StringSimilarityMatcher primary = isCjk ? _zhTwIslandMatcher! : _englishIslandMatcher!;
+            iBarter.StringSimilarityMatcher secondary = isCjk ? _englishIslandMatcher! : _zhTwIslandMatcher!;
+
+            // Try primary catalog
+            var best = primary.FindBest(_island, out int score);
+            if (score >= minScore) {
+                return best switch {
+                    "Ajir" => EnumLists.Island.Ajir,
+                    "Albresser" => EnumLists.Island.Albresser,
+                    "Almai" => EnumLists.Island.Almai,
+                    "Al_Naha" => EnumLists.Island.Al_Naha,
+                    "Ancient" => EnumLists.Island.Ancient,
+                    "Angie" => EnumLists.Island.Angie,
+                    "Arakil" => EnumLists.Island.Arakil,
+                    "Arita" => EnumLists.Island.Arita,
+                    "Baeza" => EnumLists.Island.Baeza,
+                    "Balvege" => EnumLists.Island.Balvege,
+                    "Barater" => EnumLists.Island.Barater,
+                    "Baremi" => EnumLists.Island.Baremi,
+                    "Beiruwa" => EnumLists.Island.Beiruwa,
+                    "Haran" => EnumLists.Island.Haran,
+                    "Carrack" => EnumLists.Island.Carrack,
+                    "Cholace" => EnumLists.Island.Cholace,
+                    "Cox_Pirate" => EnumLists.Island.Cox_Pirate,
+                    "Crows_Nest" => EnumLists.Island.Crows_Nest,
+                    "Crow" => EnumLists.Island.Crow,
+                    "Daton" => EnumLists.Island.Daton,
+                    "Delinghart" => EnumLists.Island.Delinghart,
+                    "Derko" => EnumLists.Island.Derko,
+                    "Duch" => EnumLists.Island.Duch,
+                    "Dunde" => EnumLists.Island.Dunde,
+                    "Eberdeen" => EnumLists.Island.Eberdeen,
+                    "Ephde_Rune" => EnumLists.Island.Ephde_Rune,
+                    "Esfah" => EnumLists.Island.Esfah,
+                    "Eveto" => EnumLists.Island.Eveto,
+                    "Ginburrey" => EnumLists.Island.Ginburrey,
+                    "Hakoven" => EnumLists.Island.Hakoven,
+                    "Halmad" => EnumLists.Island.Halmad,
+                    "Iliya" => EnumLists.Island.Iliya,
+                    "Unfinished" => EnumLists.Island.Unfinished,
+                    "Invernen" => EnumLists.Island.Invernen,
+                    "Kanvera" => EnumLists.Island.Kanvera,
+                    "Kashuma" => EnumLists.Island.Kashuma,
+                    "Kuit" => EnumLists.Island.Kuit,
+                    "Lantinia" => EnumLists.Island.Lantinia,
+                    "Lema" => EnumLists.Island.Lema,
+                    "Lerao" => EnumLists.Island.Lerao,
+                    "Lisz" => EnumLists.Island.Lisz,
+                    "Louruve" => EnumLists.Island.Louruve,
+                    "Luivano" => EnumLists.Island.Luivano,
+                    "Mariveno" => EnumLists.Island.Mariveno,
+                    "Marka" => EnumLists.Island.Marka,
+                    "Marlene" => EnumLists.Island.Marlene,
+                    "Modric" => EnumLists.Island.Modric,
+                    "Narvo" => EnumLists.Island.Narvo,
+                    "Netnume" => EnumLists.Island.Netnume,
+                    "Oben" => EnumLists.Island.Oben,
+                    "Orffs" => EnumLists.Island.Orffs,
+                    "Orisha" => EnumLists.Island.Orisha,
+                    "Ostra" => EnumLists.Island.Ostra,
+                    "Padix" => EnumLists.Island.Padix,
+                    "Pakio" => EnumLists.Island.Pakio,
+                    "Paratama" => EnumLists.Island.Paratama,
+                    "Pilava" => EnumLists.Island.Pilava,
+                    "Portanen" => EnumLists.Island.Portanen,
+                    "Pujara" => EnumLists.Island.Pujara,
+                    "Racid" => EnumLists.Island.Racid,
+                    "Rameda" => EnumLists.Island.Rameda,
+                    "Randis" => EnumLists.Island.Randis,
+                    "Rickun" => EnumLists.Island.Rickun,
+                    "Riyed" => EnumLists.Island.Riyed,
+                    "Rosevan" => EnumLists.Island.Rosevan,
+                    "Serca" => EnumLists.Island.Serca,
+                    "Shasha" => EnumLists.Island.Shasha,
+                    "Shirna" => EnumLists.Island.Shirna,
+                    "Sokota" => EnumLists.Island.Sokota,
+                    "Staren" => EnumLists.Island.Staren,
+                    "Taramura" => EnumLists.Island.Taramura,
+                    "Tashu" => EnumLists.Island.Tashu,
+                    "Teste" => EnumLists.Island.Teste,
+                    "Teyamal" => EnumLists.Island.Teyamal,
+                    "Theonil" => EnumLists.Island.Theonil,
+                    "Tigris" => EnumLists.Island.Tigris,
+                    "Tinberra" => EnumLists.Island.Tinberra,
+                    "Tulu" => EnumLists.Island.Tulu,
+                    "Wandering" => EnumLists.Island.Wandering,
+                    "Weita" => EnumLists.Island.Weita,
+                    "Marine" => EnumLists.Island.Marine,
+                    "Olvia" => EnumLists.Island.Olvia,
+                    "Arehaza" => EnumLists.Island.Arehaza,
+                    "Grandiha" => EnumLists.Island.Grandiha,
+                    "Midnight" => EnumLists.Island.Midnight,
+                    "Haemo" => EnumLists.Island.Haemo,
+                    "Dallae" => EnumLists.Island.Dallae,
+                    "Epheria" => EnumLists.Island.Epheria,
+                    "Sausan" => EnumLists.Island.Sausan,
+                    "Sanctuary" => EnumLists.Island.Sanctuary,
+                    "UnKnown" => EnumLists.Island.UnKnown,
+                    _ => EnumLists.Island.UnKnown,
+                };
+            }
+
+            // Cross-fallback: try the OTHER catalog
+            best = secondary.FindBest(_island, out int score2);
+            if (score2 >= minScore) {
+                return best switch {
+                    "Ajir" => EnumLists.Island.Ajir,
+                    "Albresser" => EnumLists.Island.Albresser,
+                    "Almai" => EnumLists.Island.Almai,
+                    "Al_Naha" => EnumLists.Island.Al_Naha,
+                    "Ancient" => EnumLists.Island.Ancient,
+                    "Angie" => EnumLists.Island.Angie,
+                    "Arakil" => EnumLists.Island.Arakil,
+                    "Arita" => EnumLists.Island.Arita,
+                    "Baeza" => EnumLists.Island.Baeza,
+                    "Balvege" => EnumLists.Island.Balvege,
+                    "Barater" => EnumLists.Island.Barater,
+                    "Baremi" => EnumLists.Island.Baremi,
+                    "Beiruwa" => EnumLists.Island.Beiruwa,
+                    "Haran" => EnumLists.Island.Haran,
+                    "Carrack" => EnumLists.Island.Carrack,
+                    "Cholace" => EnumLists.Island.Cholace,
+                    "Cox_Pirate" => EnumLists.Island.Cox_Pirate,
+                    "Crows_Nest" => EnumLists.Island.Crows_Nest,
+                    "Crow" => EnumLists.Island.Crow,
+                    "Daton" => EnumLists.Island.Daton,
+                    "Delinghart" => EnumLists.Island.Delinghart,
+                    "Derko" => EnumLists.Island.Derko,
+                    "Duch" => EnumLists.Island.Duch,
+                    "Dunde" => EnumLists.Island.Dunde,
+                    "Eberdeen" => EnumLists.Island.Eberdeen,
+                    "Ephde_Rune" => EnumLists.Island.Ephde_Rune,
+                    "Esfah" => EnumLists.Island.Esfah,
+                    "Eveto" => EnumLists.Island.Eveto,
+                    "Ginburrey" => EnumLists.Island.Ginburrey,
+                    "Hakoven" => EnumLists.Island.Hakoven,
+                    "Halmad" => EnumLists.Island.Halmad,
+                    "Iliya" => EnumLists.Island.Iliya,
+                    "Unfinished" => EnumLists.Island.Unfinished,
+                    "Invernen" => EnumLists.Island.Invernen,
+                    "Kanvera" => EnumLists.Island.Kanvera,
+                    "Kashuma" => EnumLists.Island.Kashuma,
+                    "Kuit" => EnumLists.Island.Kuit,
+                    "Lantinia" => EnumLists.Island.Lantinia,
+                    "Lema" => EnumLists.Island.Lema,
+                    "Lerao" => EnumLists.Island.Lerao,
+                    "Lisz" => EnumLists.Island.Lisz,
+                    "Louruve" => EnumLists.Island.Louruve,
+                    "Luivano" => EnumLists.Island.Luivano,
+                    "Mariveno" => EnumLists.Island.Mariveno,
+                    "Marka" => EnumLists.Island.Marka,
+                    "Marlene" => EnumLists.Island.Marlene,
+                    "Modric" => EnumLists.Island.Modric,
+                    "Narvo" => EnumLists.Island.Narvo,
+                    "Netnume" => EnumLists.Island.Netnume,
+                    "Oben" => EnumLists.Island.Oben,
+                    "Orffs" => EnumLists.Island.Orffs,
+                    "Orisha" => EnumLists.Island.Orisha,
+                    "Ostra" => EnumLists.Island.Ostra,
+                    "Padix" => EnumLists.Island.Padix,
+                    "Pakio" => EnumLists.Island.Pakio,
+                    "Paratama" => EnumLists.Island.Paratama,
+                    "Pilava" => EnumLists.Island.Pilava,
+                    "Portanen" => EnumLists.Island.Portanen,
+                    "Pujara" => EnumLists.Island.Pujara,
+                    "Racid" => EnumLists.Island.Racid,
+                    "Rameda" => EnumLists.Island.Rameda,
+                    "Randis" => EnumLists.Island.Randis,
+                    "Rickun" => EnumLists.Island.Rickun,
+                    "Riyed" => EnumLists.Island.Riyed,
+                    "Rosevan" => EnumLists.Island.Rosevan,
+                    "Serca" => EnumLists.Island.Serca,
+                    "Shasha" => EnumLists.Island.Shasha,
+                    "Shirna" => EnumLists.Island.Shirna,
+                    "Sokota" => EnumLists.Island.Sokota,
+                    "Staren" => EnumLists.Island.Staren,
+                    "Taramura" => EnumLists.Island.Taramura,
+                    "Tashu" => EnumLists.Island.Tashu,
+                    "Teste" => EnumLists.Island.Teste,
+                    "Teyamal" => EnumLists.Island.Teyamal,
+                    "Theonil" => EnumLists.Island.Theonil,
+                    "Tigris" => EnumLists.Island.Tigris,
+                    "Tinberra" => EnumLists.Island.Tinberra,
+                    "Tulu" => EnumLists.Island.Tulu,
+                    "Wandering" => EnumLists.Island.Wandering,
+                    "Weita" => EnumLists.Island.Weita,
+                    "Marine" => EnumLists.Island.Marine,
+                    "Olvia" => EnumLists.Island.Olvia,
+                    "Arehaza" => EnumLists.Island.Arehaza,
+                    "Grandiha" => EnumLists.Island.Grandiha,
+                    "Midnight" => EnumLists.Island.Midnight,
+                    "Haemo" => EnumLists.Island.Haemo,
+                    "Dallae" => EnumLists.Island.Dallae,
+                    "Epheria" => EnumLists.Island.Epheria,
+                    "Sausan" => EnumLists.Island.Sausan,
+                    "Sanctuary" => EnumLists.Island.Sanctuary,
+                    "UnKnown" => EnumLists.Island.UnKnown,
+                    _ => EnumLists.Island.UnKnown,
+                };
+            }
+
+            // Both matchers fell below threshold - the hand-written switch
+            // (IslandEnum) still has decent coverage of common English
+            // substrings, so it remains a useful last-ditch fallback.
+            return IslandEnum(_island);
+        }
+
+        private static iBarter.StringSimilarityMatcher? _englishIslandMatcher;
+        private static iBarter.StringSimilarityMatcher? _zhTwIslandMatcher;
+        private static readonly object _islandMatcherLock = new object();
+
+        // Tiny CSV splitter local to BuildIslandMatchers (the CFunctions
+        // SplitCsvLine is private; this just splits on comma and trims, no
+        // quote handling needed because the Islands.zh-TW.csv sidecar has
+        // no embedded commas in the NameZhTW column).
+        private static System.Collections.Generic.List<string> SplitCsvLineLocal(string line) {
+            var fields = new System.Collections.Generic.List<string>();
+            if (string.IsNullOrEmpty(line)) return fields;
+            foreach (var raw in line.Split(',')) {
+                fields.Add(raw.Trim());
+            }
+            return fields;
+        }
+
+        private void BuildIslandMatchers() {
+            if (_englishIslandMatcher != null && _zhTwIslandMatcher != null) {
+                return;
+            }
+            lock (_islandMatcherLock) {
+                if (_englishIslandMatcher != null && _zhTwIslandMatcher != null) {
+                    return;
+                }
+
+                // English catalog: enum-to-name mapping via ToString().
+                var english = new System.Collections.Generic.List<string> {
+                    "Ajir", "Albresser", "Almai", "Al_Naha", "Ancient", "Angie",
+                    "Arakil", "Arita", "Baeza", "Balvege", "Barater", "Baremi",
+                    "Beiruwa", "Haran", "Carrack", "Cholace", "Cox_Pirate",
+                    "Crows_Nest", "Crow", "Daton", "Delinghart", "Derko",
+                    "Duch", "Dunde", "Eberdeen", "Ephde_Rune", "Esfah",
+                    "Eveto", "Ginburrey", "Hakoven", "Halmad", "Iliya",
+                    "Unfinished", "Invernen", "Kanvera", "Kashuma", "Kuit",
+                    "Lantinia", "Lema", "Lerao", "Lisz", "Louruve",
+                    "Luivano", "Mariveno", "Marka", "Marlene", "Modric",
+                    "Narvo", "Netnume", "Oben", "Orffs", "Orisha", "Ostra",
+                    "Padix", "Pakio", "Paratama", "Pilava", "Portanen",
+                    "Pujara", "Racid", "Rameda", "Randis", "Rickun", "Riyed",
+                    "Rosevan", "Serca", "Shasha", "Shirna", "Sokota", "Staren",
+                    "Taramura", "Tashu", "Teste", "Teyamal", "Theonil",
+                    "Tigris", "Tinberra", "Tulu", "Wandering", "Weita",
+                    "Marine", "Olvia", "Arehaza", "Grandiha", "Midnight",
+                    "Haemo", "Dallae", "Epheria", "Sausan", "Sanctuary",
+                };
+
+                // zh-TW catalog: read from Resources/Islands.zh-TW.csv.  Falls
+                // back to the English enum name when the sidecar has no row
+                // (Confidence low / row missing) so the matcher still has
+                // something to chew on for the 50+ transliterated names.
+                var zhTw = new System.Collections.Generic.List<string>(english.Count);
+                string sidecar = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Islands.zh-TW.csv";
+                if (System.IO.File.Exists(sidecar)) {
+                    try {
+                        var byEnum = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
+                        using (var reader = new System.IO.StreamReader(sidecar, System.Text.Encoding.UTF8)) {
+                            int lineNo = 0;
+                            while (!reader.EndOfStream) {
+                                lineNo++;
+                                var line = reader.ReadLine();
+                                if (string.IsNullOrWhiteSpace(line)) continue;
+                                if (lineNo == 1 && line.StartsWith("EnumName")) continue;
+                                var parts = SplitCsvLineLocal(line);
+                                if (parts.Count < 2) continue;
+                                byEnum[parts[0]] = parts[1];
+                            }
+                        }
+                        foreach (var name in english) {
+                            if (byEnum.TryGetValue(name, out var zh) && !string.IsNullOrWhiteSpace(zh)) {
+                                zhTw.Add(zh);
+                            }
+                            else {
+                                zhTw.Add(name);  // graceful fallback
+                            }
+                        }
+                    }
+                    catch {
+                        foreach (var name in english) zhTw.Add(name);
+                    }
+                }
+                else {
+                    foreach (var name in english) zhTw.Add(name);
+                }
+
+                _englishIslandMatcher = new iBarter.StringSimilarityMatcher(new System.Collections.ArrayList(english), ignoreCase: true, removeDiacritics: true);
+                _zhTwIslandMatcher = new iBarter.StringSimilarityMatcher(new System.Collections.ArrayList(zhTw), ignoreCase: true, removeDiacritics: true);
             }
         }
 

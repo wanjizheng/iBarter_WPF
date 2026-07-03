@@ -117,6 +117,13 @@
     <Content Include="tessdata\eng_best.traineddata">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <!-- Phase 9 (i18n): Traditional Chinese OCR dictionary.  Loaded by the
+         local Tesseract engine when LanguageService.Current == TraditionalChinese
+         and the island-name ROI is OCR'd as a secondary recognizer alongside
+         PureDM's chi_tra pass.  ~2.3 MB; small enough to ship. -->
+    <Content Include="tessdata\chi_tra.traineddata">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
