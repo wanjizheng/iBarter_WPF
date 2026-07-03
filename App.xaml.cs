@@ -51,15 +51,16 @@ namespace iBarter {
 
             //SfSkinManager.ApplyStylesOnApplication = true;
 
-            // Don't initialise the i18n dictionary here.  In WPF the static
-            // Application.Current is set during the base() Application ctor,
-            // and Application.Current.Resources is populated by the App.xaml
-            // <Application.Resources> block via the auto-generated
-            // InitializeComponent call.  Both run during App's ctor before
-            // its body, so calling InitializeAtStartup() here is fine in
-            // theory.  We move it to OnStartup (Phase 9 fix) so the order
-            // is unambiguous: the dict is in MergedDictionaries before
-            // base.OnStartup triggers MainWindow's first render.
+            // Phase 9 hotfix: install the i18n dictionary FIRST, before
+            // MainWindow is constructed below.  The XAML parser evaluates
+            // {loc:Localize str.X} markup extensions synchronously at parse
+            // time; if the dict is still null the ProvideValue returns the
+            // raw key (which is what made the user see 'str.Banner.Title'
+            // text instead of the localized value).  Moving this ABOVE
+            // the new MainWindow() call fixes the order: dict populated
+            // first, then the XAML parses, then ProvideValue finds the
+            // key in the dict and returns the localized text.
+            iBarter.Localization.LanguageService.Instance.InitializeAtStartup();
 
             myCFun = new CFunctions();
             listItems = myCFun.LoadItemsCSV();
@@ -102,11 +103,6 @@ namespace iBarter {
         }
 
         protected override void OnStartup(StartupEventArgs e) {
-            // Phase 9 (i18n): install the i18n dictionary before
-            // base.OnStartup so every {DynamicResource str.X} lookup
-            // during MainWindow's first measure / layout pass finds
-            // the right value.
-            iBarter.Localization.LanguageService.Instance.InitializeAtStartup();
             base.OnStartup(e);
 
             myfmMain.Show();

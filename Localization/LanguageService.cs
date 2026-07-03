@@ -244,24 +244,16 @@ namespace iBarter.Localization {
             }
         }
 
-        // Visible log: how many keys we actually loaded.  If this is 0
-        // the XDocument parser failed to find <String> elements and the
-        // XAML file format needs another look.  The user sees this in
-        // the bottom Log dock via App.myCFun.Log.
+        // Visible log: how many keys we actually loaded.  This runs from
+        // ApplyMergedDictionary which is called BEFORE App.myCFun is
+        // constructed, so we can't go through the bottom-dock log
+        // (that would NRE).  System.Diagnostics.Debug.WriteLine is the
+        // only safe target here; the operator sees it in the attached
+        // debugger's output window or in a DebugView listener.
         private static void LogLoadedCount(string fileName, int count) {
             System.Diagnostics.Debug.WriteLine(
                 $"[LanguageService] {fileName}: loaded {count} keys; " +
                 $"path={AppDomain.CurrentDomain.BaseDirectory}");
-            try {
-                if (App.myCFun is not null) {
-                    App.myCFun.Log(
-                        $"[LanguageService] {fileName}: loaded {count} keys",
-                        System.Windows.Media.Brushes.Gray);
-                }
-            }
-            catch {
-                // swallow - logging is best-effort
-            }
         }
     }
 }

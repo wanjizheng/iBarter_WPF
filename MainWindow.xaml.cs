@@ -279,31 +279,11 @@ namespace iBarter {
         // Resources/Items.zh-TW.csv.  User-controlled; the user keeps this
         // menu item around because they occasionally edit Items.csv and want
         // a re-pull.
-        private void MenuItem_ImportBdocodexNames_Click(object sender, RoutedEventArgs e) {
-            App.myCFun.Log("[ImportBdocodexNames] Starting. This may take ~1 minute.", Brushes.Gold);
-            System.Threading.Tasks.Task.Run(async () => {
-                try {
-                    using var http = new System.Net.Http.HttpClient {
-                        Timeout = System.TimeSpan.FromSeconds(10),
-                    };
-                    http.DefaultRequestHeaders.UserAgent.ParseAdd(
-                        "Mozilla/5.0 (compatible; iBarter/1.0; +tools/ImportBdocodexNames)");
-
-                    string outputPath = System.IO.Path.Combine(
-                        AppDomain.CurrentDomain.BaseDirectory, "Resources", "Items.zh-TW.csv");
-
-                    var importer = new iBarter.Tools.ImportBdocodexNames(
-                        http,
-                        msg => App.myCFun.Log(msg, Brushes.Gray));
-
-                    int rows = await importer.RunAsync(App.listItems, outputPath);
-                    App.myCFun.Log($"[ImportBdocodexNames] Finished. Wrote {rows} rows to {outputPath}.", Brushes.Gold);
-                }
-                catch (Exception ex) {
-                    App.myCFun.Log("[ImportBdocodexNames] failed: " + ex.Message, Brushes.Red);
-                }
-            });
-        }
+        // (Phase 9 hotfix 6: the menu item was removed per user request -
+        // the importer is now triggered by re-running
+        // 'Tools/scrape_bdocodex_all_names.js' at author time, and the
+        // .csv is committed.  The .cs importer is still in the codebase
+        // for future use but is no longer wired to a menu entry.)
 
         // Phase 8 (i18n): live language toggle.  Setting
         // LanguageService.Current = X swaps the active merged dictionary
