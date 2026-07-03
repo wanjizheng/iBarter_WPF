@@ -1,5 +1,7 @@
-﻿using Newtonsoft.Json;
+﻿using iBarter.Localization;
+using Newtonsoft.Json;
 using Syncfusion.Windows.Shared;
+using System.ComponentModel;
 using System.IO;
 
 namespace iBarter {
@@ -7,6 +9,14 @@ namespace iBarter {
         private string strID;
         private string strLV;
         private string strName;
+        // Phase 5 (i18n): Traditional Chinese (zh-TW) name loaded from
+        // Resources/Items.zh-TW.csv at AppStartup. Empty when no entry exists
+        // in the sidecar; the ItemNameDisplay getter then falls back to the
+        // canonical English ItemName so unimproved rows don't blank the UI.
+        // Not [JsonIgnore]'d: sidecar is rebuilt on demand and the JSON we
+        // persist (myStorage_Data.json) does not contain this field today, so
+        // round-tripping leaves it empty for objects loaded from disk.
+        private string strNameZhTw = string.Empty;
         private int intNumber;
         private int intStorage_Velia, intStorage_Iliya, intStorage_Epheria, intStorage_Ancado;
         private String icon = null!;
@@ -20,6 +30,24 @@ namespace iBarter {
             intStorage_Iliya = _intStorageIliya;
             intStorage_Epheria = _intStorageEpheria;
             intStorage_Ancado = _intStorageAncado;
+
+            // Phase 5 (i18n): every Items instance re-fires its display
+            // PropertyChanged when the active language switches, so any
+            // data-bound cell / dropdown auto-refreshes.  The Memory cost
+            // is per-row × per-language-change (one event dispatch), which
+            // is fine for the catalog sizes iBarter deals with (275 items
+            // × a handful of users + a few windows).  Phase 8 may swap this
+            // for a WeakEventManager if profiling shows pressure.
+            try {
+                LanguageService.Instance.LanguageChanged += OnLanguageChanged;
+            }
+            catch {
+                // LanguageService may not be ready in design-time passes.
+            }
+        }
+
+        private void OnLanguageChanged(object? sender, System.EventArgs e) {
+            RaisePropertyChanged("ItemNameDisplay");
         }
 
         public string ItemName {
@@ -27,6 +55,42 @@ namespace iBarter {
             set {
                 strName = value;
                 RaisePropertyChanged("ItemName");
+                // ItemNameDisplay depends on ItemName when no zh-TW is available.
+                RaisePropertyChanged("ItemNameDisplay");
+            }
+        }
+
+        public string ItemNameZhTw {
+            get { return strNameZhTw; }
+            set {
+                strNameZhTw = value ?? string.Empty;
+                RaisePropertyChanged("ItemNameZhTw");
+                RaisePropertyChanged("ItemNameDisplay");
+            }
+        }
+
+        /// <summary>
+        ///     Phase 5 (i18n): UI-bound display name.  Returns the zh-TW name
+        ///     when the user has selected Traditional Chinese AND a non-empty
+        ///     sidecar entry exists for this ItemID; otherwise returns the
+        ///     canonical English ItemName.  Bound by SfDataGrid cells,
+        ///     GridMultiColumnDropDownList DisplayMember, and the Storage grid.
+        ///     Backing field is read-only; toggling language flips this via
+        ///     the LanguageService.LanguageChanged subscription installed in
+        ///     ctor.
+        /// </summary>
+        public string ItemNameDisplay {
+            get {
+                try {
+                    if (LanguageService.Instance?.Current == AppLanguage.TraditionalChinese
+                        && !string.IsNullOrWhiteSpace(strNameZhTw)) {
+                        return strNameZhTw;
+                    }
+                }
+                catch {
+                    // fall through to English
+                }
+                return strName;
             }
         }
 

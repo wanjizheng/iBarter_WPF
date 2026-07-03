@@ -1,6 +1,7 @@
 ﻿using iBarter.View;
 using Newtonsoft.Json;
 using Syncfusion.Windows.Shared;
+using System.ComponentModel;
 using System.IO;
 
 namespace iBarter {
@@ -21,9 +22,12 @@ namespace iBarter {
 
         public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = 0, int _intInv = 0, int _intChange = 0, bool _usingALT = false, bool _calculatedAlready = false, int _totalitem1ExchangeQuantity = -1) {
             isLand = _isLand;
+            WireUpIsland(isLand);
 
             item1 = _item1;
+            WireUpItem1(item1);
             item2 = _item2;
+            WireUpItem2(item2);
 
             item1Name = item1.ItemName;
             icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
@@ -162,6 +166,9 @@ namespace iBarter {
         public Items Item1 {
             get { return item1; }
             set {
+                if (!ReferenceEquals(item1, value)) {
+                    WireUpItem1(value);
+                }
                 item1 = value;
                 RaisePropertyChanged("Item1");
             }
@@ -170,6 +177,9 @@ namespace iBarter {
         public Items Item2 {
             get { return item2; }
             set {
+                if (!ReferenceEquals(item2, value)) {
+                    WireUpItem2(value);
+                }
                 item2 = value;
                 RaisePropertyChanged("Item2");
             }
@@ -384,5 +394,75 @@ namespace iBarter {
         // public void SetItem2(Items _item) {
         //     item2 = _item;
         // }
+
+        // ====================================================================
+        // Phase 5 (i18n): display getters + PropertyChanged relay
+        // ====================================================================
+        // Barter stores canonical English names (Item1Name, IsLandName) so
+        // the JSON persisted to myShipCargoItems_Data.json stays stable
+        // across language switches.  UI bindings now read these *Display
+        // variants instead; they read the language-aware getter on the
+        // underlying Items/Islands instance and re-fire whenever the
+        // underlying object raises PropertyChanged (which is how Items /
+        // Islands broadcast language flips).  Underlying-INPC subscription
+        // is wired in the ctor + setter so a re-assigned item still
+        // refreshes the cell.
+
+        public string Item1NameDisplay =>
+            item1?.ItemNameDisplay ?? Item1Name;
+
+        public string Item2NameDisplay =>
+            item2?.ItemNameDisplay ?? Item2Name;
+
+        public string IsLandNameDisplay =>
+            isLand?.IslandsNameDisplay ?? IsLandName;
+
+        private void WireUpItem1(Items? newItem) {
+            if (item1 != null) {
+                item1.PropertyChanged -= OnItem1PropertyChanged;
+            }
+            if (newItem != null) {
+                newItem.PropertyChanged += OnItem1PropertyChanged;
+            }
+        }
+
+        private void WireUpItem2(Items? newItem) {
+            if (item2 != null) {
+                item2.PropertyChanged -= OnItem2PropertyChanged;
+            }
+            if (newItem != null) {
+                newItem.PropertyChanged += OnItem2PropertyChanged;
+            }
+        }
+
+        private void WireUpIsland(Islands? newIsland) {
+            if (isLand != null) {
+                isLand.PropertyChanged -= OnIslandPropertyChanged;
+            }
+            if (newIsland != null) {
+                newIsland.PropertyChanged += OnIslandPropertyChanged;
+            }
+        }
+
+        private void OnItem1PropertyChanged(object? sender, PropertyChangedEventArgs e) {
+            if (e.PropertyName == nameof(Items.ItemNameDisplay)
+                || e.PropertyName == nameof(Items.ItemName)) {
+                RaisePropertyChanged(nameof(Item1NameDisplay));
+            }
+        }
+
+        private void OnItem2PropertyChanged(object? sender, PropertyChangedEventArgs e) {
+            if (e.PropertyName == nameof(Items.ItemNameDisplay)
+                || e.PropertyName == nameof(Items.ItemName)) {
+                RaisePropertyChanged(nameof(Item2NameDisplay));
+            }
+        }
+
+        private void OnIslandPropertyChanged(object? sender, PropertyChangedEventArgs e) {
+            if (e.PropertyName == nameof(Islands.IslandsNameDisplay)
+                || e.PropertyName == nameof(Islands.IslandsName)) {
+                RaisePropertyChanged(nameof(IsLandNameDisplay));
+            }
+        }
     }
 }

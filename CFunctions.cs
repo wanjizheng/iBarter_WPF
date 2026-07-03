@@ -601,6 +601,128 @@ namespace iBarter {
             return listIslands;
         }
 
+        /// <summary>
+        ///     Phase 5 (i18n): re-reads <c>Resources/Items.zh-TW.csv</c> (the
+        ///     sidecar produced by <c>Tools/ImportBdocodexNames</c>) and
+        ///     mutates the matching in-memory <see cref="Items"/> instances
+        ///     so the <c>ItemNameDisplay</c> getter returns the right string
+        ///     when the user switches language.  Idempotent: safe to call
+        ///     repeatedly.  Best-effort: a missing sidecar file is logged
+        ///     once and leaves the catalog's zh-TW names empty (display
+        ///     falls back to English).
+        /// </summary>
+        public int LoadItemsZhTw() {
+            string csvPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Items.zh-TW.csv";
+            if (!System.IO.File.Exists(csvPath)) {
+                Log("Items.zh-TW.csv not found: " + csvPath + " - skipping; run Tools > Import Bdocodex Names to populate.", Brushes.Gray);
+                return 0;
+            }
+            if (App.listItems is null || App.listItems.Count == 0) {
+                return 0;
+            }
+
+            // Build a lookup by ItemID then mutate in place.  We keep the
+            // English ItemName field untouched so the JSON persisted to
+            // myStorage_Data.json / myShipCargoItems_Data.json stays stable
+            // across language switches.
+            var byId = new Dictionary<string, string>(StringComparer.Ordinal);
+            try {
+                using (var reader = new StreamReader(csvPath, Encoding.UTF8)) {
+                    int lineNo = 0;
+                    while (!reader.EndOfStream) {
+                        lineNo++;
+                        var line = reader.ReadLine();
+                        if (string.IsNullOrWhiteSpace(line)) continue;
+                        // skip BOM-only line
+                        if (lineNo == 1 && line.StartsWith("﻿")) {
+                            line = line.Substring(1);
+                        }
+                        if (lineNo == 1 && line.StartsWith("ItemID")) {
+                            continue;  // header
+                        }
+                        var results = SplitCsvLine(line);
+                        if (results.Count < 2) continue;
+                        var id = results[0].Trim();
+                        var name = results[1].Trim();
+                        if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(name)) continue;
+                        byId[id] = name;
+                    }
+                }
+            }
+            catch (Exception ex) {
+                Log("Items.zh-TW.csv parse error: " + ex.Message, Brushes.Red);
+                return 0;
+            }
+
+            int updated = 0;
+            foreach (var item in App.listItems) {
+                if (item is null || string.IsNullOrEmpty(item.ItemID)) continue;
+                if (byId.TryGetValue(item.ItemID, out var zh)) {
+                    if (item.ItemNameZhTw != zh) {
+                        item.ItemNameZhTw = zh;
+                        updated++;
+                    }
+                }
+            }
+            Log($"Items.zh-TW: applied {updated} names from sidecar.", Brushes.Gray);
+            return updated;
+        }
+
+        /// <summary>
+        ///     Phase 5 (i18n): re-reads <c>Resources/Islands.zh-TW.csv</c>
+        ///     (hand-curated; bdocodex has no per-island page) and mutates
+        ///     the matching in-memory <see cref="Islands"/> instances.
+        ///     Schema: <c>EnumName,NameZhTW,Confidence,Note</c>.
+        /// </summary>
+        public int LoadIslandsZhTw() {
+            string csvPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Islands.zh-TW.csv";
+            if (!System.IO.File.Exists(csvPath)) {
+                Log("Islands.zh-TW.csv not found: " + csvPath + " - skipping; English island names will show even in zh-TW mode.", Brushes.Gray);
+                return 0;
+            }
+            if (App.listIslands is null || App.listIslands.Count == 0) {
+                return 0;
+            }
+
+            var byName = new Dictionary<string, string>(StringComparer.Ordinal);
+            try {
+                using (var reader = new StreamReader(csvPath, Encoding.UTF8)) {
+                    int lineNo = 0;
+                    while (!reader.EndOfStream) {
+                        lineNo++;
+                        var line = reader.ReadLine();
+                        if (string.IsNullOrWhiteSpace(line)) continue;
+                        if (lineNo == 1 && line.StartsWith("EnumName")) {
+                            continue;  // header
+                        }
+                        var results = SplitCsvLine(line);
+                        if (results.Count < 2) continue;
+                        var key = results[0].Trim();
+                        var name = results[1].Trim();
+                        if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(name)) continue;
+                        byName[key] = name;
+                    }
+                }
+            }
+            catch (Exception ex) {
+                Log("Islands.zh-TW.csv parse error: " + ex.Message, Brushes.Red);
+                return 0;
+            }
+
+            int updated = 0;
+            foreach (var island in App.listIslands) {
+                if (island is null) continue;
+                if (byName.TryGetValue(island.IslandsName, out var zh)) {
+                    if (island.IslandsNameZhTw != zh) {
+                        island.IslandsNameZhTw = zh;
+                        updated++;
+                    }
+                }
+            }
+            Log($"Islands.zh-TW: applied {updated} names from sidecar.", Brushes.Gray);
+            return updated;
+        }
+
         #endregion
 
 

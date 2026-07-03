@@ -88,7 +88,7 @@
                                RowStyle="{StaticResource rowStyle}"
                                AllowDrop="False" LiveDataUpdateMode="AllowChildViewUpdate" AllowSorting="False" CurrentCellEndEdit="DataGrid_Storage_CurrentCellEndEdit" Grid.Row="1">
             <Syncfusion:SfDataGrid.Columns>
-                <Syncfusion:GridTextColumn HeaderText="Inventory" MappingName="ItemName" AllowResizing="True"
+                <Syncfusion:GridTextColumn HeaderText="Inventory" MappingName="ItemNameDisplay" AllowResizing="True"
                                    AllowEditing="False" ColumnSizer="Auto"/>
                 <Syncfusion:GridImageColumn HeaderText="Icon" MappingName="ItemIcon" Width="40"
                                     TextAlignment="Center" AllowEditing="False" />

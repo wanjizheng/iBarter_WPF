@@ -1,4 +1,5 @@
-﻿using Syncfusion.Windows.Shared;
+﻿using iBarter.Localization;
+using Syncfusion.Windows.Shared;
 using System.ComponentModel;
 using System.Windows;
 
@@ -9,12 +10,42 @@ namespace iBarter {
         private int intRemaining;
         private Thickness myThickness;
 
+        // Phase 5 (i18n): Traditional Chinese name loaded from
+        // Resources/Islands.zh-TW.csv at AppStartup.  Empty when the
+        // hand-curated sidecar has no row for this Island enum (Confidence
+        // = low / blank); the display getter then falls back to the
+        // canonical English IslandsName so unimproved rows don't blank
+        // the UI.  No setter — populated only at ctor via the loader.
+        private string strNameZhTw = string.Empty;
 
         public Islands(EnumLists.Island _name, int _parley, int _remaining = 0) {
             intParley = _parley;
             enumIsland = _name;
             intRemaining = _remaining;
             myThickness = new Thickness(0, 0, 0, 0);
+
+            // Phase 5: every Islands instance re-fires its display
+            // PropertyChanged when the active language switches so the
+            // planner / scanner / map labels refresh without reload.
+            try {
+                LanguageService.Instance.LanguageChanged += OnLanguageChanged;
+            }
+            catch {
+                // design-time pass; nothing to localize
+            }
+        }
+
+        public string IslandsNameZhTw {
+            get { return strNameZhTw; }
+            set {
+                strNameZhTw = value ?? string.Empty;
+                RaisePropertyChanged("IslandsNameZhTw");
+                RaisePropertyChanged("IslandsNameDisplay");
+            }
+        }
+
+        private void OnLanguageChanged(object? sender, System.EventArgs e) {
+            RaisePropertyChanged("IslandsNameDisplay");
         }
 
         public Thickness IslandsThickness {
@@ -38,6 +69,27 @@ namespace iBarter {
 
         public string IslandsName {
             get { return Island.ToString(); }
+        }
+
+        /// <summary>
+        ///     Phase 5 (i18n): UI-bound display name.  zh-TW when the user
+        ///     has selected Traditional Chinese AND a non-empty sidecar entry
+        ///     exists for this Island enum; otherwise the canonical English
+        ///     <see cref="IslandsName"/>.
+        /// </summary>
+        public string IslandsNameDisplay {
+            get {
+                try {
+                    if (LanguageService.Instance?.Current == AppLanguage.TraditionalChinese
+                        && !string.IsNullOrWhiteSpace(strNameZhTw)) {
+                        return strNameZhTw;
+                    }
+                }
+                catch {
+                    // fall through to English
+                }
+                return IslandsName;
+            }
         }
 
         public int Parley {

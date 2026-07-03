@@ -61,6 +61,16 @@ namespace iBarter {
             myCFun = new CFunctions();
             listItems = myCFun.LoadItemsCSV();
             listIslands = myCFun.LoadIslandsCSV();
+            // Phase 5 (i18n): re-read the zh-TW sidecars so every Item /
+            // Islands instance has its display field populated before any
+            // view binds against it.  The display getter (ItemNameDisplay
+            // / IslandsNameDisplay) returns English or zh-TW based on
+            // LanguageService.Current at read time, so the order relative
+            // to InitializeAtStartup() does not matter — but doing it
+            // here keeps the Log() messages visible in the bottom dock.
+            myCFun.LoadItemsZhTw();
+            myCFun.LoadIslandsZhTw();
+
             listStorage = new List<Items>();
             listCargoItems = new List<Barter>();
 
