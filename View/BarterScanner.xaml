@@ -61,8 +61,8 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     IconWidth="26" IconHeight="26"
-                    Label="Scan"
-                    ToolTip="Scan"
+                    Label="{DynamicResource str.Scanner.Btn.Scan}"
+                    ToolTip="{DynamicResource str.Scanner.Btn.ScanTip}"
                     SizeMode="Small"
                     FontFamily="Microsoft YaHei"
                     SmallIcon="/Images/scan.png" Click="ButtonAdv_Scan_ClickAsync" />
@@ -72,8 +72,8 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     IconWidth="26" IconHeight="26"
-                    Label="Add"
-                    ToolTip="Add"
+                    Label="{DynamicResource str.Scanner.Btn.Add}"
+                    ToolTip="{DynamicResource str.Scanner.Btn.AddTip}"
                     SizeMode="Small"
                     FontFamily="Microsoft YaHei"
                     SmallIcon="/Images/add.png" Click="ButtonAdv_Add_Click" />

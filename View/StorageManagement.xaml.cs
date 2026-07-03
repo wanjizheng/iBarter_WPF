@@ -1,5 +1,8 @@
-﻿using Newtonsoft.Json;
+﻿using iBarter.Localization;
+using Newtonsoft.Json;
+using Syncfusion.UI.Xaml.Grid;
 using Syncfusion.Windows.Shared;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows.Media;
 
@@ -8,11 +11,34 @@ namespace iBarter.View {
     /// Interaction logic for StorageManagement.xaml
     /// </summary>
     public partial class StorageManagement : ChromelessWindow {
+
+        // Phase 2 (i18n): SfDataGrid GridTextColumn.MappingName -> resource key.
+        // HeaderText is a CLR property (not a DP) so {DynamicResource} cannot
+        // refresh it on language flip; we override via this map in code-behind
+        // on every LanguageService.LanguageChanged.
+        private static readonly IReadOnlyDictionary<string, string> _headerKeyMap =
+            new Dictionary<string, string> {
+                ["ItemName"]                          = "str.Grid.Storage.Col.Inventory",
+                ["ItemIcon"]                          = "str.Grid.Storage.Col.Icon",
+                ["ItemTier"]                          = "str.Grid.Storage.Col.Tier",
+                ["StorageVeliaQuantity_Velia"]       = "str.Grid.Storage.Col.Velia",
+                ["StorageVeliaQuantity_Iliya"]       = "str.Grid.Storage.Col.Iliya",
+                ["StorageVeliaQuantity_Epheria"]     = "str.Grid.Storage.Col.Epheria",
+                ["StorageVeliaQuantity_Ancado"]      = "str.Grid.Storage.Col.Ancado",
+            };
+
         public StorageManagement() {
             InitializeComponent();
             DataContext = App.myStorageVM;
             DataGrid_Storage.ItemsSource = App.myStorageVM.StorageCollection;
             RefreshData();
+
+            ApplyLocalizedHeaders();
+            LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalizedHeaders();
+        }
+
+        private void ApplyLocalizedHeaders() {
+            GridHeaderLocalization.ApplyHeaders(DataGrid_Storage, _headerKeyMap);
         }
 
         public void RefreshData() {

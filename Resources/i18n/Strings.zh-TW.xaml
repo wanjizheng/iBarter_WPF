@@ -5,15 +5,108 @@
     <!--
         iBarter Traditional Chinese (zh-TW, 繁體中文) UI strings.
 
-        Phase 1: scaffolding only - English placeholders so the lookup path
-        resolves cleanly when the user toggles language. Real translations
-        are added in Phase 3 once all keys are present in Strings.en-US.xaml
-        (translators get the master then fill this side, missing-key detection
-        via StringDiffCheck).
-
-        Key naming:  identical to Strings.en-US.xaml. Lookup goes through
-        LanguageService which swaps this dictionary in/out of MergedDictionaries.
+        Phase 2 keeps the keys identical to en-US so the lookup plumbing
+        is exercised identically when the language flips. Real zh-TW
+        translations land in Phase 3 once all keys are present in
+        Strings.en-US.xaml.
     -->
+
     <system:String x:Key="str.i18n.placeholder">i18n 框架已啟用（繁體中文）</system:String>
+
+    <system:String x:Key="str.MainWindow.Title">iBarter</system:String>
+    <system:String x:Key="str.MainWindow.ThemesToggle">主題</system:String>
+    <system:String x:Key="str.MainWindow.ThemesPanelHeader">主題</system:String>
+    <system:String x:Key="str.MainWindow.ChoosePalette">選擇配色</system:String>
+
+    <system:String x:Key="str.Menu.Windows">視窗</system:String>
+    <system:String x:Key="str.Menu.BarterScanner">交換掃描器</system:String>
+    <system:String x:Key="str.Menu.StorageManager">倉庫管理</system:String>
+    <system:String x:Key="str.Menu.SyncImages">同步圖示</system:String>
+
+    <system:String x:Key="str.Dock.ShipCargo">船艙</system:String>
+    <system:String x:Key="str.Dock.Log">日誌</system:String>
+    <system:String x:Key="str.Dock.Planner">路線計畫</system:String>
+    <system:String x:Key="str.Dock.Map">地圖</system:String>
+
+    <system:String x:Key="str.Splash.Banner">iBarter</system:String>
+    <system:String x:Key="str.Banner.Title">iBarter — 黑色沙漠專用</system:String>
+
+    <system:String x:Key="str.Planner.Btn.New">新增</system:String>
+    <system:String x:Key="str.Planner.Btn.NewTip">建立新計畫</system:String>
+    <system:String x:Key="str.Planner.Btn.Save">儲存</system:String>
+    <system:String x:Key="str.Planner.Btn.SaveTip">儲存目前計畫</system:String>
+    <system:String x:Key="str.Planner.Btn.Load">讀取</system:String>
+    <system:String x:Key="str.Planner.Btn.LoadTip">載入已儲存計畫</system:String>
+    <system:String x:Key="str.Planner.Btn.Groupping">群組化</system:String>
+    <system:String x:Key="str.Planner.Btn.GrouppingTip">依物品家族分組</system:String>
+    <system:String x:Key="str.Planner.Btn.Clean">清理</system:String>
+    <system:String x:Key="str.Planner.Btn.CleanTip">移除已完成或無效的列</system:String>
+    <system:String x:Key="str.Planner.Btn.Done">完成</system:String>
+    <system:String x:Key="str.Planner.Btn.DoneTip">標記選取交換為完成並更新倉庫</system:String>
+
+    <system:String x:Key="str.Planner.TotalBarters">交換總數：</system:String>
+    <system:String x:Key="str.Planner.MaxLV5">最大 LV5：</system:String>
+    <system:String x:Key="str.Planner.MaxLV6">最大 LV6：</system:String>
+    <system:String x:Key="str.Planner.MaxLV7">最大 LV7：</system:String>
+    <system:String x:Key="str.Planner.Parley">交涉值：</system:String>
+    <system:String x:Key="str.Planner.ParleyMax">/1000000</system:String>
+
+    <!-- Column headers: zh-TW translations for Phase 2. Real translations
+         for LV/Short labels get a Phase 3 polish pass. -->
+    <system:String x:Key="str.Grid.Planner.Col.Group">群組</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.LV">等級</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.CK">航海等級</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.Eq">倍率</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.No">編號</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.Location">地點</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.Islands">島嶼</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.IslandParley">交涉值</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.IslandRemaining">剩餘</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.I1No">物品1數量</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.I1">物品1</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.Item">物品</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.ItemID">物品代碼</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.ItemName">物品名稱</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.ItemLV">物品等級</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.ItemNumber">物品編號</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.I2">物品2</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.Exchange">交換對象</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.I2No">物品2數量</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.Inv">庫存</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.InvChange">庫存變動</system:String>
+
+    <system:String x:Key="str.Storage.DefaultSeedCity">預設種子城市：</system:String>
+    <system:String x:Key="str.Grid.Storage.Col.Inventory">庫存</system:String>
+    <system:String x:Key="str.Grid.Storage.Col.Icon">圖示</system:String>
+    <system:String x:Key="str.Grid.Storage.Col.Tier">等級</system:String>
+    <system:String x:Key="str.Grid.Storage.Col.Velia">貝利利亞</system:String>
+    <!-- Note: "Illiya" is the BDO EN spelling; zh-TW romanization is 伊利亞. -->
+    <system:String x:Key="str.Grid.Storage.Col.Iliya">伊利亞</system:String>
+    <system:String x:Key="str.Grid.Storage.Col.Epheria">伊菲利亞</system:String>
+    <system:String x:Key="str.Grid.Storage.Col.Ancado">安卡多</system:String>
+
+    <system:String x:Key="str.Scanner.Btn.Scan">掃描</system:String>
+    <system:String x:Key="str.Scanner.Btn.ScanTip">擷取交換畫面並辨識路線</system:String>
+    <system:String x:Key="str.Scanner.Btn.Add">加入</system:String>
+    <system:String x:Key="str.Scanner.Btn.AddTip">將選取列加入路線計畫</system:String>
+
+    <system:String x:Key="str.Grid.Scanner.Col.Islands">島嶼</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.IslandsSub">島嶼</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.Parley">交涉值</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.Remaining">剩餘</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.No">編號</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.I1No">物品1數量</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.Icon1">圖示</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.Item1Name">物品1名稱</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.I2No">物品2數量</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.Icon2">圖示</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.Item2Name">物品2名稱</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.DropdownItemID">物品代碼</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.DropdownItemName">物品名稱</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.DropdownItemLV">物品等級</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.DropdownItemNumber">物品編號</system:String>
+
+    <system:String x:Key="str.ShipCargo.Btn.Clean">清理</system:String>
+    <system:String x:Key="str.ShipCargo.Btn.CleanTip">移除已完成的船貨列</system:String>
 
 </ResourceDictionary>

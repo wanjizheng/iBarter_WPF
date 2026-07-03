@@ -5,19 +5,128 @@
     <!--
         iBarter English (default) UI strings.
 
-        Phase 1: scaffolding only. Keys will be added in subsequent phases:
-          * Phase 2: main menu, dock headers, splash, banner, status-bar labels.
-          * Phase 3: zh-TW equivalents (this file is the master).
-          * Phase 5: tier labels ([Level N]).
-          * Phase 6: every user-visible Log(...) format string + MessageBox text.
-          * Phase 8: language-menu labels themselves (English / 繁體中文).
+        Key convention:  str.<Area>.<SubArea>.<Key>  dot-separated.
+        Areas (Phase 2): Menu / Dock / MainWindow / Splash / Banner /
+                         Planner / Storage / Scanner / ShipCargo / Grid.<View>.
 
-        Key naming convention:  str.<Area>.<SubArea>.<Key>  all dot-separated.
-        Examples:  str.Menu.Windows, str.Planner.Col.Island, str.Log.SyncImagesDone.
+        Phase 2 adds the UI chrome (menus, docks, buttons, tooltips,
+        column headers). Phase 3 fills Strings.zh-TW.xaml with real
+        translations; Phase 5+ add tier/label/log strings.
 
-        A single placeholder key is kept so we can verify the lookup and live
-        switch mechanics at design time. Remove after Phase 2 ships more keys.
+        A single "placeholder" key from Phase 1 is preserved so the
+        live switch plumbing can still be sanity-checked.
     -->
+
+    <!-- Phase 1 sanity-check key (intentionally kept) -->
     <system:String x:Key="str.i18n.placeholder">i18n scaffolding active (en-US)</system:String>
+
+    <!-- MainWindow.xaml -->
+    <system:String x:Key="str.MainWindow.Title">iBarter</system:String>
+    <system:String x:Key="str.MainWindow.ThemesToggle">Themes</system:String>
+    <system:String x:Key="str.MainWindow.ThemesPanelHeader">Themes</system:String>
+    <system:String x:Key="str.MainWindow.ChoosePalette">Choose Palette</system:String>
+
+    <!-- Top menu (MainWindow.xaml) -->
+    <system:String x:Key="str.Menu.Windows">Windows</system:String>
+    <system:String x:Key="str.Menu.BarterScanner">Barter Scanner</system:String>
+    <system:String x:Key="str.Menu.StorageManager">Storage Manager</system:String>
+    <system:String x:Key="str.Menu.SyncImages">Sync Images</system:String>
+
+    <!-- DockingManager panel headers (MainWindow.xaml) -->
+    <system:String x:Key="str.Dock.ShipCargo">Ship Cargo</system:String>
+    <system:String x:Key="str.Dock.Log">Log</system:String>
+    <system:String x:Key="str.Dock.Planner">Planner</system:String>
+    <system:String x:Key="str.Dock.Map">Map</system:String>
+
+    <!-- SplashScreen.xaml -->
+    <system:String x:Key="str.Splash.Banner">iBarter</system:String>
+
+    <!-- BannerCombo.xaml -->
+    <system:String x:Key="str.Banner.Title">iBarter for Black Desert Online</system:String>
+
+    <!-- PlannerControl.xaml toolbar buttons -->
+    <system:String x:Key="str.Planner.Btn.New">New</system:String>
+    <system:String x:Key="str.Planner.Btn.NewTip">Start a new plan</system:String>
+    <system:String x:Key="str.Planner.Btn.Save">Save</system:String>
+    <system:String x:Key="str.Planner.Btn.SaveTip">Save the current plan</system:String>
+    <system:String x:Key="str.Planner.Btn.Load">Load</system:String>
+    <system:String x:Key="str.Planner.Btn.LoadTip">Load a saved plan</system:String>
+    <system:String x:Key="str.Planner.Btn.Groupping">Groupping</system:String>
+    <system:String x:Key="str.Planner.Btn.GrouppingTip">Group rows by item family</system:String>
+    <system:String x:Key="str.Planner.Btn.Clean">Clean</system:String>
+    <system:String x:Key="str.Planner.Btn.CleanTip">Remove finished or invalid rows</system:String>
+    <system:String x:Key="str.Planner.Btn.Done">Done</system:String>
+    <system:String x:Key="str.Planner.Btn.DoneTip">Mark the selected barter as exchanged and update storage</system:String>
+
+    <!-- PlannerControl.xaml toolbar labels -->
+    <system:String x:Key="str.Planner.TotalBarters">Total Barters: </system:String>
+    <system:String x:Key="str.Planner.MaxLV5">Max LV5:</system:String>
+    <system:String x:Key="str.Planner.MaxLV6">Max LV6:</system:String>
+    <system:String x:Key="str.Planner.MaxLV7">Max LV7:</system:String>
+    <system:String x:Key="str.Planner.Parley">Parley: </system:String>
+    <system:String x:Key="str.Planner.ParleyMax">/1000000</system:String>
+
+    <!-- PlannerControl.xaml SfDataGrid column headers (subscripted by MappingName in code-behind) -->
+    <system:String x:Key="str.Grid.Planner.Col.Group">Group</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.LV">LV</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.CK">CK</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.Eq">Eq.</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.No">No.</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.Location">Location</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.Islands">Islands</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.IslandParley">Parley</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.IslandRemaining">Remaining</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.I1No">I1 No.</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.I1">I1</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.Item">Item</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.ItemID">ItemID</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.ItemName">Item Name</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.ItemLV">Item LV</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.ItemNumber">Item Number</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.I2">I2</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.Exchange">Exchange</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.I2No">I2 No.</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.Inv">Inv</system:String>
+    <system:String x:Key="str.Grid.Planner.Col.InvChange">InvChange</system:String>
+
+    <!-- StorageManagement.xaml toolbar label -->
+    <system:String x:Key="str.Storage.DefaultSeedCity">Default Seed City:</system:String>
+
+    <!-- StorageManagement.xaml SfDataGrid column headers (MappingName -> key, applied in code-behind) -->
+    <system:String x:Key="str.Grid.Storage.Col.Inventory">Inventory</system:String>
+    <system:String x:Key="str.Grid.Storage.Col.Icon">Icon</system:String>
+    <system:String x:Key="str.Grid.Storage.Col.Tier">Tier</system:String>
+    <system:String x:Key="str.Grid.Storage.Col.Velia">Velia</system:String>
+    <system:String x:Key="str.Grid.Storage.Col.Iliya">Iliya</system:String>
+    <system:String x:Key="str.Grid.Storage.Col.Epheria">Epheria</system:String>
+    <system:String x:Key="str.Grid.Storage.Col.Ancado">Ancado</system:String>
+
+    <!-- BarterScanner.xaml toolbar buttons -->
+    <system:String x:Key="str.Scanner.Btn.Scan">Scan</system:String>
+    <system:String x:Key="str.Scanner.Btn.ScanTip">Capture the barter screen and identify the route</system:String>
+    <system:String x:Key="str.Scanner.Btn.Add">Add</system:String>
+    <system:String x:Key="str.Scanner.Btn.AddTip">Add the selected row to the planner</system:String>
+
+    <!-- BarterScanner.xaml SfDataGrid column headers (MappingName -> key) -->
+    <system:String x:Key="str.Grid.Scanner.Col.Islands">Islands</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.IslandsSub">Islands</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.Parley">Parley</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.Remaining">Remaining</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.No">No.</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.I1No">I1 No.</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.Icon1">Icon</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.Item1Name">Item1 Name</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.I2No">I2 No.</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.Icon2">Icon</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.Item2Name">Item2 Name</system:String>
+    <!-- Reuse Item dropdown sub-columns (same key as Planner) -->
+    <system:String x:Key="str.Grid.Scanner.Col.DropdownItemID">ItemID</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.DropdownItemName">Item Name</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.DropdownItemLV">Item LV</system:String>
+    <system:String x:Key="str.Grid.Scanner.Col.DropdownItemNumber">Item Number</system:String>
+
+    <!-- ShipCargoControl.xaml toolbar button -->
+    <system:String x:Key="str.ShipCargo.Btn.Clean">Clean</system:String>
+    <system:String x:Key="str.ShipCargo.Btn.CleanTip">Remove finished cargo rows</system:String>
 
 </ResourceDictionary>

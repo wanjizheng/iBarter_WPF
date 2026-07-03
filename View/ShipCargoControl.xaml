@@ -53,8 +53,8 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 IconWidth="26" IconHeight="26"
-                Label="Clean"
-                ToolTip="Clean"
+                Label="{DynamicResource str.ShipCargo.Btn.Clean}"
+                ToolTip="{DynamicResource str.ShipCargo.Btn.CleanTip}"
                 SizeMode="Small"
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/clean.png" Click="ButtonAdv_Clean_Click" />

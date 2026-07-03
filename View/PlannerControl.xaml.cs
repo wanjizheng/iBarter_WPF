@@ -1,6 +1,8 @@
-﻿using Newtonsoft.Json;
+﻿using iBarter.Localization;
+using Newtonsoft.Json;
 using Syncfusion.Pdf.Grid;
 using Syncfusion.UI.Xaml.Grid;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -18,6 +20,50 @@ namespace iBarter.View {
     public partial class PlannerControl : UserControl {
         // Highest barter item LV in the game; chain recursion stops one step before reaching this.
         private const int MAX_BARTER_LV = 7;
+
+        // Phase 2 (i18n): column-header MappingName -> resource key for every
+        // direct GridTextColumn on DataGrid_Planner. HeaderText is a plain CLR
+        // property so {DynamicResource} cannot refresh it; the code-behind
+        // ApplyLocalizedHeaders runs once at ctor and on every
+        // LanguageService.LanguageChanged notification.
+        private static readonly IReadOnlyDictionary<string, string> _headerKeyMap =
+            new Dictionary<string, string> {
+                ["BarterGroup"]       = "str.Grid.Planner.Col.Group",
+                ["Item1LV"]           = "str.Grid.Planner.Col.LV",
+                ["ExchangeDone"]      = "str.Grid.Planner.Col.CK",
+                ["ExchangeQuantity"]  = "str.Grid.Planner.Col.Eq",
+                ["IslandRemaining"]   = "str.Grid.Planner.Col.No",
+                ["Item1Number"]       = "str.Grid.Planner.Col.I1No",
+                ["Item2Number"]       = "str.Grid.Planner.Col.I2No",
+                ["InvQuantity"]       = "str.Grid.Planner.Col.Inv",
+                ["InvQuantityChange"] = "str.Grid.Planner.Col.InvChange",
+            };
+
+        // Multi-column dropdown outer-HeaderText overrides (MappingName isn't usable
+        // for the dropdowns because they own their own column list, not the grid's).
+        private static readonly IReadOnlyDictionary<string, string> _dropdownOuterKeyMap =
+            new Dictionary<string, string> {
+                ["Islands"]  = "str.Grid.Planner.Col.Location",
+                ["Item"]     = "str.Grid.Planner.Col.Item",
+                ["Exchange"] = "str.Grid.Planner.Col.Exchange",
+            };
+
+        // Per-dropdown inner column MappingName -> resource key.  Islands dropdown
+        // shows the Island row itself (Islands/Parley/Remaining); the two Item
+        // dropdowns share the same four sub-column keys.
+        private static readonly IReadOnlyDictionary<string, string> _islandDropdownInnerKeyMap =
+            new Dictionary<string, string> {
+                ["IslandsName"] = "str.Grid.Planner.Col.Islands",
+                ["Parley"]      = "str.Grid.Planner.Col.IslandParley",
+                ["Remaining"]   = "str.Grid.Planner.Col.IslandRemaining",
+            };
+        private static readonly IReadOnlyDictionary<string, string> _itemDropdownInnerKeyMap =
+            new Dictionary<string, string> {
+                ["ItemID"]     = "str.Grid.Planner.Col.ItemID",
+                ["ItemName"]   = "str.Grid.Planner.Col.ItemName",
+                ["ItemLV"]     = "str.Grid.Planner.Col.ItemLV",
+                ["ItemNumber"] = "str.Grid.Planner.Col.ItemNumber",
+            };
 
         public PlannerControl() {
             InitializeComponent();
@@ -38,6 +84,45 @@ namespace iBarter.View {
             //DataGrid_Planner.SortColumnDescriptions.Add(new SortColumnDescription() { ColumnName = "x:Column_LV", SortDirection = ListSortDirection.Ascending });
             SetupDataGridStyle();
             LoadSavedComboBoxValue();
+
+            // Phase 2 (i18n): one-shot apply + subscribe for live re-render.
+            ApplyLocalizedHeaders();
+            LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalizedHeaders();
+        }
+
+        private void ApplyLocalizedHeaders() {
+            var svc = LanguageService.Instance;
+            GridHeaderLocalization.ApplyHeaders(DataGrid_Planner, _headerKeyMap);
+
+            if (GridMultiColumnDropDownList_Islands != null
+                && _dropdownOuterKeyMap.TryGetValue("Islands", out var ki))
+                GridMultiColumnDropDownList_Islands.HeaderText = svc.Localize(ki);
+            if (GridMultiColumnDropDownList_Item != null
+                && _dropdownOuterKeyMap.TryGetValue("Item", out var kIt))
+                GridMultiColumnDropDownList_Item.HeaderText = svc.Localize(kIt);
+            if (GridMultiColumnDropDownList_Exchange != null
+                && _dropdownOuterKeyMap.TryGetValue("Exchange", out var kEx))
+                GridMultiColumnDropDownList_Exchange.HeaderText = svc.Localize(kEx);
+
+            ApplyDropdownInnerHeaders(GridMultiColumnDropDownList_Islands, _islandDropdownInnerKeyMap);
+            ApplyDropdownInnerHeaders(GridMultiColumnDropDownList_Item, _itemDropdownInnerKeyMap);
+            ApplyDropdownInnerHeaders(GridMultiColumnDropDownList_Exchange, _itemDropdownInnerKeyMap);
+        }
+
+        private static void ApplyDropdownInnerHeaders(
+            GridMultiColumnDropDownList? dropdown,
+            IReadOnlyDictionary<string, string> map) {
+            if (dropdown is null || dropdown.Columns is null) {
+                return;
+            }
+            var svc = LanguageService.Instance;
+            foreach (var col in dropdown.Columns) {
+                if (col is GridTextColumn tc
+                    && !string.IsNullOrEmpty(tc.MappingName)
+                    && map.TryGetValue(tc.MappingName, out var key)) {
+                    tc.HeaderText = svc.Localize(key);
+                }
+            }
         }
 
         private void SetupDataGridStyle() {

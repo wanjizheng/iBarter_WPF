@@ -1,5 +1,7 @@
-﻿using Syncfusion.UI.Xaml.Grid;
+﻿using iBarter.Localization;
+using Syncfusion.UI.Xaml.Grid;
 using Syncfusion.Windows.Shared;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
 using Syncfusion.UI.Xaml.ScrollAxis;
@@ -9,6 +11,42 @@ namespace iBarter.View {
     /// Interaction logic for MainWindow.xaml
     /// </summary>
     public partial class BarterScanner : ChromelessWindow {
+
+        // Phase 2 (i18n): MappingName -> resource key for direct GridTextColumns,
+        // plus a separate map for the GridMultiColumnDropDownList outer HeaderText.
+        // The dropdown inner column map (Islands / Parley / Remaining sub-cols;
+        // ItemID / Item Name / Item LV / Item Number on the item dropdowns) is
+        // shared with the planner where the labels are identical.
+        private static readonly IReadOnlyDictionary<string, string> _headerKeyMap =
+            new Dictionary<string, string> {
+                ["IslandRemaining"] = "str.Grid.Scanner.Col.No",
+                ["Parley"]          = "str.Grid.Scanner.Col.Parley",
+                ["Item1Number"]     = "str.Grid.Scanner.Col.I1No",
+                ["Item2Number"]     = "str.Grid.Scanner.Col.I2No",
+            };
+
+        private static readonly IReadOnlyDictionary<string, string> _dropdownOuterKeyMap =
+            new Dictionary<string, string> {
+                ["Islands"] = "str.Grid.Scanner.Col.Islands",
+                ["Item1"]   = "str.Grid.Scanner.Col.Item1Name",
+                ["Item2"]   = "str.Grid.Scanner.Col.Item2Name",
+            };
+
+        private static readonly IReadOnlyDictionary<string, string> _islandDropdownInnerKeyMap =
+            new Dictionary<string, string> {
+                ["IslandsName"] = "str.Grid.Scanner.Col.IslandsSub",
+                ["Parley"]      = "str.Grid.Scanner.Col.Parley",
+                ["Remaining"]   = "str.Grid.Scanner.Col.Remaining",
+            };
+
+        private static readonly IReadOnlyDictionary<string, string> _itemDropdownInnerKeyMap =
+            new Dictionary<string, string> {
+                ["ItemID"]     = "str.Grid.Scanner.Col.DropdownItemID",
+                ["ItemName"]   = "str.Grid.Scanner.Col.DropdownItemName",
+                ["ItemLV"]     = "str.Grid.Scanner.Col.DropdownItemLV",
+                ["ItemNumber"] = "str.Grid.Scanner.Col.DropdownItemNumber",
+            };
+
         public BarterScanner() {
             InitializeComponent();
 
@@ -17,6 +55,44 @@ namespace iBarter.View {
             GridMultiColumnDropDownList_Item1.ItemsSource = App.mySVM.ItemsCollection;
             GridMultiColumnDropDownList_Item2.ItemsSource = App.mySVM.ItemsCollection;
             GridMultiColumnDropDownList_Islands.ItemsSource = App.mySVM.IslandsCollection;
+
+            ApplyLocalizedHeaders();
+            LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalizedHeaders();
+        }
+
+        private void ApplyLocalizedHeaders() {
+            var svc = LanguageService.Instance;
+            GridHeaderLocalization.ApplyHeaders(BarterScanResults, _headerKeyMap);
+
+            if (GridMultiColumnDropDownList_Islands != null
+                && _dropdownOuterKeyMap.TryGetValue("Islands", out var ki))
+                GridMultiColumnDropDownList_Islands.HeaderText = svc.Localize(ki);
+            if (GridMultiColumnDropDownList_Item1 != null
+                && _dropdownOuterKeyMap.TryGetValue("Item1", out var k1))
+                GridMultiColumnDropDownList_Item1.HeaderText = svc.Localize(k1);
+            if (GridMultiColumnDropDownList_Item2 != null
+                && _dropdownOuterKeyMap.TryGetValue("Item2", out var k2))
+                GridMultiColumnDropDownList_Item2.HeaderText = svc.Localize(k2);
+
+            ApplyDropdownInnerHeaders(GridMultiColumnDropDownList_Islands, _islandDropdownInnerKeyMap);
+            ApplyDropdownInnerHeaders(GridMultiColumnDropDownList_Item1, _itemDropdownInnerKeyMap);
+            ApplyDropdownInnerHeaders(GridMultiColumnDropDownList_Item2, _itemDropdownInnerKeyMap);
+        }
+
+        private static void ApplyDropdownInnerHeaders(
+            GridMultiColumnDropDownList? dropdown,
+            IReadOnlyDictionary<string, string> map) {
+            if (dropdown is null || dropdown.Columns is null) {
+                return;
+            }
+            var svc = LanguageService.Instance;
+            foreach (var col in dropdown.Columns) {
+                if (col is GridTextColumn tc
+                    && !string.IsNullOrEmpty(tc.MappingName)
+                    && map.TryGetValue(tc.MappingName, out var key)) {
+                    tc.HeaderText = svc.Localize(key);
+                }
+            }
         }
 
         GridRowSizingOptions gridRowResizingOptions = new GridRowSizingOptions();
