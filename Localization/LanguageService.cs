@@ -115,9 +115,22 @@ namespace iBarter.Localization {
         public string Localize(string key, params object[] args) {
             string text;
             try {
-                // Application.FindResource walks the merged dictionaries (including
-                // the one we installed via ApplyMergedDictionary). Returns null on miss.
-                text = Application.Current?.FindResource(key) as string ?? key;
+                // 1) Try the dictionary we installed in ApplyMergedDictionary
+                //    first.  ResourceDictionary indexer returns the value if
+                //    the key is present, else null - and unlike FindResource
+                //    it doesn't walk up the visual tree, so it's exactly
+                //    the i18n strings we explicitly populated.
+                if (_installedLanguageDictionary is not null
+                    && _installedLanguageDictionary.Contains(key)) {
+                    text = (string)_installedLanguageDictionary[key]!;
+                }
+                // 2) Fall back to Application.FindResource (covers any other
+                //    dictionaries merged by the user / View code).  This is
+                //    the original Phase 1 path; kept as fallback in case
+                //    _installedLanguageDictionary is replaced or stale.
+                else {
+                    text = Application.Current?.FindResource(key) as string ?? key;
+                }
             }
             catch {
                 text = key;
@@ -218,10 +231,36 @@ namespace iBarter.Localization {
 
                 merged.Add(dict);
                 _installedLanguageDictionary = dict;
+
+                // Visible log: how many keys we actually loaded.  If this is
+                // 0 the XDocument parser failed to find <String> elements
+                // and the XAML file format needs another look.  The user
+                // sees this in the bottom Log dock via App.myCFun.Log.
+                LogLoadedCount(fileName, dict.Count);
             }
             catch (Exception ex) {
                 System.Diagnostics.Debug.WriteLine(
                     $"[LanguageService] ApplyMergedDictionary({value}) failed: {ex.Message}");
+            }
+        }
+
+        // Visible log: how many keys we actually loaded.  If this is 0
+        // the XDocument parser failed to find <String> elements and the
+        // XAML file format needs another look.  The user sees this in
+        // the bottom Log dock via App.myCFun.Log.
+        private static void LogLoadedCount(string fileName, int count) {
+            System.Diagnostics.Debug.WriteLine(
+                $"[LanguageService] {fileName}: loaded {count} keys; " +
+                $"path={AppDomain.CurrentDomain.BaseDirectory}");
+            try {
+                if (App.myCFun is not null) {
+                    App.myCFun.Log(
+                        $"[LanguageService] {fileName}: loaded {count} keys",
+                        System.Windows.Media.Brushes.Gray);
+                }
+            }
+            catch {
+                // swallow - logging is best-effort
             }
         }
     }
