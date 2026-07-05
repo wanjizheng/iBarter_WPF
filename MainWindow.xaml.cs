@@ -38,6 +38,7 @@ namespace iBarter {
             // alive for that open SplashScreen. Force-close splash +
             // shut down its background Dispatcher here regardless.
             this.Closing += MainWindow_Closing;
+            Localization.LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalizedChrome();
             //var mapCenterPoint = new MapPoint(14, 21, SpatialReferences.Wgs84);
             //MainMapView.SetViewpoint(new Viewpoint(mapCenterPoint, 52541284));
         }
@@ -152,7 +153,7 @@ namespace iBarter {
             // InitializeAtStartup (which read it from Properties.Settings
             // in Phase 1).  The click handlers maintain the marks from
             // here on; we only seed the initial state.
-            SyncLangCheckmarks();
+            ApplyLocalizedChrome();
 
             try {
                 // App.mySplashScreen.worker.ReportProgress(10);
@@ -295,12 +296,20 @@ namespace iBarter {
         // selection survives restart.
         private void MenuItem_LangEnglish_Click(object sender, RoutedEventArgs e) {
             iBarter.Localization.LanguageService.Instance.Current = iBarter.Localization.AppLanguage.English;
-            SyncLangCheckmarks();
+            ApplyLocalizedChrome();
         }
 
         private void MenuItem_LangZhTw_Click(object sender, RoutedEventArgs e) {
             iBarter.Localization.LanguageService.Instance.Current = iBarter.Localization.AppLanguage.TraditionalChinese;
+            ApplyLocalizedChrome();
+        }
+
+        private void ApplyLocalizedChrome() {
             SyncLangCheckmarks();
+            if (statusBarItem_Version != null) {
+                statusBarItem_Version.Text =
+                    Localization.LanguageService.Instance.Localize("str.StatusBar.VersionLabel") + "Beta_4.4";
+            }
         }
 
         private void SyncLangCheckmarks() {

@@ -139,7 +139,7 @@ namespace iBarter.Localization {
                     var doc = XDocument.Load(resolvedPath, LoadOptions.None);
                     foreach (var el in doc.Descendants()) {
                         if (el.Name.LocalName != "String") continue;
-                        var keyAttr = el.Attribute("Key");
+                        var keyAttr = el.Attributes().FirstOrDefault(a => a.Name.LocalName == "Key");
                         if (keyAttr is null) continue;
                         string key = keyAttr.Value;
                         if (string.IsNullOrEmpty(key)) continue;

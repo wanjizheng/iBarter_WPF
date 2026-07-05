@@ -9,34 +9,21 @@
 //
 //   <Setter Property="Header" Value="{loc:Localize str.Planner.Save}" />
 //
-// Mechanism (simplified for the Phase 9 hotfix chain):
-//   * ProvideValue returns a plain string (not a Binding).  WPF's
-//     BAML compiler on .NET 10 throws "Value cannot be null.
-//     (Parameter 'key')" inside Binding's ProvideValue path when
-//     the markup extension is used in property setters during BAML
-//     compilation, regardless of our catch block.  Returning a
-//     plain string sidesteps that error entirely.
-//   * Live language flips are still observable through the rest of
-//     the i18n stack:
-//       - Items.ItemNameDisplay / ItemTierDisplay re-fire INPC on
-//         every Items instance when LanguageChanged is raised;
-//       - Islands.IslandsNameDisplay does the same on Islands;
-//       - Barter.Item1NameDisplay / Item2NameDisplay / IsLandNameDisplay
-//         re-fire because Items/Islands they reference re-fired
-//         (Phase 5 WireUpItem1/2 / WireUpIsland subscribe chain);
-//       - The per-View ApplyLocalizedHeaders re-walks SfDataGrid
-//         column headers on every LanguageChanged (Phase 2 wiring).
-//     So the chrome that doesn't auto-refresh is purely the
-//     {loc:Localize} XAML string substitution; everything data-bound
-//     to *Display getters does refresh in place.
-//   * When the user re-opens a View (or restarts the app), the
-//     XAML re-evaluates ProvideValue and the new language's text
-//     appears.  This is an acceptable user flow for a menu-driven
-//     language switch: "switch language, close + reopen the view".
+// Mechanism:
+//   * For normal DependencyProperty targets, ProvideValue returns a
+//     one-way Binding to this extension's Text property.  When
+//     LanguageService raises LanguageChanged, Text raises INPC and
+//     already-rendered UI updates in place.
+//   * For non-DP targets (for example style Setters / design-time
+//     parser paths), ProvideValue falls back to a plain string.  That
+//     keeps the extension out of WPF's fragile BAML Setter binding path
+//     while still giving the visible UI live language flips.
 
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
+using System.Windows.Data;
 using System.Windows.Markup;
 
 namespace iBarter.Localization {
@@ -118,6 +105,17 @@ namespace iBarter.Localization {
         public override object ProvideValue(IServiceProvider serviceProvider) {
             try {
                 HookLanguageChanged();
+                var provideValueTarget =
+                    serviceProvider.GetService(typeof(IProvideValueTarget)) as IProvideValueTarget;
+                if (provideValueTarget?.TargetObject is DependencyObject
+                    && provideValueTarget.TargetProperty is DependencyProperty) {
+                    var binding = new Binding(nameof(Text)) {
+                        Source = this,
+                        Mode = BindingMode.OneWay,
+                        UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+                    };
+                    return binding.ProvideValue(serviceProvider);
+                }
                 return Text;
             }
             catch (Exception ex) {
