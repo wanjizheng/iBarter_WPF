@@ -222,15 +222,16 @@
                                                 AllowEditing="False" AllowResizing="True">
                     </syncfusion:GridImageColumn>
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Item"
-                                                            AllowAutoComplete="True"
+                                                            AllowAutoComplete="False"
                                                             AutoGenerateColumns="False"
                                                             DisplayMember="ItemNameDisplay"
                                                             HeaderText="Item"
                                                             MappingName="Item1NameDisplay"
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
-                                                            AllowIncrementalFiltering="True" AllowEditing="True"
-                                                            AllowFiltering="True" Width="150">
+                                                            AllowEditing="True"
+                                                            PopupHeight="400" PopupWidth="500"
+                                                            Width="150">
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
                                 <syncfusion:GridTextColumn
@@ -248,15 +249,16 @@
                                                 TextAlignment="Center"
                                                 AllowEditing="False" AllowResizing="True" />
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Exchange"
-                                                            AllowAutoComplete="True"
+                                                            AllowAutoComplete="False"
                                                             AutoGenerateColumns="False"
                                                             DisplayMember="ItemNameDisplay"
                                                             HeaderText="Exchange"
                                                             MappingName="Item2NameDisplay"
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
-                                                            AllowIncrementalFiltering="True" AllowEditing="True"
-                                                            AllowFiltering="True" Width="150">
+                                                            AllowEditing="True"
+                                                            PopupHeight="400" PopupWidth="500"
+                                                            Width="150">
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
                                 <syncfusion:GridTextColumn
