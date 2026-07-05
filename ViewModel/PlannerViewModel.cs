@@ -84,17 +84,6 @@ namespace iBarter.ViewModel {
 
         private ObservableCollection<Items> PopulateItems() {
             // Reuse App.listItems populated at startup; CSV was read 3x before this fix.
-            // Phase 9 hotfix 8: log the count so the user can see in the bottom
-            // dock whether App.listItems is actually populated when the
-            // dropdown's ItemsSource was wired.  If 0 the dropdown is empty
-            // because LoadItemsCSV failed or App.listItems was 0 when
-            // PlannerViewModel ctor fired.
-            try {
-                App.myCFun?.Log(
-                    $"[PopulateItems] App.listItems.Count = {App.listItems?.Count ?? -1}",
-                    System.Windows.Media.Brushes.Gray);
-            }
-            catch { }
             return new ObservableCollection<Items>(App.listItems);
         }
 
