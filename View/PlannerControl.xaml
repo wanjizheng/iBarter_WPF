@@ -230,7 +230,6 @@
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
                                                             AllowEditing="True"
-                                                            PopupHeight="400" PopupWidth="500"
                                                             Width="150">
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
@@ -257,7 +256,6 @@
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
                                                             AllowEditing="True"
-                                                            PopupHeight="400" PopupWidth="500"
                                                             Width="150">
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
