@@ -89,19 +89,19 @@
                                RowStyle="{StaticResource rowStyle}"
                                AllowDrop="False" LiveDataUpdateMode="AllowChildViewUpdate" AllowSorting="False" CurrentCellEndEdit="DataGrid_Storage_CurrentCellEndEdit" Grid.Row="1">
             <Syncfusion:SfDataGrid.Columns>
-                <Syncfusion:GridTextColumn HeaderText="Inventory" MappingName="ItemNameDisplay" AllowResizing="True"
+                <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Inventory}" MappingName="ItemNameDisplay" AllowResizing="True"
                                    AllowEditing="False" ColumnSizer="Auto"/>
-                <Syncfusion:GridImageColumn HeaderText="Icon" MappingName="ItemIcon" Width="40"
+                <Syncfusion:GridImageColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Icon}" MappingName="ItemIcon" Width="40"
                                     TextAlignment="Center" AllowEditing="False" />
-                <Syncfusion:GridTextColumn HeaderText="Tier" Width="70" MappingName="ItemTierDisplay"
+                <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Tier}" Width="70" MappingName="ItemTierDisplay"
                                    AllowEditing="False" AllowResizing="True"/>
-                <Syncfusion:GridTextColumn HeaderText="Velia" MappingName="StorageVeliaQuantity_Velia"
+                <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Velia}" MappingName="StorageVeliaQuantity_Velia"
                                            AllowEditing="True" AllowResizing="True"/>
-                <Syncfusion:GridTextColumn HeaderText="Iliya" MappingName="StorageVeliaQuantity_Iliya"
+                <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Iliya}" MappingName="StorageVeliaQuantity_Iliya"
                                            AllowEditing="True" AllowResizing="True"/>
-                <Syncfusion:GridTextColumn HeaderText="Epheria" MappingName="StorageVeliaQuantity_Epheria"
+                <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Epheria}" MappingName="StorageVeliaQuantity_Epheria"
                                            AllowEditing="True" AllowResizing="True"/>
-                <Syncfusion:GridTextColumn HeaderText="Ancado" MappingName="StorageVeliaQuantity_Ancado"
+                <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Ancado}" MappingName="StorageVeliaQuantity_Ancado"
                                            AllowEditing="True" AllowResizing="True"/>
             </Syncfusion:SfDataGrid.Columns>
 
