@@ -75,25 +75,6 @@ namespace iBarter.View {
             GridMultiColumnDropDownList_Exchange.ItemsSource = App.myPVM.ItemsCollection;
             GridMultiColumnDropDownList_Islands.ItemsSource = App.myPVM.IslandsCollection;
 
-            // Phase 9 hotfix 8: verify the dropdown's ItemsSource actually has
-            // items when the control wires up.  This runs AFTER Window_Loaded
-            // (PlannerControl is the document content of the docking panel,
-            // which is rendered after MainWindow's first measure pass), so
-            // the Log call lands in the bottom dock and the user can see it.
-            try {
-                int appList = App.listItems?.Count ?? -1;
-                int itemsCol = App.myPVM.ItemsCollection?.Count ?? -1;
-                int dropdown = GridMultiColumnDropDownList_Item.ItemsSource is System.Collections.ICollection ic
-                    ? ic.Count : -1;
-                App.myCFun?.Log(
-                    $"[PlannerControl] App.listItems={appList}, ItemsCollection={itemsCol}, dropdown.ItemsSource={dropdown}, " +
-                    $"ItemsCollection[0].ItemName={(App.myPVM.ItemsCollection?.Count > 0 ? App.myPVM.ItemsCollection[0].ItemName : "<empty>")}",
-                    System.Windows.Media.Brushes.Gray);
-            }
-            catch (Exception ex) {
-                App.myCFun?.Log("[PlannerControl] diagnostic failed: " + ex.Message, System.Windows.Media.Brushes.Red);
-            }
-
             // ComboBox_AltLevel.ItemsSource = App.myPVM.AltCollection;
             // ComboBox_AltLevel.DisplayMemberPath = "Level";
             // ComboBox_AltLevel.SelectedValuePath = "Value";

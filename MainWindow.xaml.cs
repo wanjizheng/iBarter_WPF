@@ -155,6 +155,26 @@ namespace iBarter {
             // here on; we only seed the initial state.
             ApplyLocalizedChrome();
 
+            // Phase 9 hotfix 8: the dropdown is empty when clicked and the
+            // user has been unable to see the diagnostic from PlannerControl
+            // ctor because Syncfusion's DockingManager lazily creates
+            // document content only when the panel is first activated.  Print
+            // the data counts here so the user can confirm App.listItems /
+            // ItemsCollection actually have rows when the UI starts up.
+            try {
+                int appList = App.listItems?.Count ?? -1;
+                int itemsCol = App.myPVM?.ItemsCollection?.Count ?? -1;
+                int islandsCol = App.myPVM?.IslandsCollection?.Count ?? -1;
+                int storageItems = App.listStorage?.Count ?? -1;
+                App.myCFun?.Log(
+                    $"[Diagnostic] App.listItems={appList}, myPVM.ItemsCollection={itemsCol}, " +
+                    $"IslandsCollection={islandsCol}, listStorage={storageItems}",
+                    System.Windows.Media.Brushes.Gray);
+            }
+            catch (Exception ex) {
+                App.myCFun?.Log("[Diagnostic] failed: " + ex.Message, System.Windows.Media.Brushes.Red);
+            }
+
             try {
                 // App.mySplashScreen.worker.ReportProgress(10);
                 Logging.SaveConsoleLog = false;
