@@ -1718,20 +1718,10 @@ namespace iBarter {
         }
 
         private int TryReadRemainingCount(PointPlus pointPlusAnchor, PointPlus pointPlusEdge, string strIsland) {
-            // The "Remaining" word always sits just to the right of the
-            // anchor icon (within the same barter row). Narrow the search
-            // rect to anchor.X - 50 .. anchor.X + 450 instead of the full
-            // window width. Cuts FindPicture cost ~5-6x (rect area shrinks
-            // from WindowWidth x ~30 to ~500 x ~30). The 50-px left margin
-            // covers the case where the icon template straddles the anchor
-            // edge; the 450-px right margin covers the worst-case "Remaining"
-            // label position observed on BDO barter UI.
-            int remX1 = System.Math.Max(0, pointPlusAnchor.X - 50);
-            int remX2 = System.Math.Min(App.myPureDM.WindowWidth, pointPlusAnchor.X + 450);
             PointPlus pointPlusRemaining = FindScanLabel(
-                remX1,
+                0,
                 pointPlusAnchor.Y + pointPlusAnchor.Size.Height,
-                remX2,
+                App.myPureDM.WindowWidth,
                 pointPlusAnchor.Y + 60,
                 "Remaining", 0.6, out _, out string triedRemainingPaths);
 
@@ -2164,6 +2154,13 @@ namespace iBarter {
         // returns PointPlus.Empty (X = -1) on miss so the caller falls through
         // to the existing PureDM FindPicture + O(n) fallback path unchanged.
         // On miss or any invariant violation, the cache entry is invalidated.
+        //
+        // IMPORTANT: ImageID must be populated on the returned PointPlus.
+        // Downstream code does `listPointPlus[0].ImageID.Substring(14, Length-18)`
+        // to extract the matched itemID; without ImageID set, that Substring
+        // throws (or returns wrong data). PureDM normally populates ImageID
+        // as a side effect of FindPicture, but the cache hit path bypasses
+        // FindPicture - so we reconstruct the same path string here.
         private static PointPlus TryIconPointCache(string itemID, int intX1, int intY1) {
             if (string.IsNullOrEmpty(itemID)) return PointPlus.Empty;
             if (!_iconPointCache.TryGetValue(itemID, out var entry)) return PointPlus.Empty;
@@ -2178,11 +2175,15 @@ namespace iBarter {
                 return PointPlus.Empty;
             }
             // Reconstruct absolute screen position from the capture-rect
-            // origin (intX1, intY1) plus the cached offset.
+            // origin (intX1, intY1) plus the cached offset. Also reconstruct
+            // ImageID - PureDM stores the template path passed to FindPicture
+            // ("\\Images\\Items\\<id>.bmp"); downstream's
+            // ImageID.Substring(14, Length-18) extracts the itemID from it.
             var p = new PointPlus();
             p.X = intX1 + entry.OffsetX;
             p.Y = intY1 + entry.OffsetY;
             p.Size = new System.Drawing.Size(entry.SizeWidth, entry.SizeHeight);
+            p.ImageID = "\\Images\\Items\\" + itemID + ".bmp";
             return p;
         }
 
