@@ -56,12 +56,13 @@ namespace iBarter {
 
         // Maximum worker threads the parallel scan loop may spawn. Each thread
         // lazily loads a Tesseract 4 LSTM instance (~30-50 MB resident) plus
-        // transient Magick/Bitmap/Mat buffers (~30-40 MB peak per worker). At 2
-        // workers the steady-state cost is ~120 MB on top of the existing
-        // _tplCache (~50-100 MB) - safe on typical BDO machines. Raise to 4
-        // only if the host has >2 GB free RAM at scan time; lower to 1
-        // (effectively serial) if memory pressure is observed.
-        private const int ScanMaxParallelism = 2;
+        // transient Magick/Bitmap/Mat buffers (~30-40 MB peak per worker). With
+        // LargeAddressAware set in iBarter.csproj the x86 process under WOW64
+        // gets a 4 GB user-mode address space, so 4 workers (~320 MB transient
+        // peak on top of the existing _tplCache ~50-100 MB) leaves ~3.5 GB
+        // headroom. Lower to 2 if you see OutOfMemoryException on older 32-bit
+        // Windows hosts (2 GB cap, no LAA).
+        private const int ScanMaxParallelism = 4;
 
         // [ThreadStatic] - set per Parallel.ForEach iteration so each worker's
         // Log() calls accumulate into a per-iteration buffer instead of hitting

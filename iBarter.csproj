@@ -15,6 +15,22 @@
 	<ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
+  <!--
+    MSBuild's <LargeAddressAware>true</LargeAddressAware> does NOT propagate
+    to the .NET apphost (iBarter.exe) - it's a C++ linker flag only. Flip
+    IMAGE_DLLCHARACTERISTICS_LARGE_ADDRESS_AWARE (bit 5 of the PE Optional
+    Header DllCharacteristics field at PE+94) directly via PowerShell so
+    the apphost is recognised as LargeAddressAware. On 64-bit Windows
+    hosting this 32-bit binary under WOW64, this lifts the user-mode
+    address space cap from 2 GB to 4 GB.
+  -->
+  <Target Name="SetLargeAddressAware" AfterTargets="Build">
+    <PropertyGroup>
+      <_LAAExePath>$(OutDir)iBarter.exe</_LAAExePath>
+    </PropertyGroup>
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$bytes = [System.IO.File]::ReadAllBytes('$(_LAAExePath)'); $peOff = [System.BitConverter]::ToInt32($bytes, 0x3C); $optOff = $peOff + 24; $magic = [System.BitConverter]::ToUInt16($bytes, $optOff); if ($magic -ne 0x10B) { Write-Host '[LAA] Skipping - not PE32 (magic=0x' + $magic.ToString('X4') + ')' ; exit 0 }; $dllCharOff = $optOff + 92; $cur = [System.BitConverter]::ToUInt16($bytes, $dllCharOff); if (($cur -band 0x0020) -ne 0) { Write-Host '[LAA] Already set (DllCharacteristics=0x' + $cur.ToString('X4') + ')' ; exit 0 }; $new = $cur -bor 0x0020; [byte[]]$wb = [System.BitConverter]::GetBytes($new); for ($i = 0; $i -lt 2; $i++) { $bytes[$dllCharOff + $i] = $wb[$i] }; [System.IO.File]::WriteAllBytes('$(_LAAExePath)', $bytes); Write-Host '[LAA] Set IMAGE_DLLCHARACTERISTICS_LARGE_ADDRESS_AWARE (DllCharacteristics 0x' + $cur.ToString('X4') + ' -> 0x' + $new.ToString('X4') + ')'&quot;" />
+  </Target>
+
   <ItemGroup>
     <!-- Magick.NET-Q16-AnyCPU only copies native on .NET Framework; this project
          targets .NET 10, so copy the x86 native manually and let Costura embed it. -->
