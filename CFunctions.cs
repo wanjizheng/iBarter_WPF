@@ -64,46 +64,14 @@ namespace iBarter {
         // Windows hosts (2 GB cap, no LAA).
         private const int ScanMaxParallelism = 4;
 
-        // [ThreadStatic] - set per Parallel.ForEach iteration so each worker's
-        // Log() calls accumulate into a per-iteration buffer instead of hitting
-        // the UI Dispatcher (which would order them by completion time, not
-        // island Y position). The single-threaded ordering pass below drains
-        // buffers[i] in i order, so the Log pane shows entries in the same
-        // top-to-bottom order the user sees in the Scanner grid. Null = no
-        // capture (caller wants real-time logging, or is the ordering pass
-        // itself running on a non-worker thread).
-        [ThreadStatic]
-        private static System.Collections.Generic.List<LogEntry>? _logCapture;
-
-        internal readonly struct LogEntry {
-            public readonly string Message;
-            public readonly Brush Color;
-            public LogEntry(string m, Brush c) { Message = m; Color = c; }
-        }
-
-        // Begin capturing Log() calls on the current thread. Must be paired
-        // with EndLogCapture() in a finally block.
-        internal static void BeginLogCapture() {
-            _logCapture = new System.Collections.Generic.List<LogEntry>();
-        }
-
-        // Stop capturing and return the buffer accumulated since
-        // BeginLogCapture. Returns null if BeginLogCapture was not called on
-        // this thread.
-        internal static System.Collections.Generic.List<LogEntry>? EndLogCapture() {
-            var captured = _logCapture;
-            _logCapture = null;
-            return captured;
-        }
+        // (Log capture removed - the [ThreadStatic] buffer caused a regression
+        // that hung scans silently. Workers now log in real-time via the UI
+        // Dispatcher, so the Log pane shows entries in completion order, not
+        // island Y order. The Scanner grid still preserves top-to-bottom
+        // order because we write to fixed-slot results[i] and append by
+        // index in the ordering pass.)
 
         public void Log(string _message, Brush _color) {
-            // Capture path: when a Parallel.ForEach worker has set _logCapture,
-            // append and return. Do NOT touch Dispatcher here - the ordering
-            // pass will drain us in index order.
-            if (_logCapture != null) {
-                _logCapture.Add(new LogEntry(_message, _color));
-                return;
-            }
             if (!Application.Current.Dispatcher.CheckAccess()) {
                 Application.Current.Dispatcher.Invoke(new Action(() => Log(_message, _color)));
             }
@@ -1191,35 +1159,26 @@ namespace iBarter {
             // Run up to 6 anchors in parallel. Each worker writes to a fixed slot in
             // `results`, so insertion into App.listBarterScanner below preserves
             // the top-to-bottom Y-sorted order. PureDM is serialized via
-            // _pureDmLock; Tesseract is per-thread via ThreadLocal. Log() calls
-            // inside workers accumulate into logBuffers[i] (set up by
-            // BeginLogCapture) and the ordering pass flushes them in i order so
-            // the Log pane also shows top-to-bottom output.
+            // _pureDmLock; Tesseract is per-thread via ThreadLocal.
+            //
+            // Workers call Log() directly via Dispatcher.Invoke - the Log pane
+            // will show entries in completion order, not island Y order. The
+            // Scanner grid is still top-to-bottom because results[i] is appended
+            // in i order by the single-threaded ordering pass below.
             int n = Math.Min(6, listAnchors.Count);
             var results = new Barter[n];
-            var logBuffers = new System.Collections.Generic.List<LogEntry>[n];
-            // Default 2 worker threads. See the Risks section for the memory
-            // math: 2 threads = ~2 x Tesseract LSTM (60-100 MB) + 2 x transient
-            // Magick/Mat pipeline (~40 MB). Comfortable on a typical BDO
-            // machine. Override via the ScanMaxParallelism const at the top
-            // of CFunctions if the host has plenty of free RAM.
             var parallelOpts = new ParallelOptions { MaxDegreeOfParallelism = ScanMaxParallelism };
 
             try {
                 Parallel.ForEach(System.Linq.Enumerable.Range(0, n), parallelOpts, i => {
-                    BeginLogCapture();
                     try {
                         results[i] = IdentifyBarterAsync(listAnchors[i]);
                     }
                     catch (Exception ex) {
-                        // Buffered; will flush in i order by the ordering pass below.
                         Log(Localization.LanguageService.Instance.Localize(
                             "str.Log.Scanner.AnchorFailed", i, ex.GetType().Name, ex.Message),
                             Brushes.IndianRed);
                         results[i] = null;
-                    }
-                    finally {
-                        logBuffers[i] = EndLogCapture();
                     }
                 });
             }
@@ -1229,21 +1188,12 @@ namespace iBarter {
                     Brushes.Red);
             }
 
-            // Ordered flush + append. One thread, deterministic i=0..n order:
-            //   1. drain logBuffers[i] into the Log pane (so Log messages
-            //      appear in the same top-to-bottom order as the grid);
-            //   2. add results[i] to App.listBarterScanner under _listLock.
-            // The duplicate-Island-name filter happens here so it sees all 6
+            // Ordered append: only one thread touches App.listBarterScanner.
+            // The duplicate-Island-name filter happens here so it sees all
             // results at once - workers can't race against a mutating list
             // while checking.
             lock (App._listLock) {
                 for (int i = 0; i < n; i++) {
-                    var buf = logBuffers[i];
-                    if (buf != null) {
-                        foreach (var entry in buf) {
-                            Log(entry.Message, entry.Color);
-                        }
-                    }
                     var myBarter = results[i];
                     if (myBarter == null) continue;
                     if (myBarter.IsLand == null || myBarter.Item1 == null || myBarter.Item2 == null) continue;
