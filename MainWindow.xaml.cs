@@ -52,10 +52,11 @@ namespace iBarter {
                     var splash = App.mySplashScreen;
                     splash.Dispatcher.Invoke(() => {
                         try { splash.Close(); } catch { }
-                        // Stop the background Dispatcher.Run() loop so the
-                        // STA thread can unwind.
-                        System.Windows.Threading.Dispatcher.ExitAllFrames();
                     });
+                    // InvokeShutdown() must be called from outside the Invoke
+                    // callback - it terminates Dispatcher.Run() and lets the
+                    // STA thread unwind cleanly.
+                    splash.Dispatcher.InvokeShutdown();
                 }
             }
             catch { }
@@ -98,6 +99,7 @@ namespace iBarter {
         /// <param name="e"></param>
         private void OnActivateWindow(object sender, RoutedEventArgs e) {
             if (App.myBarterScanner != null && App.myBarterScanner.IsLoaded) {
+                App.myBarterScanner.InitializeScannerState();
                 App.myBarterScanner.Activate();
                 return;
             }
@@ -240,6 +242,12 @@ namespace iBarter {
                 myShipCargo.RefreshData();
 
                 App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
+                // Shut down the background STA Dispatcher so Dispatcher.Run() exits
+                // and the SplashScreen thread terminates. Without this the thread
+                // stays alive as a "zombie" Dispatcher, holding WPF/DirectWrite
+                // resources that cause 0x80070008 (ERROR_NOT_ENOUGH_MEMORY) during
+                // subsequent DirectWrite calls on the main thread (e.g. during Scan).
+                App.mySplashScreen.Dispatcher.InvokeShutdown();
                 //SfSkinManager.ApplyStylesOnApplication = true;
                 this.WindowState = WindowState.Normal;
                 this.WindowStartupLocation = WindowStartupLocation.CenterScreen;

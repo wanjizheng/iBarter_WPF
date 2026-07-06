@@ -53,16 +53,16 @@ namespace iBarter.View {
         // dropdowns share the same four sub-column keys.
         private static readonly IReadOnlyDictionary<string, string> _islandDropdownInnerKeyMap =
             new Dictionary<string, string> {
-                ["IslandsName"] = "str.Grid.Planner.Col.Islands",
-                ["Parley"]      = "str.Grid.Planner.Col.IslandParley",
-                ["Remaining"]   = "str.Grid.Planner.Col.IslandRemaining",
+                ["IslandsNameDisplay"] = "str.Grid.Planner.Col.Islands",
+                ["Parley"]             = "str.Grid.Planner.Col.IslandParley",
+                ["Remaining"]          = "str.Grid.Planner.Col.IslandRemaining",
             };
         private static readonly IReadOnlyDictionary<string, string> _itemDropdownInnerKeyMap =
             new Dictionary<string, string> {
-                ["ItemID"]     = "str.Grid.Planner.Col.ItemID",
-                ["ItemName"]   = "str.Grid.Planner.Col.ItemName",
-                ["ItemLV"]     = "str.Grid.Planner.Col.ItemLV",
-                ["ItemNumber"] = "str.Grid.Planner.Col.ItemNumber",
+                ["ItemID"]          = "str.Grid.Planner.Col.ItemID",
+                ["ItemNameDisplay"] = "str.Grid.Planner.Col.ItemName",
+                ["ItemLV"]          = "str.Grid.Planner.Col.ItemLV",
+                ["ItemNumber"]      = "str.Grid.Planner.Col.ItemNumber",
             };
 
         public PlannerControl() {
@@ -71,6 +71,7 @@ namespace iBarter.View {
             DataGrid_Planner.ItemsSource = App.myPVM.BarterCollection;
 
             DataGrid_Planner.AutoScroller.AutoScrolling = AutoScrollOrientation.Both;
+            RegisterLocalizedDropDownRenderer();
             GridMultiColumnDropDownList_Item.ItemsSource = App.myPVM.ItemsCollection;
             GridMultiColumnDropDownList_Exchange.ItemsSource = App.myPVM.ItemsCollection;
             GridMultiColumnDropDownList_Islands.ItemsSource = App.myPVM.IslandsCollection;
@@ -86,8 +87,18 @@ namespace iBarter.View {
             LoadSavedComboBoxValue();
 
             // Phase 2 (i18n): one-shot apply + subscribe for live re-render.
+            ApplyLocalization();
+            LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalization();
+        }
+
+        private void RegisterLocalizedDropDownRenderer() {
+            DataGrid_Planner.CellRenderers.Remove("MultiColumnDropDown");
+            DataGrid_Planner.CellRenderers.Add("MultiColumnDropDown", new LocalizedMultiColumnDropDownRenderer());
+        }
+
+        private void ApplyLocalization() {
             ApplyLocalizedHeaders();
-            LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalizedHeaders();
+            RefreshLocalizedDisplay();
         }
 
         private void ApplyLocalizedHeaders() {
@@ -107,6 +118,19 @@ namespace iBarter.View {
             ApplyDropdownInnerHeaders(GridMultiColumnDropDownList_Islands, _islandDropdownInnerKeyMap);
             ApplyDropdownInnerHeaders(GridMultiColumnDropDownList_Item, _itemDropdownInnerKeyMap);
             ApplyDropdownInnerHeaders(GridMultiColumnDropDownList_Exchange, _itemDropdownInnerKeyMap);
+        }
+
+        private void RefreshLocalizedDisplay() {
+            if (DataGrid_Planner == null) {
+                return;
+            }
+            if (!Dispatcher.CheckAccess()) {
+                Dispatcher.Invoke(RefreshLocalizedDisplay);
+                return;
+            }
+
+            DataGrid_Planner.View?.Refresh();
+            DataGrid_Planner.InvalidateVisual();
         }
 
         private static void ApplyDropdownInnerHeaders(
@@ -555,20 +579,34 @@ namespace iBarter.View {
 
         private void DataGrid_Planner_CurrentCellEndEdit(object sender, CurrentCellEndEditEventArgs e) {
             if (e.RowColumnIndex.ColumnIndex == 5) {
-                Barter barter = (Barter)DataGrid_Planner.CurrentItem;
-                Barter? myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == barter.IsLandName);
-                if (myBarter.ExchangeQuantity > myBarter.IslandRemaining || myBarter.ExchangeQuantity < 0) {
-                    myBarter.ExchangeQuantity = myBarter.IslandRemaining;
+                Barter barter = DataGrid_Planner.CurrentItem as Barter;
+                Barter myBarter = barter == null
+                    ? null
+                    : App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == barter.IsLandName);
+                if (myBarter != null) {
+                    if (myBarter.ExchangeQuantity > myBarter.IslandRemaining || myBarter.ExchangeQuantity < 0) {
+                        myBarter.ExchangeQuantity = myBarter.IslandRemaining;
+                    }
+
+                    UpdateInvChange(myBarter.BarterGroup);
+                    App.myfmMain.myShipCargo.UpdateCurrentLV();
+                    App.myfmMain.myShipCargo.SaveData();
                 }
-        
-                UpdateInvChange(myBarter.BarterGroup);
-                App.myfmMain.myShipCargo.UpdateCurrentLV();
-                App.myfmMain.myShipCargo.SaveData();
             }
 
             SaveData();
-            // View.Refresh() removed: bindings auto-refresh the edited cell,
-            // and the old call forced a full N-row redraw on every keystroke.
+            // Numeric-cell edits auto-refresh via their bindings, so we skip the
+            // expensive full View.Refresh() for them (perf commit 055942b). BUT a
+            // GridImageColumn (Item1Icon/Item2Icon) does NOT pick up the icon-path
+            // change that follows an item-name edit, so refresh the view only when
+            // the edited column was one of the item dropdowns.
+            int colIdx = e.RowColumnIndex.ColumnIndex - 1; // -1: row header occupies visual index 0
+            if (colIdx >= 0 && colIdx < DataGrid_Planner.Columns.Count) {
+                string mapping = DataGrid_Planner.Columns[colIdx].MappingName;
+                if (mapping == "Item1Name" || mapping == "Item2Name") {
+                    DataGrid_Planner.View?.Refresh();
+                }
+            }
             UpdateParley();
             //Grouping();
             UpdateMapControl();

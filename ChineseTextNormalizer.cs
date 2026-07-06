@@ -1,0 +1,185 @@
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace iBarter {
+    internal static class ChineseTextNormalizer {
+        private const uint LCMAP_TRADITIONAL_CHINESE = 0x04000000;
+
+        public static string NormalizeForMatching(string input) {
+            if (string.IsNullOrWhiteSpace(input)) {
+                return string.Empty;
+            }
+
+            string text = ToTraditionalChinese(input);
+            bool hasCjk = ContainsCjk(text);
+
+            var mapped = new StringBuilder(text.Length);
+            foreach (char ch in text) {
+                mapped.Append(MapOcrVariant(ch));
+            }
+
+            if (!hasCjk) {
+                return mapped.ToString();
+            }
+
+            var compact = new StringBuilder(mapped.Length);
+            foreach (char ch in mapped.ToString()) {
+                if (ContainsCjk(ch) || char.IsLetterOrDigit(ch)) {
+                    compact.Append(ch);
+                }
+            }
+            return compact.ToString();
+        }
+
+        public static bool ContainsCjk(string input) {
+            if (string.IsNullOrEmpty(input)) {
+                return false;
+            }
+
+            foreach (char ch in input) {
+                if (ContainsCjk(ch)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool ContainsCjk(char ch) {
+            return ch >= 0x4E00 && ch <= 0x9FFF;
+        }
+
+        private static char MapOcrVariant(char ch) {
+            return ch switch {
+                '僻' => '島',
+                '伺' => '島',
+                '鸟' => '島',
+                _ => ch,
+            };
+        }
+
+        private static string ToTraditionalChinese(string input) {
+            if (string.IsNullOrEmpty(input) || !ContainsCjk(input)) {
+                return input ?? string.Empty;
+            }
+
+            try {
+                var buffer = new StringBuilder(input.Length * 2);
+                int length = LCMapStringEx(
+                    "zh-CN",
+                    LCMAP_TRADITIONAL_CHINESE,
+                    input,
+                    -1,
+                    buffer,
+                    buffer.Capacity,
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    IntPtr.Zero);
+
+                if (length > 0) {
+                    string converted = buffer.ToString();
+                    int terminator = converted.IndexOf('\0');
+                    if (terminator >= 0) {
+                        return converted.Substring(0, terminator);
+                    }
+                    int count = Math.Min(length - 1, converted.Length);
+                    return count > 0 ? converted.Substring(0, count) : string.Empty;
+                }
+            }
+            catch {
+                // Fall through to the small manual map below.  The app is
+                // Windows-only, but keeping a fallback makes unit-style checks
+                // and unusual runtimes less brittle.
+            }
+
+            var mapped = new StringBuilder(input.Length);
+            foreach (char ch in input) {
+                mapped.Append(MapSimplifiedVariant(ch));
+            }
+            return mapped.ToString();
+        }
+
+        private static char MapSimplifiedVariant(char ch) {
+            return ch switch {
+                '岛' => '島',
+                '玛' => '瑪',
+                '亚' => '亞',
+                '尔' => '爾',
+                '卢' => '盧',
+                '乌' => '烏',
+                '鸦' => '鴉',
+                '巢' => '巢',
+                '汉' => '漢',
+                '龙' => '龍',
+                '药' => '藥',
+                '酒' => '酒',
+                '画' => '畫',
+                '灯' => '燈',
+                '绳' => '繩',
+                '铁' => '鐵',
+                '铜' => '銅',
+                '银' => '銀',
+                '盐' => '鹽',
+                '软' => '軟',
+                '优' => '優',
+                '质' => '質',
+                '书' => '書',
+                '图' => '圖',
+                '纸' => '紙',
+                '线' => '線',
+                '丝' => '絲',
+                '箱' => '箱',
+                '贝' => '貝',
+                '庄' => '莊',
+                '萨' => '薩',
+                '扇' => '扇',
+                '营' => '營',
+                '地' => '地',
+                '圣' => '聖',
+                '殿' => '殿',
+                '侦' => '偵',
+                '查' => '查',
+                '觉' => '覺',
+                '术' => '術',
+                '遗' => '遺',
+                '迹' => '跡',
+                '龟' => '龜',
+                '湾' => '灣',
+                '麦' => '麥',
+                '蓝' => '藍',
+                '赛' => '賽',
+                '达' => '達',
+                '门' => '門',
+                '币' => '幣',
+                '钟' => '鐘',
+                '旧' => '舊',
+                '号' => '號',
+                '颗' => '顆',
+                '丢' => '丟',
+                '失' => '失',
+                '装' => '裝',
+                '饰' => '飾',
+                '骑' => '騎',
+                '团' => '團',
+                '贼' => '賊',
+                '维' => '維',
+                '滨' => '濱',
+                '舰' => '艦',
+                '桥' => '橋',
+                _ => ch,
+            };
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = false)]
+        private static extern int LCMapStringEx(
+            string lpLocaleName,
+            uint dwMapFlags,
+            string lpSrcStr,
+            int cchSrc,
+            StringBuilder lpDestStr,
+            int cchDest,
+            IntPtr lpVersionInformation,
+            IntPtr lpReserved,
+            IntPtr sortHandle);
+    }
+}

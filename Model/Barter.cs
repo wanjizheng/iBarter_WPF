@@ -21,17 +21,17 @@ namespace iBarter {
         }
 
         public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = 0, int _intInv = 0, int _intChange = 0, bool _usingALT = false, bool _calculatedAlready = false, int _totalitem1ExchangeQuantity = -1) {
-            isLand = _isLand;
+            isLand = ResolveCatalogIsland(_isLand, _isLand?.IslandsName);
             WireUpIsland(isLand);
 
-            item1 = _item1;
+            item1 = ResolveCatalogItem(_item1, _item1?.ItemName);
             WireUpItem1(item1);
-            item2 = _item2;
+            item2 = ResolveCatalogItem(_item2, _item2?.ItemName);
             WireUpItem2(item2);
 
-            item1Name = item1.ItemName;
+            item1Name = item1?.ItemName ?? "";
             icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
-            item2Name = item2.ItemName;
+            item2Name = item2?.ItemName ?? "";
             icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
 
             exchangeQuantity = _exchangeQuantity;
@@ -56,8 +56,14 @@ namespace iBarter {
         public Islands IsLand {
             get { return isLand; }
             set {
-                isLand = value;
+                var resolved = ResolveCatalogIsland(value, value?.IslandsName);
+                if (!ReferenceEquals(isLand, resolved)) {
+                    WireUpIsland(resolved);
+                }
+                isLand = resolved;
                 RaisePropertyChanged("IsLand");
+                RaisePropertyChanged(nameof(IsLandName));
+                RaisePropertyChanged(nameof(IsLandNameDisplay));
             }
         }
 
@@ -137,27 +143,36 @@ namespace iBarter {
         }
 
         public int Parley {
-            get { return IsLand.Parley; }
+            get { return IsLand?.Parley ?? 0; }
             set {
+                if (IsLand == null) {
+                    return;
+                }
                 IsLand.Parley = value;
                 RaisePropertyChanged("Parley");
             }
         }
 
         public string IsLandName {
-            get { return IsLand.IslandsName; }
+            get { return IsLand?.IslandsName ?? ""; }
             set {
-                int intParley = Parley;
-                //Islands myIslands = new Islands(App.myCFun.IslandEnum(value), App.listIslands.Where(land => land.Island == App.myCFun.IslandEnum(value)).Select(land => land.Parley).FirstOrDefault());
-                Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == value);
-                IsLand = myIslands;
-                IsLand.Parley = intParley;
+                int intParley = IsLand?.Parley ?? 0;
+                Islands? myIslands = FindCatalogIsland(value);
+                if (myIslands != null) {
+                    IsLand = myIslands;
+                    IsLand.Parley = intParley;
+                }
+                RaisePropertyChanged(nameof(IsLandName));
+                RaisePropertyChanged(nameof(IsLandNameDisplay));
             }
         }
 
         public int IslandRemaining {
-            get { return IsLand.Remaining; }
+            get { return IsLand?.Remaining ?? 0; }
             set {
+                if (IsLand == null) {
+                    return;
+                }
                 IsLand.Remaining = value;
                 RaisePropertyChanged("IslandRemaining");
             }
@@ -166,22 +181,33 @@ namespace iBarter {
         public Items Item1 {
             get { return item1; }
             set {
-                if (!ReferenceEquals(item1, value)) {
-                    WireUpItem1(value);
+                var resolved = ResolveCatalogItem(value, value?.ItemName ?? item1Name);
+                if (!ReferenceEquals(item1, resolved)) {
+                    WireUpItem1(resolved);
                 }
-                item1 = value;
+                item1 = resolved;
+                item1Name = item1?.ItemName ?? item1Name;
                 RaisePropertyChanged("Item1");
+                RaisePropertyChanged(nameof(Item1Name));
+                RaisePropertyChanged(nameof(Item1NameDisplay));
+                RaisePropertyChanged(nameof(Item1LV));
+                RaisePropertyChanged(nameof(Item1Icon));
             }
         }
 
         public Items Item2 {
             get { return item2; }
             set {
-                if (!ReferenceEquals(item2, value)) {
-                    WireUpItem2(value);
+                var resolved = ResolveCatalogItem(value, value?.ItemName ?? item2Name);
+                if (!ReferenceEquals(item2, resolved)) {
+                    WireUpItem2(resolved);
                 }
-                item2 = value;
+                item2 = resolved;
+                item2Name = item2?.ItemName ?? item2Name;
                 RaisePropertyChanged("Item2");
+                RaisePropertyChanged(nameof(Item2Name));
+                RaisePropertyChanged(nameof(Item2NameDisplay));
+                RaisePropertyChanged(nameof(Item2Icon));
             }
         }
 
@@ -203,6 +229,8 @@ namespace iBarter {
                 item1Name = value;
                 UpdateItem();
                 RaisePropertyChanged("Item1NameChange");
+                RaisePropertyChanged(nameof(Item1Name));
+                RaisePropertyChanged(nameof(Item1NameDisplay));
             }
         }
 
@@ -296,6 +324,8 @@ namespace iBarter {
                 item2Name = value;
                 UpdateItem();
                 RaisePropertyChanged("Item2NameChange");
+                RaisePropertyChanged(nameof(Item2Name));
+                RaisePropertyChanged(nameof(Item2NameDisplay));
             }
         }
 
@@ -352,16 +382,26 @@ namespace iBarter {
         }
 
         private void UpdateItem() {
-            if (item1Name != "" && !item1Name.Equals(Item1.ItemName)) {
-                Items item1 = new Items(App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemName, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemID, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemLV);
-                Item1 = item1;
-                icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+            if (item1Name != "" && (Item1 == null || !item1Name.Equals(Item1.ItemName))) {
+                Items? resolvedItem1 = FindCatalogItem(item1Name);
+                if (resolvedItem1 != null) {
+                    item1Name = resolvedItem1.ItemName;
+                    Item1 = CreateItemFromCatalog(resolvedItem1, item1);
+                }
+                if (Item1 != null) {
+                    icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+                }
             }
 
-            if (item2Name != "" && !item2Name.Equals(Item2.ItemName)) {
-                Items item2 = new Items(App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemName, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemID, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemLV);
-                Item2 = item2;
-                icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+            if (item2Name != "" && (Item2 == null || !item2Name.Equals(Item2.ItemName))) {
+                Items? resolvedItem2 = FindCatalogItem(item2Name);
+                if (resolvedItem2 != null) {
+                    item2Name = resolvedItem2.ItemName;
+                    Item2 = CreateItemFromCatalog(resolvedItem2, item2);
+                }
+                if (Item2 != null) {
+                    icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+                }
             }
 
             //RaisePropertyChanged("ItemChange");
@@ -408,14 +448,108 @@ namespace iBarter {
         // is wired in the ctor + setter so a re-assigned item still
         // refreshes the cell.
 
-        public string Item1NameDisplay =>
-            item1?.ItemNameDisplay ?? Item1Name;
+        [JsonIgnore]
+        public string Item1NameDisplay {
+            get { return item1?.ItemNameDisplay ?? Item1Name; }
+            set { Item1Name = value; }
+        }
 
-        public string Item2NameDisplay =>
-            item2?.ItemNameDisplay ?? Item2Name;
+        [JsonIgnore]
+        public string Item2NameDisplay {
+            get { return item2?.ItemNameDisplay ?? Item2Name; }
+            set { Item2Name = value; }
+        }
 
-        public string IsLandNameDisplay =>
-            isLand?.IslandsNameDisplay ?? IsLandName;
+        [JsonIgnore]
+        public string IsLandNameDisplay {
+            get { return isLand?.IslandsNameDisplay ?? IsLandName; }
+            set { IsLandName = value; }
+        }
+
+        private static Items ResolveCatalogItem(Items? candidate, string? name) {
+            if (App.listItems != null) {
+                Items? byName = FindCatalogItem(name)
+                    ?? FindCatalogItem(candidate?.ItemName)
+                    ?? FindCatalogItem(candidate?.ItemNameZhTw);
+                if (byName != null) {
+                    return CreateItemFromCatalog(byName, candidate);
+                }
+
+                if (!string.IsNullOrWhiteSpace(candidate?.ItemID)) {
+                    Items? byId = App.listItems.FirstOrDefault(i => i.ItemID == candidate.ItemID);
+                    if (byId != null) {
+                        return CreateItemFromCatalog(byId, candidate);
+                    }
+                }
+            }
+
+            return candidate ?? new Items(name ?? string.Empty, "0", "0");
+        }
+
+        private static Items CreateItemFromCatalog(Items catalog, Items? candidate) {
+            var item = new Items(
+                catalog.ItemName,
+                catalog.ItemID,
+                catalog.ItemLV,
+                candidate?.ItemNumber ?? catalog.ItemNumber,
+                candidate?.StorageVeliaQuantity_Velia ?? catalog.StorageVeliaQuantity_Velia,
+                candidate?.StorageVeliaQuantity_Iliya ?? catalog.StorageVeliaQuantity_Iliya,
+                candidate?.StorageVeliaQuantity_Epheria ?? catalog.StorageVeliaQuantity_Epheria,
+                candidate?.StorageVeliaQuantity_Ancado ?? catalog.StorageVeliaQuantity_Ancado);
+            item.ItemNameZhTw = catalog.ItemNameZhTw;
+            return item;
+        }
+
+        private static Items? FindCatalogItem(string? name) {
+            if (string.IsNullOrWhiteSpace(name) || App.listItems == null) {
+                return null;
+            }
+
+            return App.listItems.FirstOrDefault(i =>
+                string.Equals(i.ItemName, name, StringComparison.Ordinal) ||
+                string.Equals(i.ItemNameDisplay, name, StringComparison.Ordinal) ||
+                string.Equals(i.ItemNameZhTw, name, StringComparison.Ordinal));
+        }
+
+        private static Islands ResolveCatalogIsland(Islands? candidate, string? name) {
+            if (App.listIslands != null) {
+                Islands? byName = FindCatalogIsland(name)
+                    ?? FindCatalogIsland(candidate?.IslandsName)
+                    ?? FindCatalogIsland(candidate?.IslandsNameZhTw);
+                if (byName != null) {
+                    return CreateIslandFromCatalog(byName, candidate);
+                }
+
+                if (candidate != null) {
+                    Islands? byEnum = App.listIslands.FirstOrDefault(i => i.Island == candidate.Island);
+                    if (byEnum != null) {
+                        return CreateIslandFromCatalog(byEnum, candidate);
+                    }
+                }
+            }
+
+            return candidate ?? new Islands(EnumLists.Island.Unfinished, 0);
+        }
+
+        private static Islands CreateIslandFromCatalog(Islands catalog, Islands? candidate) {
+            var island = new Islands(
+                catalog.Island,
+                candidate?.Parley ?? catalog.Parley,
+                candidate?.Remaining ?? catalog.Remaining);
+            island.IslandsNameZhTw = catalog.IslandsNameZhTw;
+            return island;
+        }
+
+        private static Islands? FindCatalogIsland(string? name) {
+            if (string.IsNullOrWhiteSpace(name) || App.listIslands == null) {
+                return null;
+            }
+
+            return App.listIslands.FirstOrDefault(i =>
+                string.Equals(i.IslandsName, name, StringComparison.Ordinal) ||
+                string.Equals(i.IslandsNameDisplay, name, StringComparison.Ordinal) ||
+                string.Equals(i.IslandsNameZhTw, name, StringComparison.Ordinal));
+        }
 
         private void WireUpItem1(Items? newItem) {
             if (item1 != null) {

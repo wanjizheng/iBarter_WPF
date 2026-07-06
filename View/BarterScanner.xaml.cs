@@ -34,17 +34,17 @@ namespace iBarter.View {
 
         private static readonly IReadOnlyDictionary<string, string> _islandDropdownInnerKeyMap =
             new Dictionary<string, string> {
-                ["IslandsName"] = "str.Grid.Scanner.Col.IslandsSub",
-                ["Parley"]      = "str.Grid.Scanner.Col.Parley",
-                ["Remaining"]   = "str.Grid.Scanner.Col.Remaining",
+                ["IslandsNameDisplay"] = "str.Grid.Scanner.Col.IslandsSub",
+                ["Parley"]             = "str.Grid.Scanner.Col.Parley",
+                ["Remaining"]          = "str.Grid.Scanner.Col.Remaining",
             };
 
         private static readonly IReadOnlyDictionary<string, string> _itemDropdownInnerKeyMap =
             new Dictionary<string, string> {
-                ["ItemID"]     = "str.Grid.Scanner.Col.DropdownItemID",
-                ["ItemName"]   = "str.Grid.Scanner.Col.DropdownItemName",
-                ["ItemLV"]     = "str.Grid.Scanner.Col.DropdownItemLV",
-                ["ItemNumber"] = "str.Grid.Scanner.Col.DropdownItemNumber",
+                ["ItemID"]          = "str.Grid.Scanner.Col.DropdownItemID",
+                ["ItemNameDisplay"] = "str.Grid.Scanner.Col.DropdownItemName",
+                ["ItemLV"]          = "str.Grid.Scanner.Col.DropdownItemLV",
+                ["ItemNumber"]      = "str.Grid.Scanner.Col.DropdownItemNumber",
             };
 
         public BarterScanner() {
@@ -52,12 +52,36 @@ namespace iBarter.View {
 
             this.DataContext = App.mySVM;
             BarterScanResults.ItemsSource = App.mySVM.BarterDetails;
+            RegisterLocalizedDropDownRenderer();
             GridMultiColumnDropDownList_Item1.ItemsSource = App.mySVM.ItemsCollection;
             GridMultiColumnDropDownList_Item2.ItemsSource = App.mySVM.ItemsCollection;
             GridMultiColumnDropDownList_Islands.ItemsSource = App.mySVM.IslandsCollection;
 
+            InitializeScannerState();
+            ApplyLocalization();
+            LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalization();
+        }
+
+        public void InitializeScannerState() {
+            if (App.mySVM != null) {
+                DataContext = App.mySVM;
+                BarterScanResults.ItemsSource = App.mySVM.BarterDetails;
+                GridMultiColumnDropDownList_Item1.ItemsSource = App.mySVM.ItemsCollection;
+                GridMultiColumnDropDownList_Item2.ItemsSource = App.mySVM.ItemsCollection;
+                GridMultiColumnDropDownList_Islands.ItemsSource = App.mySVM.IslandsCollection;
+            }
+
+            App.myCFun?.RefreshScannerGameWindowState(out _);
+        }
+
+        private void RegisterLocalizedDropDownRenderer() {
+            BarterScanResults.CellRenderers.Remove("MultiColumnDropDown");
+            BarterScanResults.CellRenderers.Add("MultiColumnDropDown", new LocalizedMultiColumnDropDownRenderer());
+        }
+
+        private void ApplyLocalization() {
             ApplyLocalizedHeaders();
-            LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalizedHeaders();
+            RefreshLocalizedDisplay();
         }
 
         private void ApplyLocalizedHeaders() {
@@ -77,6 +101,19 @@ namespace iBarter.View {
             ApplyDropdownInnerHeaders(GridMultiColumnDropDownList_Islands, _islandDropdownInnerKeyMap);
             ApplyDropdownInnerHeaders(GridMultiColumnDropDownList_Item1, _itemDropdownInnerKeyMap);
             ApplyDropdownInnerHeaders(GridMultiColumnDropDownList_Item2, _itemDropdownInnerKeyMap);
+        }
+
+        private void RefreshLocalizedDisplay() {
+            if (BarterScanResults == null) {
+                return;
+            }
+            if (!Dispatcher.CheckAccess()) {
+                Dispatcher.Invoke(RefreshLocalizedDisplay);
+                return;
+            }
+
+            BarterScanResults.View?.Refresh();
+            BarterScanResults.InvalidateVisual();
         }
 
         private static void ApplyDropdownInnerHeaders(

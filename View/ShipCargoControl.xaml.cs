@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -22,6 +23,20 @@ namespace iBarter.View {
             //PropertyGrid_Ship.Items = App.myCVM.CargoProperty;
 
             App.myCargoProperty = new CargoProperty();
+            Localization.LanguageService.Instance.LanguageChanged += (_, _) => RefreshLocalizedDisplay();
+        }
+
+        private void RefreshLocalizedDisplay() {
+            if (ListBox_ShipCargo == null) {
+                return;
+            }
+            if (!Dispatcher.CheckAccess()) {
+                Dispatcher.Invoke(RefreshLocalizedDisplay);
+                return;
+            }
+
+            CollectionViewSource.GetDefaultView(ListBox_ShipCargo.ItemsSource)?.Refresh();
+            ListBox_ShipCargo.InvalidateVisual();
         }
 
         private object _draggedItem;

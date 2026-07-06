@@ -47,7 +47,14 @@ namespace iBarter {
 
 
         public App() {
-            SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JHaF5cWWdCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdlWXlceXVdR2BZVEJ3W0FWYEo=");
+            SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JAaF5cX2pCd1p/TH5YfUNzdUVEY1ZUTXxaS1ZhSXxVdkJjX35edXJRRGhcWEd9XEY=");
+
+            // Global safety net: an unhandled exception on the UI thread
+            // (e.g. a bad cell edit in the Planner grid) otherwise tears down
+            // the whole process. Log the full stack to crash.log and mark it
+            // handled so a single failed action no longer crashes the app.
+            this.DispatcherUnhandledException += App_DispatcherUnhandledException;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
             //SfSkinManager.ApplyStylesOnApplication = true;
 
@@ -107,6 +114,36 @@ namespace iBarter {
 
             myfmMain.Show();
             //mySplashScreen.Show();
+        }
+
+        private void App_DispatcherUnhandledException(object sender,
+            System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e) {
+            LogCrash("UI-thread", e.Exception);
+            // Keep the app alive; the failed action is aborted but the user
+            // doesn't lose their whole planning session to one bad edit.
+            e.Handled = true;
+        }
+
+        private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e) {
+            LogCrash("non-UI-thread", e.ExceptionObject as Exception);
+        }
+
+        private static void LogCrash(string origin, Exception? ex) {
+            try {
+                string logPath = AppDomain.CurrentDomain.BaseDirectory + "crash.log";
+                string entry = "==== " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " (" + origin + ") ====\r\n"
+                    + (ex?.ToString() ?? "(null exception)") + "\r\n\r\n";
+                System.IO.File.AppendAllText(logPath, entry);
+            }
+            catch {
+                // last-resort logger must never throw
+            }
+            try {
+                myCFun?.Log((ex?.GetType().Name ?? "Exception") + ": " + (ex?.Message ?? ""),
+                    System.Windows.Media.Brushes.Red);
+            }
+            catch {
+            }
         }
     }
 }

@@ -53,10 +53,13 @@
     <None Remove="Resources\Images\edge.bmp" />
     <None Remove="Resources\Images\Parley.bmp" />
     <None Remove="Resources\Images\Parley2.bmp" />
+    <None Remove="Resources\Images\Parley_CN.bmp" />
     <None Remove="Resources\Images\Remaining.bmp" />
     <None Remove="Resources\Images\Remaining2.bmp" />
+    <None Remove="Resources\Images\Remaining_CN.bmp" />
     <None Remove="Resources\Images\Required.bmp" />
     <None Remove="Resources\Images\Required2.bmp" />
+    <None Remove="Resources\Images\Required_CN.bmp" />
     <None Remove="Resources\Islands.csv" />
     <None Remove="Resources\Items.csv" />
     <None Remove="Resources\Storage.csv" />
@@ -79,16 +82,25 @@
     <Content Include="Resources\Images\Parley2.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Images\Parley_CN.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\Images\Remaining.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Resources\Images\Remaining2.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Images\Remaining_CN.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\Images\Required.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Resources\Images\Required2.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Required_CN.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Resources\Islands.csv">
@@ -129,10 +141,14 @@
     <Content Include="tessdata\eng_best.traineddata">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <!-- Phase 9 (i18n): Traditional Chinese OCR dictionary.  Loaded by the
+    <!-- Phase 9 (i18n): Chinese OCR dictionaries.  Loaded by the
          local Tesseract engine when LanguageService.Current == TraditionalChinese
-         and the island-name ROI is OCR'd as a secondary recognizer alongside
-         PureDM's chi_tra pass.  ~2.3 MB; small enough to ship. -->
+         and PureDM's OCR pass.  The game can render some zh-TW labels with
+         simplified glyphs, so ship chi_sim alongside chi_tra and request both
+         languages when both traineddata files are present. -->
+    <Content Include="tessdata\chi_sim.traineddata">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="tessdata\chi_tra.traineddata">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
@@ -147,28 +163,28 @@
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.14.0" />
     <PackageReference Include="MaterialDesignThemes" Version="5.3.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="Syncfusion.Licensing" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Shared.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.FluentDark.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.MaterialDark.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.MaterialDarkBlue.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.MaterialLight.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.MaterialLightBlue.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Metro.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Office2019Black.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Office2019Colorful.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Office2019DarkGray.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Office2019HighContrast.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Office2019HighContrastWhite.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Office2019White.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.SystemTheme.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Windows11Dark.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Windows11Light.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Tools.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.UI.WPF.NET" Version="33.2.15" />
+    <PackageReference Include="Syncfusion.Licensing" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Shared.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.FluentDark.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.MaterialDark.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.MaterialDarkBlue.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.MaterialLight.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.MaterialLightBlue.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.Metro.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.Office2019Black.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.Office2019Colorful.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.Office2019DarkGray.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.Office2019HighContrast.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.Office2019HighContrastWhite.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.Office2019White.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.SystemTheme.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.Windows11Dark.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Themes.Windows11Light.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.Tools.WPF" Version="34.1.29" />
+    <PackageReference Include="Syncfusion.UI.WPF.NET" Version="34.1.29" />
   </ItemGroup>
 
   <ItemGroup>

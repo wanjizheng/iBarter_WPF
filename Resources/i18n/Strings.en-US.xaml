@@ -35,6 +35,7 @@
 
     <!-- Top menu (MainWindow.xaml) -->
     <sys:String x:Key="str.Menu.Windows">Windows</sys:String>
+    <sys:String x:Key="str.Menu.Language">Language</sys:String>
     <sys:String x:Key="str.Menu.BarterScanner">Barter Scanner</sys:String>
     <sys:String x:Key="str.Menu.StorageManager">Storage Manager</sys:String>
     <sys:String x:Key="str.Menu.SyncImages">Sync Images</sys:String>
@@ -174,6 +175,31 @@
     <sys:String x:Key="str.Log.SyncImages.Starting">SyncImages: starting...</sys:String>
     <sys:String x:Key="str.Log.SyncImages.Done">SyncImages: done.</sys:String>
     <sys:String x:Key="str.Log.SyncImages.Failed">SyncImages failed: {0}</sys:String>
+    <sys:String x:Key="str.Log.SyncImages.FolderMissing">SyncImages: image folder missing: {0}</sys:String>
+    <sys:String x:Key="str.Log.SyncImages.DownloadFail">SyncImages: download fail {0}: {1}</sys:String>
+    <sys:String x:Key="str.Log.SyncImages.Queued">SyncImages: queued {0} download(s)</sys:String>
+    <sys:String x:Key="str.Log.SyncImages.DeleteFail">SyncImages: delete fail {0}: {1}</sys:String>
+    <sys:String x:Key="str.Log.SyncImages.Deleted">SyncImages: deleted {0} orphan(s){1}</sys:String>
+    <sys:String x:Key="str.Log.SyncImages.NoOrphans">SyncImages: no orphans to delete</sys:String>
+    <sys:String x:Key="str.Log.SyncImages.CSVScan">SyncImages: CSV has {0} valid IDs ({1} skipped)</sys:String>
+
+    <sys:String x:Key="str.Log.RefreshItems.IDNotInCSV">RefreshItemsCore: ID not in Items.csv: {0}</sys:String>
+    <sys:String x:Key="str.Log.RefreshItems.NoBdocodexImage">No bdocodex image for: {0} ({1})</sys:String>
+    <sys:String x:Key="str.Log.RefreshItems.DownloadIcon">Download icon for: {0} ({1})</sys:String>
+    <sys:String x:Key="str.Log.RefreshItems.SkipIcon">Skip icon {0} ({1}): {2}</sys:String>
+
+    <sys:String x:Key="str.Log.ItemsCSV.NotFound">Items.csv not found: {0}</sys:String>
+    <sys:String x:Key="str.Log.ItemsCSV.BadColumns">Items.csv line {0} skipped (expected 4 columns, got {1}): {2}</sys:String>
+    <sys:String x:Key="str.Log.ItemsCSV.BadID">Items.csv line {0} skipped (non-numeric ID '{1}'): {2}</sys:String>
+    <sys:String x:Key="str.Log.ItemsCSV.BadNumber">Items.csv line {0} bad number '{1}': {2}</sys:String>
+
+    <sys:String x:Key="str.Log.ItemsZhTW.NotFound">Items.zh-TW.csv not found: {0} - skipping; run Tools > Import Bdocodex Names to populate.</sys:String>
+    <sys:String x:Key="str.Log.ItemsZhTW.ParseError">Items.zh-TW.csv parse error: {0}</sys:String>
+    <sys:String x:Key="str.Log.ItemsZhTW.Applied">Items.zh-TW: applied {0} names from sidecar.</sys:String>
+
+    <sys:String x:Key="str.Log.IslandsZhTW.NotFound">Islands.zh-TW.csv not found: {0} - skipping; English island names will show even in zh-TW mode.</sys:String>
+    <sys:String x:Key="str.Log.IslandsZhTW.ParseError">Islands.zh-TW.csv parse error: {0}</sys:String>
+    <sys:String x:Key="str.Log.IslandsZhTW.Applied">Islands.zh-TW: applied {0} names from sidecar.</sys:String>
 
     <sys:String x:Key="str.Log.Planner.Loaded">Loaded...</sys:String>
     <sys:String x:Key="str.Log.Planner.Saved">Saved...</sys:String>
@@ -186,6 +212,27 @@
     <sys:String x:Key="str.Log.Scanner.Starting">Start scanning...</sys:String>
     <sys:String x:Key="str.Log.Scanner.Done">Done!</sys:String>
     <sys:String x:Key="str.Log.Scanner.NoAnchor">Scan: no anchor.bmp found in game window ({0}x{1}). Is the barter screen open?</sys:String>
+    <sys:String x:Key="str.Log.Scanner.CaptureWindowFailed">Scan: cannot capture game window ({0}).</sys:String>
+    <sys:String x:Key="str.Log.Scanner.RemainingCountFailed">Error, cannot identify the remaining number => {0} (tried: {1})</sys:String>
+    <sys:String x:Key="str.Log.Scanner.ScanLabelsFailed">Error, cannot locate scan labels => {0}</sys:String>
+    <sys:String x:Key="str.Log.Scanner.InvalidOcrRect">Error, invalid parley OCR rectangle => {0}</sys:String>
+    <sys:String x:Key="str.Log.Scanner.UnknownIsland">Unknown islands! Double check your result! => {0}</sys:String>
+    <sys:String x:Key="str.Log.Scanner.IslandInfoFailed">Error, cannot identify the islands information => {0}</sys:String>
+    <sys:String x:Key="str.Log.Scanner.IdentifiedIsland">Identified island: {0}</sys:String>
+    <sys:String x:Key="str.Log.Scanner.CannotIdentifyItemIcons">Can't identify item icons: {0}</sys:String>
+    <sys:String x:Key="str.Log.Scanner.SecondItemUseCrowCoin">Cannot identify the second item. Use Crow Coin instead.</sys:String>
+    <sys:String x:Key="str.Log.Scanner.OcrSummary">&lt;{0} - {1} ~ {2}&gt; Item1: {3} =&gt; {4} | Item2: {5} =&gt; {6}</sys:String>
+    <sys:String x:Key="str.Log.Scanner.FoundAnchors">Found anchor×{0} ({1})</sys:String>
+    <sys:String x:Key="str.Log.Scanner.FilteredAnchors">Filtered {0} outlier anchors (kept X={1}~{2}, {3} remaining)</sys:String>
+
+    <sys:String x:Key="str.Log.OcrQty.Picked">OCR qty {0}: picked {1} (votes={2}; A={3} R={4} G={5})</sys:String>
+    <sys:String x:Key="str.Log.OcrQty.NoConsensus">OCR qty {0}: no consensus; raw={1} R={2} G={3}</sys:String>
+    <sys:String x:Key="str.Log.OcrQty.FallbackCSV">OCR qty {0} fallback CSV={1}</sys:String>
+
+    <sys:String x:Key="str.Log.PickTwoBest.NoSlot1">PickTwoBest returned no candidates for slot1 (itemID={0}, lv={1})</sys:String>
+    <sys:String x:Key="str.Log.PickTwoBest.NoSlot2">PickTwoBest returned no candidates for slot2 (itemID={0}, lv={1})</sys:String>
+
+    <sys:String x:Key="str.Log.LV5Skip">LV5+ skip OCR for {0} ({1}) -&gt; 1</sys:String>
 
     <sys:String x:Key="str.Log.ShipCargo.CopiedToClipboard">{0} copied to the clipboard.</sys:String>
 

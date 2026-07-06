@@ -198,15 +198,21 @@
                                                             AutoGenerateColumns="False"
                                                             DisplayMember="IslandsNameDisplay"
                                                             HeaderText="Location"
-                                                            MappingName="IsLandNameDisplay"
+                                                            MappingName="IsLandName"
                                                             ValueMember="IslandsName"
                                                             AllowResizing="True"
                                                             AllowIncrementalFiltering="True" AllowEditing="True"
                                                             AllowFiltering="True"
+                                                            SearchCondition="Contains"
                                                             Width="100">
+                        <syncfusion:GridMultiColumnDropDownList.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding IsLandNameDisplay}" VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </syncfusion:GridMultiColumnDropDownList.CellTemplate>
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
-                                <syncfusion:GridTextColumn HeaderText="Islands" MappingName="IslandsName" />
+                                <syncfusion:GridTextColumn HeaderText="Islands" MappingName="IslandsNameDisplay" />
                                 <syncfusion:GridTextColumn HeaderText="Parley" MappingName="Parley" />
                                 <syncfusion:GridTextColumn HeaderText="Remaining" MappingName="Remaining" />
                             </syncfusion:Columns>
@@ -222,21 +228,28 @@
                                                 AllowEditing="False" AllowResizing="True">
                     </syncfusion:GridImageColumn>
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Item"
-                                                            AllowAutoComplete="False"
+                                                            AllowAutoComplete="True"
                                                             AutoGenerateColumns="False"
                                                             DisplayMember="ItemNameDisplay"
                                                             HeaderText="Item"
-                                                            MappingName="Item1NameDisplay"
+                                                            MappingName="Item1Name"
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
+                                                            AllowIncrementalFiltering="True"
                                                             AllowEditing="True"
+                                                            SearchCondition="Contains"
                                                             Width="150">
+                        <syncfusion:GridMultiColumnDropDownList.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Item1NameDisplay}" VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </syncfusion:GridMultiColumnDropDownList.CellTemplate>
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
                                 <syncfusion:GridTextColumn
                                     HeaderText="ItemID"
                                     MappingName="ItemID" />
-                                <syncfusion:GridTextColumn HeaderText="Item Name" MappingName="ItemName" />
+                                <syncfusion:GridTextColumn HeaderText="Item Name" MappingName="ItemNameDisplay" />
                                 <syncfusion:GridTextColumn HeaderText="Item LV" MappingName="ItemLV" />
                                 <syncfusion:GridTextColumn HeaderText="Item Number" MappingName="ItemNumber" />
                             </syncfusion:Columns>
@@ -248,21 +261,28 @@
                                                 TextAlignment="Center"
                                                 AllowEditing="False" AllowResizing="True" />
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Exchange"
-                                                            AllowAutoComplete="False"
+                                                            AllowAutoComplete="True"
                                                             AutoGenerateColumns="False"
                                                             DisplayMember="ItemNameDisplay"
                                                             HeaderText="Exchange"
-                                                            MappingName="Item2NameDisplay"
+                                                            MappingName="Item2Name"
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
+                                                            AllowIncrementalFiltering="True"
                                                             AllowEditing="True"
+                                                            SearchCondition="Contains"
                                                             Width="150">
+                        <syncfusion:GridMultiColumnDropDownList.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Item2NameDisplay}" VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </syncfusion:GridMultiColumnDropDownList.CellTemplate>
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
                                 <syncfusion:GridTextColumn
                                     HeaderText="ItemID"
                                     MappingName="ItemID" AllowSorting="True" />
-                                <syncfusion:GridTextColumn HeaderText="Item Name" MappingName="ItemName"
+                                <syncfusion:GridTextColumn HeaderText="Item Name" MappingName="ItemNameDisplay"
                                                            AllowSorting="True" />
                                 <syncfusion:GridTextColumn HeaderText="Item LV" MappingName="ItemLV"
                                                            AllowSorting="True" />

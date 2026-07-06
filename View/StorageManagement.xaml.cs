@@ -18,9 +18,9 @@ namespace iBarter.View {
         // on every LanguageService.LanguageChanged.
         private static readonly IReadOnlyDictionary<string, string> _headerKeyMap =
             new Dictionary<string, string> {
-                ["ItemName"]                          = "str.Grid.Storage.Col.Inventory",
+                ["ItemNameDisplay"]                   = "str.Grid.Storage.Col.Inventory",
                 ["ItemIcon"]                          = "str.Grid.Storage.Col.Icon",
-                ["ItemTier"]                          = "str.Grid.Storage.Col.Tier",
+                ["ItemTierDisplay"]                   = "str.Grid.Storage.Col.Tier",
                 ["StorageVeliaQuantity_Velia"]       = "str.Grid.Storage.Col.Velia",
                 ["StorageVeliaQuantity_Iliya"]       = "str.Grid.Storage.Col.Iliya",
                 ["StorageVeliaQuantity_Epheria"]     = "str.Grid.Storage.Col.Epheria",
@@ -33,12 +33,31 @@ namespace iBarter.View {
             DataGrid_Storage.ItemsSource = App.myStorageVM.StorageCollection;
             RefreshData();
 
+            ApplyLocalization();
+            LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalization();
+        }
+
+        private void ApplyLocalization() {
             ApplyLocalizedHeaders();
-            LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalizedHeaders();
+            RefreshLocalizedDisplay();
         }
 
         private void ApplyLocalizedHeaders() {
             GridHeaderLocalization.ApplyHeaders(DataGrid_Storage, _headerKeyMap);
+        }
+
+        private void RefreshLocalizedDisplay() {
+            if (DataGrid_Storage == null) {
+                return;
+            }
+            if (!Dispatcher.CheckAccess()) {
+                Dispatcher.Invoke(RefreshLocalizedDisplay);
+                return;
+            }
+
+            HydrateStorageCollection();
+            DataGrid_Storage.View?.Refresh();
+            DataGrid_Storage.InvalidateVisual();
         }
 
         public void RefreshData() {
@@ -48,13 +67,15 @@ namespace iBarter.View {
             if (File.Exists(strPath_Data) && fileInfo.Length > 0) {
                 try {
                     string readJsonData = File.ReadAllText(strPath_Data);
-                    List<Items> dataSource = JsonConvert.DeserializeObject<List<Items>>(readJsonData);
+                    List<Items>? dataSource = JsonConvert.DeserializeObject<List<Items>>(readJsonData);
 
                     DataGrid_Storage.BeginInit();
-                    for (int i = 0; i < dataSource.Count; i++) {
-                        Items myItem = dataSource[i];
-                        if (App.myStorageVM.StorageCollection.FirstOrDefault(i => i.ItemName.Equals(myItem.ItemName)) == null) {
-                            App.myStorageVM.StorageCollection.Add(myItem);
+                    if (dataSource != null) {
+                        for (int i = 0; i < dataSource.Count; i++) {
+                            Items myItem = HydrateStorageItem(dataSource[i]);
+                            if (App.myStorageVM.StorageCollection.FirstOrDefault(i => i.ItemName.Equals(myItem.ItemName)) == null) {
+                                App.myStorageVM.StorageCollection.Add(myItem);
+                            }
                         }
                     }
 
@@ -74,6 +95,53 @@ namespace iBarter.View {
             // items (e.g. the LV6 batch in 2587a5b) become visible to existing
             // users without forcing them to delete myStorage_Data.json.
             SeedHardcodedFallback();
+        }
+
+        private static void HydrateStorageCollection() {
+            if (App.myStorageVM?.StorageCollection == null) {
+                return;
+            }
+
+            for (int index = 0; index < App.myStorageVM.StorageCollection.Count; index++) {
+                var hydrated = HydrateStorageItem(App.myStorageVM.StorageCollection[index]);
+                if (!ReferenceEquals(hydrated, App.myStorageVM.StorageCollection[index])) {
+                    App.myStorageVM.StorageCollection[index] = hydrated;
+                }
+            }
+        }
+
+        private static Items HydrateStorageItem(Items item) {
+            if (App.listItems == null) {
+                return item;
+            }
+
+            var catalog = App.listItems.FirstOrDefault(i =>
+                string.Equals(i.ItemID, item.ItemID, StringComparison.Ordinal)
+                || string.Equals(i.ItemName, item.ItemName, StringComparison.Ordinal)
+                || string.Equals(i.ItemNameZhTw, item.ItemName, StringComparison.Ordinal)
+                || string.Equals(i.ItemNameDisplay, item.ItemName, StringComparison.Ordinal));
+            if (catalog == null) {
+                return item;
+            }
+
+            if (string.Equals(item.ItemName, catalog.ItemName, StringComparison.Ordinal)
+                && string.Equals(item.ItemID, catalog.ItemID, StringComparison.Ordinal)
+                && string.Equals(item.ItemLV, catalog.ItemLV, StringComparison.Ordinal)
+                && string.Equals(item.ItemNameZhTw, catalog.ItemNameZhTw, StringComparison.Ordinal)) {
+                return item;
+            }
+
+            var hydrated = new Items(
+                catalog.ItemName,
+                catalog.ItemID,
+                catalog.ItemLV,
+                item.ItemNumber,
+                item.StorageVeliaQuantity_Velia,
+                item.StorageVeliaQuantity_Iliya,
+                item.StorageVeliaQuantity_Epheria,
+                item.StorageVeliaQuantity_Ancado);
+            hydrated.ItemNameZhTw = catalog.ItemNameZhTw;
+            return hydrated;
         }
 
         private void SeedHardcodedFallback() {

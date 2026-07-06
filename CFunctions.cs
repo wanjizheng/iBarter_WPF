@@ -51,26 +51,104 @@ namespace iBarter {
             set { gameFontType = value; }
         }
 
+        private const int MaxLogBlocks = 500;
+
         public void Log(string _message, Brush _color) {
             if (!Application.Current.Dispatcher.CheckAccess()) {
                 Application.Current.Dispatcher.Invoke(new Action(() => Log(_message, _color)));
             }
             else {
-                if (App.myfmMain != null) {
-                    var myDT = DateTime.Now;
+                if (App.myfmMain?.richTextBox_Log != null) {
+                    // Append-and-trim with self-healing recovery. A single transient
+                    // COMException during rapid logging used to wipe the entire 500-line
+                    // log buffer (Blocks.Clear() below), destroying exactly the
+                    // diagnostic history the operator was reading. Now: drop ONE old
+                    // block (which is usually the AppendText that just failed to free
+                    // native resources) and retry the append. If that still fails, drop
+                    // the oldest 25% of blocks to relieve pressure without nuking
+                    // recent history. As a last resort, only then clear everything -
+                    // and write a one-line marker so the operator can tell.
+                    try {
+                        var myDT = DateTime.Now;
+                        var strTime = "[ " + myDT.ToString("hh:mm:ss") + " ]  ";
+                        var logBox = App.myfmMain.richTextBox_Log;
 
+                        logBox.AppendText(strTime);
+                        var tr = new TextRange(logBox.Document.ContentEnd, logBox.Document.ContentEnd);
+                        tr.Text = _message + "\r\n";
+                        tr.ApplyPropertyValue(TextElement.ForegroundProperty, _color);
 
-                    var strTime = "[ " + myDT.ToString("hh:mm:ss") + " ]  ";
+                        TrimLogToMaxBlocks(logBox);
 
-
-                    App.myfmMain.richTextBox_Log.AppendText(strTime);
-                    var tr = new TextRange(App.myfmMain.richTextBox_Log.Document.ContentEnd,
-                        App.myfmMain.richTextBox_Log.Document.ContentEnd);
-                    tr.Text = _message + "\r\n";
-                    var bc = new BrushConverter();
-                    tr.ApplyPropertyValue(TextElement.ForegroundProperty, _color);
-                    App.myfmMain.richTextBox_Log.ScrollToEnd();
+                        try {
+                            logBox.ScrollToEnd();
+                        }
+                        catch (COMException) {
+                            // WPF text formatting can run out of native resources during rapid logging.
+                        }
+                    }
+                    catch (COMException ex) {
+                        if (!TryRecoverLogFromComException(ex, _message)) {
+                            // Recovery itself failed - swallow silently to avoid crashing
+                            // the calling scan thread. The next successful Log() call will
+                            // resume appending.
+                        }
+                    }
                 }
+            }
+        }
+
+        private void TrimLogToMaxBlocks(System.Windows.Controls.RichTextBox logBox) {
+            // The trim loop itself can throw COMException if the document is in a
+            // bad state; isolate it so a single bad block doesn't kill the append.
+            while (logBox.Document.Blocks.Count > MaxLogBlocks) {
+                var first = logBox.Document.Blocks.FirstBlock;
+                if (first == null) break;
+                logBox.Document.Blocks.Remove(first);
+            }
+        }
+
+        private bool TryRecoverLogFromComException(Exception original, string lostMessage) {
+            try {
+                var logBox = App.myfmMain?.richTextBox_Log;
+                if (logBox == null) return false;
+
+                // 1) Drop the OLDEST block - usually the AppendText that just failed
+                // is occupying the native buffer that's exhausted. Free it and retry.
+                if (logBox.Document.Blocks.Count > 0) {
+                    var first = logBox.Document.Blocks.FirstBlock;
+                    if (first != null) logBox.Document.Blocks.Remove(first);
+                }
+                try {
+                    var tr = new TextRange(logBox.Document.ContentEnd, logBox.Document.ContentEnd);
+                    tr.Text = "[recovered] " + lostMessage + "\r\n";
+                    return true;
+                }
+                catch (COMException) { /* fall through */ }
+
+                // 2) Drop the oldest 25% to relieve native pressure, then retry.
+                int dropCount = Math.Max(1, logBox.Document.Blocks.Count / 4);
+                for (int i = 0; i < dropCount; i++) {
+                    var first = logBox.Document.Blocks.FirstBlock;
+                    if (first == null) break;
+                    logBox.Document.Blocks.Remove(first);
+                }
+                try {
+                    var tr = new TextRange(logBox.Document.ContentEnd, logBox.Document.ContentEnd);
+                    tr.Text = "[recovered with trim] " + lostMessage + "\r\n";
+                    return true;
+                }
+                catch (COMException) { /* fall through */ }
+
+                // 3) Last resort: clear, write a marker, return false so the caller
+                // knows recovery is incomplete. We no longer nuke silently.
+                logBox.Document.Blocks.Clear();
+                var marker = new TextRange(logBox.Document.ContentEnd, logBox.Document.ContentEnd);
+                marker.Text = "[log buffer cleared after " + original.GetType().Name + "]\r\n";
+                return false;
+            }
+            catch {
+                return false;
             }
         }
 
@@ -164,7 +242,7 @@ namespace iBarter {
                         // - the previous behaviour was an unhandled throw
                         // out of DownloadMissingIcon, which silently left
                         // every subsequent item un-downloaded.
-                        Log("Skip icon " + item.ItemID + " (" + item.ItemName + "): " + ex.Message, Brushes.OrangeRed);
+                        Log(Localization.LanguageService.Instance.Localize("str.Log.RefreshItems.SkipIcon", item.ItemID, item.ItemNameDisplay, ex.Message), Brushes.OrangeRed);
                     }
                 }
             }
@@ -183,7 +261,7 @@ namespace iBarter {
         public void SyncImages() {
             string imgDir = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items";
             if (!System.IO.Directory.Exists(imgDir)) {
-                Log("SyncImages: image folder missing: " + imgDir, Brushes.Red);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.FolderMissing", imgDir), Brushes.Red);
                 return;
             }
 
@@ -203,7 +281,7 @@ namespace iBarter {
                     skipped++;
                 }
             }
-            Log($"SyncImages: CSV has {csvIds.Count} valid IDs ({skipped} skipped)", Brushes.Gray);
+            Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.CSVScan", csvIds.Count, skipped), Brushes.Gray);
 
             // Phase 1: queue downloads for missing bmps.
             int toDownload = 0;
@@ -215,11 +293,11 @@ namespace iBarter {
                         toDownload++;
                     }
                     catch (Exception ex) {
-                        Log("SyncImages: download fail " + id + ": " + ex.Message, Brushes.OrangeRed);
+                        Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.DownloadFail", id, ex.Message), Brushes.OrangeRed);
                     }
                 }
             }
-            Log($"SyncImages: queued {toDownload} download(s)", Brushes.Blue);
+            Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.Queued", toDownload), Brushes.Blue);
 
             // Phase 2: delete orphaned bmps (stem not in CSV). Run sync
             // here so the user gets an immediate "deleted N" line in the
@@ -236,7 +314,7 @@ namespace iBarter {
                         if (deletedNames.Count < 20) deletedNames.Add(stem);
                     }
                     catch (Exception ex) {
-                        Log("SyncImages: delete fail " + path + ": " + ex.Message, Brushes.OrangeRed);
+                        Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.DeleteFail", path, ex.Message), Brushes.OrangeRed);
                     }
                 }
             }
@@ -244,10 +322,10 @@ namespace iBarter {
                 string preview = deletedNames.Count > 0
                     ? " (" + string.Join(", ", deletedNames) + (deleted > deletedNames.Count ? ", ..." : "") + ")"
                     : "";
-                Log($"SyncImages: deleted {deleted} orphan(s){preview}", Brushes.Blue);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.Deleted", deleted, preview), Brushes.Blue);
             }
             else {
-                Log("SyncImages: no orphans to delete", Brushes.Gray);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.NoOrphans"), Brushes.Gray);
             }
         }
 
@@ -269,7 +347,7 @@ namespace iBarter {
                 // on the first `item.ItemID` access below. Bail out with a
                 // visible log instead.
                 if (myItem == null) {
-                    Log("RefreshItemsCore: ID not in Items.csv: " + _itemID, Brushes.OrangeRed);
+                    Log(Localization.LanguageService.Instance.Localize("str.Log.RefreshItems.IDNotInCSV", _itemID), Brushes.OrangeRed);
                     return;
                 }
                 listItems.Clear();
@@ -300,7 +378,7 @@ namespace iBarter {
                 // the truth: 'no image' or 'caching' rather than always 'downloading'.
                 if (string.IsNullOrEmpty(imageUrl)) {
                     if (_itemID != "") {
-                        Log("No bdocodex image for: " + item.ItemName + " (" + _itemID + ")", Brushes.OrangeRed);
+                        Log(Localization.LanguageService.Instance.Localize("str.Log.RefreshItems.NoBdocodexImage", item.ItemNameDisplay, _itemID), Brushes.OrangeRed);
                     }
                     i++;
                     continue;
@@ -313,7 +391,7 @@ namespace iBarter {
                     // Use the local foreach 'item' - its ToString() was the
                     // class name 'iBarter.Items' because Items never
                     // overrode ToString(), masking the actual name.
-                    Log("Download icon for: " + item.ItemName + " (" + _itemID + ")", Brushes.Gold);
+                    Log(Localization.LanguageService.Instance.Localize("str.Log.RefreshItems.DownloadIcon", item.ItemNameDisplay, _itemID), Brushes.Gold);
                 }
 
                 i++;
@@ -530,7 +608,7 @@ namespace iBarter {
             var listItems = new List<Items>();
             string csvPath = AppDomain.CurrentDomain.BaseDirectory + "\\Resources\\Items.csv";
             if (!System.IO.File.Exists(csvPath)) {
-                Log("Items.csv not found: " + csvPath, Brushes.Red);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.ItemsCSV.NotFound", csvPath), Brushes.Red);
                 return listItems;
             }
             using (var reader = new StreamReader(csvPath)) {
@@ -542,7 +620,7 @@ namespace iBarter {
                     var results = SplitCsvLine(line);
                     // Schema: Name, ID, LV, Number. Anything else is malformed.
                     if (results.Count < 4) {
-                        Log($"Items.csv line {lineNo} skipped (expected 4 columns, got {results.Count}): {line}", Brushes.OrangeRed);
+                        Log(Localization.LanguageService.Instance.Localize("str.Log.ItemsCSV.BadColumns", lineNo, results.Count, line), Brushes.OrangeRed);
                         continue;
                     }
                     var strName = results[0].Replace("'", "").Replace("(", "").Replace(")", "").Trim();
@@ -553,13 +631,13 @@ namespace iBarter {
                     // int.Parse; a non-numeric ID would throw and abort the
                     // whole refresh loop.
                     if (!System.Text.RegularExpressions.Regex.IsMatch(strID, "^[0-9]+$")) {
-                        Log($"Items.csv line {lineNo} skipped (non-numeric ID '{strID}'): {strName}", Brushes.OrangeRed);
+                        Log(Localization.LanguageService.Instance.Localize("str.Log.ItemsCSV.BadID", lineNo, strID, strName), Brushes.OrangeRed);
                         continue;
                     }
 
                     int intNumber = -1;
                     if (!int.TryParse(results[3].Trim(), out intNumber)) {
-                        Log($"Items.csv line {lineNo} bad number '{results[3]}': {strName}", Brushes.OrangeRed);
+                        Log(Localization.LanguageService.Instance.Localize("str.Log.ItemsCSV.BadNumber", lineNo, results[3], strName), Brushes.OrangeRed);
                         intNumber = -1;
                     }
 
@@ -614,7 +692,7 @@ namespace iBarter {
         public int LoadItemsZhTw() {
             string csvPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Items.zh-TW.csv";
             if (!System.IO.File.Exists(csvPath)) {
-                Log("Items.zh-TW.csv not found: " + csvPath + " - skipping; run Tools > Import Bdocodex Names to populate.", Brushes.Gray);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.ItemsZhTW.NotFound", csvPath), Brushes.Gray);
                 return 0;
             }
             if (App.listItems is null || App.listItems.Count == 0) {
@@ -650,7 +728,7 @@ namespace iBarter {
                 }
             }
             catch (Exception ex) {
-                Log("Items.zh-TW.csv parse error: " + ex.Message, Brushes.Red);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.ItemsZhTW.ParseError", ex.Message), Brushes.Red);
                 return 0;
             }
 
@@ -664,7 +742,7 @@ namespace iBarter {
                     }
                 }
             }
-            Log($"Items.zh-TW: applied {updated} names from sidecar.", Brushes.Gray);
+            Log(Localization.LanguageService.Instance.Localize("str.Log.ItemsZhTW.Applied", updated), Brushes.Gray);
             return updated;
         }
 
@@ -677,7 +755,7 @@ namespace iBarter {
         public int LoadIslandsZhTw() {
             string csvPath = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Islands.zh-TW.csv";
             if (!System.IO.File.Exists(csvPath)) {
-                Log("Islands.zh-TW.csv not found: " + csvPath + " - skipping; English island names will show even in zh-TW mode.", Brushes.Gray);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.IslandsZhTW.NotFound", csvPath), Brushes.Gray);
                 return 0;
             }
             if (App.listIslands is null || App.listIslands.Count == 0) {
@@ -705,7 +783,7 @@ namespace iBarter {
                 }
             }
             catch (Exception ex) {
-                Log("Islands.zh-TW.csv parse error: " + ex.Message, Brushes.Red);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.IslandsZhTW.ParseError", ex.Message), Brushes.Red);
                 return 0;
             }
 
@@ -719,7 +797,7 @@ namespace iBarter {
                     }
                 }
             }
-            Log($"Islands.zh-TW: applied {updated} names from sidecar.", Brushes.Gray);
+            Log(Localization.LanguageService.Instance.Localize("str.Log.IslandsZhTW.Applied", updated), Brushes.Gray);
             return updated;
         }
 
@@ -734,21 +812,284 @@ namespace iBarter {
             }
         }
 
-        public async Task IdentifyRoutes() {
-            App.listBarterScanner.Clear();
-            if (!Application.Current.Dispatcher.CheckAccess()) {
-                Application.Current.Dispatcher.Invoke(new Action(CleanDataGrid));
+        private bool TryRefreshGameWindowSize(out string reason) {
+            reason = "";
+            if (App.myPureDM == null || App.myPureDM.DM == null) {
+                reason = "PureDM is not initialized";
+                return false;
             }
-            else {
+
+            int hwnd = (int)App.myPureDM.WindowHandle;
+            if (hwnd <= 0) {
+                reason = "game window handle is invalid";
+                return false;
+            }
+
+            App.myPureDM.DM.GetClientSize(hwnd, out int width, out int height);
+            if (width <= 0 || height <= 0) {
+                reason = "game client size is invalid: " + width + "x" + height;
+                return false;
+            }
+
+            App.myPureDM.WindowWidth = width;
+            App.myPureDM.WindowHeight = height;
+            return true;
+        }
+
+        private bool TryValidateGameCapture(out string reason) {
+            reason = "";
+            if (App.myPureDM == null || App.myPureDM.DM == null) {
+                reason = "PureDM is not initialized";
+                return false;
+            }
+
+            int hwnd = (int)App.myPureDM.WindowHandle;
+            if (hwnd <= 0) {
+                reason = "game window handle is invalid";
+                return false;
+            }
+
+            int isBind = App.myPureDM.DM.IsBind(hwnd);
+            if (isBind != 1) {
+                reason = "game window is not bound (DM.IsBind=" + isBind + ")";
+                return false;
+            }
+
+            int probeX2 = Math.Min(Math.Max(App.myPureDM.WindowWidth, 1), 64);
+            int probeY2 = Math.Min(Math.Max(App.myPureDM.WindowHeight, 1), 64);
+            // Lock for the same reason as CaptureScreenBytes: the internal
+            // pointer is freed on the next GetScreenDataBmp call, so even a
+            // probe-only call (that doesn't copy data) must be serialised with
+            // any concurrent capture+copy in progress elsewhere.
+            lock (App.myPureDM.DM) {
+                IntPtr data;
+                int size;
+                int ret = App.myPureDM.DM.GetScreenDataBmp(0, 0, probeX2, probeY2, out data, out size);
+                if (ret == 0 || data == IntPtr.Zero || size <= 0) {
+                    int lastError = App.myPureDM.DM.GetLastError();
+                    reason = "GetScreenDataBmp failed for probe "
+                             + probeX2 + "x" + probeY2
+                             + " (ret=" + ret + ", size=" + size + ", lastError=" + lastError + ")";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public bool RefreshScannerGameWindowState(out string reason) {
+            return TryRefreshGameWindowSize(out reason);
+        }
+
+        private readonly struct AnchorCandidate {
+            public AnchorCandidate(string path, double similarity, bool autoResize, CV.PictureColorMode colorMode) {
+                Path = path;
+                Similarity = similarity;
+                AutoResize = autoResize;
+                ColorMode = colorMode;
+            }
+
+            public string Path { get; }
+            public double Similarity { get; }
+            public bool AutoResize { get; }
+            public CV.PictureColorMode ColorMode { get; }
+        }
+
+        private static List<AnchorCandidate> AnchorImageCandidates() {
+            return new List<AnchorCandidate> {
+                new AnchorCandidate("\\Images\\anchor.bmp", 0.8, false, CV.PictureColorMode.Gray),
+                // new AnchorCandidate("\\Images\\anchor.bmp", 0.74, true, CV.PictureColorMode.Gray),
+                // new AnchorCandidate("\\Images\\anchor.bmp", 0.7, true, CV.PictureColorMode.Color),
+            };
+        }
+
+        // Tracks the checksum of the last captured frame that failed anchor
+        // detection. If consecutive scans produce the SAME checksum the DX
+        // hook is returning a frozen/cached frame instead of a live one.
+        //
+        // Both fields are static AND IdentifyRoutes can be re-entered across UI
+        // threads (Dispatcher hops + Thread.Sleep(200) make continuation
+        // surfaces non-deterministic). Without a lock, two concurrent scans
+        // can read-then-write torn state and either false-flag a frozen frame
+        // or miss a real one. Guard every access through the lock object.
+        // CaptureAnchorFailDiagnostic was removed: it saved frozen-frame BMPs to
+        // Resources\Images\Testing\ during the anchor-detection OOM
+        // investigation (Phase X). With the OOM fixed (tile-based matching,
+        // see PureDM/CV.cs OpenCVMatchTemplates), the diagnostic is no
+        // longer needed and would silently consume disk under repeated
+        // anchor failures. The IdentifyRoutes failure branch now logs a
+        // plain "capture succeeded; anchor template did not match" /
+        // "capture failed: ..." line instead. The previously emitted
+        // anchor-failure i18n keys (str.Log.Scanner.AnchorFailureDiag et
+        // al.) were also removed in the same cleanup pass.
+
+        private List<PointPlus> FindBarterAnchors(out string triedAnchors) {
+            var attempts = new List<string>();
+            if (App.myPureDM.WindowWidth <= 0 || App.myPureDM.WindowHeight <= 0) {
+                triedAnchors = "invalid scan bounds: " + App.myPureDM.WindowWidth + "x" + App.myPureDM.WindowHeight;
+                return new List<PointPlus>();
+            }
+
+            // Single active candidate today (the @0.74 / @0.7 fallback variants are
+            // intentionally commented out in AnchorImageCandidates() — they were
+            // dropped because the deduplication-by-candidate below used each
+            // candidate's own Size.Width/Height as the tolerance, which differs
+            // across candidates and silently merged away real anchors at scale
+            // 1.0/0.74/0.7). If a fallback candidate is needed in the future,
+            // re-add it AND replace the per-candidate tolerance with a fixed
+            // 30 px so merges stay correct.
+            //
+            // The function is preserved as a list-returning wrapper rather than
+            // a single call so the per-candidate triedAnchors string stays
+            // uniform with the OCR / label scanner code that still iterates
+            // multiple candidates. The cost is one extra allocation per scan.
+            var allAnchors = new List<PointPlus>();
+
+            foreach (var candidate in AnchorImageCandidates()) {
+                try {
+                    List<PointPlus> anchors = App.myPureDM.CV.FindPictures(
+                        0,
+                        0,
+                        App.myPureDM.WindowWidth,
+                        App.myPureDM.WindowHeight,
+                        candidate.Path,
+                        candidate.Similarity,
+                        candidate.AutoResize,
+                        candidate.ColorMode);
+
+                    attempts.Add(candidate.Path
+                                 + "@" + candidate.Similarity.ToString("0.00", CultureInfo.InvariantCulture)
+                                 + (candidate.AutoResize ? "+resize" : "")
+                                 + "+" + candidate.ColorMode
+                                 + "=" + anchors.Count);
+
+                    // With one active candidate the dedup is a no-op, but kept so
+                    // adding fallback candidates back doesn't require re-deriving
+                    // the merge rule. Tolerance is fixed at 30 px (≈ 1.5× the
+                    // 18 px anchor template) so it doesn't depend on the matched
+                    // candidate's own reported Size.
+                    const int fixedDedupPx = 30;
+                    foreach (var a in anchors) {
+                        bool isDuplicate = allAnchors.Any(existing =>
+                            Math.Abs(existing.X - a.X) < fixedDedupPx &&
+                            Math.Abs(existing.Y - a.Y) < fixedDedupPx);
+                        if (!isDuplicate) {
+                            allAnchors.Add(a);
+                        }
+                    }
+                }
+                catch (Exception ex) {
+                    attempts.Add(candidate.Path
+                                 + "@" + candidate.Similarity.ToString("0.00", CultureInfo.InvariantCulture)
+                                 + "=error:" + ex.Message);
+                }
+            }
+
+            triedAnchors = string.Join(", ", attempts);
+            return allAnchors;
+        }
+
+        public async Task IdentifyRoutes() {
+            // UI-thread setup: clear the result collection + clean the data grid.
+            // Both touch WPF bound collections and must run on the dispatcher.
+            if (Application.Current.Dispatcher.CheckAccess()) {
+                App.listBarterScanner.Clear();
                 CleanDataGrid();
             }
+            else {
+                Application.Current.Dispatcher.Invoke(new Action(() => {
+                    App.listBarterScanner.Clear();
+                    CleanDataGrid();
+                }));
+            }
 
+            // Offload the heavy synchronous work to a background thread.
+            //
+            // The body below does:
+            //   - DM.GetClientSize + GetScreenDataBmp (COM, blocking, ~50ms each)
+            //   - FindBarterAnchors: full-window capture + OpenCV tile loop
+            //     (was the root cause of the "Failed to allocate 28068560 bytes"
+            //     fix; the tile loop runs ~5 MatchTemplate calls per candidate)
+            //   - 6× IdentifyBarterAsync: per-anchor capture + FindPicture +
+            //     OCRString retry loop (5 attempts × 100ms) + MagickImage
+            //     5-stage pipeline (per anchor)
+            //
+            // Without the Task.Run wrapper the UI thread was blocked for tens of
+            // seconds per scan click. Log() and other UI-redirected calls work
+            // correctly from the background thread (they Dispatcher.Invoke back
+            // internally), so no other plumbing changes are required.
+            await Task.Run(() => DoIdentifyRoutesHeavy());
+        }
 
-            List<PointPlus> listAnchors = App.myPureDM.CV.FindPictures(0, 0, App.myPureDM.WindowWidth,
-                App.myPureDM.WindowHeight, "\\Images\\anchor.bmp", 0.8, false);
+        private void DoIdentifyRoutesHeavy() {
+            if (!TryRefreshGameWindowSize(out string scanReadyError)) {
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.CaptureWindowFailed", scanReadyError), Brushes.OrangeRed);
+                return;
+            }
 
+            // Pre-scan capture health check: in dx.graphic.3d.10plus mode the
+            // DirectX hook can silently go stale after the first scan session –
+            // IsBind() still returns 1 but GetScreenDataBmp() returns 0.
+            // When we detect this, rebind on the UI thread (the same thread that
+            // originally called BindWindowEx) to reset the DX capture pipeline,
+            // then wait briefly for the hook to reinitialise before scanning.
+            if (!TryValidateGameCapture(out string preScanCaptureError)
+                && preScanCaptureError.Contains("GetScreenDataBmp failed")) {
+                Log("截图接口失效（DX钩子失效），正在自动重新绑定窗口...", Brushes.Orange);
+                Application.Current.Dispatcher.Invoke(new Action(() => {
+                    App.myPureDM.CV.BindWindow((int)App.myPureDM.WindowHandle);
+                }));
+                System.Threading.Thread.Sleep(200); // allow DX hook to reinitialise
+                if (!TryValidateGameCapture(out string postRebindError)) {
+                    Log("重新绑定后截图仍失败：" + postRebindError + "。请手动重新绑定后再扫描。",
+                        Brushes.OrangeRed);
+                    return;
+                }
+                Log("自动重新绑定成功，继续扫描。", Brushes.Blue);
+            }
+
+            List<PointPlus> listAnchors = FindBarterAnchors(out string triedAnchors);
+
+            Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.FoundAnchors", listAnchors.Count, triedAnchors), Brushes.DimGray);
 
             listAnchors.Sort((p1, p2) => { return p1.Y.CompareTo(p2.Y); });
+
+            // Filter out anchors whose X coordinate is a clear outlier.
+            // All valid barter-row anchors are vertically stacked and therefore
+            // share approximately the same X position.  A special-exchange
+            // notification banner adds an extra anchor icon at a noticeably
+            // different X.  Strategy: find the contiguous X cluster that
+            // contains a strict majority of the anchors; if at least one anchor
+            // lies outside that cluster, remove it and log the removal.
+            // The filter is intentionally conservative – it only fires when
+            // the winning cluster is a strict majority (> half), so no
+            // filtering happens when every anchor is already aligned or when
+            // the total count is ≤ 1.
+            if (listAnchors.Count > 1) {
+                const int xTolerance = 30; // px; real-row anchors are typically within 5 px
+                var byX = listAnchors.OrderBy(a => a.X).ToList();
+
+                int bestStart = 0, bestLen = 1;
+                int runStart  = 0, runLen  = 1;
+                for (int i = 1; i < byX.Count; i++) {
+                    if (byX[i].X - byX[runStart].X <= xTolerance) {
+                        runLen++;
+                    }
+                    else {
+                        if (runLen > bestLen) { bestLen = runLen; bestStart = runStart; }
+                        runStart = i; runLen = 1;
+                    }
+                }
+                if (runLen > bestLen) { bestLen = runLen; bestStart = runStart; }
+
+                if (bestLen > listAnchors.Count / 2 && bestLen < listAnchors.Count) {
+                    int xMin = byX[bestStart].X - 5;
+                    int xMax = byX[bestStart + bestLen - 1].X + 5;
+                    int removed = listAnchors.RemoveAll(a => a.X < xMin || a.X > xMax);
+                    if (removed > 0)
+                        Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.FilteredAnchors", removed, xMin, xMax, listAnchors.Count), Brushes.DimGray);
+                }
+            }
 
             // Surface a clear warning instead of silently looping zero times
             // and logging "Done!" with no scan work. The two most common
@@ -758,7 +1099,18 @@ namespace iBarter {
             // the game but the user may not realise the barter UI must
             // be on screen for anchor.bmp to be found.
             if (listAnchors.Count == 0) {
-                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.NoAnchor", App.myPureDM.WindowWidth, App.myPureDM.WindowHeight), Brushes.OrangeRed);
+                // (Anchor-fail diagnostic was removed; see the note at the deleted
+                // CaptureAnchorFailDiagnostic stub above.)
+                string captureDiagnostic;
+                if (TryValidateGameCapture(out string captureReadyError)) {
+                    captureDiagnostic = " Capture diagnostic: capture succeeded; anchor template did not match.";
+                }
+                else {
+                    captureDiagnostic = " Capture diagnostic: " + captureReadyError + ". Bind the game window once, then scan again.";
+                }
+
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.NoAnchor", App.myPureDM.WindowWidth, App.myPureDM.WindowHeight)
+                    + " (tried: " + triedAnchors + ")." + captureDiagnostic, Brushes.OrangeRed);
             }
 
 
@@ -790,12 +1142,25 @@ namespace iBarter {
 
             for (int i = 0; i < Math.Min(6, listAnchors.Count); i++) {
                 var myBarter = IdentifyBarterAsync(listAnchors[i]); // 一个一个来
+                if (myBarter == null) {
+                    continue;
+                }
 
                 if (myBarter.IsLand != null && myBarter.Item1 != null && myBarter.Item2 != null &&
                     App.listBarterScanner.FirstOrDefault(b => b.IsLand.Island.ToString().Equals(myBarter.IsLand.Island.ToString())) == null) {
                     App.listBarterScanner.Add(myBarter);
                 }
             }
+
+            // Anchors were found and processed: reset the frozen-frame detector
+            // so a genuine stale-frame condition on the NEXT scan is not masked
+            // by the checksum of a frame that was captured during this scan.
+            // The save-count reset ALSO bounds the diagnostic BMPs at 5 per
+            // consecutive-failure streak (the reset only happens when anchors
+            // were found, so an alternating success/failure session gets up to
+            // 5 BMPs per failure streak rather than 5 per app run).
+            // (Anchors-found reset of _lastAnchorFailChecksum / _anchorFailSaveCount
+            // was removed together with CaptureAnchorFailDiagnostic above.)
 
 
             // bool tofRunning = true;
@@ -1152,23 +1517,311 @@ namespace iBarter {
 
         // Phase 9 (i18n): returns the Tesseract/PureDM language code to use
         // for the active UI language.  Default path is the existing
-        // eng_best (faster, more accurate for English UI text).  zh-TW
-        // switches to chi_tra, loaded from tessdata/chi_tra.traineddata
-        // (Phase 9 added it to the build output).  Both PureDM.CV.OCRString
-        // and our local Tesseract engine consume the same code, so we get
-        // parity between PureDM's main recognizer and our backup
-        // digit-only engine without a per-call site branch.
+        // eng_best (faster, more accurate for English UI text).  zh-TW uses
+        // both simplified and traditional Chinese data when available because
+        // the game can render zh-TW labels with simplified glyphs.
         private static string CurrentOcrLanguage() {
             try {
-                if (iBarter.Localization.LanguageService.Instance?.Current
-                    == iBarter.Localization.AppLanguage.TraditionalChinese) {
-                    return "chi_tra";
+                if (IsTraditionalChineseUi()) {
+                    string tessDataDir = AppDomain.CurrentDomain.BaseDirectory + @"tessdata\";
+                    bool hasSim = System.IO.File.Exists(tessDataDir + "chi_sim.traineddata");
+                    bool hasTra = System.IO.File.Exists(tessDataDir + "chi_tra.traineddata");
+                    if (hasSim && hasTra) return "chi_sim+chi_tra";
+                    if (hasSim) return "chi_sim";
+                    if (hasTra) return "chi_tra";
                 }
             }
             catch {
                 // design-time / pre-startup; fall through to English
             }
             return "eng_best";
+        }
+
+        private static bool IsTraditionalChineseUi() {
+            try {
+                return iBarter.Localization.LanguageService.Instance?.Current
+                    == iBarter.Localization.AppLanguage.TraditionalChinese;
+            }
+            catch {
+                return false;
+            }
+        }
+
+        private readonly struct ScanLabelCandidate {
+            public ScanLabelCandidate(string path, double similarity) {
+                Path = path;
+                Similarity = similarity;
+            }
+
+            public string Path { get; }
+            public double Similarity { get; }
+        }
+
+        private readonly struct ScanLabelMatch {
+            public ScanLabelMatch(PointPlus point, string path) {
+                Point = point;
+                Path = path;
+            }
+
+            public PointPlus Point { get; }
+            public string Path { get; }
+        }
+
+        private List<ScanLabelCandidate> ScanLabelImageCandidates(string labelName, double similarity) {
+            var candidates = new List<ScanLabelCandidate>();
+
+            if (IsTraditionalChineseUi()) {
+                candidates.Add(new ScanLabelCandidate("\\Images\\" + labelName + "_CN.bmp", similarity));
+                return candidates;
+            }
+
+            string primary = "\\Images\\" + labelName + ".bmp";
+            string alternate = "\\Images\\" + labelName + "2.bmp";
+            if (GameFont == FontType.DejaVuSans) {
+                candidates.Add(new ScanLabelCandidate(alternate, similarity));
+                candidates.Add(new ScanLabelCandidate(primary, similarity));
+            }
+            else {
+                candidates.Add(new ScanLabelCandidate(primary, similarity));
+                candidates.Add(new ScanLabelCandidate(alternate, similarity));
+            }
+
+            return candidates;
+        }
+
+        private PointPlus FindScanLabel(int x1, int y1, int x2, int y2, string labelName, double similarity, out string matchedPath, out string triedPaths) {
+            var candidates = ScanLabelImageCandidates(labelName, similarity);
+            triedPaths = string.Join(", ", candidates.Select(c => c.Path + "@" + c.Similarity.ToString("0.00", CultureInfo.InvariantCulture)));
+            foreach (var candidate in candidates) {
+                PointPlus point = App.myPureDM.CV.FindPicture(x1, y1, x2, y2, candidate.Path, candidate.Similarity, CV.Mode.OpenCV, false);
+                if (!point.IsEmpty) {
+                    matchedPath = candidate.Path;
+                    // DO NOT silently flip the global GameFont on a single 2.bmp
+                    // fallback match: a stray false-positive at low similarity
+                    // (Remaining threshold is 0.6) biases every subsequent
+                    // label-detection ordering for the rest of the scan. The
+                    // font auto-detection was unreliable in practice; user can
+                    // set GameFont via the UI when DejaVuSans rendering is
+                    // actually used. The label detection itself still works
+                    // for both fonts via the candidate loop above.
+                    return point;
+                }
+            }
+
+            matchedPath = "";
+            return PointPlus.Empty;
+        }
+
+        private List<ScanLabelMatch> FindScanLabelMatches(int x1, int y1, int x2, int y2, string labelName, double similarity, List<string> attempts) {
+            var matches = new List<ScanLabelMatch>();
+            foreach (var candidate in ScanLabelImageCandidates(labelName, similarity)) {
+                PointPlus point = App.myPureDM.CV.FindPicture(x1, y1, x2, y2, candidate.Path, candidate.Similarity, CV.Mode.OpenCV, false);
+                string status = point.IsEmpty
+                    ? "not found"
+                    : "at " + point.X + "," + point.Y + " size " + point.Size.Width + "x" + point.Size.Height;
+                attempts.Add(labelName + ":" + candidate.Path + "@" + candidate.Similarity.ToString("0.00", CultureInfo.InvariantCulture) + "=" + status);
+                if (!point.IsEmpty) {
+                    matches.Add(new ScanLabelMatch(point, candidate.Path));
+                }
+            }
+            return matches;
+        }
+
+        private static bool IsPlausibleParleyRequiredPair(PointPlus parley, PointPlus required) {
+            if (parley.IsEmpty || required.IsEmpty) {
+                return false;
+            }
+
+            int parleyRight = parley.X + parley.Size.Width;
+            if (IsTraditionalChineseUi()) {
+                const int allowedChineseOverlap = 4;
+                if (required.X < parleyRight - allowedChineseOverlap) {
+                    return false;
+                }
+            }
+            else {
+                if (required.X <= parleyRight) {
+                    return false;
+                }
+            }
+
+            int verticalTolerance = Math.Max(14, Math.Max(parley.Size.Height, required.Size.Height));
+            return Math.Abs(required.Y - parley.Y) <= verticalTolerance;
+        }
+
+        private bool TryFindParleyRequiredLabels(
+            int x1,
+            int y1,
+            int x2,
+            int y2,
+            out PointPlus pointPlusParley,
+            out string strParleyPath,
+            out PointPlus pointPlusRequired,
+            out string strRequiredPath,
+            out string triedLabels) {
+            var attempts = new List<string>();
+            var parleyMatches = FindScanLabelMatches(x1, y1, x2, y2, "Parley", 0.8, attempts);
+            var requiredMatches = FindScanLabelMatches(x1, y1, x2, y2, "Required", 0.8, attempts);
+
+            foreach (var parley in parleyMatches) {
+                foreach (var required in requiredMatches) {
+                    if (IsPlausibleParleyRequiredPair(parley.Point, required.Point)) {
+                        pointPlusParley = parley.Point;
+                        strParleyPath = parley.Path;
+                        pointPlusRequired = required.Point;
+                        strRequiredPath = required.Path;
+                        // Same rationale as FindScanLabel: do not flip GameFont
+                        // on a single 2.bmp fallback match. Both labels finding
+                        // each other via IsPlausibleParleyRequiredPair is strong
+                        // evidence the font is correct, but a single fallback in
+                        // a noisy scan bias all later scans. Let the user set it
+                        // via the UI.
+                        triedLabels = string.Join("; ", attempts);
+                        return true;
+                    }
+                }
+            }
+
+            pointPlusParley = parleyMatches.Count > 0 ? parleyMatches[0].Point : PointPlus.Empty;
+            strParleyPath = parleyMatches.Count > 0 ? parleyMatches[0].Path : "";
+            pointPlusRequired = requiredMatches.Count > 0 ? requiredMatches[0].Point : PointPlus.Empty;
+            strRequiredPath = requiredMatches.Count > 0 ? requiredMatches[0].Path : "";
+            triedLabels = string.Join("; ", attempts);
+            return false;
+        }
+
+        // Minimum sane OCR rect dimensions. Anything smaller than this is either a
+        // template-match coincidence (1-px wide rect after Parley and Required
+        // labels get matched adjacent on screen) or arithmetic overflow.
+        // Tesseract on a 1×14 px sliver returns '' through all 5 retries, which
+        // surfaces as a silent 'cannot identify parley' log + dropped anchor.
+        private const int MinOcrRectWidth  = 6;
+        private const int MinOcrRectHeight = 8;
+
+        private static bool IsValidOcrRectangle(int x1, int y1, int x2, int y2) {
+            return x1 >= 0 && y1 >= 0
+                && x2 - x1 >= MinOcrRectWidth
+                && y2 - y1 >= MinOcrRectHeight
+                && x2 <= 99999 && y2 <= 99999; // catch overflow on degenerate inputs
+        }
+
+        private int TryReadRemainingCount(PointPlus pointPlusAnchor, PointPlus pointPlusEdge, string strIsland) {
+            PointPlus pointPlusRemaining = FindScanLabel(
+                0,
+                pointPlusAnchor.Y + pointPlusAnchor.Size.Height,
+                App.myPureDM.WindowWidth,
+                pointPlusAnchor.Y + 60,
+                "Remaining", 0.6, out _, out string triedRemainingPaths);
+
+            if (pointPlusRemaining.IsEmpty) {
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.RemainingCountFailed", strIsland, triedRemainingPaths), Brushes.IndianRed);
+                return 0;
+            }
+
+            int x1 = pointPlusRemaining.X + pointPlusRemaining.Size.Width;
+            int y1 = pointPlusRemaining.Y;
+            int x2 = pointPlusRemaining.X + pointPlusRemaining.Size.Width + 30;
+            int y2 = pointPlusRemaining.Y + pointPlusRemaining.Size.Height + 2;
+
+            // 4-way vote: Diff / Color / Binary (PureDM) + Tess
+            // (Tesseract with 5x scale + 78% threshold + morphology
+            // close — see TryRemainingTesseractOcr for details). The
+            // priority is tuned from live data:
+            //   - Binary (PureDM threshold 126) preserves '5's top bar
+            //     and reads 5 correctly on 30x16 strips (confirmed
+            //     empirically: 萨扇营地 / 哈科班岛 / 向阳岛 all read
+            //     5 via Binary, all read 2 via Color).
+            //   - Color (full-shape) is unreliable for '5' on this
+            //     strip (systematically reads 5 as 2) but is the safer
+            //     tie-breaker for digits where Binary fragments the
+            //     thin stroke (e.g. '4's diagonal).
+            //   - Diff is the original primary (preserves '4'
+            //     diagonal) and stays at priority 2.
+            //   - Tess is priority 4 when it works (5x + morphology
+            //     close is the most robust pipeline), with TryRawOcr
+            //     as a no-preprocessing fallback if the threshold
+            //     pipeline returns no digit.
+            var candidates = new List<(string source, int value, int priority)>();
+            string rawDiff = null, rawColor = null, rawBinary = null;
+            string modeTried = "";
+
+            foreach (var mode in new[] { CV.OCRMode.Diff, CV.OCRMode.Color, CV.OCRMode.Binary }) {
+                string raw;
+                try {
+                    raw = App.myPureDM.CV.OCRString(
+                        x1, y1, x2, y2,
+                        CV.OCRType.Number, mode, false, "", CurrentOcrLanguage());
+                    modeTried = mode.ToString();
+                    if (mode == CV.OCRMode.Diff) rawDiff = raw;
+                    else if (mode == CV.OCRMode.Color) rawColor = raw;
+                    else rawBinary = raw;
+                }
+                catch {
+                    raw = null;
+                }
+                if (!string.IsNullOrWhiteSpace(raw)
+                    && BarterOcrParsing.TryParseRemainingCount(raw, out int parsedFromMode)) {
+                    int prio = mode == CV.OCRMode.Binary ? 3
+                             : mode == CV.OCRMode.Diff   ? 2 : 1;
+                    candidates.Add((mode.ToString(), parsedFromMode, prio));
+                }
+            }
+
+            int tessPick = TryRemainingTesseractOcr(x1, y1, x2, y2);
+            if (tessPick <= 0) {
+                // Phase R fallback: raw Tesseract with no Magick
+                // preprocessing. The 5x + threshold + close pipeline
+                // (Phase T) is calibrated for the icon overlay (pure
+                // white digit on dark icon body, ~245-255 RGB). The
+                // "Remaining: N" label text in this UI is rendered in
+                // a less-than-pure-white colour, so the 78% threshold
+                // strips it out and Tesseract sees nothing — fall
+                // through to raw OCR which lets Tesseract's binariser
+                // pick the digit out of the un-preprocessed capture.
+                tessPick = TryRawOcr(x1, y1, x2, y2);
+            }
+            if (tessPick > 0) {
+                candidates.Add(("Tess", tessPick, 4));
+            }
+
+            if (candidates.Count == 0) {
+                Log(Localization.LanguageService.Instance.Localize(
+                    "str.Log.Scanner.RemainingCountFailed",
+                    strIsland,
+                    triedRemainingPaths + "; tried=" + modeTried
+                        + " D=\"" + (rawDiff ?? "<null>") + "\""
+                        + " C=\"" + (rawColor ?? "<null>") + "\""
+                        + " B=\"" + (rawBinary ?? "<null>") + "\""
+                        + " T=" + (tessPick > 0 ? tessPick.ToString() : "<null>")),
+                    Brushes.IndianRed);
+                return 0;
+            }
+
+            int winningValue = candidates
+                .GroupBy(c => c.value)
+                .OrderByDescending(g => g.Count())
+                .ThenByDescending(g => g.Max(c => c.priority))
+                .First().Key;
+
+            // Diagnostic log: only when modes disagree. Most islands
+            // have unanimous reads (no log noise); the disagreement
+            // case is exactly the 5->2 / 4->1 / 1->7 regressions we
+            // want to diagnose. Shows crop + per-mode raw + resolved
+            // value, so a future regression is greppable from the Log
+            // alone without re-running with TryWriteDebugLog enabled.
+            if (candidates.Select(c => c.value).Distinct().Count() > 1) {
+                Log(
+                    "OCR.Remain " + strIsland
+                        + " crop=(" + x1 + "," + y1 + "," + x2 + "," + y2 + ")"
+                        + " D=\"" + (rawDiff ?? "<null>") + "\""
+                        + " C=\"" + (rawColor ?? "<null>") + "\""
+                        + " B=\"" + (rawBinary ?? "<null>") + "\""
+                        + " T=" + (tessPick > 0 ? tessPick.ToString() : "<null>")
+                        + " -> " + winningValue,
+                    Brushes.DarkCyan);
+            }
+
+            return winningValue;
         }
 
         // Lightweight file logger for static helpers (Log is an instance method
@@ -1373,14 +2026,18 @@ namespace iBarter {
         // Returns null on capture failure (PureDM ret != 1, or 0 size).
         private static byte[] CaptureScreenBytes(int x1, int y1, int x2, int y2) {
             if (App.myPureDM == null || App.myPureDM.DM == null) return null;
-            System.IntPtr data = System.IntPtr.Zero;
-            int size = 0;
+            // GetScreenDataBmp's internal pointer is freed on the next call;
+            // lock on the DM object so capture + Marshal.Copy is atomic.
             try {
-                int ret = App.myPureDM.DM.GetScreenDataBmp(x1, y1, x2, y2, out data, out size);
-                if (ret != 1 || data == System.IntPtr.Zero || size <= 0) return null;
-                byte[] bytes = new byte[size];
-                System.Runtime.InteropServices.Marshal.Copy(data, bytes, 0, size);
-                return bytes;
+                lock (App.myPureDM.DM) {
+                    System.IntPtr data;
+                    int size;
+                    int ret = App.myPureDM.DM.GetScreenDataBmp(x1, y1, x2, y2, out data, out size);
+                    if (ret != 1 || data == System.IntPtr.Zero || size <= 0) return null;
+                    byte[] bytes = new byte[size];
+                    System.Runtime.InteropServices.Marshal.Copy(data, bytes, 0, size);
+                    return bytes;
+                }
             }
             catch {
                 return null;
@@ -1440,6 +2097,73 @@ namespace iBarter {
             }
             catch (Exception ex) {
                 TryWriteDebugLog("OCR.R tesseract fail: " + ex.GetType().Name + " " + ex.Message);
+            }
+            return -1;
+        }
+
+        // Phase T: Tesseract OCR for the 30x16 "Remaining" count strip.
+        // Mirrors Phase G's Magick preprocessing (78% threshold + 5x
+        // scale + negate + morphology close) but skips the bottom-right
+        // 75% crop - the 30x16 strip is already focused on the digit, so
+        // a 75% crop would push the digit out of frame. The 5x scale +
+        // morphology close are exactly what fix the "5" -> "2" misread
+        // that PureDM.OCRString Diff mode suffers on the narrow strip
+        // (Diff's Sobel gradient clips the top bar of "5"; Tesseract with
+        // 5x + close preserves it). Returns -1 on any failure
+        // (capture / engine / no digit match).
+        private int TryRemainingTesseractOcr(int x1, int y1, int x2, int y2) {
+            var tess = GetTesseract();
+            if (tess == null) {
+                return -1;
+            }
+            try {
+                byte[] bmpBytes = CaptureScreenBytes(x1, y1, x2, y2);
+                if (bmpBytes == null) {
+                    return -1;
+                }
+                using (var msIn = new System.IO.MemoryStream(bmpBytes))
+                using (var mi = new MagickImage(msIn)) {
+                    mi.ColorSpace = ColorSpace.Gray;
+                    mi.Threshold(new Percentage(78));
+                    mi.Scale(new Percentage(500));
+                    mi.Negate();
+                    // Close 1-px gaps in '5'/'9'/'0' strokes after the 5x
+                    // upscale (same reason as Phase G: '5' top bar would
+                    // otherwise break at the 5x scale and look like '2').
+                    var morph = new MorphologySettings {
+                        Method = MorphologyMethod.Close,
+                        Kernel = Kernel.Square,
+                        Iterations = 1,
+                    };
+                    mi.Morphology(morph);
+                    // No bottom-right crop - the strip is already the digit.
+                    using (var ms = new System.IO.MemoryStream()) {
+                        mi.Write(ms, MagickFormat.Bmp);
+                        ms.Position = 0;
+                        using (var bitmap = new System.Drawing.Bitmap(ms)) {
+                            using (var src = bitmap.ToMat())
+                            using (var gray = new Emgu.CV.Mat()) {
+                                if (src == null || src.IsEmpty) {
+                                    return -1;
+                                }
+                                Emgu.CV.CvEnum.ColorConversion conv = src.NumberOfChannels == 4
+                                    ? Emgu.CV.CvEnum.ColorConversion.Bgra2Gray
+                                    : Emgu.CV.CvEnum.ColorConversion.Bgr2Gray;
+                                Emgu.CV.CvInvoke.CvtColor(src, gray, conv);
+                                tess.SetImage(gray);
+                            }
+                            tess.Recognize();
+                            string raw = (tess.GetUTF8Text() ?? "").Trim();
+                            Match m = Regex.Match(raw, @"\d{1,2}");
+                            if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 100) {
+                                return n;
+                            }
+                        }
+                    }
+                }
+            }
+            catch {
+                return -1;
             }
             return -1;
         }
@@ -1571,10 +2295,10 @@ namespace iBarter {
 
             if (finalPick > 0) {
                 string tally = string.Join(",", merged.Select(kv => kv.Key + "x" + kv.Value));
-                Log($"OCR qty {strID}: picked {finalPick} (votes={tally}; A={picked} R={rawPick} G={diffPick})", Brushes.Gray);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.OcrQty.Picked", strID, finalPick, tally, picked, rawPick, diffPick), Brushes.Gray);
             }
             else {
-                Log($"OCR qty {strID}: no consensus; raw={(bestRaw ?? "")} R={rawPick} G={diffPick}", Brushes.OrangeRed);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.OcrQty.NoConsensus", strID, bestRaw ?? "", rawPick, diffPick), Brushes.OrangeRed);
             }
 
             return finalPick;
@@ -1607,6 +2331,7 @@ namespace iBarter {
                 pointPlusAnchor.X - 2,
                 pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5,
                 CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage());
+            EnumLists.Island islandEnum = IslandEnumSmart(strIsland);
 
             // 2. 捕获交易物品区域截图
             int intX1 = pointPlusAnchor.X + pointPlusAnchor.Size.Width + 1;
@@ -1616,24 +2341,60 @@ namespace iBarter {
             // App.myPureDM.DM.Capture(intX1, intY1, intX2, intY2, "barterItems.bmp");
 
             // 3. 识别 Parley 数值
-            string strParleyPath = (GameFont == FontType.DejaVuSans) ? "\\Images\\Parley2.bmp" : "\\Images\\Parley.bmp";
-            PointPlus pointPlusParley = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, strParleyPath, 0.8, CV.Mode.OpenCV, false);
-            if (pointPlusParley.IsEmpty) {
-                pointPlusParley = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Parley2.bmp", 0.8, CV.Mode.OpenCV, false);
-                GameFont = FontType.DejaVuSans;
+            if (!TryFindParleyRequiredLabels(
+                    intX1, intY1, intX2, intY2,
+                    out PointPlus pointPlusParley,
+                    out string strParleyPath,
+                    out PointPlus pointPlusRequired,
+                    out string strRequiredPath,
+                    out string triedLabels)) {
+                string scanDetails = "Parley: " + (pointPlusParley.IsEmpty ? "not found" : strParleyPath + " at " + pointPlusParley.X + "," + pointPlusParley.Y)
+                    + ", Required: " + (pointPlusRequired.IsEmpty ? "not found" : strRequiredPath + " at " + pointPlusRequired.X + "," + pointPlusRequired.Y)
+                    + " (tried: " + triedLabels + ")";
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.ScanLabelsFailed", scanDetails), Brushes.Red);
+                return (Barter)null;
             }
 
-            string strRequiredPath = (GameFont == FontType.DejaVuSans) ? "\\Images\\Required2.bmp" : "\\Images\\Required.bmp";
-            PointPlus pointPlusRequired = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, strRequiredPath, 0.8, CV.Mode.OpenCV, false);
-            string strParley = App.myPureDM.CV.OCRString(
-                pointPlusParley.X + pointPlusParley.Size.Width,
-                pointPlusParley.Y,
-                pointPlusRequired.X + 1,
-                pointPlusParley.Y + pointPlusParley.Size.Height,
-                CV.OCRType.Number, CV.OCRMode.Binary, false, "", CurrentOcrLanguage());
+            int parleyOcrX1;
+            int parleyOcrY1;
+            int parleyOcrX2;
+            int parleyOcrY2;
+            if (IsTraditionalChineseUi()) {
+                parleyOcrX1 = pointPlusRequired.X + pointPlusRequired.Size.Width;
+                parleyOcrY1 = Math.Min(pointPlusParley.Y, pointPlusRequired.Y);
+                parleyOcrX2 = Math.Min(App.myPureDM.WindowWidth, parleyOcrX1 + 120);
+                parleyOcrY2 = Math.Max(
+                    pointPlusParley.Y + pointPlusParley.Size.Height,
+                    pointPlusRequired.Y + pointPlusRequired.Size.Height);
+            }
+            else {
+                parleyOcrX1 = pointPlusParley.X + pointPlusParley.Size.Width;
+                parleyOcrY1 = pointPlusParley.Y;
+                parleyOcrX2 = pointPlusRequired.X + 1;
+                parleyOcrY2 = pointPlusParley.Y + pointPlusParley.Size.Height;
+            }
+            bool hasParleyOcrRectangle = IsValidOcrRectangle(parleyOcrX1, parleyOcrY1, parleyOcrX2, parleyOcrY2);
+            if (!hasParleyOcrRectangle) {
+                string ocrRectDetails = parleyOcrX1 + "," + parleyOcrY1 + " -> " + parleyOcrX2 + "," + parleyOcrY2
+                    + " | Parley=" + strParleyPath + " at " + pointPlusParley.X + "," + pointPlusParley.Y
+                    + " size " + pointPlusParley.Size.Width + "x" + pointPlusParley.Size.Height
+                    + " | Required=" + strRequiredPath + " at " + pointPlusRequired.X + "," + pointPlusRequired.Y;
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.InvalidOcrRect", ocrRectDetails), Brushes.Red);
+                return (Barter)null;
+            }
+
+            string strParley = "";
+            if (hasParleyOcrRectangle) {
+                strParley = App.myPureDM.CV.OCRString(
+                    parleyOcrX1,
+                    parleyOcrY1,
+                    parleyOcrX2,
+                    parleyOcrY2,
+                    CV.OCRType.Number, CV.OCRMode.Binary, false, "", CurrentOcrLanguage());
+            }
 
             // 获取岛屿的默认 Parley 值，并尝试解析 OCR 得到的数值
-            int intParley = App.listIslands.Where(land => land.Island == IslandEnum(strIsland))
+            int intParley = App.listIslands.Where(land => land.Island == islandEnum)
                 .Select(land => land.Parley).FirstOrDefault();
             try {
                 intParley = int.Parse(strParley);
@@ -1646,41 +2407,22 @@ namespace iBarter {
             }
 
             // 4. 识别剩余交易次数
-            string strRemainingPath = (GameFont == FontType.DejaVuSans) ? "\\Images\\Remaining2.bmp" : "\\Images\\Remaining.bmp";
-            PointPlus pointPlusRemaining = App.myPureDM.CV.FindPicture(
-                0,
-                pointPlusAnchor.Y + pointPlusAnchor.Size.Height,
-                App.myPureDM.WindowWidth,
-                pointPlusAnchor.Y + 60,
-                strRemainingPath, 0.6, CV.Mode.OpenCV, false);
-            string strRemaining = App.myPureDM.CV.OCRString(
-                pointPlusRemaining.X + pointPlusRemaining.Size.Width,
-                pointPlusRemaining.Y,
-                pointPlusRemaining.X + pointPlusRemaining.Size.Width + 30,
-                pointPlusRemaining.Y + pointPlusRemaining.Size.Height + 2,
-                CV.OCRType.Number, CV.OCRMode.Binary, false, "", CurrentOcrLanguage());
-            int intRemaining = 0;
-            try {
-                intRemaining = int.Parse(strRemaining);
-            }
-            catch {
-                Log("Error, cannot identify the remaining number => " + strIsland, Brushes.IndianRed);
-            }
+            int intRemaining = TryReadRemainingCount(pointPlusAnchor, pointPlusEdge, strIsland);
 
-            if (IslandEnum(strIsland) == EnumLists.Island.UnKnown)
-                Log("Unknown islands! Double check your result! => " + strIsland, Brushes.Red);
+            if (islandEnum == EnumLists.Island.UnKnown)
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.UnknownIsland", strIsland), Brushes.Red);
 
             // 5. 获取岛屿信息
-            Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == IslandEnum(strIsland).ToString());
+            Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == islandEnum.ToString());
             if (myIslands == null) {
-                Log("Error, cannot identify the islands information => " + strIsland, Brushes.Red);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.IslandInfoFailed", strIsland), Brushes.Red);
                 return (Barter)null;
             }
 
             myIslands.Parley = intParley;
             myIslands.Remaining = intRemaining;
             myBarter.IsLand = myIslands;
-            Log("Identified island: " + myIslands.Island, Brushes.OrangeRed);
+            Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.IdentifiedIsland", myIslands.IslandsNameDisplay), Brushes.OrangeRed);
 
 
             // 6. 识别交易物品
@@ -1700,15 +2442,15 @@ namespace iBarter {
                 pointPlusParley.X + 376,
                 pointPlusParley.Y - pointPlusParley.Size.Height,
                 pointPlusRequired.X + 376 + 100,
-                pointPlusParley.Y + pointPlusParley.Size.Height, CV.OCRType.Words, CV.OCRMode.Color);
+                pointPlusParley.Y + pointPlusParley.Size.Height, CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage());
 
             // (Removed two dead DM.Capture writes that produced
             // myItem1.bmp / myItem2.bmp on disk - the OCR text above
             // already gave us what we needed; no downstream code ever
             // read those BMPs.)
 
-            Items myItems1 = FindMostSimilarItem(strItem1, ExtractLevelPrefix(strItem1).lv);
-            Items myItems2 = FindMostSimilarItem(strItem2, ExtractLevelPrefix(strItem2).lv);
+            Items myItems1 = FindMostSimilarItemZhTwAware(strItem1, ExtractLevelPrefix(strItem1).lv);
+            Items myItems2 = FindMostSimilarItemZhTwAware(strItem2, ExtractLevelPrefix(strItem2).lv);
 
 
             PointPlus myPP1 = new PointPlus();
@@ -1731,7 +2473,7 @@ namespace iBarter {
                 if (listPointPlus_Temp.Count >= 1)
                     listPointPlus.Add(listPointPlus_Temp[0]);
                 else
-                    Log($"PickTwoBest returned no candidates for slot1 (itemID={myItems1?.ItemID}, lv={myItems1?.ItemLV})", Brushes.IndianRed);
+                    Log(Localization.LanguageService.Instance.Localize("str.Log.PickTwoBest.NoSlot1", myItems1?.ItemID ?? "", myItems1?.ItemLV ?? ""), Brushes.IndianRed);
             }
 
 
@@ -1758,7 +2500,7 @@ namespace iBarter {
                 else if (listPointPlus_Temp.Count == 1)
                     listPointPlus.Add(listPointPlus_Temp[0]);
                 else
-                    Log($"PickTwoBest returned no candidates for slot2 (itemID={myItems2?.ItemID}, lv={myItems2?.ItemLV})", Brushes.IndianRed);
+                    Log(Localization.LanguageService.Instance.Localize("str.Log.PickTwoBest.NoSlot2", myItems2?.ItemID ?? "", myItems2?.ItemLV ?? ""), Brushes.IndianRed);
             }
 
 
@@ -1783,6 +2525,11 @@ namespace iBarter {
             // listPointPlus = PickTwoBest(listPointPlus);
             // listPointPlus.Sort((p1, p2) => p1.X.CompareTo(p2.X));
 
+            if (listPointPlus.Count < 1) {
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.CannotIdentifyItemIcons", myIslands.IslandsNameDisplay), Brushes.Red);
+                return myBarter;
+            }
+
             // 8. 识别第一个物品
             string strID1 = listPointPlus[0].ImageID.Substring(14, listPointPlus[0].ImageID.Length - 18);
             // if (strID1 == "800011")
@@ -1804,10 +2551,10 @@ namespace iBarter {
                     intNumber1 = App.listItems.Where(i => i.ItemID == strID1)
                         .Select(i => i.ItemNumber).FirstOrDefault();
                     if (intNumber1 > 0)
-                        Log($"OCR qty {strID1} fallback CSV={intNumber1}", Brushes.OrangeRed);
+                        Log(Localization.LanguageService.Instance.Localize("str.Log.OcrQty.FallbackCSV", strID1, intNumber1), Brushes.OrangeRed);
                 }
             } else {
-                Log($"LV5+ skip OCR for {strID1} ({lv1Item.ItemName}) -> 1", Brushes.Gold);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.LV5Skip", strID1, lv1Item.ItemNameDisplay), Brushes.Gold);
             }
 
             // 9. 识别第二个物品
@@ -1823,20 +2570,20 @@ namespace iBarter {
                 var lv2Item = App.listItems.FirstOrDefault(i => i.ItemID == strID2);
                 if (lv2Item != null && IsHighTier(lv2Item.ItemLV)) {
                     intNumber2 = 1;
-                    Log($"LV5+ skip OCR for {strID2} ({lv2Item.ItemName}) -> 1", Brushes.Gold);
+                    Log(Localization.LanguageService.Instance.Localize("str.Log.LV5Skip", strID2, lv2Item.ItemNameDisplay), Brushes.Gold);
                 } else {
                     intNumber2 = TryReadQuantity(listPointPlus[1], strID2);
                 }
             }
             else {
-                Log("Cannot identify the second item. Use Crow Coin instead.", Brushes.Red);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.SecondItemUseCrowCoin"), Brushes.Red);
             }
 
             if (intNumber2 <= 0) {
                 intNumber2 = App.listItems.Where(i => i.ItemID == strID2)
                     .Select(i => i.ItemNumber).FirstOrDefault();
                 if (intNumber2 > 0)
-                    Log($"OCR qty {strID2} fallback CSV={intNumber2}", Brushes.OrangeRed);
+                    Log(Localization.LanguageService.Instance.Localize("str.Log.OcrQty.FallbackCSV", strID2, intNumber2), Brushes.OrangeRed);
             }
 
             // Note (commit-history): the legacy `if (ItemLV != "0") intNumberX = 1;` override
@@ -1857,7 +2604,7 @@ namespace iBarter {
                 App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemLV).FirstOrDefault(),
                 intNumber2);
 
-            Log($"<{myIslands.Island} - {myIslands.Remaining} ~ {myIslands.Parley}> Item1: {item1.ItemName} => {intNumber1} | Item2: {item2.ItemName} => {intNumber2}", Brushes.Blue);
+            Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.OcrSummary", myIslands.IslandsNameDisplay, myIslands.Remaining, myIslands.Parley, item1.ItemNameDisplay, intNumber1, item2.ItemNameDisplay, intNumber2), Brushes.Blue);
 
             myBarter.Item1 = item1;
             myBarter.Item2 = item2;
@@ -1874,7 +2621,7 @@ namespace iBarter {
             foreach (var ch in formD)
                 if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
                     sb.Append(ch);
-            return sb.ToString().Normalize(NormalizationForm.FormC);
+            return ChineseTextNormalizer.NormalizeForMatching(sb.ToString().Normalize(NormalizationForm.FormC));
         }
 
         // 切词（英文够用）：按非字母数字分割，保留整词
@@ -1894,6 +2641,12 @@ namespace iBarter {
             b = NormalizeBasic(b);
 
             if (a == b) return 200; // 精确一致，绝对优先
+
+            bool cjk = ContainsCjk(a) || ContainsCjk(b);
+            if (cjk && Math.Min(a.Length, b.Length) >= 2 && (a.Contains(b) || b.Contains(a))) {
+                int lengthGap = Math.Abs(a.Length - b.Length);
+                return Math.Max(80, 100 - Math.Min(20, lengthGap * 2));
+            }
 
             var ta = Tokenize(a);
             var tb = Tokenize(b);
@@ -1921,6 +2674,10 @@ namespace iBarter {
             if (score < 0) score = 0;
             if (score > 100) score = 100;
             return score;
+        }
+
+        private static bool ContainsCjk(string input) {
+            return ChineseTextNormalizer.ContainsCjk(input);
         }
 
         private string RemoveLevelPrefix(string input) {
@@ -2294,13 +3051,7 @@ namespace iBarter {
                 return EnumLists.Island.UnKnown;
             }
 
-            bool isCjk = false;
-            foreach (var ch in _island) {
-                if (ch >= 0x4E00 && ch <= 0x9FFF) {
-                    isCjk = true;
-                    break;
-                }
-            }
+            bool isCjk = ContainsCjk(_island);
 
             if (_zhTwIslandMatcher == null || _englishIslandMatcher == null) {
                 BuildIslandMatchers();
@@ -2308,10 +3059,16 @@ namespace iBarter {
 
             iBarter.StringSimilarityMatcher primary = isCjk ? _zhTwIslandMatcher! : _englishIslandMatcher!;
             iBarter.StringSimilarityMatcher secondary = isCjk ? _englishIslandMatcher! : _zhTwIslandMatcher!;
+            var primaryMap = isCjk ? _zhTwIslandEnumByCandidate : _englishIslandEnumByCandidate;
+            var secondaryMap = isCjk ? _englishIslandEnumByCandidate : _zhTwIslandEnumByCandidate;
 
             // Try primary catalog
             var best = primary.FindBest(_island, out int score);
             if (score >= minScore) {
+                var resolved = ResolveIslandMatcherCandidate(best, primaryMap);
+                if (resolved != EnumLists.Island.UnKnown) {
+                    return resolved;
+                }
                 return best switch {
                     "Ajir" => EnumLists.Island.Ajir,
                     "Albresser" => EnumLists.Island.Albresser,
@@ -2326,6 +3083,7 @@ namespace iBarter {
                     "Barater" => EnumLists.Island.Barater,
                     "Baremi" => EnumLists.Island.Baremi,
                     "Beiruwa" => EnumLists.Island.Beiruwa,
+                    "Boa" => EnumLists.Island.Boa,
                     "Haran" => EnumLists.Island.Haran,
                     "Carrack" => EnumLists.Island.Carrack,
                     "Cholace" => EnumLists.Island.Cholace,
@@ -2411,6 +3169,10 @@ namespace iBarter {
             // Cross-fallback: try the OTHER catalog
             best = secondary.FindBest(_island, out int score2);
             if (score2 >= minScore) {
+                var resolved = ResolveIslandMatcherCandidate(best, secondaryMap);
+                if (resolved != EnumLists.Island.UnKnown) {
+                    return resolved;
+                }
                 return best switch {
                     "Ajir" => EnumLists.Island.Ajir,
                     "Albresser" => EnumLists.Island.Albresser,
@@ -2425,6 +3187,7 @@ namespace iBarter {
                     "Barater" => EnumLists.Island.Barater,
                     "Baremi" => EnumLists.Island.Baremi,
                     "Beiruwa" => EnumLists.Island.Beiruwa,
+                    "Boa" => EnumLists.Island.Boa,
                     "Haran" => EnumLists.Island.Haran,
                     "Carrack" => EnumLists.Island.Carrack,
                     "Cholace" => EnumLists.Island.Cholace,
@@ -2515,7 +3278,20 @@ namespace iBarter {
 
         private static iBarter.StringSimilarityMatcher? _englishIslandMatcher;
         private static iBarter.StringSimilarityMatcher? _zhTwIslandMatcher;
+        private static System.Collections.Generic.Dictionary<string, EnumLists.Island>? _englishIslandEnumByCandidate;
+        private static System.Collections.Generic.Dictionary<string, EnumLists.Island>? _zhTwIslandEnumByCandidate;
         private static readonly object _islandMatcherLock = new object();
+
+        private static EnumLists.Island ResolveIslandMatcherCandidate(
+            string candidate,
+            System.Collections.Generic.Dictionary<string, EnumLists.Island>? map) {
+            if (string.IsNullOrWhiteSpace(candidate) || map == null) {
+                return EnumLists.Island.UnKnown;
+            }
+            return map.TryGetValue(NormalizeBasic(candidate), out var island)
+                ? island
+                : EnumLists.Island.UnKnown;
+        }
 
         // Tiny CSV splitter local to BuildIslandMatchers (the CFunctions
         // SplitCsvLine is private; this just splits on comma and trims, no
@@ -2543,7 +3319,7 @@ namespace iBarter {
                 var english = new System.Collections.Generic.List<string> {
                     "Ajir", "Albresser", "Almai", "Al_Naha", "Ancient", "Angie",
                     "Arakil", "Arita", "Baeza", "Balvege", "Barater", "Baremi",
-                    "Beiruwa", "Haran", "Carrack", "Cholace", "Cox_Pirate",
+                    "Beiruwa", "Boa", "Haran", "Carrack", "Cholace", "Cox_Pirate",
                     "Crows_Nest", "Crow", "Daton", "Delinghart", "Derko",
                     "Duch", "Dunde", "Eberdeen", "Ephde_Rune", "Esfah",
                     "Eveto", "Ginburrey", "Hakoven", "Halmad", "Iliya",
@@ -2598,9 +3374,65 @@ namespace iBarter {
                     foreach (var name in english) zhTw.Add(name);
                 }
 
+                var zhTwAliases = new System.Collections.Generic.List<(string Candidate, EnumLists.Island Island)>();
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "奧爾比亞海岸", EnumLists.Island.Olvia);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "奧爾維亞海岸", EnumLists.Island.Olvia);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "奧爾比亞", EnumLists.Island.Olvia);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "奧爾維亞", EnumLists.Island.Olvia);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "亞雷哈札", EnumLists.Island.Arehaza);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "阿利赫恣", EnumLists.Island.Arehaza);
+                // OCR misread of 阿利赫恣 (observed in Arehaza village tooltips, where the
+                // game's font OCR'd the second 3-char token as 未綴 instead of 赫恣).
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "阿利未綴", EnumLists.Island.Arehaza);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "葛蘭迪哈", EnumLists.Island.Grandiha);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "午夜島", EnumLists.Island.Midnight);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "哈伊摩", EnumLists.Island.Haemo);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "杜鵑渡口", EnumLists.Island.Dallae);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "艾裴莉雅", EnumLists.Island.Epheria);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "艾裴莉雅港口", EnumLists.Island.Epheria);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "艾裴莉雅港口村莊", EnumLists.Island.Epheria);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "伊菲利亞", EnumLists.Island.Epheria);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "蘇桑", EnumLists.Island.Sausan);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "薩扇", EnumLists.Island.Sausan);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "薩扇碼頭", EnumLists.Island.Sausan);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "聖域", EnumLists.Island.Sanctuary);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "聖殿", EnumLists.Island.Sanctuary);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "聖殿海岸", EnumLists.Island.Sanctuary);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "柯克斯海盜", EnumLists.Island.Cox_Pirate);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "酷斯海賊團", EnumLists.Island.Cox_Pirate);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "柯魯之巢", EnumLists.Island.Crows_Nest);
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "西奧尼爾", EnumLists.Island.Theonil);
+
                 _englishIslandMatcher = new iBarter.StringSimilarityMatcher(new System.Collections.ArrayList(english), ignoreCase: true, removeDiacritics: true);
                 _zhTwIslandMatcher = new iBarter.StringSimilarityMatcher(new System.Collections.ArrayList(zhTw), ignoreCase: true, removeDiacritics: true);
+                _englishIslandEnumByCandidate = new System.Collections.Generic.Dictionary<string, EnumLists.Island>(System.StringComparer.Ordinal);
+                _zhTwIslandEnumByCandidate = new System.Collections.Generic.Dictionary<string, EnumLists.Island>(System.StringComparer.Ordinal);
+                for (int i = 0; i < english.Count; i++) {
+                    if (System.Enum.TryParse(english[i], out EnumLists.Island island)) {
+                        _englishIslandEnumByCandidate[NormalizeBasic(english[i])] = island;
+                        if (i < zhTw.Count && !string.IsNullOrWhiteSpace(zhTw[i])) {
+                            _zhTwIslandEnumByCandidate[NormalizeBasic(zhTw[i])] = island;
+                        }
+                    }
+                }
+                foreach (var alias in zhTwAliases) {
+                    _zhTwIslandEnumByCandidate[NormalizeBasic(alias.Candidate)] = alias.Island;
+                }
             }
+        }
+
+        private static void AddZhTwIslandAlias(
+            System.Collections.Generic.List<string> zhTw,
+            System.Collections.Generic.List<(string Candidate, EnumLists.Island Island)> aliases,
+            string candidate,
+            EnumLists.Island island) {
+            if (string.IsNullOrWhiteSpace(candidate)) {
+                return;
+            }
+            if (!zhTw.Contains(candidate)) {
+                zhTw.Add(candidate);
+            }
+            aliases.Add((candidate, island));
         }
 
 
