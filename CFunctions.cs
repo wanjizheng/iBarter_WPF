@@ -1054,6 +1054,18 @@ namespace iBarter {
 
             listAnchors.Sort((p1, p2) => { return p1.Y.CompareTo(p2.Y); });
 
+            // Refresh the barter-UI fingerprint used by the icon-position
+            // cache. Captured AFTER anchors are known so we can sample a
+            // region relative to the first anchor (~50x20 px just above it).
+            // If the user switches to a different barter session or moves
+            // the game window between scans, this hash flips and invalidates
+            // every cached icon position.
+            if (listAnchors.Count > 0) {
+                RefreshBarterUIHash(listAnchors[0]);
+            } else {
+                _currentBarterUIHash = 0;
+            }
+
             // Filter out anchors whose X coordinate is a clear outlier.
             // All valid barter-row anchors are vertically stacked and therefore
             // share approximately the same X position.  A special-exchange
@@ -1706,10 +1718,20 @@ namespace iBarter {
         }
 
         private int TryReadRemainingCount(PointPlus pointPlusAnchor, PointPlus pointPlusEdge, string strIsland) {
+            // The "Remaining" word always sits just to the right of the
+            // anchor icon (within the same barter row). Narrow the search
+            // rect to anchor.X - 50 .. anchor.X + 450 instead of the full
+            // window width. Cuts FindPicture cost ~5-6x (rect area shrinks
+            // from WindowWidth x ~30 to ~500 x ~30). The 50-px left margin
+            // covers the case where the icon template straddles the anchor
+            // edge; the 450-px right margin covers the worst-case "Remaining"
+            // label position observed on BDO barter UI.
+            int remX1 = System.Math.Max(0, pointPlusAnchor.X - 50);
+            int remX2 = System.Math.Min(App.myPureDM.WindowWidth, pointPlusAnchor.X + 450);
             PointPlus pointPlusRemaining = FindScanLabel(
-                0,
+                remX1,
                 pointPlusAnchor.Y + pointPlusAnchor.Size.Height,
-                App.myPureDM.WindowWidth,
+                remX2,
                 pointPlusAnchor.Y + 60,
                 "Remaining", 0.6, out _, out string triedRemainingPaths);
 
@@ -1862,6 +1884,39 @@ namespace iBarter {
         // only read each bmp once per app session and resize per call-site size.
         private static readonly System.Collections.Generic.Dictionary<string, Image<Bgr, byte>>
             _tplCache = new System.Collections.Generic.Dictionary<string, Image<Bgr, byte>>(System.StringComparer.Ordinal);
+
+        // Item-icon PointPlus cache. The catastrophic-fallback loop at lines
+        // ~2485 and ~2510 iterates all of App.listItems (~273 items) doing one
+        // PureDM FindPicture each when the fuzzy-matched icon template doesn't
+        // visually match the live capture. That's ~8 seconds PER missed icon.
+        //
+        // Strategy A (strict, no row position stored) + C (fingerprint of a
+        // small barter-UI region captured at scan start):
+        //   - Cache value: icon's offset from the capture-rect origin
+        //     (intX1, intY1), so the absolute screen position is reconstructed
+        //     from the current anchor. This makes the cache immune to absolute
+        //     screen-position changes (e.g. user drags the game window).
+        //   - Cache key: ItemID + WindowWidth + WindowHeight + barterUIHash.
+        //     Any of these changing invalidates the entry.
+        //   - Fallback: on cache miss OR fingerprint mismatch, the code falls
+        //     through to the existing PureDM FindPicture + O(n) loop. The
+        //     cache only saves work; it never returns stale data.
+        private static readonly System.Collections.Generic.Dictionary<string, IconPointCacheEntry>
+            _iconPointCache = new System.Collections.Generic.Dictionary<string, IconPointCacheEntry>(System.StringComparer.Ordinal);
+        private struct IconPointCacheEntry {
+            public int OffsetX;       // icon.X - intX1 (= icon.X - (anchor.X + anchor.W + 1))
+            public int OffsetY;       // icon.Y - intY1 (= icon.Y - (anchor.Y - 2))
+            public int SizeWidth;
+            public int SizeHeight;
+            public int BarterUIHash;  // hash of a small region above first anchor
+            public int WindowWidth;
+            public int WindowHeight;
+        }
+        // Computed once per scan in DoIdentifyRoutesHeavy right after
+        // FindBarterAnchors succeeds. Used as part of the icon-cache key so
+        // any UI change (e.g. user swaps to a different barter session)
+        // invalidates ALL entries without explicit invalidation calls.
+        private static int _currentBarterUIHash;
 
         // Load the icon template from Resources\Images\Items\<id>.bmp. Templates
         // are the clean icon (no number overlay) downloaded from bdocodex.
@@ -2065,6 +2120,91 @@ namespace iBarter {
             catch {
                 return null;
             }
+        }
+
+        // Cheap deterministic hash of a byte buffer. Used as a barter-UI
+        // fingerprint - not cryptographic, just needs to change when the
+        // captured pixels change (i.e. when the user swaps to a different
+        // barter session or moves the game window).
+        private static int SimpleByteHash(byte[] bytes) {
+            if (bytes == null || bytes.Length == 0) return 0;
+            unchecked {
+                int h = 17;
+                // Sample every 7th byte; the first 200 bytes are enough to
+                // distinguish one barter session from another while keeping
+                // the hash cost trivial (~30 ns for a typical 100x20 region).
+                int stride = System.Math.Max(1, bytes.Length / 200);
+                for (int i = 0; i < bytes.Length; i += stride) {
+                    h = h * 31 + bytes[i];
+                }
+                return h;
+            }
+        }
+
+        // Capture + hash the barter UI region just above the first anchor.
+        // The capture rect is intentionally small (~50x20 px, ~1 KB BMP) so
+        // the call takes ~5 ms even on heavily-fragmented native heaps.
+        // Any change to this region (different barter session, different
+        // game state, BDO redraw) flips the hash and invalidates ALL icon
+        // cache entries - no explicit invalidation plumbing required.
+        private static void RefreshBarterUIHash(PointPlus firstAnchor) {
+            if (firstAnchor == null || firstAnchor.X < 0 || firstAnchor.Y < 10) {
+                _currentBarterUIHash = 0;
+                return;
+            }
+            int x1 = firstAnchor.X;
+            int y1 = System.Math.Max(0, firstAnchor.Y - 30);
+            int x2 = firstAnchor.X + 50;
+            int y2 = firstAnchor.Y - 10;
+            byte[] bytes = CaptureScreenBytes(x1, y1, x2, y2);
+            _currentBarterUIHash = SimpleByteHash(bytes);
+        }
+
+        // Try the icon-position cache. Returns a populated PointPlus on hit;
+        // returns PointPlus.Empty (X = -1) on miss so the caller falls through
+        // to the existing PureDM FindPicture + O(n) fallback path unchanged.
+        // On miss or any invariant violation, the cache entry is invalidated.
+        private static PointPlus TryIconPointCache(string itemID, int intX1, int intY1) {
+            if (string.IsNullOrEmpty(itemID)) return PointPlus.Empty;
+            if (!_iconPointCache.TryGetValue(itemID, out var entry)) return PointPlus.Empty;
+            if (App.myPureDM == null) return PointPlus.Empty;
+            if (entry.WindowWidth != App.myPureDM.WindowWidth
+                || entry.WindowHeight != App.myPureDM.WindowHeight) {
+                _iconPointCache.Remove(itemID);
+                return PointPlus.Empty;
+            }
+            if (entry.BarterUIHash != _currentBarterUIHash) {
+                _iconPointCache.Remove(itemID);
+                return PointPlus.Empty;
+            }
+            // Reconstruct absolute screen position from the capture-rect
+            // origin (intX1, intY1) plus the cached offset.
+            var p = new PointPlus();
+            p.X = intX1 + entry.OffsetX;
+            p.Y = intY1 + entry.OffsetY;
+            p.Size = new System.Drawing.Size(entry.SizeWidth, entry.SizeHeight);
+            return p;
+        }
+
+        // Populate the icon-position cache after a successful PureDM FindPicture.
+        // Stores the icon's offset within the capture rect (intX1, intY1) so
+        // the value is independent of absolute screen position.
+        private static void StoreIconPointCache(string itemID, PointPlus found, int intX1, int intY1) {
+            if (string.IsNullOrEmpty(itemID)
+                || found == null
+                || found.X < 0
+                || App.myPureDM == null) {
+                return;
+            }
+            var entry = new IconPointCacheEntry();
+            entry.OffsetX = found.X - intX1;
+            entry.OffsetY = found.Y - intY1;
+            entry.SizeWidth = found.Size != null ? found.Size.Width : 0;
+            entry.SizeHeight = found.Size != null ? found.Size.Height : 0;
+            entry.BarterUIHash = _currentBarterUIHash;
+            entry.WindowWidth = App.myPureDM.WindowWidth;
+            entry.WindowHeight = App.myPureDM.WindowHeight;
+            _iconPointCache[itemID] = entry;
         }
 
         // Phase R: feed the raw captured bitmap to Tesseract with NO
@@ -2477,8 +2617,18 @@ namespace iBarter {
 
 
             PointPlus myPP1 = new PointPlus();
-            if (myItems1 != null)
-                myPP1 = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems1.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+            if (myItems1 != null) {
+                // Cache hit short-circuits the PureDM FindPicture + skips the
+                // O(n) fallback below entirely. The cache is invalidated
+                // automatically when the barter UI fingerprint changes.
+                myPP1 = TryIconPointCache(myItems1.ItemID, intX1, intY1);
+                if (myPP1.X == -1) {
+                    myPP1 = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems1.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+                    if (myPP1.X != -1 && myPP1.Y != -1 && myPP1.X * myPP1.Y != 0) {
+                        StoreIconPointCache(myItems1.ItemID, myPP1, intX1, intY1);
+                    }
+                }
+            }
             if (myPP1.X != -1 && myPP1.Y != -1 && myPP1.X * myPP1.Y != 0)
                 listPointPlus.Add(myPP1);
             else {
@@ -2502,8 +2652,16 @@ namespace iBarter {
 
             PointPlus myPP2 = new PointPlus();
 
-            if (myItems2 != null)
-                myPP2 = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems2.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+            if (myItems2 != null) {
+                // Same cache short-circuit as item 1 above.
+                myPP2 = TryIconPointCache(myItems2.ItemID, intX1, intY1);
+                if (myPP2.X == -1) {
+                    myPP2 = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems2.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+                    if (myPP2.X != -1 && myPP2.Y != -1 && myPP2.X * myPP2.Y != 0) {
+                        StoreIconPointCache(myItems2.ItemID, myPP2, intX1, intY1);
+                    }
+                }
+            }
             if (myPP2.X != -1 && myPP2.Y != -1 && myPP2.X * myPP2.Y != 0)
                 listPointPlus.Add(myPP2);
             else {
