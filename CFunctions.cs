@@ -17,7 +17,6 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -53,23 +52,6 @@ namespace iBarter {
         }
 
         private const int MaxLogBlocks = 500;
-
-        // Maximum worker threads the parallel scan loop may spawn. Each thread
-        // lazily loads a Tesseract 4 LSTM instance (~30-50 MB resident) plus
-        // transient Magick/Bitmap/Mat buffers (~30-40 MB peak per worker). With
-        // LargeAddressAware set in iBarter.csproj the x86 process under WOW64
-        // gets a 4 GB user-mode address space, so 4 workers (~320 MB transient
-        // peak on top of the existing _tplCache ~50-100 MB) leaves ~3.5 GB
-        // headroom. Lower to 2 if you see OutOfMemoryException on older 32-bit
-        // Windows hosts (2 GB cap, no LAA).
-        private const int ScanMaxParallelism = 4;
-
-        // (Log capture removed - the [ThreadStatic] buffer caused a regression
-        // that hung scans silently. Workers now log in real-time via the UI
-        // Dispatcher, so the Log pane shows entries in completion order, not
-        // island Y order. The Scanner grid still preserves top-to-bottom
-        // order because we write to fixed-slot results[i] and append by
-        // index in the ordering pass.)
 
         public void Log(string _message, Brush _color) {
             if (!Application.Current.Dispatcher.CheckAccess()) {
@@ -1156,49 +1138,16 @@ namespace iBarter {
             // }
 
 
-            // Run up to 6 anchors in parallel. Each worker writes to a fixed slot in
-            // `results`, so insertion into App.listBarterScanner below preserves
-            // the top-to-bottom Y-sorted order. PureDM is serialized via
-            // _pureDmLock; Tesseract is per-thread via ThreadLocal.
-            //
-            // Workers call Log() directly via Dispatcher.Invoke - the Log pane
-            // will show entries in completion order, not island Y order. The
-            // Scanner grid is still top-to-bottom because results[i] is appended
-            // in i order by the single-threaded ordering pass below.
-            int n = Math.Min(6, listAnchors.Count);
-            var results = new Barter[n];
-            var parallelOpts = new ParallelOptions { MaxDegreeOfParallelism = ScanMaxParallelism };
+            List<Task<Barter>> tasks = new List<Task<Barter>>();
 
-            try {
-                Parallel.ForEach(System.Linq.Enumerable.Range(0, n), parallelOpts, i => {
-                    try {
-                        results[i] = IdentifyBarterAsync(listAnchors[i]);
-                    }
-                    catch (Exception ex) {
-                        Log(Localization.LanguageService.Instance.Localize(
-                            "str.Log.Scanner.AnchorFailed", i, ex.GetType().Name, ex.Message),
-                            Brushes.IndianRed);
-                        results[i] = null;
-                    }
-                });
-            }
-            catch (Exception ex) {
-                Log(Localization.LanguageService.Instance.Localize(
-                    "str.Log.Scanner.ParallelFailed", ex.GetType().Name, ex.Message),
-                    Brushes.Red);
-            }
+            for (int i = 0; i < Math.Min(6, listAnchors.Count); i++) {
+                var myBarter = IdentifyBarterAsync(listAnchors[i]); // 一个一个来
+                if (myBarter == null) {
+                    continue;
+                }
 
-            // Ordered append: only one thread touches App.listBarterScanner.
-            // The duplicate-Island-name filter happens here so it sees all
-            // results at once - workers can't race against a mutating list
-            // while checking.
-            lock (App._listLock) {
-                for (int i = 0; i < n; i++) {
-                    var myBarter = results[i];
-                    if (myBarter == null) continue;
-                    if (myBarter.IsLand == null || myBarter.Item1 == null || myBarter.Item2 == null) continue;
-                    if (App.listBarterScanner.Any(b => b.IsLand.Island.ToString()
-                            .Equals(myBarter.IsLand.Island.ToString(), System.StringComparison.Ordinal))) continue;
+                if (myBarter.IsLand != null && myBarter.Item1 != null && myBarter.Item2 != null &&
+                    App.listBarterScanner.FirstOrDefault(b => b.IsLand.Island.ToString().Equals(myBarter.IsLand.Island.ToString())) == null) {
                     App.listBarterScanner.Add(myBarter);
                 }
             }
@@ -1531,42 +1480,38 @@ namespace iBarter {
         //  No cross-scan cache — the on-screen count changes per scan (e.g.
         //  remaining inventory / remaining trades) so a cached value would be
         //  stale by the next run.
-        //
-        //  Per-thread Tesseract instance. Each Parallel.ForEach worker thread
-        //  pays the LSTM init cost (~hundreds of ms) once; subsequent
-        //  SetImage/Recognize/GetUTF8Text calls are then per-thread and need
-        //  no lock. Separate Tesseract instances own independent TessBaseAPI
-        //  handles, so concurrent calls across worker threads are safe.
-        //  trackAllValues:false keeps the Values enumerable empty so unused
-        //  instances are not kept alive.
-        private static readonly ThreadLocal<Tesseract> _tessPerThread =
-            new ThreadLocal<Tesseract>(CreateTesseractForThisThread, trackAllValues: false);
+        private static Tesseract _tess;
+        private static readonly object _tessLock = new object();
 
-        private static Tesseract CreateTesseractForThisThread() {
-            try {
-                // Tesseract 4 ctor: TessBaseAPI.Init(dataPath, language, oem).
-                // dataPath must be a *directory*; Tesseract appends
-                // "<language>.traineddata" to find the model file. The
-                // iBarter.csproj <Content> block already copies
-                // eng.traineddata to the build output, so we just point
-                // at the directory.
-                string tessDataDir = AppDomain.CurrentDomain.BaseDirectory + @"tessdata\";
-                if (!System.IO.Directory.Exists(tessDataDir) ||
-                    !System.IO.File.Exists(tessDataDir + "eng.traineddata")) {
-                    TryWriteDebugLog("[OCR] tessdata MISSING: " + tessDataDir);
+        private static Tesseract GetTesseract() {
+            if (_tess != null) return _tess;
+            lock (_tessLock) {
+                if (_tess != null) return _tess;
+                try {
+                    // Tesseract 4 ctor: TessBaseAPI.Init(dataPath, language, oem).
+                    // dataPath must be a *directory*; Tesseract appends
+                    // "<language>.traineddata" to find the model file. The
+                    // iBarter.csproj <Content> block already copies
+                    // eng.traineddata to the build output, so we just point
+                    // at the directory.
+                    string tessDataDir = AppDomain.CurrentDomain.BaseDirectory + @"tessdata\";
+                    if (!System.IO.Directory.Exists(tessDataDir) ||
+                        !System.IO.File.Exists(tessDataDir + "eng.traineddata")) {
+                        TryWriteDebugLog("[OCR] tessdata MISSING: " + tessDataDir);
+                        return null;
+                    }
+                    _tess = new Tesseract(tessDataDir, "eng", OcrEngineMode.Default);
+                    _tess.SetVariable("tessedit_char_whitelist", "0123456789");
+                    // psm SetVariable throws 'Unable to set psm to X' on the
+                    // Emgu.CV.OCR.Tesseract 4 + LSTM build shipped here. Default
+                    // psm 3 (fully automatic) handles short digit runs well
+                    // once the digit whitelist above is in effect.
+                    return _tess;
+                }
+                catch (Exception ex) {
+                    TryWriteDebugLog("[OCR] tess init fail: " + ex.GetType().Name + " " + ex.Message);
                     return null;
                 }
-                var tess = new Tesseract(tessDataDir, CurrentOcrLanguage(), OcrEngineMode.Default);
-                tess.SetVariable("tessedit_char_whitelist", "0123456789");
-                // psm SetVariable throws 'Unable to set psm to X' on the
-                // Emgu.CV.OCR.Tesseract 4 + LSTM build shipped here. Default
-                // psm 3 (fully automatic) handles short digit runs well
-                // once the digit whitelist above is in effect.
-                return tess;
-            }
-            catch (Exception ex) {
-                TryWriteDebugLog("[OCR] tess init fail: " + ex.GetType().Name + " " + ex.Message);
-                return null;
             }
         }
 
@@ -1648,7 +1593,7 @@ namespace iBarter {
             var candidates = ScanLabelImageCandidates(labelName, similarity);
             triedPaths = string.Join(", ", candidates.Select(c => c.Path + "@" + c.Similarity.ToString("0.00", CultureInfo.InvariantCulture)));
             foreach (var candidate in candidates) {
-                PointPlus point = PureDmFindPictureSimple(x1, y1, x2, y2, candidate.Path, candidate.Similarity, CV.Mode.OpenCV, false);
+                PointPlus point = App.myPureDM.CV.FindPicture(x1, y1, x2, y2, candidate.Path, candidate.Similarity, CV.Mode.OpenCV, false);
                 if (!point.IsEmpty) {
                     matchedPath = candidate.Path;
                     // DO NOT silently flip the global GameFont on a single 2.bmp
@@ -1670,7 +1615,7 @@ namespace iBarter {
         private List<ScanLabelMatch> FindScanLabelMatches(int x1, int y1, int x2, int y2, string labelName, double similarity, List<string> attempts) {
             var matches = new List<ScanLabelMatch>();
             foreach (var candidate in ScanLabelImageCandidates(labelName, similarity)) {
-                PointPlus point = PureDmFindPictureSimple(x1, y1, x2, y2, candidate.Path, candidate.Similarity, CV.Mode.OpenCV, false);
+                PointPlus point = App.myPureDM.CV.FindPicture(x1, y1, x2, y2, candidate.Path, candidate.Similarity, CV.Mode.OpenCV, false);
                 string status = point.IsEmpty
                     ? "not found"
                     : "at " + point.X + "," + point.Y + " size " + point.Size.Width + "x" + point.Size.Height;
@@ -1803,7 +1748,7 @@ namespace iBarter {
             foreach (var mode in new[] { CV.OCRMode.Diff, CV.OCRMode.Color, CV.OCRMode.Binary }) {
                 string raw;
                 try {
-                    raw = PureDmOcrString(
+                    raw = App.myPureDM.CV.OCRString(
                         x1, y1, x2, y2,
                         CV.OCRType.Number, mode, false, "", CurrentOcrLanguage());
                     modeTried = mode.ToString();
@@ -1917,79 +1862,38 @@ namespace iBarter {
         // only read each bmp once per app session and resize per call-site size.
         private static readonly System.Collections.Generic.Dictionary<string, Image<Bgr, byte>>
             _tplCache = new System.Collections.Generic.Dictionary<string, Image<Bgr, byte>>(System.StringComparer.Ordinal);
-        private static readonly object _tplCacheLock = new object();
-
-        // Single lock guarding all App.myPureDM.CV.* and App.myPureDM.DM.* calls
-        // (excluding the two sites that already lock on App.myPureDM.DM:
-        // CaptureScreenBytes at ~line 2050 and TryValidateGameCapture probe).
-        // PureDM is COM + single-threaded; concurrent calls can return torn
-        // states or RPC_E_DISCONNECTED. Held only for the duration of one
-        // PureDM call so the Magick + Tesseract work between calls runs in
-        // parallel across worker threads.
-        private static readonly object _pureDmLock = new object();
-
-        // Locking wrappers around the PureDM COM calls. Every PureDM CV call
-        // site that runs inside the parallel scan loop must go through one
-        // of these. The wrappers are static so they can be called from
-        // instance methods without ceremony.
-        private static PointPlus PureDmFindPicture(int x1, int y1, int x2, int y2,
-                string path, double sim1, double sim2, int offX, CV.Mode mode,
-                bool autoResize, CV.PictureColorMode color, bool sim4Enable, double sim4) {
-            lock (_pureDmLock) {
-                return App.myPureDM.CV.FindPicture(x1, y1, x2, y2, path, sim1, sim2, offX, mode, autoResize, color, sim4Enable, sim4);
-            }
-        }
-
-        private static PointPlus PureDmFindPictureSimple(int x1, int y1, int x2, int y2,
-                string path, double sim, CV.Mode mode, bool autoResize) {
-            lock (_pureDmLock) {
-                return App.myPureDM.CV.FindPicture(x1, y1, x2, y2, path, sim, mode, autoResize);
-            }
-        }
-
-        private static string PureDmOcrString(int x1, int y1, int x2, int y2,
-                CV.OCRType type, CV.OCRMode mode, bool flag, string id, string lang) {
-            lock (_pureDmLock) {
-                return App.myPureDM.CV.OCRString(x1, y1, x2, y2, type, mode, flag, id, lang);
-            }
-        }
 
         // Load the icon template from Resources\Images\Items\<id>.bmp. Templates
         // are the clean icon (no number overlay) downloaded from bdocodex.
         // Resize to liveSize if needed (the live capture may differ by a
         // pixel because of UI scaling / AA). Returns null if the bmp is
-        // missing or unreadable. The whole read+load+store sequence runs
-        // under _tplCacheLock so concurrent worker threads in the parallel
-        // scan loop don't race on the Dictionary's TryGetValue + indexer
-        // pair.
+        // missing or unreadable.
         private Image<Bgr, byte> LoadIconTemplate(string itemID, System.Drawing.Size liveSize) {
             if (string.IsNullOrEmpty(itemID)) return null;
             string key = itemID + "|" + liveSize.Width + "x" + liveSize.Height;
-            lock (_tplCacheLock) {
-                if (_tplCache.TryGetValue(key, out var cached)) return cached;
-                string path = AppDomain.CurrentDomain.BaseDirectory +
-                              "Resources\\Images\\Items\\" + itemID + ".bmp";
-                if (!System.IO.File.Exists(path)) {
-                    TryWriteDebugLog("OCR.G tpl path MISSING: " + path);
-                    return null;
+            if (_tplCache.TryGetValue(key, out var cached)) return cached;
+            string path = AppDomain.CurrentDomain.BaseDirectory +
+                          "Resources\\Images\\Items\\" + itemID + ".bmp";
+            if (!System.IO.File.Exists(path)) {
+                TryWriteDebugLog("OCR.G tpl path MISSING: " + path);
+                return null;
+            }
+            try {
+                var tpl = new Image<Bgr, byte>(path);
+                Image<Bgr, byte> sized = tpl;
+                if (tpl.Size != liveSize) {
+                    var resized = new Image<Bgr, byte>(liveSize);
+                    // CvInvoke.Resize with dsize=Size(0,0) + fx=0,fy=0 throws
+                    // 'inv_scale_x > 0' - we must pass the actual target size.
+                    CvInvoke.Resize(tpl, resized, liveSize, 0.0, 0.0, Inter.Linear);
+                    sized = resized;
                 }
-                try {
-                    var tpl = new Image<Bgr, byte>(path);
-                    Image<Bgr, byte> sized = tpl;
-                    if (tpl.Size != liveSize) {
-                        var resized = new Image<Bgr, byte>(liveSize);
-                        // CvInvoke.Resize with dsize=Size(0,0) + fx=0,fy=0 throws
-                        // 'inv_scale_x > 0' - we must pass the actual target size.
-                        CvInvoke.Resize(tpl, resized, liveSize, 0.0, 0.0, Inter.Linear);
-                        sized = resized;
-                    }
-                    _tplCache[key] = sized;
-                    return sized;
-                }
-                catch (Exception ex) {
-                    TryWriteDebugLog("OCR.G tpl load fail " + itemID + " " + liveSize + ": " + ex.GetType().Name + " " + ex.Message);
-                    return null;
-                }
+                _tplCache[key] = sized;
+                return sized;
+            }
+            catch (Exception ex) {
+                TryWriteDebugLog("OCR.G tpl load fail " + itemID + " " + liveSize + ": " + ex.GetType().Name + " " + ex.Message);
+                return null;
             }
         }
 
@@ -2009,7 +1913,7 @@ namespace iBarter {
         //   3. AbsDiff (template vs live)
         //   4. Threshold Otsu (binary bilevel)
         //   5. Magick 3x upscale + Negate (Tesseract prefers dark text on light bg)
-        //   6. Emgu.Tesseract via _tessPerThread.Value
+        //   6. Emgu.Tesseract via GetTesseract()
         //
         // Returns -1 on any failure (template missing, Tesseract missing, no
         // digits matched).
@@ -2026,7 +1930,7 @@ namespace iBarter {
         // isolates the digit strokes alone. Magick Scale 3x + Negate produces
         // a clean dark-on-light bitmap for Tesseract.
         private int TryTemplateDiffOcr(int x1, int y1, int x2, int y2) {
-            var tess = _tessPerThread.Value;
+            var tess = GetTesseract();
             if (tess == null) {
                 TryWriteDebugLog("OCR.G tess=null");
                 return -1;
@@ -2171,7 +2075,7 @@ namespace iBarter {
         // alongside Phase A (screen-coords), F (M-variant preprocessing)
         // and G (78% threshold + 5x upscale + morphology close).
         private int TryRawOcr(int x1, int y1, int x2, int y2) {
-            var tess = _tessPerThread.Value;
+            var tess = GetTesseract();
             if (tess == null) {
                 TryWriteDebugLog("OCR.R tess=null");
                 return -1;
@@ -2231,7 +2135,7 @@ namespace iBarter {
         // 5x + close preserves it). Returns -1 on any failure
         // (capture / engine / no digit match).
         private int TryRemainingTesseractOcr(int x1, int y1, int x2, int y2) {
-            var tess = _tessPerThread.Value;
+            var tess = GetTesseract();
             if (tess == null) {
                 return -1;
             }
@@ -2328,7 +2232,7 @@ namespace iBarter {
                 int x2 = (int)(oX + oW * c.rf);
                 int y2 = (int)(oY + oH * c.bf);
                 try {
-                    string raw = PureDmOcrString(x1, y1, x2, y2,
+                    string raw = App.myPureDM.CV.OCRString(x1, y1, x2, y2,
                         CV.OCRType.Number, CV.OCRMode.Diff, false, strID, CurrentOcrLanguage()) ?? "";
                     // Cap at 4 digits and < 10000 - values >= 10000 mean we almost
                     // certainly picked up neighbouring row text (Parley "10,432",
@@ -2431,7 +2335,7 @@ namespace iBarter {
             Barter myBarter = new Barter();
 
             // 1. 查找边缘图片以确定岛屿信息
-            PointPlus pointPlusEdge = PureDmFindPictureSimple(
+            PointPlus pointPlusEdge = App.myPureDM.CV.FindPicture(
                 Math.Max(0, pointPlusAnchor.X - 300),
                 pointPlusAnchor.Y - 5,
                 pointPlusAnchor.X - 5,
@@ -2444,7 +2348,7 @@ namespace iBarter {
                 return (Barter)null;
 
             // 通过 OCR 识别岛屿名称
-            string strIsland = PureDmOcrString(
+            string strIsland = App.myPureDM.CV.OCRString(
                 pointPlusEdge.X + pointPlusEdge.Size.Width,
                 pointPlusAnchor.Y - 2,
                 pointPlusAnchor.X - 2,
@@ -2504,7 +2408,7 @@ namespace iBarter {
 
             string strParley = "";
             if (hasParleyOcrRectangle) {
-                strParley = PureDmOcrString(
+                strParley = App.myPureDM.CV.OCRString(
                     parleyOcrX1,
                     parleyOcrY1,
                     parleyOcrX2,
@@ -2550,14 +2454,14 @@ namespace iBarter {
             // OCR the two trade-item labels directly from the screen via
             // PureDM.CV.OCRString (it captures the rect internally and
             // returns the recognised text). No disk file is involved.
-            string strItem1 = PureDmOcrString(
+            string strItem1 = App.myPureDM.CV.OCRString(
                 pointPlusParley.X,
                 pointPlusParley.Y - pointPlusParley.Size.Height,
                 pointPlusRequired.X + 120,
                 pointPlusParley.Y + 1, CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage());
 
 
-            string strItem2 = PureDmOcrString(
+            string strItem2 = App.myPureDM.CV.OCRString(
                 pointPlusParley.X + 376,
                 pointPlusParley.Y - pointPlusParley.Size.Height,
                 pointPlusRequired.X + 376 + 100,
@@ -2574,13 +2478,13 @@ namespace iBarter {
 
             PointPlus myPP1 = new PointPlus();
             if (myItems1 != null)
-                myPP1 = PureDmFindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems1.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+                myPP1 = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems1.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
             if (myPP1.X != -1 && myPP1.Y != -1 && myPP1.X * myPP1.Y != 0)
                 listPointPlus.Add(myPP1);
             else {
                 List<PointPlus> listPointPlus_Temp = new List<PointPlus>();
                 foreach (Items item in App.listItems) {
-                    PointPlus myPP = PureDmFindPicture(
+                    PointPlus myPP = App.myPureDM.CV.FindPicture(
                         intX1, intY1, intX2, intY2,
                         "\\Images\\Items\\" + item.ItemID + ".bmp",
                         0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
@@ -2599,13 +2503,13 @@ namespace iBarter {
             PointPlus myPP2 = new PointPlus();
 
             if (myItems2 != null)
-                myPP2 = PureDmFindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems2.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+                myPP2 = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems2.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
             if (myPP2.X != -1 && myPP2.Y != -1 && myPP2.X * myPP2.Y != 0)
                 listPointPlus.Add(myPP2);
             else {
                 List<PointPlus> listPointPlus_Temp = new List<PointPlus>();
                 foreach (Items item in App.listItems) {
-                    PointPlus myPP = PureDmFindPicture(
+                    PointPlus myPP = App.myPureDM.CV.FindPicture(
                         intX1, intY1, intX2, intY2,
                         "\\Images\\Items\\" + item.ItemID + ".bmp",
                         0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);

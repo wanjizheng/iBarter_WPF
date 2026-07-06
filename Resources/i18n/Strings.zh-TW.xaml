@@ -186,8 +186,6 @@
     <sys:String x:Key="str.Log.Scanner.OcrSummary">&lt;{0} - {1} ~ {2}&gt; 物品1：{3} =&gt; {4} | 物品2：{5} =&gt; {6}</sys:String>
     <sys:String x:Key="str.Log.Scanner.FoundAnchors">找到 anchor×{0}（{1}）</sys:String>
     <sys:String x:Key="str.Log.Scanner.FilteredAnchors">已过滤 {0} 个 X 坐标异常的 anchor（保留 X={1}~{2}，剩余 {3} 个）</sys:String>
-    <sys:String x:Key="str.Log.Scanner.AnchorFailed">第 {0} 行掃描失敗：{1} {2}</sys:String>
-    <sys:String x:Key="str.Log.Scanner.ParallelFailed">並行掃描失敗：{0} {1}</sys:String>
 
     <sys:String x:Key="str.Log.OcrQty.Picked">OCR 数量 {0}：选取 {1}（票数={2}；A={3} R={4} G={5}）</sys:String>
     <sys:String x:Key="str.Log.OcrQty.NoConsensus">OCR 数量 {0}：无共识；原始={1} R={2} G={3}</sys:String>

@@ -224,8 +224,6 @@
     <sys:String x:Key="str.Log.Scanner.OcrSummary">&lt;{0} - {1} ~ {2}&gt; Item1: {3} =&gt; {4} | Item2: {5} =&gt; {6}</sys:String>
     <sys:String x:Key="str.Log.Scanner.FoundAnchors">Found anchor×{0} ({1})</sys:String>
     <sys:String x:Key="str.Log.Scanner.FilteredAnchors">Filtered {0} outlier anchors (kept X={1}~{2}, {3} remaining)</sys:String>
-    <sys:String x:Key="str.Log.Scanner.AnchorFailed">Anchor {0} failed: {1} {2}</sys:String>
-    <sys:String x:Key="str.Log.Scanner.ParallelFailed">Parallel scan failed: {0} {1}</sys:String>
 
     <sys:String x:Key="str.Log.OcrQty.Picked">OCR qty {0}: picked {1} (votes={2}; A={3} R={4} G={5})</sys:String>
     <sys:String x:Key="str.Log.OcrQty.NoConsensus">OCR qty {0}: no consensus; raw={1} R={2} G={3}</sys:String>
