@@ -2729,8 +2729,17 @@ namespace iBarter {
             // directly. See the comment on the OCR_ALIASES field for the
             // "苔藓 -> 若攻" example. Falls through silently if the
             // OCR text isn't in the table.
+            // Use NormalizeBasic on the alias lookup key too, so a
+            // simplified-Chinese OCR (e.g. "若攻树合板" with simplified
+            // 树) matches the traditional-Chinese alias key (e.g.
+            // "若攻樹合板" with traditional 樹). Without this the user's
+            // "苔藓" misread as "若攻" wouldn't hit the alias - the
+            // 若/攻 wrong characters are the same, but the 树 vs 樹
+            // simplified-vs-traditional form fails the Dictionary
+            // exact-match lookup.
             var top1Candidates = new System.Collections.Generic.List<Items>();
-            if (OCR_ALIASES.TryGetValue(strItem1 ?? "", out string aliasItemID1)
+            string aliasKey1 = NormalizeBasic(strItem1 ?? "");
+            if (OCR_ALIASES.TryGetValue(aliasKey1, out string aliasItemID1)
                 && App.listItems != null) {
                 var aliased = App.listItems.FirstOrDefault(i => i.ItemID == aliasItemID1);
                 if (aliased != null) top1Candidates.Add(aliased);
@@ -2739,7 +2748,8 @@ namespace iBarter {
                 top1Candidates = FindMostSimilarItemZhTwAware(strItem1, 10, ExtractLevelPrefix(strItem1).lv);
             }
             var top2Candidates = new System.Collections.Generic.List<Items>();
-            if (OCR_ALIASES.TryGetValue(strItem2 ?? "", out string aliasItemID2)
+            string aliasKey2 = NormalizeBasic(strItem2 ?? "");
+            if (OCR_ALIASES.TryGetValue(aliasKey2, out string aliasItemID2)
                 && App.listItems != null) {
                 var aliased = App.listItems.FirstOrDefault(i => i.ItemID == aliasItemID2);
                 if (aliased != null) top2Candidates.Add(aliased);
