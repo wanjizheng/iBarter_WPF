@@ -52,7 +52,7 @@ namespace iBarter {
             set { gameFontType = value; }
         }
 
-        private const int MaxLogBlocks = 500;
+        private const int MaxLogBlocks = 200;
 
         // OCR-text -> ItemID override table. PureDM's built-in Chinese OCR
         // is empirically noisy on some specific characters; the worst case
@@ -140,16 +140,27 @@ namespace iBarter {
             }
             }
             catch (OutOfMemoryException) {
-                // The Dispatcher.Invoke at the top of Log() is the most
-                // common failure point - the background scan thread tries
-                // to queue a UI action, the queue is full, and Invoke
-                // fails to allocate the GDI handle needed to enqueue it.
-                // Swallow silently. The previous try/catch was inside the
-                // 'else' branch so it never caught the Invoke OOM - the
-                // exception propagated out of Log, WPF's internal error
-                // handler tried to log it via the same path, that also
-                // OOM'd, and 100+ 'SecondaryException' entries spammed
-                // the log.
+                // OOM at this level can come from two sources:
+                //   1. Dispatcher.Invoke (queue full) - swallow silently.
+                //   2. WPF's internal text-formatting layer (GetGlyphMetrics
+                //      etc.) when the glyph cache / USER handle budget is
+                //      exhausted by rapid log appends. WPF's internal
+                //      error handler then tries to log the OOM via the
+                //      same path, that OOMs again, cascading 100+
+                //      'SecondaryException' entries that lock up the UI
+                //      thread. The user observed this in long-running
+                //      sessions even though gdi=268 was well below the
+                //      10k GDI handle limit.
+                // Scorched-earth recovery: clear the entire log buffer
+                // so WPF's text formatter can release its native handles
+                // and the next Log() call succeeds. We lose log history
+                // but the scan itself continues.
+                try {
+                    var logBox = App.myfmMain?.richTextBox_Log;
+                    if (logBox != null && logBox.Dispatcher.CheckAccess()) {
+                        logBox.Document.Blocks.Clear();
+                    }
+                } catch { /* best-effort */ }
             }
         }
 
