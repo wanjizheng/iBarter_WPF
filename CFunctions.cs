@@ -2223,13 +2223,16 @@ namespace iBarter {
 // as it amplified signal for low-contrast icons, and F never uniquely
 // rescued a case where A + R + G already agreed. -1 outcomes stayed -1.)
 
-        // Capture a screen rect into a managed byte[] via PureDM's
-        // GetScreenDataBmp (returns IntPtr + size, both copied via
-        // Marshal.Copy). Replaces the old DM.Capture + file read pair -
-        // the entire OCR pipeline is now disk-free: Phase A's screen
-        // OCR goes through PureDM.CV directly, Phase R + G capture
-        // screen pixels on demand and feed Tesseract from memory.
-        // Returns null on capture failure (PureDM ret != 1, or 0 size).
+        // Image-dump toggle for scan debugging. When set, every capture
+        // (OCR regions, icon-search regions) writes the captured bytes
+        // to disk under iBarter_dump\ before returning them to the
+        // caller. Set the environment variable IBARTER_DUMP=1 to enable,
+        // or set the field at runtime from a debugger watch window.
+        // Off by default - the per-icon capture rate is high and
+        // disk writes would slow the scan and fill the SSD quickly.
+        public static bool EnableImageDump = System.Environment.GetEnvironmentVariable("IBARTER_DUMP") == "1";
+        private static int _dumpSeq = 0;
+
         private static byte[] CaptureScreenBytes(int x1, int y1, int x2, int y2) {
             if (App.myPureDM == null || App.myPureDM.DM == null) return null;
             // GetScreenDataBmp's internal pointer is freed on the next call;
@@ -2898,12 +2901,10 @@ namespace iBarter {
             if (!myPP1.IsEmpty)
                 listPointPlus.Add(myPP1);
             else
-                Log(Localization.LanguageService.Instance.Localize(
-                    "str.Log.PickTwoBest.NoSlot1",
-                    chosenItem1 != null ? chosenItem1.ItemID
-                        : (top1Candidates.Count > 0 ? top1Candidates[0].ItemID : ""),
-                    chosenItem1 != null ? chosenItem1.ItemLV
-                        : (top1Candidates.Count > 0 ? top1Candidates[0].ItemLV : "")),
+                Log("[DIAG-icon-find-failed] slot1 chosen="
+                    + (chosenItem1 != null ? chosenItem1.ItemID : "null")
+                    + " - TOP 3 candidates all failed icon FindPicture match"
+                    + " (template not pixel-matched by any candidate)",
                     Brushes.IndianRed);
             // [DIAG-icon] (the normal "candidates=N found=X iconSearch=Yms"
             // version) removed - this fired 12+ times per scan and the
@@ -2948,12 +2949,9 @@ namespace iBarter {
             if (!myPP2.IsEmpty)
                 listPointPlus.Add(myPP2);
             else
-                Log(Localization.LanguageService.Instance.Localize(
-                    "str.Log.PickTwoBest.NoSlot2",
-                    chosenItem2 != null ? chosenItem2.ItemID
-                        : (top2Candidates.Count > 0 ? top2Candidates[0].ItemID : ""),
-                    chosenItem2 != null ? chosenItem2.ItemLV
-                        : (top2Candidates.Count > 0 ? top2Candidates[0].ItemLV : "")),
+                Log("[DIAG-icon-find-failed] slot2 chosen="
+                    + (chosenItem2 != null ? chosenItem2.ItemID : "null")
+                    + " - TOP 3 candidates all failed icon FindPicture match",
                     Brushes.IndianRed);
             // (slot2 DIAG-icon candidates= removed - same WPF pressure
             // reason as slot1 above)
