@@ -3284,6 +3284,26 @@ namespace iBarter {
         // if fuzzy's top-1 Sim is close to the best Sim, fuzzy is right;
         // if fuzzy's Sim is much lower, the visual best is the more
         // trustworthy signal.
+        //
+        // PureDM's FindPicture has no internal retry - one transient
+        // capture failure (GPU queue / anti-aliasing frame) returns
+        // Empty and we fall through. We retry each candidate ONCE on
+        // Empty with a short sleep - the transient is usually resolved
+        // within a frame.
+        private static PointPlus FindPictureWithRetry(
+                int intX1, int intY1, int intX2, int intY2, string imagePath) {
+            var pp = App.myPureDM.CV.FindPicture(
+                intX1, intY1, intX2, intY2, imagePath,
+                0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+            if (pp.IsEmpty) {
+                System.Threading.Thread.Sleep(100);
+                pp = App.myPureDM.CV.FindPicture(
+                    intX1, intY1, intX2, intY2, imagePath,
+                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+            }
+            return pp;
+        }
+
         private static TopNIconResult FindItemIconCompare(
                 System.Collections.Generic.List<Items> candidates,
                 int intX1, int intY1, int intX2, int intY2) {
@@ -3293,11 +3313,10 @@ namespace iBarter {
             for (int i = 0; i < candidates.Count; i++) {
                 var item = candidates[i];
                 if (item == null || string.IsNullOrEmpty(item.ItemID)) continue;
-                PointPlus pp = App.myPureDM.CV.FindPicture(
+                PointPlus pp = FindPictureWithRetry(
                     intX1, intY1, intX2, intY2,
-                    "\\Images\\Items\\" + item.ItemID + ".bmp",
-                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
-                if (pp.X == -1 || pp.Y == -1 || pp.X * pp.Y == 0) continue;
+                    "\\Images\\Items\\" + item.ItemID + ".bmp");
+                if (pp.IsEmpty) continue;
                 if (i == 0) result.FuzzyTop = pp;
                 if (pp.Sim > bestSim) {
                     bestSim = pp.Sim;
