@@ -111,6 +111,17 @@ namespace iBarter {
                             // resume appending.
                         }
                     }
+                    catch (OutOfMemoryException) {
+                        // GDI/USER handle budget exhausted (0x80070008). The
+                        // earlier commit added FindPicture retry which doubled
+                        // the capture calls per icon - on the user's machine
+                        // that pushed total captures over the budget and this
+                        // Log() call then OOM'd, which WPF's internal error
+                        // handler tries to log via the same path, cascading
+                        // into 100+ "SecondaryException" entries. Swallow
+                        // silently so the cascade doesn't lock up the UI
+                        // thread; the next scan will get a fresh budget.
+                    }
                 }
             }
         }
@@ -3285,25 +3296,13 @@ namespace iBarter {
         // if fuzzy's Sim is much lower, the visual best is the more
         // trustworthy signal.
         //
-        // PureDM's FindPicture has no internal retry - one transient
-        // capture failure (GPU queue / anti-aliasing frame) returns
-        // Empty and we fall through. We retry each candidate ONCE on
-        // Empty with a short sleep - the transient is usually resolved
-        // within a frame.
-        private static PointPlus FindPictureWithRetry(
-                int intX1, int intY1, int intX2, int intY2, string imagePath) {
-            var pp = App.myPureDM.CV.FindPicture(
-                intX1, intY1, intX2, intY2, imagePath,
-                0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
-            if (pp.IsEmpty) {
-                System.Threading.Thread.Sleep(100);
-                pp = App.myPureDM.CV.FindPicture(
-                    intX1, intY1, intX2, intY2, imagePath,
-                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
-            }
-            return pp;
-        }
-
+        // No retry on Empty - the previous version retried once and
+        // doubled the FindPicture calls per icon. On the user's
+        // machine that pushed total PureDM captures over the GDI/USER
+        // handle budget within a single island and triggered a
+        // 0x80070008 OOM cascade. Accept Empty and fall through; the
+        // user noted 'restart fixes it' so transient failures recover
+        // on the next scan anyway.
         private static TopNIconResult FindItemIconCompare(
                 System.Collections.Generic.List<Items> candidates,
                 int intX1, int intY1, int intX2, int intY2) {
@@ -3313,9 +3312,10 @@ namespace iBarter {
             for (int i = 0; i < candidates.Count; i++) {
                 var item = candidates[i];
                 if (item == null || string.IsNullOrEmpty(item.ItemID)) continue;
-                PointPlus pp = FindPictureWithRetry(
+                PointPlus pp = App.myPureDM.CV.FindPicture(
                     intX1, intY1, intX2, intY2,
-                    "\\Images\\Items\\" + item.ItemID + ".bmp");
+                    "\\Images\\Items\\" + item.ItemID + ".bmp",
+                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
                 if (pp.IsEmpty) continue;
                 if (i == 0) result.FuzzyTop = pp;
                 if (pp.Sim > bestSim) {
