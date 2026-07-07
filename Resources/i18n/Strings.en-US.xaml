@@ -39,6 +39,9 @@
     <sys:String x:Key="str.Menu.BarterScanner">Barter Scanner</sys:String>
     <sys:String x:Key="str.Menu.StorageManager">Storage Manager</sys:String>
     <sys:String x:Key="str.Menu.SyncImages">Sync Images</sys:String>
+    <sys:String x:Key="str.Menu.RebindGameWindow">Re-bind Game Window</sys:String>
+    <sys:String x:Key="str.Log.Scanner.CaptureDown">Capture interface down. Game window unbound. Please re-bind manually via the menu.</sys:String>
+    <sys:String x:Key="str.Log.Scanner.RebindSucceeded">Re-bind succeeded, capture restored.</sys:String>
 
     <!-- DockingManager panel headers (MainWindow.xaml) -->
     <sys:String x:Key="str.Dock.ShipCargo">Ship Cargo</sys:String>

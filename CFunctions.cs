@@ -1094,24 +1094,22 @@ namespace iBarter {
             }
 
             // Pre-scan capture health check: in dx.graphic.3d.10plus mode the
-            // DirectX hook can silently go stale after the first scan session –
+            // DirectX hook can silently go stale after the first scan session -
             // IsBind() still returns 1 but GetScreenDataBmp() returns 0.
-            // When we detect this, rebind on the UI thread (the same thread that
-            // originally called BindWindowEx) to reset the DX capture pipeline,
-            // then wait briefly for the hook to reinitialise before scanning.
+            // User explicitly requested we NOT auto-rebind here - instead
+            // we unbind (which restores the hook to a known state) and
+            // prompt the user to manually re-bind via the menu button.
             if (!TryValidateGameCapture(out string preScanCaptureError)
                 && preScanCaptureError.Contains("GetScreenDataBmp failed")) {
-                Log("截图接口失效（DX钩子失效），正在自动重新绑定窗口...", Brushes.Orange);
-                Application.Current.Dispatcher.Invoke(new Action(() => {
-                    App.myPureDM.CV.BindWindow((int)App.myPureDM.WindowHandle);
-                }));
-                System.Threading.Thread.Sleep(200); // allow DX hook to reinitialise
-                if (!TryValidateGameCapture(out string postRebindError)) {
-                    Log("重新绑定后截图仍失败：" + postRebindError + "。请手动重新绑定后再扫描。",
-                        Brushes.OrangeRed);
-                    return;
-                }
-                Log("自动重新绑定成功，继续扫描。", Brushes.Blue);
+                // Unbind first so the next manual bind starts from a clean
+                // state. BindWindow with hwnd=0 acts as an unbind in PureDM.
+                try {
+                    App.myPureDM.CV.BindWindow(0);
+                } catch { /* best-effort unbind */ }
+                System.Threading.Thread.Sleep(200);
+                Log(Localization.LanguageService.Instance.Localize(
+                    "str.Log.Scanner.CaptureDown"), Brushes.OrangeRed);
+                return;
             }
 
             List<PointPlus> listAnchors = FindBarterAnchors(out string triedAnchors);

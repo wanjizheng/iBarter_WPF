@@ -303,6 +303,28 @@ namespace iBarter {
             });
         }
 
+        // Manual re-bind of the game window. Used when PureDM's DX
+        // capture interface goes stale mid-session (a common issue
+        // with the 'dx.graphic.3d.10plus' mode the user binds with):
+        // IsBind() may still return 1 but GetScreenDataBmp() returns 0
+        // and every subsequent scan finds zero anchors. The scan
+        // path detects this and emits a 'please re-bind manually'
+        // prompt; the user clicks this menu item to retry the bind
+        // themselves (on the UI thread - the same thread the original
+        // BindWindowEx was called from) so the DX capture pipeline
+        // gets reset.
+        private void MenuItem_RebindGameWindow_Click(object sender, RoutedEventArgs e) {
+            try {
+                App.myCFun.Log("Re-binding game window on UI thread...", Brushes.Orange);
+                App.myPureDM.CV.BindWindow((int)App.myPureDM.WindowHandle);
+                System.Threading.Thread.Sleep(200); // let DX hook reinitialise
+                App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.RebindSucceeded"), Brushes.Blue);
+            }
+            catch (Exception ex) {
+                App.myCFun.Log("Re-bind failed: " + ex.Message, Brushes.Red);
+            }
+        }
+
         // Phase 4 (i18n): one-shot bdocodex.com/tw/item/{id}/ scraper. Hits
         // every ItemID in App.listItems, extracts the zh-TW H1, and rewrites
         // Resources/Items.zh-TW.csv.  User-controlled; the user keeps this

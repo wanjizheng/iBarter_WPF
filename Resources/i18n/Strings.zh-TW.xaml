@@ -32,6 +32,9 @@
     <sys:String x:Key="str.Menu.BarterScanner">交换扫描器</sys:String>
     <sys:String x:Key="str.Menu.StorageManager">仓库管理</sys:String>
     <sys:String x:Key="str.Menu.SyncImages">同步图示</sys:String>
+    <sys:String x:Key="str.Menu.RebindGameWindow">重新绑定游戏视窗</sys:String>
+    <sys:String x:Key="str.Log.Scanner.CaptureDown">截图介面失效，已解绑游戏视窗。请从选单手动重新绑定。</sys:String>
+    <sys:String x:Key="str.Log.Scanner.RebindSucceeded">重新绑定成功，截图恢复。</sys:String>
 
     <sys:String x:Key="str.Dock.ShipCargo">船舱</sys:String>
     <sys:String x:Key="str.Dock.Log">日志</sys:String>
