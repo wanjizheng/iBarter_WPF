@@ -2807,7 +2807,7 @@ namespace iBarter {
                 Log("[DIAG-icon-err] slot1 ex=" + ex.GetType().Name + " " + ex.Message, Brushes.LightSlateGray);
             }
             _slot1IconSw.Stop();
-            if (myPP1.X != -1 && myPP1.Y != -1 && myPP1.X * myPP1.Y != 0)
+            if (!myPP1.IsEmpty)
                 listPointPlus.Add(myPP1);
             else
                 Log(Localization.LanguageService.Instance.Localize(
@@ -2818,7 +2818,7 @@ namespace iBarter {
                         : (top1Candidates.Count > 0 ? top1Candidates[0].ItemLV : "")),
                     Brushes.IndianRed);
             Log("[DIAG-icon] slot1 candidates=" + top1Candidates.Count
-                + " found=" + (myPP1.X != -1)
+                + " found=" + (!myPP1.IsEmpty)
                 + " iconSearch=" + _slot1IconSw.ElapsedMilliseconds + "ms " + MemStat(),
                 Brushes.LightSlateGray);
 
@@ -2852,7 +2852,7 @@ namespace iBarter {
                 Log("[DIAG-icon-err] slot2 ex=" + ex.GetType().Name + " " + ex.Message, Brushes.LightSlateGray);
             }
             _slot2IconSw.Stop();
-            if (myPP2.X != -1 && myPP2.Y != -1 && myPP2.X * myPP2.Y != 0)
+            if (!myPP2.IsEmpty)
                 listPointPlus.Add(myPP2);
             else
                 Log(Localization.LanguageService.Instance.Localize(
@@ -2863,7 +2863,7 @@ namespace iBarter {
                         : (top2Candidates.Count > 0 ? top2Candidates[0].ItemLV : "")),
                     Brushes.IndianRed);
             Log("[DIAG-icon] slot2 candidates=" + top2Candidates.Count
-                + " found=" + (myPP2.X != -1)
+                + " found=" + (!myPP2.IsEmpty)
                 + " iconSearch=" + _slot2IconSw.ElapsedMilliseconds + "ms " + MemStat(),
                 Brushes.LightSlateGray);
 
