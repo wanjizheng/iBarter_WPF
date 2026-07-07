@@ -1847,26 +1847,29 @@ namespace iBarter {
                 .ThenByDescending(g => g.Max(c => c.priority))
                 .First().Key;
 
-            // Tess overread guard: Tesseract on the 30-px strip can
+            // Tess overread guard. Tesseract on the 30-px strip can
             // hallucinate a 2nd digit in low-contrast conditions
             // (logged example: 一、遇难的古代遗迹… D="" C="4" B=""
             // T=42 -> 42 — Tess "4"+"2" wins over Color's "4" by
-            // priority). When the merged winner is multi-digit AND
-            // Tess is its sole contributor (no PureDM mode agrees),
-            // AND a PureDM mode produced a single-digit value, fall
-            // back to that PureDM single-digit. We deliberately do
-            // NOT override when Tess and any PureDM mode agree on
-            // the multi-digit read — that's a corroborated read
-            // (e.g. true "10" with Diff/Binary/Tess all returning 10).
-            if (winningValue >= 10
-                && candidates.Any(c => c.source == "Tess" && c.value == winningValue)
-                && !candidates.Any(c => c.source != "Tess" && c.value == winningValue)) {
-                var pureDmSingleDigit = candidates
-                    .Where(c => c.source != "Tess" && c.value > 0 && c.value < 10)
+            // priority). Extended from the original multi-digit-only
+            // guard to also cover single-digit cases where Tess (and
+            // Color) misread "5" as "2" while Binary correctly read
+            // 5 (logged example: 一、艾裴莉雅岗哨 C="2" B="5" T=2
+            // -> was 2, should be 5). The guard fires when Tess is
+            // the SOLE contributor to the winning value AND a higher-
+            // priority PureDM mode disagrees. We deliberately do NOT
+            // override when Tess and any PureDM mode agree on the
+            // winning value — that's a corroborated read.
+            bool tessSoleWinner = candidates.Any(c => c.source == "Tess" && c.value == winningValue)
+                && !candidates.Any(c => c.source != "Tess" && c.value == winningValue);
+            if (tessSoleWinner
+                && candidates.Any(c => c.source != "Tess" && c.value > 0 && c.value != winningValue)) {
+                var pureDmOverride = candidates
+                    .Where(c => c.source != "Tess" && c.value > 0)
                     .OrderByDescending(c => c.priority)
                     .FirstOrDefault();
-                if (pureDmSingleDigit.value != 0) {
-                    winningValue = pureDmSingleDigit.value;
+                if (pureDmOverride.value != 0) {
+                    winningValue = pureDmOverride.value;
                 }
             }
 
