@@ -2713,8 +2713,21 @@ namespace iBarter {
                 }
 
                 listPointPlus_Temp = PickTwoBest(listPointPlus_Temp);
-                if (listPointPlus_Temp.Count >= 1)
+                if (listPointPlus_Temp.Count >= 1) {
                     listPointPlus.Add(listPointPlus_Temp[0]);
+                    // FIX: cache the fallback's winning position so the next
+                    // scan can skip this 273-item O(n) loop. PureDM populates
+                    // ImageID on the returned PointPlus; extract the matched
+                    // ItemID and store the position offset.
+                    var fbPicked = listPointPlus_Temp[0];
+                    if (!string.IsNullOrEmpty(fbPicked.ImageID)
+                        && fbPicked.ImageID.Length >= 18
+                        && fbPicked.ImageID.StartsWith("\\Images\\Items\\")
+                        && fbPicked.ImageID.EndsWith(".bmp")) {
+                        string fbItemID = fbPicked.ImageID.Substring(14, fbPicked.ImageID.Length - 18);
+                        StoreIconPointCache(fbItemID, fbPicked, intX1, intY1);
+                    }
+                }
                 else
                     Log(Localization.LanguageService.Instance.Localize("str.Log.PickTwoBest.NoSlot1", myItems1?.ItemID ?? "", myItems1?.ItemLV ?? ""), Brushes.IndianRed);
             }
@@ -2746,10 +2759,29 @@ namespace iBarter {
                 }
 
                 listPointPlus_Temp = PickTwoBest(listPointPlus_Temp);
-                if (listPointPlus_Temp.Count >= 2)
+                if (listPointPlus_Temp.Count >= 2) {
                     listPointPlus.Add(listPointPlus_Temp[1]);
-                else if (listPointPlus_Temp.Count == 1)
+                    // FIX: cache slot2 fallback winner too.
+                    var fbPicked = listPointPlus_Temp[1];
+                    if (!string.IsNullOrEmpty(fbPicked.ImageID)
+                        && fbPicked.ImageID.Length >= 18
+                        && fbPicked.ImageID.StartsWith("\\Images\\Items\\")
+                        && fbPicked.ImageID.EndsWith(".bmp")) {
+                        string fbItemID = fbPicked.ImageID.Substring(14, fbPicked.ImageID.Length - 18);
+                        StoreIconPointCache(fbItemID, fbPicked, intX1, intY1);
+                    }
+                }
+                else if (listPointPlus_Temp.Count == 1) {
                     listPointPlus.Add(listPointPlus_Temp[0]);
+                    var fbPicked = listPointPlus_Temp[0];
+                    if (!string.IsNullOrEmpty(fbPicked.ImageID)
+                        && fbPicked.ImageID.Length >= 18
+                        && fbPicked.ImageID.StartsWith("\\Images\\Items\\")
+                        && fbPicked.ImageID.EndsWith(".bmp")) {
+                        string fbItemID = fbPicked.ImageID.Substring(14, fbPicked.ImageID.Length - 18);
+                        StoreIconPointCache(fbItemID, fbPicked, intX1, intY1);
+                    }
+                }
                 else
                     Log(Localization.LanguageService.Instance.Localize("str.Log.PickTwoBest.NoSlot2", myItems2?.ItemID ?? "", myItems2?.ItemLV ?? ""), Brushes.IndianRed);
             }
