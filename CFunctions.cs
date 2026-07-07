@@ -71,10 +71,18 @@ namespace iBarter {
         };
 
         public void Log(string _message, Brush _color) {
-            if (!Application.Current.Dispatcher.CheckAccess()) {
-                Application.Current.Dispatcher.Invoke(new Action(() => Log(_message, _color)));
-            }
-            else {
+            // Wrap the entire body - including the background->UI
+            // Dispatcher.Invoke - in an OOM catch. The Invoke itself
+            // is what runs out of handle budget (WPF's internal error
+            // handler then tries to log the OOM via the same path,
+            // cascading into 100+ 'SecondaryException' entries). A
+            // single OOM in Invoke is non-fatal: dropping the log line
+            // is strictly better than locking up the scan thread.
+            try {
+                if (!Application.Current.Dispatcher.CheckAccess()) {
+                    Application.Current.Dispatcher.Invoke(new Action(() => Log(_message, _color)));
+                }
+                else {
                 if (App.myfmMain?.richTextBox_Log != null) {
                     // Append-and-trim with self-healing recovery. A single transient
                     // COMException during rapid logging used to wipe the entire 500-line
@@ -123,6 +131,19 @@ namespace iBarter {
                         // thread; the next scan will get a fresh budget.
                     }
                 }
+            }
+            }
+            catch (OutOfMemoryException) {
+                // The Dispatcher.Invoke at the top of Log() is the most
+                // common failure point - the background scan thread tries
+                // to queue a UI action, the queue is full, and Invoke
+                // fails to allocate the GDI handle needed to enqueue it.
+                // Swallow silently. The previous try/catch was inside the
+                // 'else' branch so it never caught the Invoke OOM - the
+                // exception propagated out of Log, WPF's internal error
+                // handler tried to log it via the same path, that also
+                // OOM'd, and 100+ 'SecondaryException' entries spammed
+                // the log.
             }
         }
 
