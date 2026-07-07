@@ -1786,32 +1786,28 @@ namespace iBarter {
             string[] modeRaws = new string[3];
             int tessPick = -1;
             int rawPick = -1;
-            System.Threading.Tasks.Parallel.Invoke(
-                () => {
-                    // 3 PureDM modes - serialised via _pureDmLock because
-                    // concurrent PureDM.CV.OCRString calls return empty
-                    // strings under contention (observed empirically: every
-                    // mode returned "" and every downstream fuzzy match /
-                    // icon fallback failed).
-                    for (int i = 0; i < modes.Length; i++) {
-                        try {
-                            lock (_pureDmLock) {
-                                modeRaws[i] = App.myPureDM.CV.OCRString(
-                                    x1, y1, x2, y2,
-                                    CV.OCRType.Number, modes[i], false, "", CurrentOcrLanguage());
-                            }
-                            modeTried = modes[i].ToString();
-                        }
-                        catch { modeRaws[i] = null; }
-                    }
-                },
-                () => { tessPick = TryRemainingTesseractOcr(x1, y1, x2, y2); },
-                () => {
-                    // Pre-launch raw Tesseract too - same Magick-or-no-Magick
-                    // rationale as TryReadQuantity: always run both so the
-                    // merge vote weights R and T equally.
-                    rawPick = TryRawOcr(x1, y1, x2, y2);
-                });
+
+            // Reverted from Parallel.Invoke - concurrent PureDM OCRString
+            // calls return empty strings even with _pureDmLock in place
+            // (observed empirically: every mode returned "" / Tesseract
+            // returned null and downstream fuzzy match / icon fallback
+            // failed for every island). The three PureDM modes run serially
+            // again, and the Tesseract paths run sequentially after.
+            for (int i = 0; i < modes.Length; i++) {
+                try {
+                    modeRaws[i] = App.myPureDM.CV.OCRString(
+                        x1, y1, x2, y2,
+                        CV.OCRType.Number, modes[i], false, "", CurrentOcrLanguage());
+                    modeTried = modes[i].ToString();
+                }
+                catch { modeRaws[i] = null; }
+            }
+
+            int tessPick2 = TryRemainingTesseractOcr(x1, y1, x2, y2);
+            if (tessPick2 <= 0) {
+                tessPick2 = TryRawOcr(x1, y1, x2, y2);
+            }
+            tessPick = tessPick2;
 
             // Mode votes are now all in. Apply priority weights.
             for (int i = 0; i < modes.Length; i++) {
@@ -1827,17 +1823,6 @@ namespace iBarter {
                     candidates.Add((mode.ToString(), parsedFromMode, prio));
                 }
             }
-
-            // Tess overread guard: when Tesseract reads a multi-digit value
-            // (>= 10) and NO PureDM mode agrees, fall back to a PureDM
-            // single-digit read. Logged example: 一、遇难的古代遗迹… D=""
-            // C="4" B="" T=42 -> 42 — Tess hallucinated "4"+"2". The guard
-            // only triggers when Tess is the SOLE contributor to a multi-
-            // digit winner; corroborated multi-digit reads (Tess + a PureDM
-            // mode agreeing) are kept. Previously TryRawOcr was a fallback
-            // for when Tess returned <= 0; with both running in parallel
-            // now, rawPick is always populated.
-            // (No-op here - the guard runs after the merge below.)
             _ = rawPick;
             if (tessPick > 0) {
                 candidates.Add(("Tess", tessPick, 4));
@@ -2422,33 +2407,26 @@ namespace iBarter {
             // serialized piece; the Tesseract init + Diff preprocessing
             // + Recognize work all runs in parallel across the 4 calls.
             // Serial baseline was 4 x ~150-200 ms; parallel = ~200 ms.
-            System.Threading.Tasks.Parallel.For(0, candidates.Length, i => {
-                var c = candidates[i];
+            // Reverted from Parallel.For - concurrent PureDM OCRString calls
+            // return empty strings even with _pureDmLock in place. Run
+            // the 4 ROI votes serially like before.
+            foreach (var c in candidates) {
                 int x1 = (int)(oX + oW * c.lf);
                 int y1 = (int)(oY + oH * c.tf);
                 int x2 = (int)(oX + oW * c.rf);
                 int y2 = (int)(oY + oH * c.bf);
                 try {
-                    // PureDM OCRString under contention returns empty
-                    // strings (COM race in ImageOCR's Tesseract init). Lock
-                    // so the 4 ROI captures serialise while Tesseract work
-                    // still runs in parallel within each call.
-                    string raw;
-                    lock (_pureDmLock) {
-                        raw = App.myPureDM.CV.OCRString(x1, y1, x2, y2,
-                            CV.OCRType.Number, CV.OCRMode.Diff, false, strID, CurrentOcrLanguage()) ?? "";
-                    }
+                    string raw = App.myPureDM.CV.OCRString(x1, y1, x2, y2,
+                        CV.OCRType.Number, CV.OCRMode.Diff, false, strID, CurrentOcrLanguage()) ?? "";
                     Match m = Regex.Match(raw, @"\d{1,4}");
                     if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
-                        lock (votes) {
-                            votes.TryGetValue(n, out int prev);
-                            votes[n] = prev + 1;
-                            if (bestRaw == null || raw.Length > bestRaw.Length) bestRaw = raw;
-                        }
+                        votes.TryGetValue(n, out int prev);
+                        votes[n] = prev + 1;
+                        if (bestRaw == null || raw.Length > bestRaw.Length) bestRaw = raw;
                     }
                 }
                 catch { /* single ROI miss should not kill the call */ }
-            });
+            }
 
             // Vote: most-agreed wins; ties favour SMALLER value - icon overlay
             // counts are typically small (1..9999) and the false positives from
@@ -2495,11 +2473,19 @@ namespace iBarter {
             int gY1 = (int)oY;
             int gX2 = (int)oX + (int)oW;
             int gY2 = (int)oY + (int)oH;
-            int rawPick = -1;
+            // Reverted from Parallel.Invoke - serial execution. The Tesseract
+            // per-thread instances are kept (no harm), but the calls run
+            // sequentially for now. We can re-introduce a TryRawOcr /
+            // TryTemplateDiffOcr Parallel.Invoke later once we have a way
+            // to confirm PureDM doesn't break under that specific shape of
+            // concurrency (the failure mode here was tied to OCRString
+            // concurrent with capture from another thread, not necessarily
+            // to Tesseract-only concurrency).
+            int rawPick = TryRawOcr(rRoiX1, rRoiY1, rRoiX2, rRoiY2);
             int diffPick = -1;
-            System.Threading.Tasks.Parallel.Invoke(
-                () => { rawPick = TryRawOcr(rRoiX1, rRoiY1, rRoiX2, rRoiY2); },
-                () => { diffPick = TryTemplateDiffOcr(gX1, gY1, gX2, gY2); });
+            if (rawPick <= 0) {
+                diffPick = TryTemplateDiffOcr(gX1, gY1, gX2, gY2);
+            }
 
             // 3-way merge vote (A screen-coords + R raw + G Magick fallback):
             var merged = new System.Collections.Generic.Dictionary<int, int>();
