@@ -1690,8 +1690,8 @@ namespace iBarter {
             out string strRequiredPath,
             out string triedLabels) {
             var attempts = new List<string>();
-            var parleyMatches = FindScanLabelMatches(x1, y1, x2, y2, "Parley", 0.8, attempts);
-            var requiredMatches = FindScanLabelMatches(x1, y1, x2, y2, "Required", 0.8, attempts);
+            var parleyMatches = FindScanLabelMatches(x1, y1, x2, y2, "Parley", 0.7, attempts);
+            var requiredMatches = FindScanLabelMatches(x1, y1, x2, y2, "Required", 0.7, attempts);
 
             foreach (var parley in parleyMatches) {
                 foreach (var required in requiredMatches) {
