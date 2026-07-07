@@ -1902,6 +1902,25 @@ namespace iBarter {
             // no-op: ocr_debug.log disabled
         }
 
+        // Returns the number of GDI handles this process is currently
+        // holding. x86 processes are capped at ~10,000 handles per
+        // process; if we leak handles inside PureDM FindPicture / ImageOCR
+        // (e.g. Image/Bmp not Dispose'd), this counter will climb across
+        // scans until we hit 0x80070008 ERROR_NOT_ENOUGH_MEMORY on the
+        // next GDI allocation. Read at known scan milestones so we can
+        // see which phase leaks.
+        [System.Runtime.InteropServices.DllImport("User32.dll")]
+        private static extern int GetGuiResources(int hProcess, int uiFlags);
+        private const int GR_GDIOBJECTS = 0;
+
+        private static string MemStat() {
+            // GetCurrentProcess() returns -1 which the API treats as the
+            // current process. 64-bit safe via IntPtr overload.
+            int gdi = GetGuiResources(-1, GR_GDIOBJECTS);
+            long managed = System.GC.GetTotalMemory(false);
+            return "gdi=" + gdi + " mngMB=" + (managed / (1024 * 1024));
+        }
+
         // Module-static cache of icon templates keyed by "<id>|<W>x<H>" so we
         // only read each bmp once per app session and resize per call-site size.
         private static readonly System.Collections.Generic.Dictionary<string, Image<Bgr, byte>>
@@ -2631,7 +2650,7 @@ namespace iBarter {
             var _remSw = System.Diagnostics.Stopwatch.StartNew();
             intRemaining = TryReadRemainingCount(pointPlusAnchor, pointPlusEdge, strIsland);
             _remSw.Stop();
-            Log("[DIAG-remaining] " + strIsland + " voting=" + _remSw.ElapsedMilliseconds + "ms result=" + intRemaining, Brushes.LightSlateGray);
+            Log("[DIAG-remaining] " + strIsland + " voting=" + _remSw.ElapsedMilliseconds + "ms result=" + intRemaining + " " + MemStat(), Brushes.LightSlateGray);
 
             if (islandEnum == EnumLists.Island.UnKnown)
                 Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.UnknownIsland", strIsland), Brushes.Red);
@@ -2681,7 +2700,7 @@ namespace iBarter {
             // fuzzy match against ItemNameZhTw needs to hit (currently 273/274
             // items have zh-TW names). If OCR returns garbled text the
             // match returns whatever has the lowest edit distance.
-            Log("[DIAG-ocr-slot1] raw='" + strItem1 + "' normalized='" + NormalizeBasic(RemoveLevelPrefix(strItem1)) + "' matched='" + (myItems1 != null ? myItems1.ItemID + "(" + (myItems1.ItemName ?? "") + "/" + (myItems1.ItemNameZhTw ?? "") + ")" : "null") + "' slot2='" + (myItems2 != null ? myItems2.ItemID : "null") + "'", Brushes.LightSlateGray);
+            Log("[DIAG-ocr-slot1] raw='" + strItem1 + "' normalized='" + NormalizeBasic(RemoveLevelPrefix(strItem1)) + "' matched='" + (myItems1 != null ? myItems1.ItemID + "(" + (myItems1.ItemName ?? "") + "/" + (myItems1.ItemNameZhTw ?? "") + ")" : "null") + "' slot2='" + (myItems2 != null ? myItems2.ItemID : "null") + "' " + MemStat(), Brushes.LightSlateGray);
 
 
             PointPlus myPP1 = new PointPlus();
@@ -2834,7 +2853,7 @@ namespace iBarter {
                 var _q1Sw = System.Diagnostics.Stopwatch.StartNew();
                 intNumber1 = TryReadQuantity(listPointPlus[0], strID1);
                 _q1Sw.Stop();
-                Log("[DIAG-ocrQty] slot1 strID=" + strID1 + " voting=" + _q1Sw.ElapsedMilliseconds + "ms result=" + intNumber1, Brushes.LightSlateGray);
+                Log("[DIAG-ocrQty] slot1 strID=" + strID1 + " voting=" + _q1Sw.ElapsedMilliseconds + "ms result=" + intNumber1 + " " + MemStat(), Brushes.LightSlateGray);
                 if (intNumber1 <= 0) {
                     // OCR failed to agree - fall back to the CSV-default quantity and
                     // log so this case is visible.
@@ -2865,7 +2884,7 @@ namespace iBarter {
                     var _q2Sw = System.Diagnostics.Stopwatch.StartNew();
                     intNumber2 = TryReadQuantity(listPointPlus[1], strID2);
                     _q2Sw.Stop();
-                    Log("[DIAG-ocrQty] slot2 strID=" + strID2 + " voting=" + _q2Sw.ElapsedMilliseconds + "ms result=" + intNumber2, Brushes.LightSlateGray);
+                    Log("[DIAG-ocrQty] slot2 strID=" + strID2 + " voting=" + _q2Sw.ElapsedMilliseconds + "ms result=" + intNumber2 + " " + MemStat(), Brushes.LightSlateGray);
                 }
             }
             else {
@@ -2905,7 +2924,7 @@ namespace iBarter {
             // DIAG: per-island total. Compare to per-icon fuzzy / fallback
             // logs above to see which step is the dominant cost.
             _islandSw.Stop();
-            Log("[DIAG-island] " + myBarter.IsLand.IslandsNameDisplay + " total=" + _islandSw.ElapsedMilliseconds + "ms", Brushes.LightSlateGray);
+            Log("[DIAG-island] " + myBarter.IsLand.IslandsNameDisplay + " total=" + _islandSw.ElapsedMilliseconds + "ms " + MemStat(), Brushes.LightSlateGray);
             return myBarter;
         }
 
