@@ -1510,6 +1510,19 @@ namespace iBarter {
         private static readonly ThreadLocal<Tesseract> _tessPerThread =
             new ThreadLocal<Tesseract>(CreateTesseractForThisThread, trackAllValues: false);
 
+        // Serialises PureDM.CV.* and App.myPureDM.CV.* calls that were
+        // previously parallelised. PureDM's CaptureByDMToMat has its own
+        // internal lock on the DM object (PureDM/CV.cs:418), but concurrent
+        // ImageOCR (which creates a fresh Tesseract per call) returns empty
+        // strings when the COM layer is contended - observed in practice as
+        // every OCR mode returning "" / Tesseract returning null. So we
+        // serialise the OCRString calls at this outer level while keeping
+        // our own Tesseract paths (per-thread instances, no shared state)
+        // genuinely parallel. Net effect: ROI vote back to serial like
+        // before, but TryRawOcr / TryTemplateDiffOcr / TryRemainingTess
+        // still run concurrently with each other.
+        private static readonly object _pureDmLock = new object();
+
         private static Tesseract CreateTesseractForThisThread() {
             try {
                 string tessDataDir = AppDomain.CurrentDomain.BaseDirectory + @"tessdata\";
@@ -1775,11 +1788,18 @@ namespace iBarter {
             int rawPick = -1;
             System.Threading.Tasks.Parallel.Invoke(
                 () => {
+                    // 3 PureDM modes - serialised via _pureDmLock because
+                    // concurrent PureDM.CV.OCRString calls return empty
+                    // strings under contention (observed empirically: every
+                    // mode returned "" and every downstream fuzzy match /
+                    // icon fallback failed).
                     for (int i = 0; i < modes.Length; i++) {
                         try {
-                            modeRaws[i] = App.myPureDM.CV.OCRString(
-                                x1, y1, x2, y2,
-                                CV.OCRType.Number, modes[i], false, "", CurrentOcrLanguage());
+                            lock (_pureDmLock) {
+                                modeRaws[i] = App.myPureDM.CV.OCRString(
+                                    x1, y1, x2, y2,
+                                    CV.OCRType.Number, modes[i], false, "", CurrentOcrLanguage());
+                            }
                             modeTried = modes[i].ToString();
                         }
                         catch { modeRaws[i] = null; }
@@ -2409,8 +2429,15 @@ namespace iBarter {
                 int x2 = (int)(oX + oW * c.rf);
                 int y2 = (int)(oY + oH * c.bf);
                 try {
-                    string raw = App.myPureDM.CV.OCRString(x1, y1, x2, y2,
-                        CV.OCRType.Number, CV.OCRMode.Diff, false, strID, CurrentOcrLanguage()) ?? "";
+                    // PureDM OCRString under contention returns empty
+                    // strings (COM race in ImageOCR's Tesseract init). Lock
+                    // so the 4 ROI captures serialise while Tesseract work
+                    // still runs in parallel within each call.
+                    string raw;
+                    lock (_pureDmLock) {
+                        raw = App.myPureDM.CV.OCRString(x1, y1, x2, y2,
+                            CV.OCRType.Number, CV.OCRMode.Diff, false, strID, CurrentOcrLanguage()) ?? "";
+                    }
                     Match m = Regex.Match(raw, @"\d{1,4}");
                     if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
                         lock (votes) {
