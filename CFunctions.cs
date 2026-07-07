@@ -54,6 +54,22 @@ namespace iBarter {
 
         private const int MaxLogBlocks = 500;
 
+        // OCR-text -> ItemID override table. PureDM's built-in Chinese OCR
+        // is empirically noisy on some specific characters; the worst case
+        // we hit was "苔藓" (moss) being misread as "若攻" (the glyphs
+        // share enough substructure that fuzzy's character edit distance
+        // ranks 苔藓树合板 below 松树合板 and the row gets tagged with
+        // the wrong item). Hardcoding the known bad OCR -> correct ItemID
+        // pairs sidesteps the OCR -> fuzzy -> wrong-item cascade. Add
+        // entries here as we discover more; the user can edit this list
+        // directly. The key is the literal OCR string as returned by
+        // PureDM.CV.OCRString; the value is the catalog ItemID.
+        private static readonly System.Collections.Generic.Dictionary<string, string> OCR_ALIASES =
+            new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal) {
+            // 苔藓 -> 若攻 misread: "Moss Tree Plywood" read as "若攻樹合板"
+            { "若攻樹合板", "4695" },
+        };
+
         public void Log(string _message, Brush _color) {
             if (!Application.Current.Dispatcher.CheckAccess()) {
                 Application.Current.Dispatcher.Invoke(new Action(() => Log(_message, _color)));
@@ -2695,8 +2711,28 @@ namespace iBarter {
             // already gave us what we needed; no downstream code ever
             // read those BMPs.)
 
-            Items myItems1 = FindMostSimilarItemZhTwAware(strItem1, ExtractLevelPrefix(strItem1).lv);
-            Items myItems2 = FindMostSimilarItemZhTwAware(strItem2, ExtractLevelPrefix(strItem2).lv);
+            // OCR alias override: if PureDM's OCR for a known-bad character
+            // pair happens to produce one of the literal strings in
+            // OCR_ALIASES, bypass fuzzy and use the alias's ItemID
+            // directly. See the comment on the OCR_ALIASES field for the
+            // "苔藓 -> 若攻" example. Falls through silently if the
+            // OCR text isn't in the table.
+            Items myItems1 = null;
+            if (OCR_ALIASES.TryGetValue(strItem1 ?? "", out string aliasItemID1)
+                && App.listItems != null) {
+                myItems1 = App.listItems.FirstOrDefault(i => i.ItemID == aliasItemID1);
+            }
+            if (myItems1 == null) {
+                myItems1 = FindMostSimilarItemZhTwAware(strItem1, ExtractLevelPrefix(strItem1).lv);
+            }
+            Items myItems2 = null;
+            if (OCR_ALIASES.TryGetValue(strItem2 ?? "", out string aliasItemID2)
+                && App.listItems != null) {
+                myItems2 = App.listItems.FirstOrDefault(i => i.ItemID == aliasItemID2);
+            }
+            if (myItems2 == null) {
+                myItems2 = FindMostSimilarItemZhTwAware(strItem2, ExtractLevelPrefix(strItem2).lv);
+            }
             // DIAG: dump raw OCR text + normalised form so we can see if
             // OCR returns Chinese / English / garbage. If OCR returns
             // Chinese text and the catalog only has English ItemName, the
