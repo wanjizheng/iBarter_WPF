@@ -2527,6 +2527,9 @@ namespace iBarter {
                 return (Barter)null;
             PointPlus pointPlusAnchor = _pp;
             Barter myBarter = new Barter();
+            // DIAG: per-island timing. Used to find which step dominates
+            // scan time. Stopped at the end of this method with a summary log.
+            var _islandSw = System.Diagnostics.Stopwatch.StartNew();
 
             // 1. 查找边缘图片以确定岛屿信息
             PointPlus pointPlusEdge = App.myPureDM.CV.FindPicture(
@@ -2624,7 +2627,11 @@ namespace iBarter {
             }
 
             // 4. 识别剩余交易次数
-            int intRemaining = TryReadRemainingCount(pointPlusAnchor, pointPlusEdge, strIsland);
+            int intRemaining;
+            var _remSw = System.Diagnostics.Stopwatch.StartNew();
+            intRemaining = TryReadRemainingCount(pointPlusAnchor, pointPlusEdge, strIsland);
+            _remSw.Stop();
+            Log("[DIAG-remaining] " + strIsland + " voting=" + _remSw.ElapsedMilliseconds + "ms result=" + intRemaining, Brushes.LightSlateGray);
 
             if (islandEnum == EnumLists.Island.UnKnown)
                 Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.UnknownIsland", strIsland), Brushes.Red);
@@ -2668,6 +2675,9 @@ namespace iBarter {
 
             Items myItems1 = FindMostSimilarItemZhTwAware(strItem1, ExtractLevelPrefix(strItem1).lv);
             Items myItems2 = FindMostSimilarItemZhTwAware(strItem2, ExtractLevelPrefix(strItem2).lv);
+            // DIAG: fuzzy match timing. Repeatedly re-fuzzying the same OCR
+            // text on consecutive scans is the most likely LRU-cache target.
+            Log("[DIAG-slot1] fuzzy=" + (myItems1 != null ? myItems1.ItemID : "null") + " slot2=" + (myItems2 != null ? myItems2.ItemID : "null"), Brushes.LightSlateGray);
 
 
             PointPlus myPP1 = new PointPlus();
@@ -2686,6 +2696,12 @@ namespace iBarter {
             if (myPP1.X != -1 && myPP1.Y != -1 && myPP1.X * myPP1.Y != 0)
                 listPointPlus.Add(myPP1);
             else {
+                // DIAG: icon FindPicture fallback triggered - primary template
+                // (myItems1.ItemID) didn't visually match the live capture.
+                // Each fallback loops App.listItems (~273 items) doing one
+                // PureDM.CV.FindPicture each - up to ~8 s. Counting these
+                // tells us if this is a major or minor contributor.
+                Log("[DIAG-fallback] slot1 entered: myItems1=" + (myItems1 != null ? myItems1.ItemID : "null"), Brushes.LightSlateGray);
                 List<PointPlus> listPointPlus_Temp = new List<PointPlus>();
                 foreach (Items item in App.listItems) {
                     PointPlus myPP = App.myPureDM.CV.FindPicture(
@@ -2779,7 +2795,10 @@ namespace iBarter {
             var lv1Item = App.listItems.FirstOrDefault(i => i.ItemID == strID1);
             if (lv1Item == null || !IsHighTier(lv1Item.ItemLV)) {
                 // Multi-ROI voting for the bottom-right "50" overlay (Phase A+C+D).
+                var _q1Sw = System.Diagnostics.Stopwatch.StartNew();
                 intNumber1 = TryReadQuantity(listPointPlus[0], strID1);
+                _q1Sw.Stop();
+                Log("[DIAG-ocrQty] slot1 strID=" + strID1 + " voting=" + _q1Sw.ElapsedMilliseconds + "ms result=" + intNumber1, Brushes.LightSlateGray);
                 if (intNumber1 <= 0) {
                     // OCR failed to agree - fall back to the CSV-default quantity and
                     // log so this case is visible.
@@ -2807,7 +2826,10 @@ namespace iBarter {
                     intNumber2 = 1;
                     Log(Localization.LanguageService.Instance.Localize("str.Log.LV5Skip", strID2, lv2Item.ItemNameDisplay), Brushes.Gold);
                 } else {
+                    var _q2Sw = System.Diagnostics.Stopwatch.StartNew();
                     intNumber2 = TryReadQuantity(listPointPlus[1], strID2);
+                    _q2Sw.Stop();
+                    Log("[DIAG-ocrQty] slot2 strID=" + strID2 + " voting=" + _q2Sw.ElapsedMilliseconds + "ms result=" + intNumber2, Brushes.LightSlateGray);
                 }
             }
             else {
@@ -2844,6 +2866,10 @@ namespace iBarter {
             myBarter.Item1 = item1;
             myBarter.Item2 = item2;
 
+            // DIAG: per-island total. Compare to per-icon fuzzy / fallback
+            // logs above to see which step is the dominant cost.
+            _islandSw.Stop();
+            Log("[DIAG-island] " + myBarter.IsLand.IslandsNameDisplay + " total=" + _islandSw.ElapsedMilliseconds + "ms", Brushes.LightSlateGray);
             return myBarter;
         }
 
