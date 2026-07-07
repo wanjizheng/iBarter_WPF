@@ -2643,13 +2643,24 @@ namespace iBarter {
             if (pointPlusEdge.X == -1 || pointPlusEdge.Y == -1)
                 return (Barter)null;
 
-            // 通过 OCR 识别岛屿名称
+            // 通过 OCR 识别岛屿名称. If PureDM's capture transient failed
+            // (DX hook state issues the user has observed), strIsland comes
+            // back empty - bail out early so the rest of the island path
+            // doesn't waste PureDM calls on a half-dead capture interface.
             string strIsland = App.myPureDM.CV.OCRString(
                 pointPlusEdge.X + pointPlusEdge.Size.Width,
                 pointPlusAnchor.Y - 2,
                 pointPlusAnchor.X - 2,
                 pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5,
                 CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage());
+            if (string.IsNullOrWhiteSpace(strIsland)) {
+                // PureDM capture transient failed (DX hook issue). Bail
+                // out so we don't burn more PureDM calls on a half-dead
+                // interface. The next scan will start fresh.
+                Log("[DIAG-empty-island-ocr] anchor=(" + pointPlusAnchor.X + "," + pointPlusAnchor.Y + ")"
+                    + " - capture interface likely down", Brushes.IndianRed);
+                return null;
+            }
             EnumLists.Island islandEnum = IslandEnumSmart(strIsland);
 
             // 2. 捕获交易物品区域截图
