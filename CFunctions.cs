@@ -84,9 +84,18 @@ namespace iBarter {
             // cascading into 100+ 'SecondaryException' entries). A
             // single OOM in Invoke is non-fatal: dropping the log line
             // is strictly better than locking up the scan thread.
+            //
+            // Use BeginInvoke (not Invoke) so the background scan
+            // thread never blocks on the UI thread. If the WPF
+            // dispatcher is overloaded or the text-rendering glyph
+            // cache is full, the call returns immediately and the UI
+            // thread can catch up at its own pace. We lose strict
+            // ordering of the log line within the scan but the scan
+            // itself never stalls.
             try {
                 if (!Application.Current.Dispatcher.CheckAccess()) {
-                    Application.Current.Dispatcher.Invoke(new Action(() => Log(_message, _color)));
+                    Application.Current.Dispatcher.BeginInvoke(
+                        new Action(() => Log(_message, _color)));
                 }
                 else {
                 if (App.myfmMain?.richTextBox_Log != null) {
@@ -2823,7 +2832,17 @@ namespace iBarter {
             // fuzzy match against ItemNameZhTw needs to hit (currently 273/274
             // items have zh-TW names). If OCR returns garbled text the
             // match returns whatever has the lowest edit distance.
-            Log("[DIAG-ocr-slot1] raw='" + strItem1 + "' normalized='" + NormalizeBasic(RemoveLevelPrefix(strItem1)) + "' matched='" + (myItems1 != null ? myItems1.ItemID + "(" + (myItems1.ItemName ?? "") + "/" + (myItems1.ItemNameZhTw ?? "") + ")" : "null") + "' slot2='" + (myItems2 != null ? myItems2.ItemID : "null") + "' " + MemStat(), Brushes.LightSlateGray);
+            // [DIAG-ocr-slot1] removed - this log fired for every slot
+            // on every island (12+ times per scan). Each WPF text-format
+            // call allocates glyph cache entries for unique characters
+            // (gdi=302, mngMB=37 etc). After many scans the WPF
+            // font cache and dispatcher queue overloaded, eventually
+            // the next log call OOM'd and from there everything
+            // downstream (Dispatcheer, PureDM) went down with it.
+            // The fundamental OOM trigger was the high-frequency
+            // log calls, not a single line. Removing them brings
+            // the per-scan log count back to roughly the level before
+            // the recent diagnostic-log additions.
 
 
             PointPlus myPP1 = new PointPlus();
@@ -2886,10 +2905,15 @@ namespace iBarter {
                     chosenItem1 != null ? chosenItem1.ItemLV
                         : (top1Candidates.Count > 0 ? top1Candidates[0].ItemLV : "")),
                     Brushes.IndianRed);
-            Log("[DIAG-icon] slot1 candidates=" + top1Candidates.Count
-                + " found=" + (!myPP1.IsEmpty)
-                + " iconSearch=" + _slot1IconSw.ElapsedMilliseconds + "ms " + MemStat(),
-                Brushes.LightSlateGray);
+            // [DIAG-icon] (the normal "candidates=N found=X iconSearch=Yms"
+            // version) removed - this fired 12+ times per scan and the
+            // long Sim/handle/mngMB strings forced WPF to allocate
+            // glyph cache entries for every unique char. Combined with
+            // the other high-frequency DIAG lines it pushed the WPF
+            // text renderer over the USER handle budget. The diagnostic
+            // value of these lines was modest (we have [DIAG-icon-mismatch]
+            // + the chose-image-best log for the cases that actually
+            // diverge) so removing them is a net win.
 
 
             PointPlus myPP2 = new PointPlus();
@@ -2931,10 +2955,8 @@ namespace iBarter {
                     chosenItem2 != null ? chosenItem2.ItemLV
                         : (top2Candidates.Count > 0 ? top2Candidates[0].ItemLV : "")),
                     Brushes.IndianRed);
-            Log("[DIAG-icon] slot2 candidates=" + top2Candidates.Count
-                + " found=" + (!myPP2.IsEmpty)
-                + " iconSearch=" + _slot2IconSw.ElapsedMilliseconds + "ms " + MemStat(),
-                Brushes.LightSlateGray);
+            // (slot2 DIAG-icon candidates= removed - same WPF pressure
+            // reason as slot1 above)
 
 
             //
@@ -3026,7 +3048,9 @@ namespace iBarter {
                     var _q1Sw = System.Diagnostics.Stopwatch.StartNew();
                     intNumber1 = TryReadQuantity(listPointPlus[0], strID1);
                     _q1Sw.Stop();
-                    Log("[DIAG-ocrQty] slot1 strID=" + strID1 + " voting=" + _q1Sw.ElapsedMilliseconds + "ms result=" + intNumber1 + " " + MemStat(), Brushes.LightSlateGray);
+                    // [DIAG-ocrQty] removed - the OCR result is already in
+                    // the standard "OcrQty.NoConsensus" or "OcrQty.Picked"
+                    // log line, no need for a separate diagnostic line.
                 }
                 if (intNumber1 <= 0) {
                     // OCR failed to agree - fall back to the CSV-default quantity and
@@ -3075,7 +3099,7 @@ namespace iBarter {
                 var _q2Sw = System.Diagnostics.Stopwatch.StartNew();
                 intNumber2 = TryReadQuantity(listPointPlus[1], strID2);
                 _q2Sw.Stop();
-                Log("[DIAG-ocrQty] slot2 strID=" + strID2 + " voting=" + _q2Sw.ElapsedMilliseconds + "ms result=" + intNumber2 + " " + MemStat(), Brushes.LightSlateGray);
+                // (slot2 DIAG-ocrQty removed - same reason as slot1)
             } else {
                 // Icon position's template doesn't match the chosen item
                 // (either fuzzy won over icon, or icon won over fuzzy),
