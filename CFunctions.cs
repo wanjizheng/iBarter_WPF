@@ -2759,10 +2759,39 @@ namespace iBarter {
 
 
             PointPlus myPP1 = new PointPlus();
+            Items chosenItem1 = null;
             var _slot1IconSw = System.Diagnostics.Stopwatch.StartNew();
             try {
                 if (top1Candidates.Count > 0) {
-                    myPP1 = FindItemIconFromCandidates(top1Candidates, intX1, intY1, intX2, intY2);
+                    var cmp = FindItemIconCompare(top1Candidates, intX1, intY1, intX2, intY2);
+                    // fuzzy-vs-image decision: if fuzzy's top-1 Sim is close to
+                    // the best Sim, fuzzy is right (the templates are all
+                    // roughly equally good, so the name match is the better
+                    // signal). If fuzzy's Sim is much lower, the visual best
+                    // wins (the template is clearly a different item).
+                    //
+                    // Threshold: fuzzy's Sim >= best.Sim * 0.7 means within
+                    // 30% of the best - the templates are close, so trust
+                    // fuzzy's name. Below that, trust the visual best.
+                    if (!cmp.Best.IsEmpty && !cmp.FuzzyTop.IsEmpty
+                        && cmp.FuzzyTop.Sim < cmp.Best.Sim * 0.7) {
+                        myPP1 = cmp.Best;
+                        // Best match's ItemID comes from its ImageID path
+                        chosenItem1 = ResolveItemFromIconID(cmp.Best.ImageID);
+                        Log("[DIAG-icon] slot1 chose image-best fuzzySim="
+                            + cmp.FuzzyTop.Sim.ToString("0.000")
+                            + " bestSim=" + cmp.Best.Sim.ToString("0.000")
+                            + " bestItemID=" + (chosenItem1 != null ? chosenItem1.ItemID : "?"),
+                            Brushes.LightSlateGray);
+                    } else if (!cmp.FuzzyTop.IsEmpty) {
+                        myPP1 = cmp.FuzzyTop;
+                        chosenItem1 = top1Candidates[0];
+                    } else if (!cmp.Best.IsEmpty) {
+                        myPP1 = cmp.Best;
+                        chosenItem1 = ResolveItemFromIconID(cmp.Best.ImageID);
+                    } else {
+                        myPP1 = PointPlus.Empty;
+                    }
                 }
             } catch (Exception ex) {
                 Log("[DIAG-icon-err] slot1 ex=" + ex.GetType().Name + " " + ex.Message, Brushes.LightSlateGray);
@@ -2773,8 +2802,10 @@ namespace iBarter {
             else
                 Log(Localization.LanguageService.Instance.Localize(
                     "str.Log.PickTwoBest.NoSlot1",
-                    top1Candidates.Count > 0 ? top1Candidates[0].ItemID : "",
-                    top1Candidates.Count > 0 ? top1Candidates[0].ItemLV : ""),
+                    chosenItem1 != null ? chosenItem1.ItemID
+                        : (top1Candidates.Count > 0 ? top1Candidates[0].ItemID : ""),
+                    chosenItem1 != null ? chosenItem1.ItemLV
+                        : (top1Candidates.Count > 0 ? top1Candidates[0].ItemLV : "")),
                     Brushes.IndianRed);
             Log("[DIAG-icon] slot1 candidates=" + top1Candidates.Count
                 + " found=" + (myPP1.X != -1)
@@ -2783,10 +2814,29 @@ namespace iBarter {
 
 
             PointPlus myPP2 = new PointPlus();
+            Items chosenItem2 = null;
             var _slot2IconSw = System.Diagnostics.Stopwatch.StartNew();
             try {
                 if (top2Candidates.Count > 0) {
-                    myPP2 = FindItemIconFromCandidates(top2Candidates, intX1, intY1, intX2, intY2);
+                    var cmp = FindItemIconCompare(top2Candidates, intX1, intY1, intX2, intY2);
+                    if (!cmp.Best.IsEmpty && !cmp.FuzzyTop.IsEmpty
+                        && cmp.FuzzyTop.Sim < cmp.Best.Sim * 0.7) {
+                        myPP2 = cmp.Best;
+                        chosenItem2 = ResolveItemFromIconID(cmp.Best.ImageID);
+                        Log("[DIAG-icon] slot2 chose image-best fuzzySim="
+                            + cmp.FuzzyTop.Sim.ToString("0.000")
+                            + " bestSim=" + cmp.Best.Sim.ToString("0.000")
+                            + " bestItemID=" + (chosenItem2 != null ? chosenItem2.ItemID : "?"),
+                            Brushes.LightSlateGray);
+                    } else if (!cmp.FuzzyTop.IsEmpty) {
+                        myPP2 = cmp.FuzzyTop;
+                        chosenItem2 = top2Candidates[0];
+                    } else if (!cmp.Best.IsEmpty) {
+                        myPP2 = cmp.Best;
+                        chosenItem2 = ResolveItemFromIconID(cmp.Best.ImageID);
+                    } else {
+                        myPP2 = PointPlus.Empty;
+                    }
                 }
             } catch (Exception ex) {
                 Log("[DIAG-icon-err] slot2 ex=" + ex.GetType().Name + " " + ex.Message, Brushes.LightSlateGray);
@@ -2797,8 +2847,10 @@ namespace iBarter {
             else
                 Log(Localization.LanguageService.Instance.Localize(
                     "str.Log.PickTwoBest.NoSlot2",
-                    top2Candidates.Count > 0 ? top2Candidates[0].ItemID : "",
-                    top2Candidates.Count > 0 ? top2Candidates[0].ItemLV : ""),
+                    chosenItem2 != null ? chosenItem2.ItemID
+                        : (top2Candidates.Count > 0 ? top2Candidates[0].ItemID : ""),
+                    chosenItem2 != null ? chosenItem2.ItemLV
+                        : (top2Candidates.Count > 0 ? top2Candidates[0].ItemLV : "")),
                     Brushes.IndianRed);
             Log("[DIAG-icon] slot2 candidates=" + top2Candidates.Count
                 + " found=" + (myPP2.X != -1)
@@ -2841,14 +2893,24 @@ namespace iBarter {
             // meaningful when the icon matches fuzzy - if they disagree,
             // skip the OCR vote and fall back to CSV default for the
             // quantity.
-            string strID1 = myItems1 != null ? myItems1.ItemID : "10";
+            // strID1 follows the fuzzy-vs-image decision above: chosenItem1
+            // is the ItemID the caller actually chose (fuzzy top 1 if its
+            // icon Sim was within 30% of the best, otherwise the best
+            // icon FindPicture match). Fall back to top1Candidates[0] if
+            // no chosenItem1 (icon-find completely failed).
+            string strID1 = chosenItem1 != null ? chosenItem1.ItemID
+                : (top1Candidates.Count > 0 ? top1Candidates[0].ItemID : "10");
             // if (strID1 == "800011")
             //     strID1 = "800012";
             // else if (strID1 == "800012")
             //     strID1 = "800011";
-            // Did the icon FindPicture find a different item than fuzzy?
-            // If so, OCR the icon's position would read the wrong number.
-            // Use the icon position only when icon and fuzzy agree.
+            // With the fuzzy-vs-image decision, chosenItem1 may come from
+            // either fuzzy's top 1 or the visual best. The icon's stored
+            // ImageID tells us which item the template actually matched.
+            // If the icon's ImageID matches chosenItem1, the icon position
+            // is correct for OCR. If not (e.g. we trusted fuzzy over the
+            // visual best), OCR quantity on the icon's position would read
+            // the wrong number - fall back to CSV default.
             string iconID1 = (listPointPlus.Count > 0 && listPointPlus[0] != null
                 && !string.IsNullOrEmpty(listPointPlus[0].ImageID)
                 && listPointPlus[0].ImageID.Length >= 18
@@ -2856,7 +2918,7 @@ namespace iBarter {
                 && listPointPlus[0].ImageID.EndsWith(".bmp"))
                 ? listPointPlus[0].ImageID.Substring(14, listPointPlus[0].ImageID.Length - 18)
                 : null;
-            bool iconMatchesFuzzy = iconID1 == strID1;
+            bool iconMatchesChosen = iconID1 == strID1;
             // Pre-OCR skip for LV5+ items: per BDO barter rules these can
             // only ever carry quantity 1, so skip the entire Phase A/G/R
             // OCR pipeline (~150-300ms per icon) and the CSV fallback
@@ -2869,14 +2931,14 @@ namespace iBarter {
                 // and the CSV fallback lookup. Saves real time on every
                 // LV5+ barter item.
                 Log(Localization.LanguageService.Instance.Localize("str.Log.LV5Skip", strID1, lv1Item.ItemNameDisplay), Brushes.Gold);
-            } else if (!iconMatchesFuzzy && myItems1 != null) {
+            } else if (!iconMatchesChosen && chosenItem1 != null) {
                 // Icon FindPicture found a different item than fuzzy - OCR
                 // quantity on the icon's position would read the wrong
                 // number. Skip the vote and go straight to CSV default
                 // for the quantity.
                 intNumber1 = App.listItems.Where(i => i.ItemID == strID1)
                     .Select(i => i.ItemNumber).FirstOrDefault();
-                Log("[DIAG-icon-mismatch] slot1 fuzzy=" + myItems1.ItemID
+                Log("[DIAG-icon-mismatch] slot1 chosen=" + (chosenItem1 != null ? chosenItem1.ItemID : "null")
                     + " icon=" + (iconID1 ?? "none")
                     + " - using CSV default qty=" + intNumber1, Brushes.LightSlateGray);
             } else {
@@ -2901,12 +2963,12 @@ namespace iBarter {
             string strID2 = "10";
             int intNumber2 = -1;
             if (listPointPlus.Count == 2) {
-                // Same identity-precedence logic as item 1: trust fuzzy's
-                // top 1 over the icon FindPicture match. OCR quantity
-                // only runs when icon and fuzzy agree.
-                Items myItems2Slot2 = top2Candidates.FirstOrDefault();
-                if (myItems2Slot2 != null) {
-                    strID2 = myItems2Slot2.ItemID;
+                // Use the fuzzy-vs-image decision from the icon-find pass
+                // (chosenItem2). Fall back to fuzzy's top 1 if no chosenItem.
+                if (chosenItem2 != null) {
+                    strID2 = chosenItem2.ItemID;
+                } else if (top2Candidates.Count > 0) {
+                    strID2 = top2Candidates[0].ItemID;
                 }
                 if (strID2 == "800011")
                     strID2 = "800012";
@@ -2919,23 +2981,25 @@ namespace iBarter {
                     && listPointPlus[1].ImageID.EndsWith(".bmp"))
                     ? listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18)
                     : null;
-                bool icon2MatchesFuzzy = iconID2 == strID2;
+                bool icon2MatchesChosen = iconID2 == strID2;
                 // Same pre-OCR LV5+ skip as for item 1.
                 var lv2Item = App.listItems.FirstOrDefault(i => i.ItemID == strID2);
                 if (lv2Item != null && IsHighTier(lv2Item.ItemLV)) {
                     intNumber2 = 1;
                     Log(Localization.LanguageService.Instance.Localize("str.Log.LV5Skip", strID2, lv2Item.ItemNameDisplay), Brushes.Gold);
-                } else if (icon2MatchesFuzzy) {
+                } else if (icon2MatchesChosen) {
                     var _q2Sw = System.Diagnostics.Stopwatch.StartNew();
                     intNumber2 = TryReadQuantity(listPointPlus[1], strID2);
                     _q2Sw.Stop();
                     Log("[DIAG-ocrQty] slot2 strID=" + strID2 + " voting=" + _q2Sw.ElapsedMilliseconds + "ms result=" + intNumber2 + " " + MemStat(), Brushes.LightSlateGray);
                 } else {
-                    // Icon FindPicture found a different item than fuzzy -
-                    // skip the vote, go straight to CSV default.
+                    // Icon position's template doesn't match the chosen item
+                    // (either fuzzy won over icon, or icon won over fuzzy).
+                    // OCR quantity on the icon's position would read the
+                    // wrong number - skip and go straight to CSV default.
                     intNumber2 = App.listItems.Where(i => i.ItemID == strID2)
                         .Select(i => i.ItemNumber).FirstOrDefault();
-                    Log("[DIAG-icon-mismatch] slot2 fuzzy=" + (myItems2Slot2 != null ? myItems2Slot2.ItemID : "null")
+                    Log("[DIAG-icon-mismatch] slot2 chosen=" + (chosenItem2 != null ? chosenItem2.ItemID : "null")
                         + " icon=" + (iconID2 ?? "none")
                         + " - using CSV default qty=" + intNumber2, Brushes.LightSlateGray);
                 }
@@ -3190,6 +3254,63 @@ namespace iBarter {
                 }
             }
             return PointPlus.Empty;
+        }
+
+        // Result of running icon FindPicture across the top-N fuzzy
+        // candidates. fuzzyTop is the match for candidates[0] (if it
+        // visually matched); best is the highest-Sim match across all
+        // candidates. Caller compares fuzzyTop.Sim to best.Sim to decide
+        // which to trust.
+        private struct TopNIconResult {
+            public PointPlus FuzzyTop;  // match for fuzzy's #1 candidate (or Empty)
+            public PointPlus Best;      // match for whichever candidate scored highest
+        }
+
+        // Run FindPicture on each top-N fuzzy candidate and return:
+        //   - FuzzyTop: the match for candidates[0] (or Empty if no match)
+        //   - Best: the highest-Sim match across all candidates
+        //
+        // Used by the fuzzy-vs-image comparison in IdentifyBarterAsync:
+        // if fuzzy's top-1 Sim is close to the best Sim, fuzzy is right;
+        // if fuzzy's Sim is much lower, the visual best is the more
+        // trustworthy signal.
+        private static TopNIconResult FindItemIconCompare(
+                System.Collections.Generic.List<Items> candidates,
+                int intX1, int intY1, int intX2, int intY2) {
+            var result = new TopNIconResult { FuzzyTop = PointPlus.Empty, Best = PointPlus.Empty };
+            if (candidates == null) return result;
+            double bestSim = 0;
+            for (int i = 0; i < candidates.Count; i++) {
+                var item = candidates[i];
+                if (item == null || string.IsNullOrEmpty(item.ItemID)) continue;
+                PointPlus pp = App.myPureDM.CV.FindPicture(
+                    intX1, intY1, intX2, intY2,
+                    "\\Images\\Items\\" + item.ItemID + ".bmp",
+                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+                if (pp.X == -1 || pp.Y == -1 || pp.X * pp.Y == 0) continue;
+                if (i == 0) result.FuzzyTop = pp;
+                if (pp.Sim > bestSim) {
+                    bestSim = pp.Sim;
+                    result.Best = pp;
+                }
+            }
+            return result;
+        }
+
+        // Extract the ItemID from an icon FindPicture PointPlus's ImageID
+        // (which PureDM populates with the template path like
+        // "\\Images\\Items\\5856.bmp"). Returns null if the path
+        // doesn't match the expected format.
+        private static Items ResolveItemFromIconID(string imageID) {
+            if (string.IsNullOrEmpty(imageID)
+                || imageID.Length < 18
+                || !imageID.StartsWith("\\Images\\Items\\")
+                || !imageID.EndsWith(".bmp")
+                || App.listItems == null) {
+                return null;
+            }
+            string itemID = imageID.Substring(14, imageID.Length - 18);
+            return App.listItems.FirstOrDefault(i => i.ItemID == itemID);
         }
 
         List<PointPlus> PickTwoBest(List<PointPlus> list) {
