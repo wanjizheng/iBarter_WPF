@@ -2794,7 +2794,7 @@ namespace iBarter {
                 if (aliased != null) top1Candidates.Add(aliased);
             }
             if (top1Candidates.Count == 0) {
-                top1Candidates = FindMostSimilarItemZhTwAware(strItem1, 10, ExtractLevelPrefix(strItem1).lv);
+                top1Candidates = FindMostSimilarItemZhTwAware(strItem1, 3, ExtractLevelPrefix(strItem1).lv);
             }
             var top2Candidates = new System.Collections.Generic.List<Items>();
             string aliasKey2 = NormalizeBasic(strItem2 ?? "");
@@ -2804,7 +2804,7 @@ namespace iBarter {
                 if (aliased != null) top2Candidates.Add(aliased);
             }
             if (top2Candidates.Count == 0) {
-                top2Candidates = FindMostSimilarItemZhTwAware(strItem2, 10, ExtractLevelPrefix(strItem2).lv);
+                top2Candidates = FindMostSimilarItemZhTwAware(strItem2, 3, ExtractLevelPrefix(strItem2).lv);
             }
             Items myItems1 = top1Candidates.FirstOrDefault();
             Items myItems2 = top2Candidates.FirstOrDefault();
@@ -2833,22 +2833,27 @@ namespace iBarter {
                     // Tighten to 2x ratio so fuzzy wins in ambiguous cases;
                     // the OCR alias list (若攻/苔蘇/苔藓 all → 4695) makes
                     // fuzzy reliable for the user's recurring 苔藓 misreads.
-                    // Always trust fuzzy for item identity. Previous Sim
-                    // ratios (0.7 then 2.0) were unreliable: visually
-                    // similar items (800014 Pirates Gunpowder vs 5824
-                    // Cox Pirates Artifact Combat, 800002 Giant Fish
-                    // Bone vs 4664 Fir Plywood, etc.) routinely get picked
-                    // wrong by the visual Sim match. The OCR alias
-                    // list catches the recurring misreads. For the
-                    // rest, the OCR name match is the more trustworthy
-                    // signal than the visual Sim match.
-                    //
-                    // Use the icon position only when its template
-                    // match happens to agree with fuzzy (iconMatchesChosen
-                    // in the OCR-quantity block below). If icon disagrees
-                    // with fuzzy, fall back to CSV default for quantity
-                    // rather than risk reading a wrong icon's number.
-                    if (!cmp.FuzzyTop.IsEmpty) {
+                    // Fuzzy-vs-image decision. Image-best wins when its Sim is
+                    // 2x fuzzy's (clearly better template match). The user's
+                    // 杜胡島 case: fuzzy 0.52 (4695) vs best 0.79 (4664) at
+                    // 1.51x ratio - fuzzy right. 阿利塔島 same pattern: fuzzy
+                    // 0.52 (800014) vs best 0.79 (5824). The threshold
+                    // 2x is conservative enough that visually-similar-but-wrong
+                    // items don't override fuzzy; only when icon-best is
+                    // overwhelmingly confident (icon matches well, fuzzy
+                    // doesn't) does image win. The iconMatchesChosen check
+                    // in the OCR-quantity block below still prevents
+                    // OCR'ing a wrong icon's number overlay.
+                    if (!cmp.Best.IsEmpty && !cmp.FuzzyTop.IsEmpty
+                        && cmp.FuzzyTop.Sim < cmp.Best.Sim * 0.5) {
+                        myPP1 = cmp.Best;
+                        chosenItem1 = ResolveItemFromIconID(cmp.Best.ImageID);
+                        Log("[DIAG-icon] slot1 chose image-best fuzzySim="
+                            + cmp.FuzzyTop.Sim.ToString("0.000")
+                            + " bestSim=" + cmp.Best.Sim.ToString("0.000")
+                            + " bestItemID=" + (chosenItem1 != null ? chosenItem1.ItemID : "?"),
+                            Brushes.LightSlateGray);
+                    } else if (!cmp.FuzzyTop.IsEmpty) {
                         myPP1 = cmp.FuzzyTop;
                         chosenItem1 = top1Candidates[0];
                     } else if (!cmp.Best.IsEmpty) {
