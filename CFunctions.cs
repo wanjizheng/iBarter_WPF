@@ -66,8 +66,14 @@ namespace iBarter {
         // PureDM.CV.OCRString; the value is the catalog ItemID.
         private static readonly System.Collections.Generic.Dictionary<string, string> OCR_ALIASES =
             new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal) {
-            // 苔藓 -> 若攻 misread: "Moss Tree Plywood" read as "若攻樹合板"
-            { "若攻樹合板", "4695" },
+            // 苔藓 misreads to several variants on different scans - the
+            // catalog has '苔藓' (simplified 蘇 = '蘇') but PureDM's
+            // character recognizer keeps mistaking it for similar glyphs.
+            // We just direct-map every observed 苔 variant to 4695.
+            { "若攻樹合板", "4695" },  // 攻 ~ 藓 (similar stroke count)
+            { "苔蘇樹合板", "4695" },  // 蘇 ~ 藓 (both 鱼 family)
+            { "苔藓树合板", "4695" },  // 苔藓 in simplified (the correct chars)
+            { "苔藓樹合板", "4695" },  // 苔藓 in traditional (catalog form)
         };
 
         public void Log(string _message, Brush _color) {
@@ -2806,17 +2812,18 @@ namespace iBarter {
             try {
                 if (top1Candidates.Count > 0) {
                     var cmp = FindItemIconCompare(top1Candidates, intX1, intY1, intX2, intY2);
-                    // fuzzy-vs-image decision: if fuzzy's top-1 Sim is close to
-                    // the best Sim, fuzzy is right (the templates are all
-                    // roughly equally good, so the name match is the better
-                    // signal). If fuzzy's Sim is much lower, the visual best
-                    // wins (the template is clearly a different item).
-                    //
-                    // Threshold: fuzzy's Sim >= best.Sim * 0.7 means within
-                    // 30% of the best - the templates are close, so trust
-                    // fuzzy's name. Below that, trust the visual best.
+                    // Fuzzy-vs-image decision. Image-best wins only when its
+                    // Sim is at least 2x fuzzy's AND fuzzy's template match
+                    // is in the lower half. The user's 杜胡島 case showed
+                    // image-best 0.79 (Fir Plywood 4664) wrongly overriding
+                    // fuzzy 0.52 (Moss Tree Plywood 4695) at the previous
+                    // 0.7 ratio - 4664 and 4695 templates look similar so
+                    // the visual Sim picks a near-match of the wrong item.
+                    // Tighten to 2x ratio so fuzzy wins in ambiguous cases;
+                    // the OCR alias list (若攻/苔蘇/苔藓 all → 4695) makes
+                    // fuzzy reliable for the user's recurring 苔藓 misreads.
                     if (!cmp.Best.IsEmpty && !cmp.FuzzyTop.IsEmpty
-                        && cmp.FuzzyTop.Sim < cmp.Best.Sim * 0.7) {
+                        && cmp.FuzzyTop.Sim < cmp.Best.Sim * 0.5) {
                         myPP1 = cmp.Best;
                         // Best match's ItemID comes from its ImageID path
                         chosenItem1 = ResolveItemFromIconID(cmp.Best.ImageID);
@@ -2862,7 +2869,7 @@ namespace iBarter {
                 if (top2Candidates.Count > 0) {
                     var cmp = FindItemIconCompare(top2Candidates, intX1, intY1, intX2, intY2);
                     if (!cmp.Best.IsEmpty && !cmp.FuzzyTop.IsEmpty
-                        && cmp.FuzzyTop.Sim < cmp.Best.Sim * 0.7) {
+                        && cmp.FuzzyTop.Sim < cmp.Best.Sim * 0.5) {
                         myPP2 = cmp.Best;
                         chosenItem2 = ResolveItemFromIconID(cmp.Best.ImageID);
                         Log("[DIAG-icon] slot2 chose image-best fuzzySim="
