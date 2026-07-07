@@ -31,6 +31,7 @@ using SystemColors = System.Drawing.SystemColors;
 namespace iBarter {
     public class CFunctions {
         private static FontType gameFontType = FontType.StrongSword;
+        private static readonly SemaphoreSlim IdentifyRoutesGate = new SemaphoreSlim(1, 1);
 
         public CFunctions(FontType _font = FontType.StrongSword) {
             gameFontType = _font;
@@ -1022,7 +1023,7 @@ namespace iBarter {
 
             foreach (var candidate in AnchorImageCandidates()) {
                 try {
-                    List<PointPlus> anchors = App.myPureDM.CV.FindPictures(
+                    List<PointPlus> anchors = FindPicturesTiled(
                         0,
                         0,
                         App.myPureDM.WindowWidth,
@@ -1036,6 +1037,7 @@ namespace iBarter {
                                  + "@" + candidate.Similarity.ToString("0.00", CultureInfo.InvariantCulture)
                                  + (candidate.AutoResize ? "+resize" : "")
                                  + "+" + candidate.ColorMode
+                                 + "+tiled"
                                  + "=" + anchors.Count);
 
                     // With one active candidate the dedup is a no-op, but kept so
@@ -1064,36 +1066,108 @@ namespace iBarter {
             return allAnchors;
         }
 
-        public async Task IdentifyRoutes() {
-            // UI-thread setup: clear the result collection + clean the data grid.
-            // Both touch WPF bound collections and must run on the dispatcher.
-            if (Application.Current.Dispatcher.CheckAccess()) {
-                App.listBarterScanner.Clear();
-                CleanDataGrid();
-            }
-            else {
-                Application.Current.Dispatcher.Invoke(new Action(() => {
-                    App.listBarterScanner.Clear();
-                    CleanDataGrid();
-                }));
+        private List<PointPlus> FindPicturesTiled(
+            int x1,
+            int y1,
+            int x2,
+            int y2,
+            string image,
+            double similarity,
+            bool autoResize,
+            CV.PictureColorMode colorMode) {
+            var results = new List<PointPlus>();
+            const int tileWidth = 640;
+            const int tileHeight = 420;
+            const int tileOverlap = 40;
+            const int fixedDedupPx = 30;
+
+            int stepX = tileWidth - tileOverlap;
+            int stepY = tileHeight - tileOverlap;
+
+            for (int tileY = y1; tileY < y2;) {
+                int tileY2 = Math.Min(tileY + tileHeight, y2);
+                for (int tileX = x1; tileX < x2;) {
+                    int tileX2 = Math.Min(tileX + tileWidth, x2);
+                    if (tileX2 > tileX && tileY2 > tileY) {
+                        List<PointPlus> tilePoints = App.myPureDM.CV.FindPictures(
+                            tileX,
+                            tileY,
+                            tileX2,
+                            tileY2,
+                            image,
+                            similarity,
+                            autoResize,
+                            colorMode);
+
+                        foreach (var p in tilePoints) {
+                            bool isDuplicate = false;
+                            for (int i = 0; i < results.Count; i++) {
+                                var existing = results[i];
+                                if (Math.Abs(existing.X - p.X) < fixedDedupPx &&
+                                    Math.Abs(existing.Y - p.Y) < fixedDedupPx) {
+                                    if (p.Sim > existing.Sim) {
+                                        results[i] = p;
+                                    }
+                                    isDuplicate = true;
+                                    break;
+                                }
+                            }
+                            if (!isDuplicate) {
+                                results.Add(p);
+                            }
+                        }
+                    }
+
+                    if (tileX2 >= x2) break;
+                    tileX += stepX;
+                }
+
+                if (tileY2 >= y2) break;
+                tileY += stepY;
             }
 
-            // Offload the heavy synchronous work to a background thread.
-            //
-            // The body below does:
-            //   - DM.GetClientSize + GetScreenDataBmp (COM, blocking, ~50ms each)
-            //   - FindBarterAnchors: full-window capture + OpenCV tile loop
-            //     (was the root cause of the "Failed to allocate 28068560 bytes"
-            //     fix; the tile loop runs ~5 MatchTemplate calls per candidate)
-            //   - 6× IdentifyBarterAsync: per-anchor capture + FindPicture +
-            //     OCRString retry loop (5 attempts × 100ms) + MagickImage
-            //     5-stage pipeline (per anchor)
-            //
-            // Without the Task.Run wrapper the UI thread was blocked for tens of
-            // seconds per scan click. Log() and other UI-redirected calls work
-            // correctly from the background thread (they Dispatcher.Invoke back
-            // internally), so no other plumbing changes are required.
-            await Task.Run(() => DoIdentifyRoutesHeavy());
+            return results;
+        }
+
+        public async Task IdentifyRoutes() {
+            if (!await IdentifyRoutesGate.WaitAsync(0)) {
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.AlreadyRunning"), Brushes.Orange);
+                return;
+            }
+
+            try {
+                // UI-thread setup: clear the result collection + clean the data grid.
+                // Both touch WPF bound collections and must run on the dispatcher.
+                if (Application.Current.Dispatcher.CheckAccess()) {
+                    App.listBarterScanner.Clear();
+                    CleanDataGrid();
+                }
+                else {
+                    Application.Current.Dispatcher.Invoke(new Action(() => {
+                        App.listBarterScanner.Clear();
+                        CleanDataGrid();
+                    }));
+                }
+
+                // Offload the heavy synchronous work to a background thread.
+                //
+                // The body below does:
+                //   - DM.GetClientSize + GetScreenDataBmp (COM, blocking, ~50ms each)
+                //   - FindBarterAnchors: tiled capture + OpenCV tile loop
+                //     (avoids one fragile 2560x1369 GetScreenDataBmp call)
+                //   - 6× IdentifyBarterAsync: per-anchor capture + FindPicture +
+                //     OCRString retry loop (5 attempts × 100ms) + MagickImage
+                //     5-stage pipeline (per anchor)
+                //
+                // Without the Task.Run wrapper the UI thread was blocked for tens of
+                // seconds per scan click. Log() and other UI-redirected calls work
+                // correctly from the background thread (they Dispatcher.Invoke back
+                // internally), so no other plumbing changes are required.
+                await Task.Run(() => DoIdentifyRoutesHeavy());
+            }
+            finally {
+                IdentifyRoutesGate.Release();
+            }
         }
 
         private void DoIdentifyRoutesHeavy() {
@@ -2223,16 +2297,6 @@ namespace iBarter {
 // as it amplified signal for low-contrast icons, and F never uniquely
 // rescued a case where A + R + G already agreed. -1 outcomes stayed -1.)
 
-        // Image-dump toggle for scan debugging. When set, every capture
-        // (OCR regions, icon-search regions) writes the captured bytes
-        // to disk under iBarter_dump\ before returning them to the
-        // caller. Set the environment variable IBARTER_DUMP=1 to enable,
-        // or set the field at runtime from a debugger watch window.
-        // Off by default - the per-icon capture rate is high and
-        // disk writes would slow the scan and fill the SSD quickly.
-        public static bool EnableImageDump = System.Environment.GetEnvironmentVariable("IBARTER_DUMP") == "1";
-        private static int _dumpSeq = 0;
-
         private static byte[] CaptureScreenBytes(int x1, int y1, int x2, int y2) {
             if (App.myPureDM == null || App.myPureDM.DM == null) return null;
             // GetScreenDataBmp's internal pointer is freed on the next call;
@@ -3352,7 +3416,7 @@ namespace iBarter {
                 PointPlus pp = App.myPureDM.CV.FindPicture(
                     intX1, intY1, intX2, intY2,
                     "\\Images\\Items\\" + item.ItemID + ".bmp",
-                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, false, 0.7);
                 if (pp.X != -1 && pp.Y != -1 && pp.X * pp.Y != 0) {
                     return pp;
                 }
@@ -3398,7 +3462,7 @@ namespace iBarter {
                 PointPlus pp = App.myPureDM.CV.FindPicture(
                     intX1, intY1, intX2, intY2,
                     "\\Images\\Items\\" + item.ItemID + ".bmp",
-                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, false, 0.7);
                 if (pp.IsEmpty) continue;
                 if (i == 0) result.FuzzyTop = pp;
                 if (pp.Sim > bestSim) {
