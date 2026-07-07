@@ -129,6 +129,7 @@ namespace iBarter {
         }
 
         private static void LogCrash(string origin, Exception? ex) {
+            // Write the full exception to crash.log (no WPF involvement).
             try {
                 string logPath = AppDomain.CurrentDomain.BaseDirectory + "crash.log";
                 string entry = "==== " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " (" + origin + ") ====\r\n"
@@ -138,12 +139,15 @@ namespace iBarter {
             catch {
                 // last-resort logger must never throw
             }
-            try {
-                myCFun?.Log((ex?.GetType().Name ?? "Exception") + ": " + (ex?.Message ?? ""),
-                    System.Windows.Media.Brushes.Red);
-            }
-            catch {
-            }
+            // Note: we deliberately do NOT call myCFun?.Log() here. The
+            // crash path fires AFTER WPF's text renderer has already
+            // OOM'd in the Log() call (or worse, recursively from
+            // Dispatcher processing itself). Any further Log() call
+            // goes back through WPF text rendering and can NRE - the
+            // user sees a "NullReferenceException: object reference
+            // not set" flood on the next scan as WPF's internal error
+            // handler tries to log the secondary NRE. Writing to
+            // crash.log is enough; the user reads it from disk.
         }
     }
 }
