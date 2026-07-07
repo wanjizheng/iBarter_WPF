@@ -2675,9 +2675,13 @@ namespace iBarter {
 
             Items myItems1 = FindMostSimilarItemZhTwAware(strItem1, ExtractLevelPrefix(strItem1).lv);
             Items myItems2 = FindMostSimilarItemZhTwAware(strItem2, ExtractLevelPrefix(strItem2).lv);
-            // DIAG: fuzzy match timing. Repeatedly re-fuzzying the same OCR
-            // text on consecutive scans is the most likely LRU-cache target.
-            Log("[DIAG-slot1] fuzzy=" + (myItems1 != null ? myItems1.ItemID : "null") + " slot2=" + (myItems2 != null ? myItems2.ItemID : "null"), Brushes.LightSlateGray);
+            // DIAG: dump raw OCR text + normalised form so we can see if
+            // OCR returns Chinese / English / garbage. If OCR returns
+            // Chinese text and the catalog only has English ItemName, the
+            // fuzzy match against ItemNameZhTw needs to hit (currently 273/274
+            // items have zh-TW names). If OCR returns garbled text the
+            // match returns whatever has the lowest edit distance.
+            Log("[DIAG-ocr-slot1] raw='" + strItem1 + "' normalized='" + NormalizeBasic(RemoveLevelPrefix(strItem1)) + "' matched='" + (myItems1 != null ? myItems1.ItemID + "(" + (myItems1.ItemName ?? "") + "/" + (myItems1.ItemNameZhTw ?? "") + ")" : "null") + "' slot2='" + (myItems2 != null ? myItems2.ItemID : "null") + "'", Brushes.LightSlateGray);
 
 
             PointPlus myPP1 = new PointPlus();
