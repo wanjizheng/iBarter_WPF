@@ -3009,52 +3009,55 @@ namespace iBarter {
             }
 
             // 9. 识别第二个物品
+            // Use the fuzzy-vs-image decision from the icon-find pass
+            // (chosenItem2) REGARDLESS of how many icons FindPicture
+            // actually matched - the old 'if listPointPlus.Count == 2'
+            // gate fell through to the default '10' (Crow Coin) when the
+            // slot2 icon-find failed even though fuzzy had a perfectly
+            // good name match. Set strID2 up front; the OCR-quantity
+            // block below decides whether to OCR on the icon position
+            // (icon2MatchesChosen) or skip straight to CSV default.
             string strID2 = "10";
             int intNumber2 = -1;
-            if (listPointPlus.Count == 2) {
-                // Use the fuzzy-vs-image decision from the icon-find pass
-                // (chosenItem2). Fall back to fuzzy's top 1 if no chosenItem.
-                if (chosenItem2 != null) {
-                    strID2 = chosenItem2.ItemID;
-                } else if (top2Candidates.Count > 0) {
-                    strID2 = top2Candidates[0].ItemID;
-                }
-                if (strID2 == "800011")
-                    strID2 = "800012";
-                else if (strID2 == "800012")
-                    strID2 = "800011";
-                string iconID2 = (listPointPlus.Count > 1 && listPointPlus[1] != null
-                    && !string.IsNullOrEmpty(listPointPlus[1].ImageID)
-                    && listPointPlus[1].ImageID.Length >= 18
-                    && listPointPlus[1].ImageID.StartsWith("\\Images\\Items\\")
-                    && listPointPlus[1].ImageID.EndsWith(".bmp"))
-                    ? listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18)
-                    : null;
-                bool icon2MatchesChosen = iconID2 == strID2;
-                // Same pre-OCR LV5+ skip as for item 1.
-                var lv2Item = App.listItems.FirstOrDefault(i => i.ItemID == strID2);
-                if (lv2Item != null && IsHighTier(lv2Item.ItemLV)) {
-                    intNumber2 = 1;
-                    Log(Localization.LanguageService.Instance.Localize("str.Log.LV5Skip", strID2, lv2Item.ItemNameDisplay), Brushes.Gold);
-                } else if (icon2MatchesChosen) {
-                    var _q2Sw = System.Diagnostics.Stopwatch.StartNew();
-                    intNumber2 = TryReadQuantity(listPointPlus[1], strID2);
-                    _q2Sw.Stop();
-                    Log("[DIAG-ocrQty] slot2 strID=" + strID2 + " voting=" + _q2Sw.ElapsedMilliseconds + "ms result=" + intNumber2 + " " + MemStat(), Brushes.LightSlateGray);
-                } else {
-                    // Icon position's template doesn't match the chosen item
-                    // (either fuzzy won over icon, or icon won over fuzzy).
-                    // OCR quantity on the icon's position would read the
-                    // wrong number - skip and go straight to CSV default.
-                    intNumber2 = App.listItems.Where(i => i.ItemID == strID2)
-                        .Select(i => i.ItemNumber).FirstOrDefault();
-                    Log("[DIAG-icon-mismatch] slot2 chosen=" + (chosenItem2 != null ? chosenItem2.ItemID : "null")
-                        + " icon=" + (iconID2 ?? "none")
-                        + " - using CSV default qty=" + intNumber2, Brushes.LightSlateGray);
-                }
+            if (chosenItem2 != null) {
+                strID2 = chosenItem2.ItemID;
+            } else if (top2Candidates.Count > 0) {
+                strID2 = top2Candidates[0].ItemID;
             }
-            else {
-                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.SecondItemUseCrowCoin"), Brushes.Red);
+            if (strID2 == "800011")
+                strID2 = "800012";
+            else if (strID2 == "800012")
+                strID2 = "800011";
+            string iconID2 = (listPointPlus.Count > 1 && listPointPlus[1] != null
+                && !string.IsNullOrEmpty(listPointPlus[1].ImageID)
+                && listPointPlus[1].ImageID.Length >= 18
+                && listPointPlus[1].ImageID.StartsWith("\\Images\\Items\\")
+                && listPointPlus[1].ImageID.EndsWith(".bmp"))
+                ? listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18)
+                : null;
+            bool icon2MatchesChosen = iconID2 == strID2;
+            // Same pre-OCR LV5+ skip as for item 1.
+            var lv2Item = App.listItems.FirstOrDefault(i => i.ItemID == strID2);
+            if (lv2Item != null && IsHighTier(lv2Item.ItemLV)) {
+                intNumber2 = 1;
+                Log(Localization.LanguageService.Instance.Localize("str.Log.LV5Skip", strID2, lv2Item.ItemNameDisplay), Brushes.Gold);
+            } else if (icon2MatchesChosen && listPointPlus.Count > 1) {
+                var _q2Sw = System.Diagnostics.Stopwatch.StartNew();
+                intNumber2 = TryReadQuantity(listPointPlus[1], strID2);
+                _q2Sw.Stop();
+                Log("[DIAG-ocrQty] slot2 strID=" + strID2 + " voting=" + _q2Sw.ElapsedMilliseconds + "ms result=" + intNumber2 + " " + MemStat(), Brushes.LightSlateGray);
+            } else {
+                // Icon position's template doesn't match the chosen item
+                // (either fuzzy won over icon, or icon won over fuzzy),
+                // or no icon position at all (slot2 icon FindPicture
+                // failed completely). OCR quantity on the icon's
+                // position would read the wrong number - skip and go
+                // straight to CSV default.
+                intNumber2 = App.listItems.Where(i => i.ItemID == strID2)
+                    .Select(i => i.ItemNumber).FirstOrDefault();
+                Log("[DIAG-icon-mismatch] slot2 chosen=" + (chosenItem2 != null ? chosenItem2.ItemID : "null")
+                    + " icon=" + (iconID2 ?? "none")
+                    + " - using CSV default qty=" + intNumber2, Brushes.LightSlateGray);
             }
 
             if (intNumber2 <= 0) {
