@@ -2833,17 +2833,22 @@ namespace iBarter {
                     // Tighten to 2x ratio so fuzzy wins in ambiguous cases;
                     // the OCR alias list (若攻/苔蘇/苔藓 all → 4695) makes
                     // fuzzy reliable for the user's recurring 苔藓 misreads.
-                    if (!cmp.Best.IsEmpty && !cmp.FuzzyTop.IsEmpty
-                        && cmp.FuzzyTop.Sim < cmp.Best.Sim * 0.5) {
-                        myPP1 = cmp.Best;
-                        // Best match's ItemID comes from its ImageID path
-                        chosenItem1 = ResolveItemFromIconID(cmp.Best.ImageID);
-                        Log("[DIAG-icon] slot1 chose image-best fuzzySim="
-                            + cmp.FuzzyTop.Sim.ToString("0.000")
-                            + " bestSim=" + cmp.Best.Sim.ToString("0.000")
-                            + " bestItemID=" + (chosenItem1 != null ? chosenItem1.ItemID : "?"),
-                            Brushes.LightSlateGray);
-                    } else if (!cmp.FuzzyTop.IsEmpty) {
+                    // Always trust fuzzy for item identity. Previous Sim
+                    // ratios (0.7 then 2.0) were unreliable: visually
+                    // similar items (800014 Pirates Gunpowder vs 5824
+                    // Cox Pirates Artifact Combat, 800002 Giant Fish
+                    // Bone vs 4664 Fir Plywood, etc.) routinely get picked
+                    // wrong by the visual Sim match. The OCR alias
+                    // list catches the recurring misreads. For the
+                    // rest, the OCR name match is the more trustworthy
+                    // signal than the visual Sim match.
+                    //
+                    // Use the icon position only when its template
+                    // match happens to agree with fuzzy (iconMatchesChosen
+                    // in the OCR-quantity block below). If icon disagrees
+                    // with fuzzy, fall back to CSV default for quantity
+                    // rather than risk reading a wrong icon's number.
+                    if (!cmp.FuzzyTop.IsEmpty) {
                         myPP1 = cmp.FuzzyTop;
                         chosenItem1 = top1Candidates[0];
                     } else if (!cmp.Best.IsEmpty) {
