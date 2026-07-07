@@ -2717,22 +2717,26 @@ namespace iBarter {
             // directly. See the comment on the OCR_ALIASES field for the
             // "苔藓 -> 若攻" example. Falls through silently if the
             // OCR text isn't in the table.
-            Items myItems1 = null;
+            var top1Candidates = new System.Collections.Generic.List<Items>();
             if (OCR_ALIASES.TryGetValue(strItem1 ?? "", out string aliasItemID1)
                 && App.listItems != null) {
-                myItems1 = App.listItems.FirstOrDefault(i => i.ItemID == aliasItemID1);
+                var aliased = App.listItems.FirstOrDefault(i => i.ItemID == aliasItemID1);
+                if (aliased != null) top1Candidates.Add(aliased);
             }
-            if (myItems1 == null) {
-                myItems1 = FindMostSimilarItemZhTwAware(strItem1, ExtractLevelPrefix(strItem1).lv);
+            if (top1Candidates.Count == 0) {
+                top1Candidates = FindMostSimilarItemZhTwAware(strItem1, 10, ExtractLevelPrefix(strItem1).lv);
             }
-            Items myItems2 = null;
+            var top2Candidates = new System.Collections.Generic.List<Items>();
             if (OCR_ALIASES.TryGetValue(strItem2 ?? "", out string aliasItemID2)
                 && App.listItems != null) {
-                myItems2 = App.listItems.FirstOrDefault(i => i.ItemID == aliasItemID2);
+                var aliased = App.listItems.FirstOrDefault(i => i.ItemID == aliasItemID2);
+                if (aliased != null) top2Candidates.Add(aliased);
             }
-            if (myItems2 == null) {
-                myItems2 = FindMostSimilarItemZhTwAware(strItem2, ExtractLevelPrefix(strItem2).lv);
+            if (top2Candidates.Count == 0) {
+                top2Candidates = FindMostSimilarItemZhTwAware(strItem2, 10, ExtractLevelPrefix(strItem2).lv);
             }
+            Items myItems1 = top1Candidates.FirstOrDefault();
+            Items myItems2 = top2Candidates.FirstOrDefault();
             // DIAG: dump raw OCR text + normalised form so we can see if
             // OCR returns Chinese / English / garbage. If OCR returns
             // Chinese text and the catalog only has English ItemName, the
@@ -2743,110 +2747,51 @@ namespace iBarter {
 
 
             PointPlus myPP1 = new PointPlus();
-            if (myItems1 != null) {
-                // Cache hit short-circuits the PureDM FindPicture + skips the
-                // O(n) fallback below entirely. The cache is invalidated
-                // automatically when the barter UI fingerprint changes.
-                myPP1 = TryIconPointCache(myItems1.ItemID, intX1, intY1);
-                if (myPP1.X == -1) {
-                    myPP1 = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems1.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
-                    if (myPP1.X != -1 && myPP1.Y != -1 && myPP1.X * myPP1.Y != 0) {
-                        StoreIconPointCache(myItems1.ItemID, myPP1, intX1, intY1);
-                    }
+            var _slot1IconSw = System.Diagnostics.Stopwatch.StartNew();
+            try {
+                if (top1Candidates.Count > 0) {
+                    myPP1 = FindItemIconFromCandidates(top1Candidates, intX1, intY1, intX2, intY2);
                 }
+            } catch (Exception ex) {
+                Log("[DIAG-icon-err] slot1 ex=" + ex.GetType().Name + " " + ex.Message, Brushes.LightSlateGray);
             }
+            _slot1IconSw.Stop();
             if (myPP1.X != -1 && myPP1.Y != -1 && myPP1.X * myPP1.Y != 0)
                 listPointPlus.Add(myPP1);
-            else {
-                // DIAG: icon FindPicture fallback triggered - primary template
-                // (myItems1.ItemID) didn't visually match the live capture.
-                // Each fallback loops App.listItems (~273 items) doing one
-                // PureDM.CV.FindPicture each - up to ~8 s. Counting these
-                // tells us if this is a major or minor contributor.
-                Log("[DIAG-fallback] slot1 entered: myItems1=" + (myItems1 != null ? myItems1.ItemID : "null"), Brushes.LightSlateGray);
-                List<PointPlus> listPointPlus_Temp = new List<PointPlus>();
-                foreach (Items item in App.listItems) {
-                    PointPlus myPP = App.myPureDM.CV.FindPicture(
-                        intX1, intY1, intX2, intY2,
-                        "\\Images\\Items\\" + item.ItemID + ".bmp",
-                        0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
-                    if (myPP.X != -1 && myPP.Y != -1 && myPP.X * myPP.Y != 0)
-                        listPointPlus_Temp.Add(myPP);
-                }
-
-                listPointPlus_Temp = PickTwoBest(listPointPlus_Temp);
-                if (listPointPlus_Temp.Count >= 1) {
-                    listPointPlus.Add(listPointPlus_Temp[0]);
-                    // FIX: cache the fallback's winning position so the next
-                    // scan can skip this 273-item O(n) loop. PureDM populates
-                    // ImageID on the returned PointPlus; extract the matched
-                    // ItemID and store the position offset.
-                    var fbPicked = listPointPlus_Temp[0];
-                    if (!string.IsNullOrEmpty(fbPicked.ImageID)
-                        && fbPicked.ImageID.Length >= 18
-                        && fbPicked.ImageID.StartsWith("\\Images\\Items\\")
-                        && fbPicked.ImageID.EndsWith(".bmp")) {
-                        string fbItemID = fbPicked.ImageID.Substring(14, fbPicked.ImageID.Length - 18);
-                        StoreIconPointCache(fbItemID, fbPicked, intX1, intY1);
-                    }
-                }
-                else
-                    Log(Localization.LanguageService.Instance.Localize("str.Log.PickTwoBest.NoSlot1", myItems1?.ItemID ?? "", myItems1?.ItemLV ?? ""), Brushes.IndianRed);
-            }
+            else
+                Log(Localization.LanguageService.Instance.Localize(
+                    "str.Log.PickTwoBest.NoSlot1",
+                    top1Candidates.Count > 0 ? top1Candidates[0].ItemID : "",
+                    top1Candidates.Count > 0 ? top1Candidates[0].ItemLV : ""),
+                    Brushes.IndianRed);
+            Log("[DIAG-icon] slot1 candidates=" + top1Candidates.Count
+                + " found=" + (myPP1.X != -1)
+                + " iconSearch=" + _slot1IconSw.ElapsedMilliseconds + "ms " + MemStat(),
+                Brushes.LightSlateGray);
 
 
             PointPlus myPP2 = new PointPlus();
-
-            if (myItems2 != null) {
-                // Same cache short-circuit as item 1 above.
-                myPP2 = TryIconPointCache(myItems2.ItemID, intX1, intY1);
-                if (myPP2.X == -1) {
-                    myPP2 = App.myPureDM.CV.FindPicture(intX1, intY1, intX2, intY2, "\\Images\\Items\\" + myItems2.ItemID + ".bmp", 0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
-                    if (myPP2.X != -1 && myPP2.Y != -1 && myPP2.X * myPP2.Y != 0) {
-                        StoreIconPointCache(myItems2.ItemID, myPP2, intX1, intY1);
-                    }
+            var _slot2IconSw = System.Diagnostics.Stopwatch.StartNew();
+            try {
+                if (top2Candidates.Count > 0) {
+                    myPP2 = FindItemIconFromCandidates(top2Candidates, intX1, intY1, intX2, intY2);
                 }
+            } catch (Exception ex) {
+                Log("[DIAG-icon-err] slot2 ex=" + ex.GetType().Name + " " + ex.Message, Brushes.LightSlateGray);
             }
+            _slot2IconSw.Stop();
             if (myPP2.X != -1 && myPP2.Y != -1 && myPP2.X * myPP2.Y != 0)
                 listPointPlus.Add(myPP2);
-            else {
-                List<PointPlus> listPointPlus_Temp = new List<PointPlus>();
-                foreach (Items item in App.listItems) {
-                    PointPlus myPP = App.myPureDM.CV.FindPicture(
-                        intX1, intY1, intX2, intY2,
-                        "\\Images\\Items\\" + item.ItemID + ".bmp",
-                        0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
-                    if (myPP.X != -1 && myPP.Y != -1 && myPP.X * myPP.Y != 0)
-                        listPointPlus_Temp.Add(myPP);
-                }
-
-                listPointPlus_Temp = PickTwoBest(listPointPlus_Temp);
-                if (listPointPlus_Temp.Count >= 2) {
-                    listPointPlus.Add(listPointPlus_Temp[1]);
-                    // FIX: cache slot2 fallback winner too.
-                    var fbPicked = listPointPlus_Temp[1];
-                    if (!string.IsNullOrEmpty(fbPicked.ImageID)
-                        && fbPicked.ImageID.Length >= 18
-                        && fbPicked.ImageID.StartsWith("\\Images\\Items\\")
-                        && fbPicked.ImageID.EndsWith(".bmp")) {
-                        string fbItemID = fbPicked.ImageID.Substring(14, fbPicked.ImageID.Length - 18);
-                        StoreIconPointCache(fbItemID, fbPicked, intX1, intY1);
-                    }
-                }
-                else if (listPointPlus_Temp.Count == 1) {
-                    listPointPlus.Add(listPointPlus_Temp[0]);
-                    var fbPicked = listPointPlus_Temp[0];
-                    if (!string.IsNullOrEmpty(fbPicked.ImageID)
-                        && fbPicked.ImageID.Length >= 18
-                        && fbPicked.ImageID.StartsWith("\\Images\\Items\\")
-                        && fbPicked.ImageID.EndsWith(".bmp")) {
-                        string fbItemID = fbPicked.ImageID.Substring(14, fbPicked.ImageID.Length - 18);
-                        StoreIconPointCache(fbItemID, fbPicked, intX1, intY1);
-                    }
-                }
-                else
-                    Log(Localization.LanguageService.Instance.Localize("str.Log.PickTwoBest.NoSlot2", myItems2?.ItemID ?? "", myItems2?.ItemLV ?? ""), Brushes.IndianRed);
-            }
+            else
+                Log(Localization.LanguageService.Instance.Localize(
+                    "str.Log.PickTwoBest.NoSlot2",
+                    top2Candidates.Count > 0 ? top2Candidates[0].ItemID : "",
+                    top2Candidates.Count > 0 ? top2Candidates[0].ItemLV : ""),
+                    Brushes.IndianRed);
+            Log("[DIAG-icon] slot2 candidates=" + top2Candidates.Count
+                + " found=" + (myPP2.X != -1)
+                + " iconSearch=" + _slot2IconSw.ElapsedMilliseconds + "ms " + MemStat(),
+                Brushes.LightSlateGray);
 
 
             //
@@ -3092,24 +3037,36 @@ namespace iBarter {
         // assumed English and we still try the zh-TW column as a
         // cross-fallback so e.g. an English OCR misread of "Aloe" still
         // matches 蘆薈 (item with empty English name in some rows).
-        public Items FindMostSimilarItemZhTwAware(string strItem1, string expectedLv = null) {
+        //
+        // Now returns the TOP N (default 10) candidates rather than a
+        // single best match. The icon FindPicture pass below iterates
+        // this list directly, bounding the worst-case FindPicture calls
+        // per icon to N (~300 ms) instead of all 273 catalog items
+        // (~8 s) when the primary template doesn't match the live capture.
+        public System.Collections.Generic.List<Items> FindMostSimilarItemZhTwAware(
+                string strItem1, int topN = 10, string expectedLv = null) {
             if (string.IsNullOrWhiteSpace(strItem1) || App.listItems == null || App.listItems.Count == 0)
-                return null;
+                return new System.Collections.Generic.List<Items>();
 
             string processed = NormalizeBasic(RemoveLevelPrefix(strItem1));
             if (string.IsNullOrEmpty(processed)) {
-                return FindMostSimilarItem(strItem1, expectedLv);
+                var single = FindMostSimilarItem(strItem1, expectedLv);
+                return single != null
+                    ? new System.Collections.Generic.List<Items> { single }
+                    : new System.Collections.Generic.List<Items>();
             }
 
             // First, exact match against EITHER name (case-insensitive after
             // NormalizeBasic).  An English OCR result might exactly equal
             // an item's English canonical; a Chinese OCR result might
-            // exactly equal its zh-TW sidecar entry.  Both win.
+            // exactly equal its zh-TW sidecar entry.  Both win - return
+            // just that one in the list.
             foreach (var it in App.listItems) {
-                if (NormalizeBasic(it.ItemName) == processed) return it;
+                if (NormalizeBasic(it.ItemName) == processed)
+                    return new System.Collections.Generic.List<Items> { it };
                 if (!string.IsNullOrWhiteSpace(it.ItemNameZhTw)
                     && NormalizeBasic(it.ItemNameZhTw) == processed) {
-                    return it;
+                    return new System.Collections.Generic.List<Items> { it };
                 }
             }
 
@@ -3129,11 +3086,42 @@ namespace iBarter {
                 })
                 .OrderByDescending(x => x.Score)
                 .ThenBy(x => (x.Item.ItemName ?? string.Empty).Length)
+                .Take(topN)
                 .Select(x => x.Item)
-                .FirstOrDefault();
+                .ToList();
         }
 
         const int minDx = 300;
+
+        // Item-icon FindPicture across the TOP-N fuzzy candidates.
+        //
+        // Tries each candidate's template inside the capture rect (intX1..intX2
+        // x intY1..intY2, which is anchored to the row's anchor icon). Returns
+        // the first successful match, or PointPlus.Empty if none of the
+        // candidates' templates match.
+        //
+        // Bounding the fallback to the fuzzy top-N (default 10) caps the
+        // worst-case icon-search cost at ~10 PureDM.CV.FindPicture calls
+        // (~300 ms) instead of looping all 273 catalog items (~8 s). The
+        // previous 273-item fallback was the dominant scan cost when the
+        // primary template didn't pixel-match the live capture.
+        private static PointPlus FindItemIconFromCandidates(
+                System.Collections.Generic.List<Items> candidates,
+                int intX1, int intY1, int intX2, int intY2) {
+            if (candidates == null) return PointPlus.Empty;
+            for (int i = 0; i < candidates.Count; i++) {
+                var item = candidates[i];
+                if (item == null || string.IsNullOrEmpty(item.ItemID)) continue;
+                PointPlus pp = App.myPureDM.CV.FindPicture(
+                    intX1, intY1, intX2, intY2,
+                    "\\Images\\Items\\" + item.ItemID + ".bmp",
+                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, true, 0.7);
+                if (pp.X != -1 && pp.Y != -1 && pp.X * pp.Y != 0) {
+                    return pp;
+                }
+            }
+            return PointPlus.Empty;
+        }
 
         List<PointPlus> PickTwoBest(List<PointPlus> list) {
             var res = new List<PointPlus>();
