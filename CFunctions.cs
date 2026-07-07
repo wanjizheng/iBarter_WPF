@@ -1875,17 +1875,29 @@ namespace iBarter {
             // the SOLE contributor to the winning value AND a higher-
             // priority PureDM mode disagrees. We deliberately do NOT
             // override when Tess and any PureDM mode agree on the
-            // winning value — that's a corroborated read.
-            bool tessSoleWinner = candidates.Any(c => c.source == "Tess" && c.value == winningValue)
-                && !candidates.Any(c => c.source != "Tess" && c.value == winningValue);
-            if (tessSoleWinner
-                && candidates.Any(c => c.source != "Tess" && c.value > 0 && c.value != winningValue)) {
-                var pureDmOverride = candidates
-                    .Where(c => c.source != "Tess" && c.value > 0)
+            // Tess overread guard. Originally required T to be the SOLE
+            // contributor to the winning value; extended to fire whenever
+            // T contributes to the winner AND a disagreeing PureDM mode
+            // (priority 1-3) exists. The current empirical data shows
+            // T+C are both systematically misreading "5" as "2" on the
+            // 30-px Remaining strip (logged example: 一、艾裴莉雅岗哨
+            // C="2" B="5" T=2 -> was 2). The PureDM Binary mode (priority 3)
+            // is empirically the most reliable for digit reads, so we
+            // trust its value over the Tess+Color consensus.
+            //
+            // Trade-off: if T+C are right and B is wrong, this guard
+            // overrides to B's wrong value. Narrow the trigger to
+            // "Binary is the disagreeing source" (rather than any
+            // non-Tess) if regressions appear elsewhere.
+            bool tessContributesToWinner = candidates.Any(c => c.source == "Tess" && c.value == winningValue);
+            if (tessContributesToWinner
+                && candidates.Any(c => c.source == "Binary" && c.value > 0 && c.value != winningValue)) {
+                var binaryOverride = candidates
+                    .Where(c => c.source == "Binary" && c.value > 0)
                     .OrderByDescending(c => c.priority)
                     .FirstOrDefault();
-                if (pureDmOverride.value != 0) {
-                    winningValue = pureDmOverride.value;
+                if (binaryOverride.value != 0) {
+                    winningValue = binaryOverride.value;
                 }
             }
 
@@ -2821,23 +2833,60 @@ namespace iBarter {
             }
 
             // 8. 识别第一个物品
-            string strID1 = listPointPlus[0].ImageID.Substring(14, listPointPlus[0].ImageID.Length - 18);
+            // Trust fuzzy's top 1 ItemID for the item identity. The icon
+            // FindPicture template often matches a visually-similar but
+            // wrong item (e.g. fuzzy says 苔藓树合板 4695, icon
+            // FindPicture says 松树合板 4658 because the templates look
+            // similar). OCR quantity on the icon's position is only
+            // meaningful when the icon matches fuzzy - if they disagree,
+            // skip the OCR vote and fall back to CSV default for the
+            // quantity.
+            string strID1 = myItems1 != null ? myItems1.ItemID : "10";
             // if (strID1 == "800011")
             //     strID1 = "800012";
             // else if (strID1 == "800012")
             //     strID1 = "800011";
+            // Did the icon FindPicture find a different item than fuzzy?
+            // If so, OCR the icon's position would read the wrong number.
+            // Use the icon position only when icon and fuzzy agree.
+            string iconID1 = (listPointPlus.Count > 0 && listPointPlus[0] != null
+                && !string.IsNullOrEmpty(listPointPlus[0].ImageID)
+                && listPointPlus[0].ImageID.Length >= 18
+                && listPointPlus[0].ImageID.StartsWith("\\Images\\Items\\")
+                && listPointPlus[0].ImageID.EndsWith(".bmp"))
+                ? listPointPlus[0].ImageID.Substring(14, listPointPlus[0].ImageID.Length - 18)
+                : null;
+            bool iconMatchesFuzzy = iconID1 == strID1;
             // Pre-OCR skip for LV5+ items: per BDO barter rules these can
             // only ever carry quantity 1, so skip the entire Phase A/G/R
             // OCR pipeline (~150-300ms per icon) and the CSV fallback
             // lookup. Saves real time on every LV5+ barter item.
             int intNumber1 = 1;
             var lv1Item = App.listItems.FirstOrDefault(i => i.ItemID == strID1);
-            if (lv1Item == null || !IsHighTier(lv1Item.ItemLV)) {
-                // Multi-ROI voting for the bottom-right "50" overlay (Phase A+C+D).
-                var _q1Sw = System.Diagnostics.Stopwatch.StartNew();
-                intNumber1 = TryReadQuantity(listPointPlus[0], strID1);
-                _q1Sw.Stop();
-                Log("[DIAG-ocrQty] slot1 strID=" + strID1 + " voting=" + _q1Sw.ElapsedMilliseconds + "ms result=" + intNumber1 + " " + MemStat(), Brushes.LightSlateGray);
+            if (lv1Item != null && IsHighTier(lv1Item.ItemLV)) {
+                // LV5+ skip: per BDO barter rules these only ever carry
+                // quantity 1, so skip the entire Phase A/G/R OCR pipeline
+                // and the CSV fallback lookup. Saves real time on every
+                // LV5+ barter item.
+                Log(Localization.LanguageService.Instance.Localize("str.Log.LV5Skip", strID1, lv1Item.ItemNameDisplay), Brushes.Gold);
+            } else if (!iconMatchesFuzzy && myItems1 != null) {
+                // Icon FindPicture found a different item than fuzzy - OCR
+                // quantity on the icon's position would read the wrong
+                // number. Skip the vote and go straight to CSV default
+                // for the quantity.
+                intNumber1 = App.listItems.Where(i => i.ItemID == strID1)
+                    .Select(i => i.ItemNumber).FirstOrDefault();
+                Log("[DIAG-icon-mismatch] slot1 fuzzy=" + myItems1.ItemID
+                    + " icon=" + (iconID1 ?? "none")
+                    + " - using CSV default qty=" + intNumber1, Brushes.LightSlateGray);
+            } else {
+                if (listPointPlus.Count > 0) {
+                    // Multi-ROI voting for the bottom-right "50" overlay (Phase A+C+D).
+                    var _q1Sw = System.Diagnostics.Stopwatch.StartNew();
+                    intNumber1 = TryReadQuantity(listPointPlus[0], strID1);
+                    _q1Sw.Stop();
+                    Log("[DIAG-ocrQty] slot1 strID=" + strID1 + " voting=" + _q1Sw.ElapsedMilliseconds + "ms result=" + intNumber1 + " " + MemStat(), Brushes.LightSlateGray);
+                }
                 if (intNumber1 <= 0) {
                     // OCR failed to agree - fall back to the CSV-default quantity and
                     // log so this case is visible.
@@ -2846,29 +2895,49 @@ namespace iBarter {
                     if (intNumber1 > 0)
                         Log(Localization.LanguageService.Instance.Localize("str.Log.OcrQty.FallbackCSV", strID1, intNumber1), Brushes.OrangeRed);
                 }
-            } else {
-                Log(Localization.LanguageService.Instance.Localize("str.Log.LV5Skip", strID1, lv1Item.ItemNameDisplay), Brushes.Gold);
             }
 
             // 9. 识别第二个物品
             string strID2 = "10";
             int intNumber2 = -1;
             if (listPointPlus.Count == 2) {
-                strID2 = listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18);
+                // Same identity-precedence logic as item 1: trust fuzzy's
+                // top 1 over the icon FindPicture match. OCR quantity
+                // only runs when icon and fuzzy agree.
+                Items myItems2Slot2 = top2Candidates.FirstOrDefault();
+                if (myItems2Slot2 != null) {
+                    strID2 = myItems2Slot2.ItemID;
+                }
                 if (strID2 == "800011")
                     strID2 = "800012";
                 else if (strID2 == "800012")
                     strID2 = "800011";
+                string iconID2 = (listPointPlus.Count > 1 && listPointPlus[1] != null
+                    && !string.IsNullOrEmpty(listPointPlus[1].ImageID)
+                    && listPointPlus[1].ImageID.Length >= 18
+                    && listPointPlus[1].ImageID.StartsWith("\\Images\\Items\\")
+                    && listPointPlus[1].ImageID.EndsWith(".bmp"))
+                    ? listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18)
+                    : null;
+                bool icon2MatchesFuzzy = iconID2 == strID2;
                 // Same pre-OCR LV5+ skip as for item 1.
                 var lv2Item = App.listItems.FirstOrDefault(i => i.ItemID == strID2);
                 if (lv2Item != null && IsHighTier(lv2Item.ItemLV)) {
                     intNumber2 = 1;
                     Log(Localization.LanguageService.Instance.Localize("str.Log.LV5Skip", strID2, lv2Item.ItemNameDisplay), Brushes.Gold);
-                } else {
+                } else if (icon2MatchesFuzzy) {
                     var _q2Sw = System.Diagnostics.Stopwatch.StartNew();
                     intNumber2 = TryReadQuantity(listPointPlus[1], strID2);
                     _q2Sw.Stop();
                     Log("[DIAG-ocrQty] slot2 strID=" + strID2 + " voting=" + _q2Sw.ElapsedMilliseconds + "ms result=" + intNumber2 + " " + MemStat(), Brushes.LightSlateGray);
+                } else {
+                    // Icon FindPicture found a different item than fuzzy -
+                    // skip the vote, go straight to CSV default.
+                    intNumber2 = App.listItems.Where(i => i.ItemID == strID2)
+                        .Select(i => i.ItemNumber).FirstOrDefault();
+                    Log("[DIAG-icon-mismatch] slot2 fuzzy=" + (myItems2Slot2 != null ? myItems2Slot2.ItemID : "null")
+                        + " icon=" + (iconID2 ?? "none")
+                        + " - using CSV default qty=" + intNumber2, Brushes.LightSlateGray);
                 }
             }
             else {
