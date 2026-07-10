@@ -30,7 +30,7 @@ The session is deliberately synchronous and single-owner. The existing `Identify
 
 ## PureDM Changes
 
-PureDM will expose a scoped capture-session API on `CV`. Starting a session performs the only live `DM.Capture` required by the scan. While active, `CaptureByDMToMat` normalizes requested screen coordinates, checks that they fit the snapshot, and returns an owned crop clone. Callers continue disposing returned `Mat` instances exactly as they do today.
+PureDM will expose a scoped capture-session API on `CV`. Starting a session performs the only live `DM.Capture` required by the scan. Scanner and snapshot rectangles retain inclusive right/bottom coordinates. The native DM call must never exceed the valid client maximum (`width - 1`, `height - 1`): the active DX hook returns an image one pixel smaller on the right and bottom for those safe bounds, so PureDM expands that decoded image to the expected client size in memory by replicating only the missing right column and bottom row. While active, `CaptureByDMToMat` normalizes requested screen coordinates, checks that they fit the snapshot, and returns an owned crop clone. Callers continue disposing returned `Mat` instances exactly as they do today.
 
 The session also exposes BMP bytes for iBarter's Magick.NET and custom Tesseract paths. Encoding occurs from the in-memory crop; it does not call DM and does not create shared temporary files.
 

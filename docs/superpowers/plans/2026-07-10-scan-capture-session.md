@@ -12,7 +12,7 @@
 
 - Every Scan click that acquires successfully creates a new frame ID and performs one full-client live capture; no frame is reused by a later click.
 - All public scanner coordinates remain absolute client coordinates.
-- DM rectangles and scanner rectangles use inclusive right/bottom coordinates; snapshot crops therefore use width `x2 - x1 + 1` and height `y2 - y1 + 1`.
+- Scanner and snapshot rectangles use inclusive right/bottom coordinates, so snapshot crops use width `x2 - x1 + 1` and height `y2 - y1 + 1`. Native DM endpoints must remain within `width - 1`, `height - 1`; if the active hook returns a frame one pixel short on the right/bottom, complete it in OpenCV memory without moving existing pixels or issuing another capture.
 - Template matches returned from a crop remain absolute by adding the requested crop's `x1/y1` exactly once.
 - No route-recognition operation may call live DM capture while a scan capture session is active.
 - Failed snapshot acquisition publishes no session and does not enter anchor/OCR processing.
