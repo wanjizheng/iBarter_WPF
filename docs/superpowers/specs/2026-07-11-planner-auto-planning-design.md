@@ -101,13 +101,17 @@ Within a tier, prefer the feasible complete bundle that yields more target-tier 
 
 ### Restock First
 
-Treat the selected Planner LV5 and LV6 maximum values as the desired inventory per item. Ignore the LV7 maximum because LV7 goods are intended for sale.
+Restocking covers LV1 through LV6 goods in two strict phases. Ignore the LV7 maximum because LV7 goods are intended for sale.
 
-For every LV5/LV6 item below its target, calculate:
+Treat the selected Planner LV5 and LV6 maximum values as the desired inventory per item. For every LV5/LV6 item below its target, calculate:
 
 `deficit ratio = (target - projected inventory) / target`
 
-Items at or above target are not restock targets. A zero target disables restocking for that tier. Select the item with the greatest current deficit ratio, then add the smallest complete bundle that improves it without intentionally raising projected inventory beyond the target. Recalculate deficits after each accepted bundle. Ties prefer larger absolute deficit, then lower complete-bundle parley, then stable item and row identity.
+LV5/LV6 items at or above target are not restock targets. A zero target disables restocking for that tier. Select the LV5/LV6 item with the greatest current deficit ratio, then add the smallest complete bundle that improves it without intentionally raising projected inventory beyond the target. Recalculate deficits after each accepted bundle. Ties prefer larger absolute deficit, then lower complete-bundle parley, then stable item and row identity.
+
+Complete the LV5/LV6 phase before spending parley on LV1-LV4. If no eligible LV5/LV6 bundle remains or fits, use the remaining parley for LV1-LV4.
+
+LV1 through LV4 have no configured target and no implicit inventory cap. Among feasible LV1-LV4 targets, select the item with the lowest current projected inventory. After every accepted bundle, recalculate all projected inventories and select the now-lowest item again. Continue until no useful complete bundle fits. Ties prefer the lower item level, then the lower complete-bundle parley cost, then stable item and row identity.
 
 Upstream production may exceed the exact deficit only when indivisible exchange output makes oversupply unavoidable. Route limits, non-negative inventory, and the parley cap remain mandatory.
 
@@ -159,7 +163,8 @@ Add service-level unit tests before production implementation. Tests must cover:
 - CK exclusion and unfinished-row reset semantics at the integration boundary;
 - Crow Coin ranking, constrained selection, and profit fallback;
 - Profit First excluding Crow Coin and preferring LV7 targets;
-- Restock First deficit-ratio ordering, LV5/LV6 targets, zero targets, and LV7 exclusion;
+- Restock First lowest-inventory ordering for LV1-LV4 with no implicit cap;
+- Restock First deficit-ratio ordering for LV5/LV6, zero targets, strict phase ordering, and LV7 exclusion;
 - indivisible-output oversupply;
 - malformed/cyclic graph diagnostics;
 - live Planner state remaining unchanged after failure.
