@@ -22,13 +22,29 @@ Once you are happy with the result, click the second button in the BarterScanner
 
 ![image](https://github.com/wanjizheng/iBarter_WPF/assets/15932911/4adfe7d8-9750-45d7-ac4e-34e59bca089d)
 
-There are six buttons on the Planner window, from the left to the right, they are:
+There are seven buttons on the Planner window, from the left to the right, they are:
 1. Create a new plan.
 2. Save the current plan.
 3. Open an existing plan.
 4. Grouping.
 5. Clean the current plan.
 6. Finish the current plan and add the results to the storage record (Windows=>Storage Manager)
+7. Auto Plan: fill every unfinished Eq. value from a zero baseline, preserving CK rows and respecting the 1,000,000 parley budget. Pick a strategy from the dropdown next to it before clicking.
+
+### Auto Plan strategies
+
+The Auto Plan button sits next to a strategy dropdown. All three strategies share these contracts:
+
+- Only unfinished (`CK` unchecked) rows are touched — CK rows keep their current `Eq.` value byte-for-byte.
+- The total parley shown in the toolbar after the click equals `sum(effective parley × multiplier)` and never exceeds 1,000,000.
+- If the planner cannot satisfy a route (cycle, missing inventory, or budget exhausted), the row's `Eq.` stays at zero and a localized message is written to the log.
+- Results are deterministic: identical inputs always produce identical multipliers.
+
+Strategies:
+
+- **Crow Coin First** — fill Crow-Coin-producing routes first by descending coin output, then by output-per-parley efficiency, then by row id. Any remaining budget is spent on non-crow routes in input-level order (LV4 → LV5 → LV6 → LV7).
+- **Profit First** — Crow-Coin routes are excluded. The planner only considers "leaf" routes (whose output is not consumed by another route in the plan), ranked by descending target tier (LV7 → LV6 → LV5 → LV4), then by output, then by efficiency, then by row id.
+- **Restock First** — two-phase. Phase 1 fills LV5 and LV6 outputs toward the `Max LV5` and `Max LV6` combo box targets by descending deficit ratio; overshoot is allowed only when one indivisible exchange crosses the target. Phase 2 spends any remaining parley on the lowest-projected LV1–LV4 inventory item; LV1–LV4 have no implicit cap and LV7 outputs are excluded.
 
 Columns in the table are:
 1. Group: Group number.
