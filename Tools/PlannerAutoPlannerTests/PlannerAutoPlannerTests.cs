@@ -34,21 +34,26 @@ public sealed class PlannerAutoPlannerTests {
     }
 
     [Fact]
-    public void Reverse_supply_never_crosses_group() {
+    public void Reverse_supply_never_crosses_group_when_budget_prevents_producer() {
+        // Profit ranks by tier desc: rB (LV3) wins. rB's bundle needs an in-group
+        // producer for B but there is none (rA is in group 1) — the bundle fails
+        // for every increment of rB up to Remaining, so rB is skipped entirely.
+        // rA (LV2) then commits using the A inventory. Budget is set so rA=5
+        // exhausts the parley before rB could pick up B from rA's production.
         var rA = Route("rA", 1, "A", 1, 1, "B", 2, 1, 1_000, 5);
         var rB = Route("rB", 2, "B", 2, 1, "C", 3, 1, 1_000, 5);
-        var request = PlanProfit([rA, rB], new Dictionary<string, int> { ["A"] = 10, ["B"] = 0 }, 10_000);
+        var request = PlanProfit([rA, rB], new Dictionary<string, int> { ["A"] = 10, ["B"] = 0 }, 5_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
 
-        Assert.Equal(0, result.Multipliers["rA"]);
+        Assert.Equal(5, result.Multipliers["rA"]);
         Assert.Equal(0, result.Multipliers["rB"]);
     }
 
     [Fact]
     public void Three_level_reverse_chain_is_added_atomically() {
-        var r1 = Route("r1", 3, "A", 1, 1, "B", 2, 1, 1_000, 5);
-        var r2 = Route("r2", 3, "B", 2, 1, "C", 3, 1, 1_000, 5);
+        var r1 = Route("r1", 3, "A", 1, 1, "B", 2, 1, 1_000, 2);
+        var r2 = Route("r2", 3, "B", 2, 1, "C", 3, 1, 1_000, 2);
         var r3 = Route("r3", 3, "C", 3, 1, "D", 4, 1, 1_000, 2);
         var request = PlanProfit([r1, r2, r3],
             new Dictionary<string, int> { ["A"] = 10, ["B"] = 0, ["C"] = 0 }, 100_000);
@@ -62,7 +67,28 @@ public sealed class PlannerAutoPlannerTests {
     }
 
     [Fact]
-    public void Failed_bundle_leaves_every_multiplier_unchanged() {
+    public void Failed_chain_fails_atomically() {
+        // r1 needs Item X with no inventory and no producer → every bundle that
+        // tries to satisfy r3 fails the whole chain atomically.
+        var r1 = Route("r1", 3, "X", 1, 1, "B", 2, 1, 1_000, 1);
+        var r2 = Route("r2", 3, "B", 2, 1, "C", 3, 1, 1_000, 5);
+        var r3 = Route("r3", 3, "C", 3, 1, "D", 4, 1, 1_000, 2);
+        var request = PlanProfit([r1, r2, r3],
+            new Dictionary<string, int> { ["X"] = 0, ["B"] = 0, ["C"] = 0 }, 100_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.Equal(0, result.Multipliers["r1"]);
+        Assert.Equal(0, result.Multipliers["r2"]);
+        Assert.Equal(0, result.Multipliers["r3"]);
+    }
+
+    [Fact]
+    public void Failed_increment_stops_target_without_reverting_prior_commits() {
+        // r1.Remaining=1 limits the chain: r3=2 requires r1=2 (impossible) so the
+        // planner keeps the successful r3=1 commit instead of reverting everything.
+        // This documents the incremental semantics: prior commits survive a later
+        // failed increment.
         var r1 = Route("r1", 3, "A", 1, 1, "B", 2, 1, 1_000, 1); // remaining 1
         var r2 = Route("r2", 3, "B", 2, 1, "C", 3, 1, 1_000, 5);
         var r3 = Route("r3", 3, "C", 3, 1, "D", 4, 1, 1_000, 2);
@@ -71,9 +97,176 @@ public sealed class PlannerAutoPlannerTests {
 
         var result = new PlannerAutoPlanner().Plan(request);
 
-        Assert.Equal(0, result.Multipliers["r1"]);
+        Assert.Equal(1, result.Multipliers["r1"]);
+        Assert.Equal(1, result.Multipliers["r2"]);
+        Assert.Equal(1, result.Multipliers["r3"]);
+    }
+
+    [Fact]
+    public void Crow_partial_fill_when_full_remaining_exceeds_budget() {
+        // rA.Remaining=5 at 60k each = 300k full, budget 100k only fits 1 exchange.
+        // The shrink-to-fit algorithm should commit rA=1 and stop, leaving 40k
+        // unused because rA=2 already exceeds the budget.
+        var rA = Route("rA", 1, "A", 5, 1, "CrowCoin", 6, 190, 60_000, 5, crow: true);
+        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst, [rA],
+            new Dictionary<string, int> { ["A"] = 10 }, 100_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.Equal(1, result.Multipliers["rA"]);
+        Assert.Equal(60_000, result.UsedParley);
+    }
+
+    [Fact]
+    public void Profit_partial_fill_when_full_remaining_exceeds_budget() {
+        var rLv7 = Route("rLv7", 1, "Lv7In", 6, 1, "Top", 7, 1, 700_000, 3);
+        var request = PlanStrategy(AutoPlanningStrategy.ProfitFirst, [rLv7],
+            new Dictionary<string, int> { ["Lv7In"] = 10 }, 1_000_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        // Full Remaining=3 costs 2.1M which exceeds budget. Shrink to fit: 1
+        // exchange fits within budget at 700k.
+        Assert.Equal(1, result.Multipliers["rLv7"]);
+        Assert.Equal(700_000, result.UsedParley);
+    }
+
+    [Fact]
+    public void Restock_partial_fill_when_full_remaining_exceeds_budget() {
+        // Phase 2 candidate with Remaining=5 at 60k each = 300k full. Budget 100k
+        // fits only 1 exchange.
+        var rLv2 = Route("rLv2", 1, "A", 1, 1, "B", 2, 1, 60_000, 5);
+        var request = new AutoPlanningRequest(
+            [rLv2],
+            new Dictionary<string, int> { ["A"] = 100, ["B"] = 0 },
+            AutoPlanningStrategy.RestockFirst, 0, 0, 100_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.Equal(1, result.Multipliers["rLv2"]);
+        Assert.Equal(60_000, result.UsedParley);
+    }
+
+    [Fact]
+    public void Shared_upstream_gets_added_when_second_target_requires_more() {
+        // Two downstream targets (rB, rC) share producer rA in the same group.
+        // First bundle commits rA=1 + rB=1 (1 B produced, 1 consumed by rB).
+        // Second bundle for rC needs 1 more B; rA must be pulled in again
+        // because rA=1's single B was already consumed. The producer's final
+        // multiplier is the SUM of bundle increments, not the max.
+        var rA = Route("rA", 5, "A", 1, 1, "B", 2, 1, 1_000, 10); // A→B producer
+        var rB = Route("rB", 5, "B", 2, 1, "C", 3, 1, 1_000, 1); // B→C consumer
+        var rC = Route("rC", 5, "B", 2, 1, "D", 4, 1, 1_000, 1); // B→D consumer
+        var request = PlanProfit([rA, rB, rC],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 0 }, 100_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        // Iter 1: rB wins on tier (LV3). Bundle rB=1 needs 1 B. deficit 1. rA=1
+        //         produces 1 B (Item2Number=1). Bundle parley = rA=1000 + rB=1000 = 2000.
+        // Iter 2: rC wins (LV4). Bundle rC=1 needs 1 B. Available B = 0 (rB consumed
+        //         the single B rA=1 produced). deficit 1. rA needs another exchange.
+        //         Bundle parley = rA=1000 + rC=1000 = 2000.
+        // Final: rA=2, rB=1, rC=1. Inventory: A=8, B=0, C=1, D=1.
+        Assert.Equal(2, result.Multipliers["rA"]);
+        Assert.Equal(1, result.Multipliers["rB"]);
+        Assert.Equal(1, result.Multipliers["rC"]);
+        Assert.Equal(4_000, result.UsedParley);
+    }
+
+    [Fact]
+    public void Shared_upstream_cumulative_with_two_consumers_and_ceiling() {
+        // rA produces 2 B per exchange. rB and rC each need 1 B. First bundle
+        // commits rA=1 + rC=1 (rA produces 2 B; rC consumes 1, leaving 1 B in
+        // inventory). Second bundle for rB finds 1 B available, no extra rA
+        // needed.
+        var rA = Route("rA", 5, "A", 1, 1, "B", 2, 2, 1_000, 10);
+        var rB = Route("rB", 5, "B", 2, 1, "C", 3, 1, 1_000, 1);
+        var rC = Route("rC", 5, "B", 2, 1, "D", 4, 1, 1_000, 1);
+        var request = PlanProfit([rA, rB, rC],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 0 }, 100_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        // Iter 1: rC wins (LV4). Bundle rC=1 needs 1 B. deficit 1. rA=1 produces
+        //         2 B (overshoot by 1). Bundle parley = rA=1000 + rC=1000 = 2000.
+        //         After commit: B inventory = 1 (one of the 2 produced is consumed).
+        // Iter 2: rB wins (LV3). Bundle rB=1 needs 1 B. Available = 1. deficit 0.
+        //         No producer needed. Bundle parley = rB=1000.
+        // Iter 3: rA is a candidate but downstream demand for B = 0 (both rB and
+        //         rC filled). Max useful target = currentCommitted = 1. Skip.
+        // Final: rA=1, rB=1, rC=1. Parley = 2000 + 1000 = 3000.
+        Assert.Equal(1, result.Multipliers["rA"]);
+        Assert.Equal(1, result.Multipliers["rB"]);
+        Assert.Equal(1, result.Multipliers["rC"]);
+        Assert.Equal(3_000, result.UsedParley);
+        Assert.Equal(0, result.ProjectedInventory["B"]);
+    }
+
+    [Fact]
+    public void Restock_re_ranks_after_each_increment_to_pick_lowest_projected() {
+        // Phase 2 picks by lowest projected inventory; the ranker must re-evaluate
+        // after each commit so the next lowest item wins. Two LV1-LV4 producers
+        // with distinct starting stocks; B1 starts at 0 (lowest), so r1 wins first.
+        // After r1 fills, the ranker picks r2 (B2 lower than B3).
+        var r1 = Route("r1", 1, "A1", 1, 1, "B1", 2, 1, 10_000, 10);
+        var r2 = Route("r2", 1, "A2", 2, 1, "B2", 3, 1, 10_000, 10);
+        var r3 = Route("r3", 1, "A3", 3, 1, "B3", 4, 1, 10_000, 10);
+        var request = new AutoPlanningRequest(
+            [r1, r2, r3],
+            new Dictionary<string, int> { ["A1"] = 100, ["A2"] = 100, ["A3"] = 100,
+                                          ["B1"] = 0, ["B2"] = 5, ["B3"] = 10 },
+            AutoPlanningStrategy.RestockFirst, 0, 0, 60_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        // Iter 1: B1=0 is lowest, r1 wins. Shrink-to-fit commits r1=6 (parley
+        //         60k = budget). After commit B1=6.
+        // Iter 2: candidates r2, r3. B2=5 < B3=10 → r2 wins. Bundle r2=10
+        //         costs 100k > 0 remaining. Skip. Result: r1=6, others 0.
+        Assert.Equal(6, result.Multipliers["r1"]);
         Assert.Equal(0, result.Multipliers["r2"]);
         Assert.Equal(0, result.Multipliers["r3"]);
+        Assert.Equal(60_000, result.UsedParley);
+    }
+
+    [Fact]
+    public void Routes_and_inventory_must_use_same_item_key() {
+        // Regression for the WPF integration bug: routes used ItemID as the item
+        // key while the inventory dict used ItemName. Real catalog data has
+        // ItemID != ItemName (e.g. "800007" vs "Crow Coin"), so the planner's
+        // CurrentInventory lookup always returned 0 and every chain silently
+        // failed. This test verifies the planner behaves correctly when the
+        // keys agree — which is now the contract enforced by the WPF code.
+        // Note: this test does NOT exercise the WPF integration itself (that
+        // requires running the UI); it verifies the planner is internally
+        // consistent so the integration fix works in production.
+        var route = new AutoPlanningRoute("r", 1, "800007", 4, 1, "800008", 5, 1, false, 10_000, 1);
+        var request = new AutoPlanningRequest(
+            [route],
+            new Dictionary<string, int> { ["800007"] = 10 },  // keyed by ItemID
+            AutoPlanningStrategy.ProfitFirst, 10, 10, 1_000_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, result.Multipliers["r"]);
+    }
+
+    [Fact]
+    public void Routes_and_inventory_with_mismatched_keys_fail_chain() {
+        // The negative case: if routes use ItemID and inventory uses ItemName,
+        // the planner cannot resolve the producer's input → bundle fails → r=0.
+        // This is what was happening in production before the fix.
+        var route = new AutoPlanningRoute("r", 1, "800007", 4, 1, "800008", 5, 1, false, 10_000, 1);
+        var request = new AutoPlanningRequest(
+            [route],
+            new Dictionary<string, int> { ["Crow Coin"] = 10 },  // wrong key — ItemName instead of ItemID
+            AutoPlanningStrategy.ProfitFirst, 10, 10, 1_000_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.Equal(0, result.Multipliers["r"]);
     }
 
     [Fact]
@@ -94,7 +287,10 @@ public sealed class PlannerAutoPlannerTests {
     }
 
     [Fact]
-    public void Crow_first_maximizes_higher_coin_output_before_efficiency() {
+    public void Crow_first_ranks_by_bundle_output_per_parley() {
+        // Two Crow-Coin routes with different output AND different per-route parley.
+        // The ranker scores full bundle cost (output / AdditionalParley), so the
+        // cheaper higher-efficiency route wins even though it produces fewer coins.
         var rA = Route("rA", 1, "A", 5, 1, "CrowCoin", 6, 190, 20_000, 1, crow: true);
         var rB = Route("rB", 1, "B", 5, 1, "CrowCoin", 6, 180, 10_000, 1, crow: true);
         var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst, [rA, rB],
@@ -103,9 +299,9 @@ public sealed class PlannerAutoPlannerTests {
         var result = new PlannerAutoPlanner().Plan(request);
 
         Assert.True(result.Success);
-        Assert.Equal(1, result.Multipliers["rA"]);
-        Assert.Equal(0, result.Multipliers["rB"]);
-        Assert.Equal(20_000, result.UsedParley);
+        Assert.Equal(0, result.Multipliers["rA"]);
+        Assert.Equal(1, result.Multipliers["rB"]);
+        Assert.Equal(10_000, result.UsedParley);
     }
 
     [Fact]

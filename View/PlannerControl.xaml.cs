@@ -1112,6 +1112,11 @@ namespace iBarter.View {
                 bool producesCrowCoin = b.Item2.ItemName == "Crow Coin";
                 int parley = GetEffectiveParley(b);
 
+                // AutoPlanningRoute's Item1Id/Item2Id and the inventory dictionary MUST
+                // use the same key field, otherwise every item appears to have 0 stock
+                // and the planner silently falls back to "no feasible candidate".
+                // Phase 6 review caught this — ItemID is the canonical, locale-
+                // independent key both sides agree on.
                 var route = new AutoPlanningRoute(
                     RowId: i.ToString(CultureInfo.InvariantCulture),
                     Group: b.BarterGroup,
@@ -1132,17 +1137,19 @@ namespace iBarter.View {
                     Route: route));
             }
 
-            // Inventory: combine the four storage cities per item via the same getter
-            // the UI uses.  This keeps the planner's projection aligned with what the
-            // user sees in the storage grid.
+            // Inventory: combine the four storage cities per item, keyed by ItemID so it
+            // matches the route's Item1Id/Item2Id. Mixing keys here (e.g. ItemName)
+            // makes every item appear to have 0 stock — the planner can't tell that
+            // "Crow Coin" in storage corresponds to ItemID "1" in routes, and silently
+            // fails every reverse-supply chain.
             var inventory = new Dictionary<string, int>(StringComparer.Ordinal);
             if (App.myStorageVM?.StorageCollection != null) {
                 foreach (var item in App.myStorageVM.StorageCollection) {
-                    if (item == null || string.IsNullOrEmpty(item.ItemName)) continue;
-                    inventory[item.ItemName] = item.StorageVeliaQuantity_Velia
-                                              + item.StorageVeliaQuantity_Iliya
-                                              + item.StorageVeliaQuantity_Epheria
-                                              + item.StorageVeliaQuantity_Ancado;
+                    if (item == null || string.IsNullOrEmpty(item.ItemID)) continue;
+                    inventory[item.ItemID] = item.StorageVeliaQuantity_Velia
+                                           + item.StorageVeliaQuantity_Iliya
+                                           + item.StorageVeliaQuantity_Epheria
+                                           + item.StorageVeliaQuantity_Ancado;
                 }
             }
 
@@ -1188,10 +1195,11 @@ namespace iBarter.View {
             }
 
             int selectedRoutes = calculation.ApplySet.Multipliers.Values.Count(v => v > 0);
-            int usedParley = 0;
-            for (int i = 0; i < liveRows.Count; i++) {
-                usedParley += GetEffectiveParley(liveRows[i]) * liveRows[i].ExchangeQuantity;
-            }
+            // Use the planner's reported usedParley rather than summing liveRows:
+            // iterating all rows would include CK rows (which UpdateParley excludes),
+            // making the success log disagree with the toolbar label and potentially
+            // exceed 1,000,000.
+            int usedParley = calculation.UsedParley;
             App.myCFun.Log(svc.Localize(
                 "str.Msg.Planner.AutoPlan.Success",
                 strategy.ToString(),

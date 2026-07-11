@@ -22,7 +22,8 @@ public sealed record PlannerApplySet(IReadOnlyDictionary<string, int> Multiplier
 
 public sealed record PlannerCalculation(
     PlannerApplySet? ApplySet,
-    IReadOnlyList<AutoPlanningDiagnostic> Diagnostics);
+    IReadOnlyList<AutoPlanningDiagnostic> Diagnostics,
+    int UsedParley);
 
 /// <summary>
 /// Non-WPF orchestration boundary between the live <see cref="iBarter.Barter"/>
@@ -58,7 +59,7 @@ public sealed class PlannerAutoPlanningAdapter {
         // untouched. Returning ApplySet=null is the atomic-application contract — the
         // UI must not partially apply multipliers when the planner rejects the input.
         if (!result.Success) {
-            return new PlannerCalculation(null, result.Diagnostics);
+            return new PlannerCalculation(null, result.Diagnostics, result.UsedParley);
         }
 
         // Build a complete multiplier map: every requested row id (CK or unfinished)
@@ -78,6 +79,6 @@ public sealed class PlannerAutoPlanningAdapter {
             }
         }
 
-        return new PlannerCalculation(new PlannerApplySet(multipliers), result.Diagnostics);
+        return new PlannerCalculation(new PlannerApplySet(multipliers), result.Diagnostics, result.UsedParley);
     }
 }
