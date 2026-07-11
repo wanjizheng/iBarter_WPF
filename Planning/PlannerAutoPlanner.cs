@@ -55,57 +55,20 @@ public sealed class PlannerAutoPlanner {
 
         var routesById = request.Routes.ToDictionary(r => r.RowId, StringComparer.Ordinal);
 
-        // A "target" is a route whose Item2 is not consumed by any other route in the
-        // request (regardless of group). These are the rows the user actually wants to
-        // drive; everything else is reached by walking the chain backward via the
-        // reverse-supply bundle. Cross-group consumption is enough to disqualify — the
-        // bundle builder never crosses groups, so a producer pulled in by a downstream
-        // route in another group would have no in-group consumer for its own output.
-        var consumed = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var r in request.Routes) {
-            foreach (var other in request.Routes) {
-                if (other.RowId != r.RowId && other.Item1Id == r.Item2Id) {
-                    consumed.Add(r.Item2Id);
-                }
-            }
-        }
-
-        var targets = request.Routes
-            .Where(r => !consumed.Contains(r.Item2Id))
-            .OrderBy(r => r.RowId, StringComparer.Ordinal)
-            .ToList();
-
         var committed = new Dictionary<string, int>(StringComparer.Ordinal);
         int committedParley = 0;
         var diagnostics = new List<AutoPlanningDiagnostic>();
 
-        foreach (var target in targets) {
-            int targetIncrement = target.Remaining;
-            if (targetIncrement <= 0) {
-                continue;
-            }
-
-            // Working inventory for the bundle reflects everything committed so far.
-            var workingInventory = ApplyMultipliers(request.CurrentInventory, routesById, committed);
-
-            if (TryBuildBundle(
-                    target.RowId, targetIncrement,
-                    routesById,
-                    workingInventory,
-                    committed,
-                    request.ParleyBudget - committedParley,
-                    out var bundle,
-                    diagnostics)) {
-
-                foreach (var (rowId, finalMul) in bundle.Multipliers) {
-                    int existing = committed.GetValueOrDefault(rowId);
-                    if (finalMul > existing) {
-                        committed[rowId] = finalMul;
-                    }
-                }
-
-                committedParley += bundle.AdditionalParley;
-            }
+        switch (request.Strategy) {
+            case AutoPlanningStrategy.CrowCoinFirst:
+                PlanCrowCoinFirst(request, routesById, committed, ref committedParley, diagnostics);
+                break;
+            case AutoPlanningStrategy.ProfitFirst:
+                PlanProfitFirst(request, routesById, committed, ref committedParley, diagnostics);
+                break;
+            case AutoPlanningStrategy.RestockFirst:
+                // Implemented in Task 4. Fall through to zero plan for now.
+                break;
         }
 
         // Every requested row gets a slot in the result map (zero when no bundle touched it).
@@ -125,6 +88,163 @@ public sealed class PlannerAutoPlanner {
             new Dictionary<string, int>(StringComparer.Ordinal),
             0,
             diagnostics);
+
+    // ------------------------------------------------------------------
+    // Strategy drivers
+    // ------------------------------------------------------------------
+
+    private static void PlanCrowCoinFirst(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        Dictionary<string, int> committed,
+        ref int committedParley,
+        List<AutoPlanningDiagnostic> diagnostics) {
+
+        // Phase 1: Crow-Coin-producing routes. Higher coin output wins; on ties,
+        // higher output-per-parley wins; then lower parley; then lower row id.
+        // Crow coin is never consumed by another route, so every crow-producing
+        // row is a valid endpoint — no leaf-target filter needed.
+        GreedyOneExchange(
+            request, routesById, committed, ref committedParley, diagnostics,
+            filter: r => r.ProducesCrowCoin,
+            ranker: (a, b) => CompareCrowCoin(a, b));
+
+        // Phase 2: remainder budget, no crow coin output allowed. Lowest input LV
+        // first (LV4 → LV5 → LV6 → LV7) — output-per-parley is irrelevant once we
+        // are constrained to "spend it on the cheapest stock to refill".
+        GreedyOneExchange(
+            request, routesById, committed, ref committedParley, diagnostics,
+            filter: r => !r.ProducesCrowCoin,
+            ranker: (a, b) => CompareRemainder(a, b));
+    }
+
+    private static void PlanProfitFirst(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        Dictionary<string, int> committed,
+        ref int committedParley,
+        List<AutoPlanningDiagnostic> diagnostics) {
+
+        // Crow coin is explicitly excluded. Restrict to "leaf" targets — routes whose
+        // Item2 is not consumed by any other route in the request — so the planner
+        // never spends parley on a producer whose output has no in-plan consumer
+        // (which would silently consume the budget without driving any user-visible
+        // output). Ranking: target tier desc, output desc, output/parley desc, parley
+        // asc, row id asc.
+        var consumed = ComputeConsumedItems(request.Routes);
+        GreedyOneExchange(
+            request, routesById, committed, ref committedParley, diagnostics,
+            filter: r => !r.ProducesCrowCoin && !consumed.Contains(r.Item2Id),
+            ranker: (a, b) => CompareProfit(a, b));
+    }
+
+    private static HashSet<string> ComputeConsumedItems(IReadOnlyList<AutoPlanningRoute> routes) {
+        var consumed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var r in routes) {
+            foreach (var other in routes) {
+                if (other.RowId != r.RowId && other.Item1Id == r.Item2Id) {
+                    consumed.Add(r.Item2Id);
+                }
+            }
+        }
+        return consumed;
+    }
+
+    private static void GreedyOneExchange(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        Dictionary<string, int> committed,
+        ref int committedParley,
+        List<AutoPlanningDiagnostic> diagnostics,
+        Func<AutoPlanningRoute, bool> filter,
+        Comparison<AutoPlanningRoute> ranker) {
+
+        while (true) {
+            var candidates = request.Routes
+                .Where(filter)
+                .Where(r => committed.TryGetValue(r.RowId, out var c) ? c < r.Remaining : r.Remaining > 0)
+                .ToList();
+
+            if (candidates.Count == 0) {
+                return;
+            }
+
+            candidates.Sort(ranker);
+
+            bool added = false;
+            foreach (var candidate in candidates) {
+                var workingInventory = ApplyMultipliers(request.CurrentInventory, routesById, committed);
+                int remainingBudget = request.ParleyBudget - committedParley;
+
+                // All-or-nothing semantics: try to fill the target's remaining quota in
+                // one atomic bundle. A failed bundle means the route is skipped entirely
+                // (e.g. Failed_bundle_leaves_every_multiplier_unchanged requires that a
+                // chain whose upstream Remaining can't support the target leaves every
+                // multiplier at 0). Partial fills via repeated 1-exchange bundles would
+                // violate that contract and silently commit upstream routes that have no
+                // downstream consumer.
+                int targetIncrement = candidate.Remaining;
+                int currentInc = committed.TryGetValue(candidate.RowId, out var ci) ? ci : 0;
+                int absoluteTarget = currentInc + targetIncrement;
+
+                if (TryBuildBundle(
+                        candidate.RowId, absoluteTarget, routesById,
+                        workingInventory, committed, remainingBudget,
+                        out var bundle, diagnostics)) {
+
+                    foreach (var (rowId, finalMul) in bundle.Multipliers) {
+                        int existing = committed.TryGetValue(rowId, out var cv) ? cv : 0;
+                        if (finalMul > existing) {
+                            committed[rowId] = finalMul;
+                        }
+                    }
+
+                    committedParley += bundle.AdditionalParley;
+                    added = true;
+                    break;
+                }
+            }
+
+            if (!added) {
+                return;
+            }
+        }
+    }
+
+    private static int CompareCrowCoin(AutoPlanningRoute a, AutoPlanningRoute b) {
+        int cmp = b.Item2Number.CompareTo(a.Item2Number); // higher coin output first
+        if (cmp != 0) return cmp;
+        // Higher output/parley first: cross-multiply to stay integer.
+        cmp = unchecked((long)b.Item2Number * a.Parley).CompareTo(unchecked((long)a.Item2Number * b.Parley));
+        if (cmp != 0) return cmp;
+        cmp = a.Parley.CompareTo(b.Parley); // lower parley first
+        if (cmp != 0) return cmp;
+        return StringComparer.Ordinal.Compare(a.RowId, b.RowId);
+    }
+
+    private static int CompareRemainder(AutoPlanningRoute a, AutoPlanningRoute b) {
+        int cmp = a.Item1Level.CompareTo(b.Item1Level); // lower input LV first
+        if (cmp != 0) return cmp;
+        cmp = b.Item2Number.CompareTo(a.Item2Number); // higher output
+        if (cmp != 0) return cmp;
+        cmp = unchecked((long)b.Item2Number * a.Parley).CompareTo(unchecked((long)a.Item2Number * b.Parley));
+        if (cmp != 0) return cmp;
+        cmp = a.Parley.CompareTo(b.Parley);
+        if (cmp != 0) return cmp;
+        return StringComparer.Ordinal.Compare(a.RowId, b.RowId);
+    }
+
+    private static int CompareProfit(AutoPlanningRoute a, AutoPlanningRoute b) {
+        int cmp = b.Item2Level.CompareTo(a.Item2Level); // higher target tier first
+        if (cmp != 0) return cmp;
+        cmp = b.Item2Number.CompareTo(a.Item2Number); // higher output
+        if (cmp != 0) return cmp;
+        cmp = unchecked((long)b.Item2Number * a.Parley).CompareTo(unchecked((long)a.Item2Number * b.Parley));
+        if (cmp != 0) return cmp;
+        cmp = a.Parley.CompareTo(b.Parley);
+        if (cmp != 0) return cmp;
+        return StringComparer.Ordinal.Compare(a.RowId, b.RowId);
+    }
 
     // ------------------------------------------------------------------
     // Atomic reverse-supply bundle builder

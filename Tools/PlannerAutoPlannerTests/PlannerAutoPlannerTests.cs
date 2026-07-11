@@ -93,11 +93,123 @@ public sealed class PlannerAutoPlannerTests {
         Assert.True(producedB >= consumedB - 1);
     }
 
+    [Fact]
+    public void Crow_first_maximizes_higher_coin_output_before_efficiency() {
+        var rA = Route("rA", 1, "A", 5, 1, "CrowCoin", 6, 190, 20_000, 1, crow: true);
+        var rB = Route("rB", 1, "B", 5, 1, "CrowCoin", 6, 180, 10_000, 1, crow: true);
+        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst, [rA, rB],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 10 }, 20_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, result.Multipliers["rA"]);
+        Assert.Equal(0, result.Multipliers["rB"]);
+        Assert.Equal(20_000, result.UsedParley);
+    }
+
+    [Fact]
+    public void Crow_first_uses_bundle_efficiency_when_coin_output_ties() {
+        var rA = Route("rA", 1, "A", 5, 1, "CrowCoin", 6, 190, 20_000, 1, crow: true);
+        var rB = Route("rB", 1, "B", 5, 1, "CrowCoin", 6, 190, 10_000, 1, crow: true);
+        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst, [rA, rB],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 10 }, 10_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.Equal(0, result.Multipliers["rA"]);
+        Assert.Equal(1, result.Multipliers["rB"]);
+        Assert.Equal(10_000, result.UsedParley);
+    }
+
+    [Fact]
+    public void Crow_first_never_exceeds_budget_when_all_coin_routes_cannot_fit() {
+        var rA = Route("rA", 1, "A", 5, 1, "CrowCoin", 6, 190, 400_000, 1, crow: true);
+        var rB = Route("rB", 1, "B", 5, 1, "CrowCoin", 6, 190, 400_000, 1, crow: true);
+        var rC = Route("rC", 1, "C", 5, 1, "CrowCoin", 6, 190, 400_000, 1, crow: true);
+        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst, [rA, rB, rC],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 10, ["C"] = 10 }, 800_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        int selected = result.Multipliers["rA"] + result.Multipliers["rB"] + result.Multipliers["rC"];
+        Assert.Equal(2, selected);
+        Assert.Equal(800_000, result.UsedParley);
+    }
+
+    [Fact]
+    public void Crow_first_spends_remainder_in_lv4_then_lv5_then_lv6_input_order() {
+        // No crow coin routes. Remainder phase: lowest input LV first.
+        var rA = Route("rA", 1, "A", 4, 1, "B", 5, 1, 100_000, 1);
+        var rB = Route("rB", 1, "B", 5, 1, "C", 6, 1, 100_000, 1);
+        var rC = Route("rC", 1, "C", 6, 1, "D", 7, 1, 100_000, 1);
+        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst, [rA, rB, rC],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 10, ["C"] = 10 }, 100_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.Equal(1, result.Multipliers["rA"]);
+        Assert.Equal(0, result.Multipliers["rB"]);
+        Assert.Equal(0, result.Multipliers["rC"]);
+    }
+
+    [Fact]
+    public void Profit_first_excludes_every_crow_output() {
+        var rCrow = Route("rCrow", 1, "A", 6, 1, "CrowCoin", 6, 190, 5_000, 1, crow: true);
+        var rLv7 = Route("rLv7", 1, "A", 6, 1, "Top", 7, 1, 5_000, 1);
+        var request = PlanStrategy(AutoPlanningStrategy.ProfitFirst, [rCrow, rLv7],
+            new Dictionary<string, int> { ["A"] = 10 }, 10_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.Equal(0, result.Multipliers["rCrow"]);
+        Assert.Equal(1, result.Multipliers["rLv7"]);
+    }
+
+    [Fact]
+    public void Profit_first_prefers_lv6_to_lv7_over_lower_targets() {
+        var rA = Route("rA", 1, "A", 4, 1, "B", 5, 1, 100_000, 1);
+        var rB = Route("rB", 1, "B", 5, 1, "C", 6, 1, 100_000, 1);
+        var rC = Route("rC", 1, "C", 6, 1, "D", 7, 1, 100_000, 1);
+        var request = PlanStrategy(AutoPlanningStrategy.ProfitFirst, [rA, rB, rC],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 10, ["C"] = 10 }, 100_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.Equal(0, result.Multipliers["rA"]);
+        Assert.Equal(0, result.Multipliers["rB"]);
+        Assert.Equal(1, result.Multipliers["rC"]);
+    }
+
+    [Fact]
+    public void Strategy_ties_are_deterministic_by_row_id() {
+        var rA = Route("rA", 1, "A", 6, 1, "Top", 7, 1, 5_000, 1);
+        var rB = Route("rB", 1, "B", 6, 1, "Top", 7, 1, 5_000, 1);
+        var fwdRequest = PlanStrategy(AutoPlanningStrategy.ProfitFirst, [rA, rB],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 10 }, 5_000);
+        var revRequest = PlanStrategy(AutoPlanningStrategy.ProfitFirst, [rB, rA],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 10 }, 5_000);
+
+        var fwdResult = new PlannerAutoPlanner().Plan(fwdRequest);
+        var revResult = new PlannerAutoPlanner().Plan(revRequest);
+
+        Assert.Equal(fwdResult.Multipliers, revResult.Multipliers);
+        Assert.Equal(1, fwdResult.Multipliers["rA"]);
+        Assert.Equal(0, fwdResult.Multipliers["rB"]);
+    }
+
     private static AutoPlanningRequest PlanProfit(
         IReadOnlyList<AutoPlanningRoute> routes,
         IReadOnlyDictionary<string, int> inventory,
         int budget = 1_000_000) =>
         new(routes, inventory, AutoPlanningStrategy.ProfitFirst, 10, 10, budget);
+
+    private static AutoPlanningRequest PlanStrategy(
+        AutoPlanningStrategy strategy,
+        IReadOnlyList<AutoPlanningRoute> routes,
+        IReadOnlyDictionary<string, int> inventory,
+        int budget = 1_000_000) =>
+        new(routes, inventory, strategy, 10, 10, budget);
 
     private static AutoPlanningRoute Route(
         string id, int group, string item1, int lv1, int n1,
