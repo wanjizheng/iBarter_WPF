@@ -95,6 +95,26 @@
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/done.png" Click="ButtonAdv_Done_Click" />
             <Separator />
+            <!-- Auto Plan (added by Phase 6 / Task 6). Reuses the refresh icon
+                 rather than shipping a new bitmap asset. -->
+            <Label Content="{loc:Localize str.Planner.AutoPlan.Strategy}" VerticalAlignment="Center" />
+            <syncfusion:ComboBoxAdv x:Name="ComboBoxAdv_AutoPlanningStrategy" SelectedIndex="0" Width="135">
+                <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.CrowCoinFirst}" Tag="CrowCoinFirst" />
+                <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.ProfitFirst}" Tag="ProfitFirst" />
+                <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.RestockFirst}" Tag="RestockFirst" />
+            </syncfusion:ComboBoxAdv>
+            <syncfusion:ButtonAdv
+                x:Name="ButtonAdv_AutoPlan"
+                Margin="4,0,4,0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                IconWidth="26" IconHeight="26"
+                Label="{loc:Localize str.Planner.Btn.AutoPlan}"
+                ToolTip="{loc:Localize str.Planner.Btn.AutoPlanTip}"
+                SizeMode="Small"
+                FontFamily="Microsoft YaHei"
+                SmallIcon="/Images/refresh.png" Click="ButtonAdv_AutoPlan_Click" />
+            <Separator />
             <Label x:Name="Label_TotalBarters" Content="{loc:Localize str.Planner.TotalBarters}" VerticalAlignment="Center" />
             <Separator />
             <!-- <Label Content="Value Pack:" VerticalAlignment="Center" /> -->
@@ -176,6 +196,7 @@
                     <!-- </syncfusion:GridTextColumn> -->
                     <syncfusion:GridTextColumn HeaderText="Group" MappingName="BarterGroup"
                                                AllowResizing="True" AllowEditing="False"
+                                               AllowFiltering="True"
                                                Width="50" />
                     <syncfusion:GridTextColumn x:Name="Column_LV" HeaderText="LV" MappingName="Item1LV"
                                                AllowResizing="True" Width="70"
@@ -183,16 +204,19 @@
                     <syncfusion:GridCheckBoxColumn x:Name="GridCheckBoxColumn_CK" HeaderText="CK"
                                                    MappingName="ExchangeDone"
                                                    AllowResizing="True" AllowEditing="True" Width="40"
+                                                   AllowFiltering="True"
                                                    UseBindingValue="True" />
                     <syncfusion:GridTextColumn HeaderText="Eq." MappingName="ExchangeQuantity" Width="40"
-                                               AllowResizing="True" AllowEditing="True" />
+                                               AllowResizing="True" AllowEditing="True"
+                                               AllowFiltering="True" />
                     <!-- <syncfusion:GridCheckBoxColumn x:Name="GridCheckBoxColumn_ALT" HeaderText="ALT" -->
                     <!--                                MappingName="UsingALT" -->
                     <!--                                AllowResizing="True" AllowEditing="True" Width="40" -->
                     <!--                                UseBindingValue="True" /> -->
                     <syncfusion:GridTextColumn HeaderText="No."
                                                MappingName="IslandRemaining" Width="40"
-                                               AllowResizing="True" AllowEditing="True" />
+                                               AllowResizing="True" AllowEditing="True"
+                                               AllowFiltering="True" />
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Islands"
                                                             AllowAutoComplete="True"
                                                             AutoGenerateColumns="False"
@@ -222,7 +246,8 @@
                     <!--                            AllowResizing="True" AllowEditing="False" /> -->
                     <!-- <syncfusion:GridTextColumn HeaderText="Parley" MappingName="Parley" AllowResizing="True" AllowEditing="True"/> -->
                     <syncfusion:GridTextColumn HeaderText="I1 No." MappingName="Item1Number" Width="40"
-                                               AllowEditing="True" AllowResizing="True" />
+                                               AllowEditing="True" AllowResizing="True"
+                                               AllowFiltering="True" />
                     <syncfusion:GridImageColumn HeaderText="I1" MappingName="Item1Icon" Width="40"
                                                 TextAlignment="Center"
                                                 AllowEditing="False" AllowResizing="True">
@@ -237,6 +262,7 @@
                                                             AllowResizing="True"
                                                             AllowIncrementalFiltering="True"
                                                             AllowEditing="True"
+                                                            AllowFiltering="True"
                                                             SearchCondition="Contains"
                                                             Width="150">
                         <syncfusion:GridMultiColumnDropDownList.CellTemplate>
@@ -270,6 +296,7 @@
                                                             AllowResizing="True"
                                                             AllowIncrementalFiltering="True"
                                                             AllowEditing="True"
+                                                            AllowFiltering="True"
                                                             SearchCondition="Contains"
                                                             Width="150">
                         <syncfusion:GridMultiColumnDropDownList.CellTemplate>
@@ -294,11 +321,14 @@
                     <!-- <syncfusion:GridTextColumn HeaderText="Exchange" MappingName="Item2Name" Width="150" -->
                     <!--                            TextAlignment="Center" AllowEditing="False" AllowResizing="True" /> -->
                     <syncfusion:GridTextColumn HeaderText="I2 No." MappingName="Item2Number"
-                                               AllowEditing="True" AllowResizing="True" />
+                                               AllowEditing="True" AllowResizing="True"
+                                               AllowFiltering="True" />
                     <syncfusion:GridTextColumn HeaderText="Inv" MappingName="InvQuantity"
-                                               AllowEditing="False" AllowResizing="True" />
+                                               AllowEditing="False" AllowResizing="True"
+                                               AllowFiltering="True" />
                     <syncfusion:GridTextColumn HeaderText="InvChange" MappingName="InvQuantityChange"
-                                               AllowEditing="False" AllowResizing="True" />
+                                               AllowEditing="False" AllowResizing="True"
+                                               AllowFiltering="True" />
 
                 </syncfusion:SfDataGrid.Columns>
 

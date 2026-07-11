@@ -1,10 +1,13 @@
 ﻿using iBarter.Localization;
+using iBarter.Planning;
 using Newtonsoft.Json;
 using Syncfusion.Pdf.Grid;
 using Syncfusion.UI.Xaml.Grid;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -202,69 +205,7 @@ namespace iBarter.View {
             if (Label_SelectedParley != null) {
                 int intParley = 0;
                 foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0)) {
-                    if (!barter.UsingALT) {
-                        intParley += barter.Parley * barter.ExchangeQuantity;
-                    }
-                    else {
-                        int intParleyTemp = 0;
-                        double doubValuePack = 1;
-                        switch (barter.IsLand.Island) {
-                            case EnumLists.Island.Halmad:
-                                intParleyTemp = 29430;
-                                break;
-                            case EnumLists.Island.Kashuma:
-                                intParleyTemp = 29430;
-                                break;
-                            case EnumLists.Island.Hakoven:
-                                intParleyTemp = 43780;
-                                break;
-                            case EnumLists.Island.Haran:
-                                intParleyTemp = 46544;
-                                break;
-                            case EnumLists.Island.Unfinished:
-                                intParleyTemp = 46544;
-                                break;
-                            case EnumLists.Island.Lantinia:
-                                intParleyTemp = 46544;
-                                break;
-                            case EnumLists.Island.Pakio:
-                                intParleyTemp = 58180;
-                                break;
-                            case EnumLists.Island.Ancient:
-                                intParleyTemp = 58180;
-                                break;
-                            case EnumLists.Island.Crow:
-                                intParleyTemp = 58180;
-                                break;
-                            case EnumLists.Island.Cholace:
-                                intParleyTemp = 58180;
-                                break;
-                            case EnumLists.Island.Rickun:
-                                intParleyTemp = 58180;
-                                break;
-                            case EnumLists.Island.Cox_Pirate:
-                                intParleyTemp = 58180;
-                                break;
-                            case EnumLists.Island.Wandering:
-                                intParleyTemp = 58180;
-                                break;
-                            case EnumLists.Island.Derko:
-                                intParleyTemp = 36420;
-                                break;
-                            case EnumLists.Island.Marine:
-                                intParleyTemp = 58180;
-                                break;
-                            default:
-                                intParleyTemp = 14286;
-                                break;
-                        }
-
-                        // if (CheckBox_ValuePack.IsChecked == true) {
-                        //     doubValuePack = 0.9;
-                        // }
-
-                        intParley += (int)(intParleyTemp * barter.ExchangeQuantity * doubValuePack);
-                    }
+                    intParley += GetEffectiveParley(barter) * barter.ExchangeQuantity;
                 }
 
                 Label_SelectedParley.Content = intParley;
@@ -274,6 +215,40 @@ namespace iBarter.View {
                 else {
                     Label_SelectedParley.Foreground = Brushes.Black;
                 }
+            }
+        }
+
+        // Phase 6 (i18n) / Task 6: pull the UsingALT island switch out of UpdateParley
+        // so the Auto Plan adapter can charge the same per-exchange parley the UI
+        // displays. If the two formulas ever drift, the budget constraint on the
+        // planner would silently disagree with the live counter.
+        private static int GetEffectiveParley(Barter barter) {
+            if (!barter.UsingALT) {
+                return barter.Parley;
+            }
+            switch (barter.IsLand.Island) {
+                case EnumLists.Island.Halmad:
+                case EnumLists.Island.Kashuma:
+                    return 29430;
+                case EnumLists.Island.Hakoven:
+                    return 43780;
+                case EnumLists.Island.Haran:
+                case EnumLists.Island.Unfinished:
+                case EnumLists.Island.Lantinia:
+                    return 46544;
+                case EnumLists.Island.Pakio:
+                case EnumLists.Island.Ancient:
+                case EnumLists.Island.Crow:
+                case EnumLists.Island.Cholace:
+                case EnumLists.Island.Rickun:
+                case EnumLists.Island.Cox_Pirate:
+                case EnumLists.Island.Wandering:
+                case EnumLists.Island.Marine:
+                    return 58180;
+                case EnumLists.Island.Derko:
+                    return 36420;
+                default:
+                    return 14286;
             }
         }
 
@@ -499,17 +474,28 @@ namespace iBarter.View {
             string strPath_Data = AppDomain.CurrentDomain.BaseDirectory +
                                   "\\Resources\\myPlan_Data.json";
 
-            if (File.Exists(strPath_Setting) && File.Exists(strPath_Data)) {
+            // 2026-07-09: load the two files independently instead of
+            // bailing if either is missing. The XML carries the
+            // DataGrid UI state (column widths / sort) and is nice-to-
+            // have; the JSON carries the actual barter rows and is the
+            // one the user actually wants back. Previously a missing
+            // XML silently aborted the whole load with no log entry,
+            // which looked like "click does nothing" from the UI.
+            bool loadedSetting = false;
+            if (File.Exists(strPath_Setting)) {
                 try {
                     using (var file = File.Open(strPath_Setting, FileMode.Open)) {
                         DataGrid_Planner.Deserialize(file);
+                        loadedSetting = true;
                     }
                 }
                 catch (Exception exception) {
-                    App.myCFun.Log(exception.Message, Brushes.Red);
+                    App.myCFun.Log("[DIAG-planner-load] setting deserialize failed: "
+                        + exception.Message, Brushes.OrangeRed);
                 }
+            }
 
-
+            if (File.Exists(strPath_Data)) {
                 try {
                     string readJsonData = File.ReadAllText(strPath_Data);
                     List<Barter> dataSource = JsonConvert.DeserializeObject<List<Barter>>(readJsonData);
@@ -522,13 +508,26 @@ namespace iBarter.View {
 
                         RefreshDataGrid();
                         //Grouping();
-                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Planner.Loaded"), Brushes.Blue);
+                        App.myCFun.Log(Localization.LanguageService.Instance.Localize(
+                            "str.Log.Planner.Loaded")
+                            + (loadedSetting ? "" : " (UI state XML missing, skipped)"),
+                            Brushes.Blue);
+                    }
+                    else {
+                        App.myCFun.Log("[DIAG-planner-load] myPlan_Data.json parsed to empty list;"
+                            + " no barters restored", Brushes.OrangeRed);
                     }
                 }
                 catch (Exception exception) {
-                    App.myCFun.Log(exception.Message, Brushes.Red);
+                    App.myCFun.Log("[DIAG-planner-load] json deserialize failed: "
+                        + exception.Message, Brushes.Red);
                 }
-                //myPlannerControl.DataGrid_Planner.ItemsSource = dataSource;
+            }
+            else if (!loadedSetting) {
+                // Neither file present - give the user a clear hint
+                // instead of the old silent no-op.
+                App.myCFun.Log("[DIAG-planner-load] no saved plan found at "
+                    + strPath_Data, Brushes.OrangeRed);
             }
 
             UpdateParley();
@@ -1067,6 +1066,138 @@ namespace iBarter.View {
             savedValue = Properties.Settings.Default.SelectedComboBoxValueLV7;
             if (savedValue >= 0 && savedValue < ComboBox_LV7Max.Items.Count)
                 ComboBox_LV7Max.SelectedIndex = savedValue;
+        }
+
+        // Phase 6 (i18n) / Task 6: Auto Plan click handler. Builds snapshots from the
+        // live collection without mutating it, delegates to the immutable planner via
+        // the adapter, and applies the result in one BeginInit/EndInit batch so the
+        // grid only re-renders once. On planner failure (ApplySet is null) the
+        // multipliers stay byte-for-byte unchanged — the failure path never enters
+        // BeginInit and never writes a multiplier.
+        private void ButtonAdv_AutoPlan_Click(object sender, RoutedEventArgs e) {
+            var svc = Localization.LanguageService.Instance;
+
+            // End any in-progress edit so the just-typed value makes it into the
+            // snapshot (otherwise we'd plan against a stale ExchangeQuantity).
+            DataGrid_Planner.SelectionController?.CurrentCellManager?.EndEdit();
+
+            if (App.myPVM?.BarterCollection == null || App.myPVM.BarterCollection.Count == 0) {
+                App.myCFun.Log(svc.Localize("str.Msg.Planner.AutoPlan.NoRows"), Brushes.Orange);
+                return;
+            }
+
+            var liveRows = App.myPVM.BarterCollection.ToList();
+
+            var snapshots = new List<PlannerRowSnapshot>(liveRows.Count);
+            for (int i = 0; i < liveRows.Count; i++) {
+                var b = liveRows[i];
+                if (b == null || b.Item1 == null || b.Item2 == null) {
+                    App.myCFun.Log(svc.Localize("str.Msg.Planner.AutoPlan.Invalid", "row " + i), Brushes.Red);
+                    return;
+                }
+
+                if (!int.TryParse(b.Item1.ItemLV, NumberStyles.Integer, CultureInfo.InvariantCulture, out int lv1)
+                    || !int.TryParse(b.Item2.ItemLV, NumberStyles.Integer, CultureInfo.InvariantCulture, out lv1)
+                    && b.Item2.ItemLV != "-1") {
+                    // Item2 may legally be "-1" for terminal routes; everything else
+                    // must parse as an int or we cannot index the planner's level
+                    // rankers correctly.
+                    if (b.Item2.ItemLV != "-1") {
+                        App.myCFun.Log(svc.Localize("str.Msg.Planner.AutoPlan.Invalid", "row " + i), Brushes.Red);
+                        return;
+                    }
+                    lv1 = -1;
+                }
+
+                bool producesCrowCoin = b.Item2.ItemName == "Crow Coin";
+                int parley = GetEffectiveParley(b);
+
+                var route = new AutoPlanningRoute(
+                    RowId: i.ToString(CultureInfo.InvariantCulture),
+                    Group: b.BarterGroup,
+                    Item1Id: b.Item1.ItemID,
+                    Item1Level: int.TryParse(b.Item1.ItemLV, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedLv1) ? parsedLv1 : 0,
+                    Item1Number: b.Item1Number,
+                    Item2Id: b.Item2.ItemID,
+                    Item2Level: int.TryParse(b.Item2.ItemLV, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedLv2) ? parsedLv2 : -1,
+                    Item2Number: b.Item2Number,
+                    ProducesCrowCoin: producesCrowCoin,
+                    Parley: parley,
+                    Remaining: b.IslandRemaining);
+
+                snapshots.Add(new PlannerRowSnapshot(
+                    RowId: route.RowId,
+                    ExchangeDone: b.ExchangeDone,
+                    ExistingMultiplier: b.ExchangeQuantity,
+                    Route: route));
+            }
+
+            // Inventory: combine the four storage cities per item via the same getter
+            // the UI uses.  This keeps the planner's projection aligned with what the
+            // user sees in the storage grid.
+            var inventory = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (App.myStorageVM?.StorageCollection != null) {
+                foreach (var item in App.myStorageVM.StorageCollection) {
+                    if (item == null || string.IsNullOrEmpty(item.ItemName)) continue;
+                    inventory[item.ItemName] = item.StorageVeliaQuantity_Velia
+                                              + item.StorageVeliaQuantity_Iliya
+                                              + item.StorageVeliaQuantity_Epheria
+                                              + item.StorageVeliaQuantity_Ancado;
+                }
+            }
+
+            var strategyTag = (ComboBoxAdv_AutoPlanningStrategy?.SelectedItem as FrameworkElement)?.Tag as string
+                ?? "ProfitFirst";
+            if (!Enum.TryParse<AutoPlanningStrategy>(strategyTag, out var strategy)) {
+                strategy = AutoPlanningStrategy.ProfitFirst;
+            }
+
+            int lv5Target = ComboBox_LV5Max != null && ComboBox_LV5Max.SelectedIndex >= 0
+                ? ComboBox_LV5Max.SelectedIndex : 0;
+            int lv6Target = ComboBox_LV6Max != null && ComboBox_LV6Max.SelectedIndex >= 0
+                ? ComboBox_LV6Max.SelectedIndex : 0;
+
+            var adapter = new PlannerAutoPlanningAdapter();
+            var calculation = adapter.Calculate(snapshots, inventory, strategy, lv5Target, lv6Target, 1_000_000);
+
+            if (calculation.ApplySet is null) {
+                string code = calculation.Diagnostics.FirstOrDefault()?.Code ?? "unknown";
+                App.myCFun.Log(svc.Localize("str.Msg.Planner.AutoPlan.Invalid", code), Brushes.Red);
+                return;
+            }
+
+            DataGrid_Planner.BeginInit();
+            try {
+                for (int i = 0; i < liveRows.Count; i++) {
+                    var key = i.ToString(CultureInfo.InvariantCulture);
+                    if (calculation.ApplySet.Multipliers.TryGetValue(key, out var newMul)) {
+                        liveRows[i].ExchangeQuantity = newMul;
+                    }
+                }
+            }
+            finally {
+                DataGrid_Planner.EndInit();
+            }
+
+            UpdateInvChange(-1);
+            UpdateParley();
+            SaveData();
+            UpdateMapControl();
+            if (App.myfmMain?.myShipCargo != null) {
+                App.myfmMain.myShipCargo.UpdateCurrentLV();
+            }
+
+            int selectedRoutes = calculation.ApplySet.Multipliers.Values.Count(v => v > 0);
+            int usedParley = 0;
+            for (int i = 0; i < liveRows.Count; i++) {
+                usedParley += GetEffectiveParley(liveRows[i]) * liveRows[i].ExchangeQuantity;
+            }
+            App.myCFun.Log(svc.Localize(
+                "str.Msg.Planner.AutoPlan.Success",
+                strategy.ToString(),
+                usedParley.ToString("N0", CultureInfo.InvariantCulture),
+                selectedRoutes.ToString(CultureInfo.InvariantCulture)),
+                selectedRoutes > 0 ? Brushes.DarkOliveGreen : Brushes.Orange);
         }
     }
 }

@@ -32,8 +32,7 @@
     <sys:String x:Key="str.Menu.BarterScanner">交换扫描器</sys:String>
     <sys:String x:Key="str.Menu.StorageManager">仓库管理</sys:String>
     <sys:String x:Key="str.Menu.SyncImages">同步图示</sys:String>
-    <sys:String x:Key="str.Menu.RebindGameWindow">重新绑定游戏视窗</sys:String>
-    <sys:String x:Key="str.Log.Scanner.CaptureDown">截图介面失效，已解绑游戏视窗。请从选单手动重新绑定。</sys:String>
+    <sys:String x:Key="str.Log.Scanner.CaptureDown">截图介面失效，已自动解绑游戏视窗。请等待 5-15 秒后重新点击扫描，DX hook 通常会自动恢复。请勿从选单手动重新绑定（在此 dx hook 版本上会崩游戏）。</sys:String>
     <sys:String x:Key="str.Log.Scanner.RebindSucceeded">重新绑定成功，截图恢复。</sys:String>
 
     <sys:String x:Key="str.Dock.ShipCargo">船舱</sys:String>
@@ -56,6 +55,18 @@
     <sys:String x:Key="str.Planner.Btn.CleanTip">移除已完成或无效的列</sys:String>
     <sys:String x:Key="str.Planner.Btn.Done">完成</sys:String>
     <sys:String x:Key="str.Planner.Btn.DoneTip">标记选取交换为完成并更新仓库</sys:String>
+
+    <!-- PlannerControl.xaml toolbar: Auto Plan (added by Phase 6 / Task 6). -->
+    <sys:String x:Key="str.Planner.AutoPlan.Strategy">策略</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.CrowCoinFirst">烏鴉硬幣優先</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.ProfitFirst">賺錢優先</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.RestockFirst">補充貨源優先</sys:String>
+    <sys:String x:Key="str.Planner.Btn.AutoPlan">自動規劃</sys:String>
+    <sys:String x:Key="str.Planner.Btn.AutoPlanTip">依選取的策略,在 1,000,000 貢獻度上限內填入未完成的交換次數</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.Success">自動規劃 ({0}):共 {1} 貢獻度,涵蓋 {2} 條路線。</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.NoRows">自動規劃:沒有可規劃的列。</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.Invalid">自動規劃失敗:輸入無效 ({0})。</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.NoFeasible">自動規劃:在貢獻度預算內沒有可行路線。</sys:String>
 
     <sys:String x:Key="str.Planner.TotalBarters">交换总数：</sys:String>
     <sys:String x:Key="str.Planner.MaxLV5">最大 LV5：</sys:String>
@@ -104,7 +115,7 @@
     <sys:String x:Key="str.Grid.Scanner.Col.IslandsSub">岛屿</sys:String>
     <sys:String x:Key="str.Grid.Scanner.Col.Parley">交涉值</sys:String>
     <sys:String x:Key="str.Grid.Scanner.Col.Remaining">剩余</sys:String>
-    <sys:String x:Key="str.Grid.Scanner.Col.No">编号</sys:String>
+    <sys:String x:Key="str.Grid.Scanner.Col.No">交换次数</sys:String>
     <sys:String x:Key="str.Grid.Scanner.Col.I1No">物品1数量</sys:String>
     <sys:String x:Key="str.Grid.Scanner.Col.Icon1">图示</sys:String>
     <sys:String x:Key="str.Grid.Scanner.Col.Item1Name">物品1名称</sys:String>
@@ -118,6 +129,12 @@
 
     <sys:String x:Key="str.ShipCargo.Btn.Clean">清理</sys:String>
     <sys:String x:Key="str.ShipCargo.Btn.CleanTip">移除已完成的船货列</sys:String>
+
+    <sys:String x:Key="str.ShipCargo.Btn.SortByChain">依链排序</sys:String>
+    <sys:String x:Key="str.ShipCargo.Btn.SortByChainTip">依照交换链顺序重新排列：产出物会被其他船货消耗的交换排在前面；没有参与任何链的交换则保留原本顺序。</sys:String>
+
+    <sys:String x:Key="str.ShipCargo.Btn.OptimalRoute">最短路径</sys:String>
+    <sys:String x:Key="str.ShipCargo.Btn.OptimalRouteTip">从「遇难的酷斯海贼船」出发，求最短航行路径并重新排列船货；同时保留交换链的先后顺序（必须先取得某物品，才能用它换下一项）。18 笔以下用精确解，更大则改用最近邻启发法。</sys:String>
 
     <sys:String x:Key="str.ItemTier.Basic">[一般物品]</sys:String>
     <sys:String x:Key="str.ItemTier.Lv1">[等级 1]</sys:String>
@@ -175,6 +192,7 @@
     <sys:String x:Key="str.Log.Storage.Saved">资料已储存。</sys:String>
 
     <sys:String x:Key="str.Log.Scanner.Starting">开始扫描…</sys:String>
+    <sys:String x:Key="str.Log.Scanner.AlreadyRunning">扫描仍在进行，已忽略本次请求。</sys:String>
     <sys:String x:Key="str.Log.Scanner.Done">完成！</sys:String>
     <sys:String x:Key="str.Log.Scanner.NoAnchor">扫描：游戏视窗中找不到 anchor.bmp（{0}x{1}）。请确认交换画面已开启。</sys:String>
     <sys:String x:Key="str.Log.Scanner.CaptureWindowFailed">扫描：无法撷取游戏视窗（{0}）。</sys:String>
@@ -200,6 +218,13 @@
     <sys:String x:Key="str.Log.LV5Skip">LV5+ 跳过 OCR：{0}（{1}）→ 1</sys:String>
 
     <sys:String x:Key="str.Log.ShipCargo.CopiedToClipboard">{0} 已复制到剪贴簿。</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.Sorted">船舱已依交换链顺序排序。</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Solo">船舱只有一笔交换，无需优化。</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoStartIsland">找不到起点「遇难的酷斯海贼船」，已中止。</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.MissingIsland">部分交换缺少岛屿资讯，改用交换链排序。</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoRoute">交换链存在循环，无符合优先顺序的完整路径，改用交换链排序。</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Done">最短路径已解出：{0} 站，总距离 {1}（地图归一化单位）。</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.DoneHeuristic">已用最近邻启发法求解最短路径：{0} 站。</sys:String>
 
     <sys:String x:Key="str.Msg.Confirmation.Title">确认</sys:String>
     <sys:String x:Key="str.Msg.Planner.DeleteRow">确定要删除此列（{0} → {1}）？</sys:String>

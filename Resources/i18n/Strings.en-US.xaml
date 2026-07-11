@@ -39,8 +39,7 @@
     <sys:String x:Key="str.Menu.BarterScanner">Barter Scanner</sys:String>
     <sys:String x:Key="str.Menu.StorageManager">Storage Manager</sys:String>
     <sys:String x:Key="str.Menu.SyncImages">Sync Images</sys:String>
-    <sys:String x:Key="str.Menu.RebindGameWindow">Re-bind Game Window</sys:String>
-    <sys:String x:Key="str.Log.Scanner.CaptureDown">Capture interface down. Game window unbound. Please re-bind manually via the menu.</sys:String>
+    <sys:String x:Key="str.Log.Scanner.CaptureDown">Capture interface down. Game window unbound. Wait 5-15 seconds and re-click Scan - the DX hook usually recovers on its own. DO NOT manually rebind via the menu (crashes the game client on this dx hook build).</sys:String>
     <sys:String x:Key="str.Log.Scanner.RebindSucceeded">Re-bind succeeded, capture restored.</sys:String>
 
     <!-- DockingManager panel headers (MainWindow.xaml) -->
@@ -68,6 +67,18 @@
     <sys:String x:Key="str.Planner.Btn.CleanTip">Remove finished or invalid rows</sys:String>
     <sys:String x:Key="str.Planner.Btn.Done">Done</sys:String>
     <sys:String x:Key="str.Planner.Btn.DoneTip">Mark the selected barter as exchanged and update storage</sys:String>
+
+    <!-- PlannerControl.xaml toolbar: Auto Plan (added by Phase 6 / Task 6). -->
+    <sys:String x:Key="str.Planner.AutoPlan.Strategy">Strategy</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.CrowCoinFirst">Crow Coin First</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.ProfitFirst">Profit First</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.RestockFirst">Restock First</sys:String>
+    <sys:String x:Key="str.Planner.Btn.AutoPlan">Auto Plan</sys:String>
+    <sys:String x:Key="str.Planner.Btn.AutoPlanTip">Fill unfinished multipliers under the 1,000,000 parley budget using the selected strategy</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.Success">Auto Plan ({0}): {1} parley used across {2} route(s).</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.NoRows">Auto Plan: no rows to plan.</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.Invalid">Auto Plan failed: invalid input ({0}).</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.NoFeasible">Auto Plan: no feasible route under the parley budget.</sys:String>
 
     <!-- PlannerControl.xaml toolbar labels -->
     <sys:String x:Key="str.Planner.TotalBarters">Total Barters: </sys:String>
@@ -123,7 +134,7 @@
     <sys:String x:Key="str.Grid.Scanner.Col.IslandsSub">Islands</sys:String>
     <sys:String x:Key="str.Grid.Scanner.Col.Parley">Parley</sys:String>
     <sys:String x:Key="str.Grid.Scanner.Col.Remaining">Remaining</sys:String>
-    <sys:String x:Key="str.Grid.Scanner.Col.No">No.</sys:String>
+    <sys:String x:Key="str.Grid.Scanner.Col.No">Exchange Count</sys:String>
     <sys:String x:Key="str.Grid.Scanner.Col.I1No">I1 No.</sys:String>
     <sys:String x:Key="str.Grid.Scanner.Col.Icon1">Icon</sys:String>
     <sys:String x:Key="str.Grid.Scanner.Col.Item1Name">Item1 Name</sys:String>
@@ -139,6 +150,14 @@
     <!-- ShipCargoControl.xaml toolbar button -->
     <sys:String x:Key="str.ShipCargo.Btn.Clean">Clean</sys:String>
     <sys:String x:Key="str.ShipCargo.Btn.CleanTip">Remove finished cargo rows</sys:String>
+
+    <!-- ShipCargoControl.xaml toolbar button: sort by barter chain -->
+    <sys:String x:Key="str.ShipCargo.Btn.SortByChain">Sort by Chain</sys:String>
+    <sys:String x:Key="str.ShipCargo.Btn.SortByChainTip">Reorder barters by chain position: barters that produce items consumed by other cargo barters come first; barters that stand alone keep their insertion order.</sys:String>
+
+    <!-- ShipCargoControl.xaml toolbar button: solve optimal sailing route from Cox_Pirate -->
+    <sys:String x:Key="str.ShipCargo.Btn.OptimalRoute">Optimal Route</sys:String>
+    <sys:String x:Key="str.ShipCargo.Btn.OptimalRouteTip">Reorder barters as the shortest sailing route starting from Wrecked Coos Pirate Ship, while still respecting the chain (you must produce an item before you can spend it). Exact solution for up to 18 barters; nearest-neighbor heuristic above that.</sys:String>
 
     <!-- Phase 6 (i18n): Item tier labels shown in the Storage grid Tier column
          and the BarterPlanner LV column.  Keyed by ItemLV integer (0..7)
@@ -213,6 +232,7 @@
     <sys:String x:Key="str.Log.Storage.Saved">Saved data.</sys:String>
 
     <sys:String x:Key="str.Log.Scanner.Starting">Start scanning...</sys:String>
+    <sys:String x:Key="str.Log.Scanner.AlreadyRunning">A scan is already running; this request was ignored.</sys:String>
     <sys:String x:Key="str.Log.Scanner.Done">Done!</sys:String>
     <sys:String x:Key="str.Log.Scanner.NoAnchor">Scan: no anchor.bmp found in game window ({0}x{1}). Is the barter screen open?</sys:String>
     <sys:String x:Key="str.Log.Scanner.CaptureWindowFailed">Scan: cannot capture game window ({0}).</sys:String>
@@ -238,6 +258,13 @@
     <sys:String x:Key="str.Log.LV5Skip">LV5+ skip OCR for {0} ({1}) -&gt; 1</sys:String>
 
     <sys:String x:Key="str.Log.ShipCargo.CopiedToClipboard">{0} copied to the clipboard.</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.Sorted">Ship cargo sorted by barter chain.</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Solo">Ship cargo has only one barter; nothing to optimize.</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoStartIsland">Cannot resolve start island for optimal route (Wrecked Coos Pirate Ship); aborting.</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.MissingIsland">Some barters are missing an island; falling back to chain sort.</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoRoute">No precedence-respecting route found (likely a chain cycle); falling back to chain sort.</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Done">Optimal route solved: {0} stops, total distance {1} (normalized map units).</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.DoneHeuristic">Optimal route solved (nearest-neighbor heuristic): {0} stops.</sys:String>
 
     <!-- Phase 7 (i18n): dialog prompts (MessageBox.Show) -->
     <sys:String x:Key="str.Msg.Confirmation.Title">Confirmation</sys:String>
