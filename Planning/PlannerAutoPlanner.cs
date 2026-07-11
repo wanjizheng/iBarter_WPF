@@ -67,7 +67,7 @@ public sealed class PlannerAutoPlanner {
                 PlanProfitFirst(request, routesById, committed, ref committedParley, diagnostics);
                 break;
             case AutoPlanningStrategy.RestockFirst:
-                // Implemented in Task 4. Fall through to zero plan for now.
+                PlanRestockFirst(request, routesById, committed, ref committedParley, diagnostics);
                 break;
         }
 
@@ -148,6 +148,99 @@ public sealed class PlannerAutoPlanner {
             }
         }
         return consumed;
+    }
+
+    private static void PlanRestockFirst(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        Dictionary<string, int> committed,
+        ref int committedParley,
+        List<AutoPlanningDiagnostic> diagnostics) {
+
+        // Phase 1: LV5/LV6 capped restock — fill toward Lv5Target / Lv6Target by the
+        // largest deficit ratio. Skip target=0 and projected>=target so we don't burn
+        // budget restocking an item that's already at quota.
+        GreedyOneExchange(
+            request, routesById, committed, ref committedParley, diagnostics,
+            filter: r => IsCappedRestockEligible(r, request, committed),
+            ranker: (a, b) => CompareDeficitRatio(a, b, request, committed));
+
+        // Phase 2: LV1-LV4 uncapped restock — spend any remaining parley on the
+        // lowest-projected inventory item. No implicit cap means we fill until the
+        // route's Remaining is exhausted or the budget runs out.
+        GreedyOneExchange(
+            request, routesById, committed, ref committedParley, diagnostics,
+            filter: r => IsUncappedRestockEligible(r),
+            ranker: (a, b) => CompareLowestProjected(a, b, request, committed));
+    }
+
+    private static bool IsCappedRestockEligible(
+        AutoPlanningRoute r,
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, int> committed) {
+        if (r.ProducesCrowCoin) return false;
+        if (r.Item2Level != 5 && r.Item2Level != 6) return false;
+        int target = r.Item2Level == 5 ? request.Lv5Target : request.Lv6Target;
+        if (target <= 0) return false;
+        int projected = ProjectedItemInventory(r.Item2Id, request, committed);
+        return projected < target;
+    }
+
+    private static bool IsUncappedRestockEligible(AutoPlanningRoute r) {
+        if (r.ProducesCrowCoin) return false;
+        return r.Item2Level >= 1 && r.Item2Level <= 4;
+    }
+
+    private static int CompareDeficitRatio(
+        AutoPlanningRoute a, AutoPlanningRoute b,
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, int> committed) {
+        int targetA = a.Item2Level == 5 ? request.Lv5Target : request.Lv6Target;
+        int targetB = b.Item2Level == 5 ? request.Lv5Target : request.Lv6Target;
+        int projA = ProjectedItemInventory(a.Item2Id, request, committed);
+        int projB = ProjectedItemInventory(b.Item2Id, request, committed);
+        int deficitA = targetA - projA;
+        int deficitB = targetB - projB;
+        // Higher deficit ratio wins. Cross-multiply to stay integer.
+        int cmp = unchecked(deficitB * targetA).CompareTo(unchecked(deficitA * targetB));
+        if (cmp != 0) return cmp;
+        return StringComparer.Ordinal.Compare(a.RowId, b.RowId);
+    }
+
+    private static int CompareLowestProjected(
+        AutoPlanningRoute a, AutoPlanningRoute b,
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, int> committed) {
+        int projA = ProjectedItemInventory(a.Item2Id, request, committed);
+        int projB = ProjectedItemInventory(b.Item2Id, request, committed);
+        int cmp = projA.CompareTo(projB); // lower projected first
+        if (cmp != 0) return cmp;
+        cmp = a.Item2Level.CompareTo(b.Item2Level); // lower output level first
+        if (cmp != 0) return cmp;
+        cmp = a.Parley.CompareTo(b.Parley); // lower parley first
+        if (cmp != 0) return cmp;
+        cmp = StringComparer.Ordinal.Compare(a.Item2Id, b.Item2Id);
+        if (cmp != 0) return cmp;
+        return StringComparer.Ordinal.Compare(a.RowId, b.RowId);
+    }
+
+    private static int ProjectedItemInventory(
+        string itemId,
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, int> committed) {
+        int baseQty = request.CurrentInventory.TryGetValue(itemId, out var q) ? q : 0;
+        foreach (var (rowId, mul) in committed) {
+            if (mul <= 0) continue;
+            var route = request.Routes.FirstOrDefault(r => r.RowId == rowId);
+            if (route is null) continue;
+            if (route.Item2Id == itemId) {
+                baseQty += mul * route.Item2Number;
+            }
+            if (route.Item1Id == itemId) {
+                baseQty -= mul * route.Item1Number;
+            }
+        }
+        return baseQty;
     }
 
     private static void GreedyOneExchange(
