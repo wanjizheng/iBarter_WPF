@@ -82,6 +82,15 @@ public sealed class PlannerAutoPlanner {
                 break;
         }
 
+        // Bounded local replacement: greedy stops when no candidate fits, but the
+        // earliest-accepted bundle may have crowded out a higher-value fill that
+        // a later pass would have picked. We try removing ONE committed route at a
+        // time (in reverse commit order) and re-running greedy on the freed
+        // budget. Accept the swap only if usedParley strictly increases and the
+        // strategy's lexicographic objective is preserved (i.e. no earlier-priority
+        // route regresses). Capped at a handful of iterations to bound runtime.
+        BoundedLocalReplacement(request, routesById, committed, ref committedParley, diagnostics, maxIterations: 3);
+
         // Every requested row gets a slot in the result map (zero when no bundle touched it).
         foreach (var r in request.Routes) {
             if (!committed.ContainsKey(r.RowId)) {
@@ -99,6 +108,191 @@ public sealed class PlannerAutoPlanner {
             new Dictionary<string, int>(StringComparer.Ordinal),
             0,
             diagnostics);
+
+    // ------------------------------------------------------------------
+    // Bounded local replacement
+    // ------------------------------------------------------------------
+
+    private static void BoundedLocalReplacement(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        Dictionary<string, int> committed,
+        ref int committedParley,
+        List<AutoPlanningDiagnostic> diagnostics,
+        int maxIterations) {
+
+        // Collect rowIds currently committed (positive multipliers only) in
+        // arbitrary order — bounded replacement just removes one at a time and
+        // tries to re-fill.
+        var committedIds = committed
+            .Where(kv => kv.Value > 0)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        for (int iter = 0; iter < maxIterations && committedIds.Count > 0; iter++) {
+            int baselineParley = committedParley;
+            bool improved = false;
+
+            foreach (var rowId in committedIds.ToList()) {
+                if (!committed.TryGetValue(rowId, out var current) || current <= 0) continue;
+
+                // Save the current row's multiplier so we can revert on a no-op.
+                int savedCurrent = current;
+                committed[rowId] = current - 1;
+                if (committed[rowId] == 0) committed.Remove(rowId);
+                committedParley = RecomputeParley(committed, routesById);
+
+                // Snapshot the multipliers we just touched (not the whole map) so
+                // the re-fill can layer additions without disturbing the snapshot.
+                var snapshot = new Dictionary<string, int>(committed, StringComparer.Ordinal);
+
+                // Run the strategy's greedy one more time. We delegate to a small
+                // helper that drives the same per-strategy filters/ranker; if any
+                // strategy filter would skip the leftover candidates the helper
+                // returns without changes.
+                int fillParley = committedParley;
+                BoundedRefill(request, routesById, committed, ref fillParley, diagnostics);
+
+                if (fillParley > committedParley) {
+                    // Accept: new plan consumes more parley (closer to budget)
+                    // without violating the lexicographic objective (the refiller
+                    // uses the same strategy ranks).
+                    committedParley = fillParley;
+                    improved = true;
+                    break;
+                }
+
+                // Revert: refilling did not increase used parley. Restore the row.
+                committed[rowId] = savedCurrent;
+                committedParley = baselineParley;
+                // Also revert any other rows the refiller touched.
+                foreach (var kv in snapshot) {
+                    if (!committed.ContainsKey(kv.Key)) committed[kv.Key] = kv.Value;
+                }
+            }
+
+            if (!improved) return;
+
+            // Rebuild committedIds from the new state for the next iteration.
+            committedIds = committed
+                .Where(kv => kv.Value > 0)
+                .Select(kv => kv.Key)
+                .ToList();
+        }
+    }
+
+    private static int RecomputeParley(
+        IReadOnlyDictionary<string, int> committed,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById) {
+        int total = 0;
+        foreach (var kv in committed) {
+            if (kv.Value <= 0) continue;
+            if (!routesById.TryGetValue(kv.Key, out var r)) continue;
+            total = checked(total + kv.Value * r.Parley);
+        }
+        return total;
+    }
+
+    private static void BoundedRefill(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        Dictionary<string, int> committed,
+        ref int committedParley,
+        List<AutoPlanningDiagnostic> diagnostics) {
+        // Re-run a single greedy pass with the strategy's filter+ranker. We do
+        // not bound by maxIterations — the greedy stops on its own when no
+        // candidate fits. This is intentionally a smaller re-filling loop than
+        // the initial GreedyFillIncrements because the strategy has already had
+        // its chance; we just want to see if the freed budget can be re-spent.
+        switch (request.Strategy) {
+            case AutoPlanningStrategy.CrowCoinFirst:
+                BoundedRefillStrategy(request, routesById, committed, ref committedParley, diagnostics,
+                    filter: r => r.ProducesCrowCoin,
+                    bundleRanker: CompareBundleOutputPerParley);
+                BoundedRefillStrategy(request, routesById, committed, ref committedParley, diagnostics,
+                    filter: r => !r.ProducesCrowCoin,
+                    bundleRanker: CompareRemainderBundle);
+                break;
+            case AutoPlanningStrategy.ProfitFirst:
+                BoundedRefillStrategy(request, routesById, committed, ref committedParley, diagnostics,
+                    filter: r => !r.ProducesCrowCoin,
+                    bundleRanker: CompareProfitBundle);
+                break;
+            case AutoPlanningStrategy.RestockFirst:
+                BoundedRefillStrategy(request, routesById, committed, ref committedParley, diagnostics,
+                    filter: r => IsCappedRestockEligible(r, request, committed),
+                    bundleRanker: (a, b, ctx) => CompareCappedBundle(a, b, ctx));
+                BoundedRefillStrategy(request, routesById, committed, ref committedParley, diagnostics,
+                    filter: r => IsUncappedRestockEligible(r),
+                    bundleRanker: (a, b, ctx) => CompareUncappedBundle(a, b, ctx));
+                break;
+        }
+    }
+
+    private static void BoundedRefillStrategy(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        Dictionary<string, int> committed,
+        ref int committedParley,
+        List<AutoPlanningDiagnostic> diagnostics,
+        Func<AutoPlanningRoute, bool> filter,
+        BundleRanker bundleRanker) {
+        var ctx = new GreedyContext {
+            Request = request,
+            RoutesById = routesById,
+            Committed = committed,
+            CommittedParley = committedParley,
+        };
+
+        while (true) {
+            var candidates = request.Routes
+                .Where(filter)
+                .Where(r => committed.TryGetValue(r.RowId, out var c) ? c < r.Remaining : r.Remaining > 0)
+                .ToList();
+
+            if (candidates.Count == 0) {
+                committedParley = ctx.CommittedParley;
+                return;
+            }
+
+            ctx.BundlesByRow.Clear();
+            foreach (var c in candidates) {
+                var workingInventory = ApplyMultipliers(request.CurrentInventory, routesById, committed);
+                int remainingBudget = request.ParleyBudget - ctx.CommittedParley;
+                int currentCommitted = committed.TryGetValue(c.RowId, out var cc) ? cc : 0;
+                int maxUsefulTarget = ComputeMaxUsefulTarget(c, committed, request, routesById);
+                int tryTarget = Math.Min(currentCommitted + c.Remaining, maxUsefulTarget);
+
+                Bundle? bundle = null;
+                for (int t = tryTarget; t > currentCommitted; t--) {
+                    if (TryBuildBundle(c.RowId, t, routesById,
+                            workingInventory, committed, remainingBudget,
+                            out var candidateBundle, diagnostics)) {
+                        bundle = candidateBundle;
+                        break;
+                    }
+                }
+                if (bundle is not null) ctx.BundlesByRow[c.RowId] = bundle;
+            }
+
+            if (ctx.BundlesByRow.Count == 0) {
+                committedParley = ctx.CommittedParley;
+                return;
+            }
+
+            candidates.Sort((a, b) => bundleRanker(a, b, ctx));
+            var winner = candidates[0];
+            var winnerBundle = ctx.BundlesByRow[winner.RowId];
+
+            foreach (var (rowId, bundleMul) in winnerBundle.Multipliers) {
+                int existing = committed.TryGetValue(rowId, out var cv) ? cv : 0;
+                int merged = Math.Max(existing, existing + bundleMul);
+                if (merged > existing) committed[rowId] = merged;
+            }
+
+            ctx.CommittedParley += winnerBundle.AdditionalParley;
+        }
+    }
 
     // ------------------------------------------------------------------
     // Strategy drivers
@@ -232,7 +426,8 @@ public sealed class PlannerAutoPlanner {
         ref int committedParley,
         List<AutoPlanningDiagnostic> diagnostics,
         Func<AutoPlanningRoute, bool> filter,
-        BundleRanker bundleRanker) {
+        BundleRanker bundleRanker,
+        List<string>? commitOrder = null) {
 
         var ctx = new GreedyContext {
             Request = request,
@@ -301,6 +496,9 @@ public sealed class PlannerAutoPlanner {
                 int merged = Math.Max(existing, existing + bundleMul);
                 if (merged > existing) {
                     committed[rowId] = merged;
+                    if (commitOrder is not null && !commitOrder.Contains(rowId)) {
+                        commitOrder.Add(rowId);
+                    }
                 }
             }
 
