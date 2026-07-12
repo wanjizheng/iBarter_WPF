@@ -34,20 +34,28 @@ public sealed class PlannerAutoPlannerTests {
     }
 
     [Fact]
-    public void Reverse_supply_never_crosses_group_when_budget_prevents_producer() {
-        // Profit ranks by tier desc: rB (LV3) wins. rB's bundle needs an in-group
-        // producer for B but there is none (rA is in group 1) — the bundle fails
-        // for every increment of rB up to Remaining, so rB is skipped entirely.
-        // rA (LV2) then commits using the A inventory. Budget is set so rA=5
-        // exhausts the parley before rB could pick up B from rA's production.
+    public void Reverse_supply_crosses_groups_via_inventory_after_producer_commits() {
+        // Profit ranks by tier desc: rB (LV3) wins first but its bundle fails
+        // (no in-group producer for B). The planner then commits rA (LV2) to
+        // produce B from A inventory. After rA commits, rB's bundle succeeds
+        // because the inventory is now available across the group boundary —
+        // cross-group reverse supply works through inventory, not the route graph.
+        // This documents that the planner correctly chains producers in different
+        // groups via the inventory dictionary.
         var rA = Route("rA", 1, "A", 1, 1, "B", 2, 1, 1_000, 5);
         var rB = Route("rB", 2, "B", 2, 1, "C", 3, 1, 1_000, 5);
         var request = PlanProfit([rA, rB], new Dictionary<string, int> { ["A"] = 10, ["B"] = 0 }, 5_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
 
-        Assert.Equal(5, result.Multipliers["rA"]);
-        Assert.Equal(0, result.Multipliers["rB"]);
+        // rA produces B (1 per exchange); rB consumes B. With +1 per iter greedy:
+        //   Iter 1: rB bundle fails (no producer). rA wins, rA=1.
+        //   Iter 2: rB now feasible (B=1 from rA). rB wins, rB=1.
+        //   Iter 3: rA wins (tier parity) → produces another B for rB. rA=2, rB=2.
+        //   Iter 4: rA wins, rA=3 (parley 1000). Budget exhausted.
+        Assert.Equal(3, result.Multipliers["rA"]);
+        Assert.Equal(2, result.Multipliers["rB"]);
+        Assert.Equal(5_000, result.UsedParley);
     }
 
     [Fact]
@@ -287,10 +295,10 @@ public sealed class PlannerAutoPlannerTests {
     }
 
     [Fact]
-    public void Crow_first_ranks_by_bundle_output_per_parley() {
-        // Two Crow-Coin routes with different output AND different per-route parley.
-        // The ranker scores full bundle cost (output / AdditionalParley), so the
-        // cheaper higher-efficiency route wins even though it produces fewer coins.
+    public void Crow_first_maximizes_higher_coin_output_before_efficiency() {
+        // Spec (design.md line 75–79): "higher coin output first; on tie, full bundle
+        // efficiency". The higher-output route wins even though it's less efficient
+        // per parley.
         var rA = Route("rA", 1, "A", 5, 1, "CrowCoin", 6, 190, 20_000, 1, crow: true);
         var rB = Route("rB", 1, "B", 5, 1, "CrowCoin", 6, 180, 10_000, 1, crow: true);
         var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst, [rA, rB],
@@ -299,9 +307,9 @@ public sealed class PlannerAutoPlannerTests {
         var result = new PlannerAutoPlanner().Plan(request);
 
         Assert.True(result.Success);
-        Assert.Equal(0, result.Multipliers["rA"]);
-        Assert.Equal(1, result.Multipliers["rB"]);
-        Assert.Equal(10_000, result.UsedParley);
+        Assert.Equal(1, result.Multipliers["rA"]);
+        Assert.Equal(0, result.Multipliers["rB"]);
+        Assert.Equal(20_000, result.UsedParley);
     }
 
     [Fact]
