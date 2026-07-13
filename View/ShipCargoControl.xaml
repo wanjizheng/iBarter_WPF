@@ -49,6 +49,18 @@
         </Grid.RowDefinitions>
         <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0">
             <Syncfusion:ButtonAdv
+                x:Name="ButtonAdv_OptimalRoute"
+                Margin="4,0,4,0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                IconWidth="26" IconHeight="26"
+                Label="{loc:Localize str.ShipCargo.Btn.OptimalRoute}"
+                ToolTip="{loc:Localize str.ShipCargo.Btn.OptimalRouteTip}"
+                SizeMode="Small"
+                FontFamily="Microsoft YaHei"
+                SmallIcon="/Images/pilot.png" Click="ButtonAdv_OptimalRoute_Click" />
+            <Separator />
+            <Syncfusion:ButtonAdv
                 x:Name="ButtonAdv_Clean"
                 Margin="4,0,4,0"
                 HorizontalAlignment="Center"

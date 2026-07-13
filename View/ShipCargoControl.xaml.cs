@@ -308,6 +308,23 @@ namespace iBarter.View {
             }
         }
 
+        // Reorder the ship cargo as an optimal sailing route starting at
+        // Cox_Pirate (遇难的酷斯海贼船), respecting the chain precedence
+        // enforced by SortByBarterChain. The reorder + persistence is
+        // handled by ShipCargoViewModel.SolveOptimalRoute (Held-Karp DP
+        // with precedence for N <= 18, greedy nearest-neighbor for larger
+        // cargoes); we refresh the ListBox here and call SaveData so the
+        // new order is written to disk.
+        private void ButtonAdv_OptimalRoute_Click(object sender, RoutedEventArgs e) {
+            if (App.myCVM == null) {
+                return;
+            }
+            App.myCVM.SolveOptimalRoute();
+            CollectionViewSource.GetDefaultView(ListBox_ShipCargo.ItemsSource)?.Refresh();
+            ListBox_ShipCargo.InvalidateVisual();
+            SaveData();
+        }
+
         private void ListBoxItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
             if (e.ClickCount == 2) {
                 try {

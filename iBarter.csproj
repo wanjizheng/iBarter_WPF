@@ -22,6 +22,9 @@
     <Compile Remove="Tools\PlannerAutoPlannerTests\**\*.cs" />
     <None Remove="Tools\PlannerAutoPlannerTests\**\*" />
     <Content Remove="Tools\PlannerAutoPlannerTests\**\*" />
+    <Compile Remove="Tools\IslandNavigationTests\**\*.cs" />
+    <None Remove="Tools\IslandNavigationTests\**\*" />
+    <Content Remove="Tools\IslandNavigationTests\**\*" />
     <!-- Magick.NET-Q16-AnyCPU only copies native on .NET Framework; this project
          targets .NET 10, so copy the x86 native manually and let Costura embed it. -->
     <None Include="$(NuGetPackageRoot)magick.net-q16-anycpu\14.14.0\runtimes\win-x86\native\Magick.Native-Q16-x86.dll">
@@ -48,6 +51,7 @@
     <None Remove="Images\iBarterMap.png" />
     <None Remove="Images\load.png" />
     <None Remove="Images\new-document.png" />
+    <None Remove="Images\pilot.png" />
     <None Remove="Images\pin.png" />
     <None Remove="Images\refresh.png" />
     <None Remove="Images\save.png" />
@@ -70,6 +74,11 @@
     <None Remove="Resources\Items.csv" />
     <None Remove="Resources\Storage.csv" />
     <None Remove="tessdata\eng_best.traineddata" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <Resource Include="Images\pilot.png" />
   </ItemGroup>
 
   <ItemGroup>

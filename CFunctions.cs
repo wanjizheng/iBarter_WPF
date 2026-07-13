@@ -32,6 +32,22 @@ namespace iBarter {
     public class CFunctions {
         private static FontType gameFontType = FontType.StrongSword;
         private static readonly SemaphoreSlim IdentifyRoutesGate = new SemaphoreSlim(1, 1);
+        private static int _scanSeq;
+        private CaptureSession? _activeScanCaptureSession;
+
+        // 2026-07-09: removed scan cooldown. The 10s/15s gate was
+        // blocking legitimate user re-clicks during normal scan sessions
+        // and didn't actually prevent the hook-degradation issues it
+        // was added for. The per-anchor smart-skip handles real failures
+        // cleanly. If the user clicks too soon, the worst case is
+        // some anchor failures + the skip-tail optimization aborts
+        // the scan early.
+
+        // 2026-07-08: brief retry delay between OCR attempts. PureDM
+        // capture has transient single-frame failures that recover within
+        // ~500 ms; a single retry covers the most common case without
+        // adding measurable scan time.
+        public static readonly int OcrRetryDelayMs = 500;
 
         public CFunctions(FontType _font = FontType.StrongSword) {
             gameFontType = _font;
@@ -488,6 +504,25 @@ namespace iBarter {
             return int.TryParse(itemLV, out lv) && lv >= 5;
         }
 
+        private static bool ShouldSkipIconConfirmation(Items item) {
+            return item != null && IsHighTier(item.ItemLV);
+        }
+
+        private static Items CreateScannerItemFromCatalog(string itemID, int quantity) {
+            Items catalog = App.listItems?.FirstOrDefault(i => i.ItemID == itemID);
+            if (catalog == null) {
+                return new Items(string.Empty, itemID ?? "0", "0", quantity);
+            }
+
+            var item = new Items(
+                catalog.ItemName,
+                catalog.ItemID,
+                catalog.ItemLV,
+                quantity);
+            item.ItemNameZhTw = catalog.ItemNameZhTw;
+            return item;
+        }
+
         private string getBetween(string strSource, string strStart, string strEnd) {
             if (strSource.Contains(strStart) && strSource.Contains(strEnd)) {
                 int Start, End;
@@ -745,7 +780,21 @@ namespace iBarter {
                     catch (Exception e) {
                     }
 
-                    var myIslands = new Islands(IslandEnum(strName), intParley);
+                    if (results.Length != 9
+                        || !double.TryParse(results[6], NumberStyles.Float, CultureInfo.InvariantCulture, out double navigationX)
+                        || !double.TryParse(results[7], NumberStyles.Float, CultureInfo.InvariantCulture, out double navigationY)
+                        || !double.IsFinite(navigationX)
+                        || !double.IsFinite(navigationY)
+                        || string.IsNullOrWhiteSpace(results[8])) {
+                        Log($"Invalid navigation coordinates for island '{strName}'.", Brushes.Red);
+                        continue;
+                    }
+
+                    var myIslands = new Islands(IslandEnum(strName), intParley) {
+                        NavigationX = navigationX,
+                        NavigationY = navigationY,
+                        NavigationSource = results[8].Trim(),
+                    };
                     myIslands.IslandsThickness = myThickness;
 
                     listIslands.Add(myIslands);
@@ -901,7 +950,14 @@ namespace iBarter {
                 return false;
             }
 
-            App.myPureDM.DM.GetClientSize(hwnd, out int width, out int height);
+            // 2026-07-10: route DM.GetClientSize through the dedicated
+            // STA worker. Previously this ran on the Task.Run pool
+            // thread, racing with the WPF UI thread's 100ms
+            // DispatcherTimer and corrupting COM state.
+            int width = 0, height = 0;
+            PureDmWorker.Call(() => {
+                App.myPureDM.DM.GetClientSize(hwnd, out width, out height);
+            });
             if (width <= 0 || height <= 0) {
                 reason = "game client size is invalid: " + width + "x" + height;
                 return false;
@@ -912,45 +968,60 @@ namespace iBarter {
             return true;
         }
 
-        private bool TryValidateGameCapture(out string reason) {
+        internal static bool RunInCaptureSession(
+            CV cv,
+            Action<CaptureSession> body,
+            out long frameId,
+            out int liveCaptureDelta,
+            out string reason) {
+            if (cv == null) throw new ArgumentNullException(nameof(cv));
+            if (body == null) throw new ArgumentNullException(nameof(body));
+
+            CaptureSession? session = null;
+            string beginReason = "";
+            frameId = 0;
+            liveCaptureDelta = 0;
             reason = "";
-            if (App.myPureDM == null || App.myPureDM.DM == null) {
-                reason = "PureDM is not initialized";
+            int captureCountBefore = cv.LiveCaptureCount;
+
+            // Only the session acquisition touches DM.Capture. Keep it on the
+            // one STA thread that owns the dm.dmsoft COM object, but do not put
+            // the whole multi-anchor scan inside one 8-second worker Call.
+            bool started = PureDmWorker.Call(() =>
+                cv.TryBeginCaptureSession(out session, out beginReason));
+            if (!started || session == null) {
+                liveCaptureDelta = cv.LiveCaptureCount - captureCountBefore;
+                reason = beginReason;
                 return false;
             }
 
-            int hwnd = (int)App.myPureDM.WindowHandle;
-            if (hwnd <= 0) {
-                reason = "game window handle is invalid";
-                return false;
+            CaptureSession activeSession = session;
+            frameId = activeSession.Id;
+            liveCaptureDelta = cv.LiveCaptureCount - captureCountBefore;
+            try {
+                // The body runs on IdentifyRoutes' background scan thread.
+                // Every stateful DM/CV operation inside it is independently
+                // marshalled through PureDmWorker.Call, preserving COM affinity
+                // and restoring a meaningful per-operation timeout boundary.
+                body(activeSession);
+                return true;
             }
-
-            int isBind = App.myPureDM.DM.IsBind(hwnd);
-            if (isBind != 1) {
-                reason = "game window is not bound (DM.IsBind=" + isBind + ")";
-                return false;
-            }
-
-            int probeX2 = Math.Min(Math.Max(App.myPureDM.WindowWidth, 1), 64);
-            int probeY2 = Math.Min(Math.Max(App.myPureDM.WindowHeight, 1), 64);
-            // Lock for the same reason as CaptureScreenBytes: the internal
-            // pointer is freed on the next GetScreenDataBmp call, so even a
-            // probe-only call (that doesn't copy data) must be serialised with
-            // any concurrent capture+copy in progress elsewhere.
-            lock (App.myPureDM.DM) {
-                IntPtr data;
-                int size;
-                int ret = App.myPureDM.DM.GetScreenDataBmp(0, 0, probeX2, probeY2, out data, out size);
-                if (ret == 0 || data == IntPtr.Zero || size <= 0) {
-                    int lastError = App.myPureDM.DM.GetLastError();
-                    reason = "GetScreenDataBmp failed for probe "
-                             + probeX2 + "x" + probeY2
-                             + " (ret=" + ret + ", size=" + size + ", lastError=" + lastError + ")";
-                    return false;
+            finally {
+                // Session teardown disposes the immutable frame and cached OCR
+                // engines. Keep that stateful CV lifecycle operation on the
+                // same STA worker as acquisition and recognition.
+                try {
+                    // Never queue teardown behind a native action that already
+                    // timed out. That action may never return; the poisoned
+                    // process is restart-only and the OS will reclaim resources.
+                    if (!PureDmWorker.IsPoisoned) {
+                        PureDmWorker.Call(activeSession.Dispose);
+                    }
+                }
+                finally {
+                    liveCaptureDelta = cv.LiveCaptureCount - captureCountBefore;
                 }
             }
-
-            return true;
         }
 
         public bool RefreshScannerGameWindowState(out string reason) {
@@ -1026,8 +1097,8 @@ namespace iBarter {
                     List<PointPlus> anchors = FindPicturesTiled(
                         0,
                         0,
-                        App.myPureDM.WindowWidth,
-                        App.myPureDM.WindowHeight,
+                        App.myPureDM.WindowWidth - 1,
+                        App.myPureDM.WindowHeight - 1,
                         candidate.Path,
                         candidate.Similarity,
                         candidate.AutoResize,
@@ -1054,6 +1125,9 @@ namespace iBarter {
                             allAnchors.Add(a);
                         }
                     }
+                }
+                catch (PureDmWorkerUnavailableException) {
+                    throw;
                 }
                 catch (Exception ex) {
                     attempts.Add(candidate.Path
@@ -1084,20 +1158,69 @@ namespace iBarter {
             int stepX = tileWidth - tileOverlap;
             int stepY = tileHeight - tileOverlap;
 
-            for (int tileY = y1; tileY < y2;) {
-                int tileY2 = Math.Min(tileY + tileHeight, y2);
-                for (int tileX = x1; tileX < x2;) {
-                    int tileX2 = Math.Min(tileX + tileWidth, x2);
-                    if (tileX2 > tileX && tileY2 > tileY) {
-                        List<PointPlus> tilePoints = App.myPureDM.CV.FindPictures(
-                            tileX,
-                            tileY,
-                            tileX2,
-                            tileY2,
-                            image,
-                            similarity,
-                            autoResize,
-                            colorMode);
+            for (int tileY = y1; tileY <= y2;) {
+                int tileY2 = Math.Min(tileY + tileHeight - 1, y2);
+                for (int tileX = x1; tileX <= x2;) {
+                    int tileX2 = Math.Min(tileX + tileWidth - 1, x2);
+                    if (tileX2 >= tileX && tileY2 >= tileY) {
+                        // 2026-07-08: per-tile try/catch.
+                        //
+                        // Without this catch, a single bad tile (DM.Capture
+                        // transient failure, e.g., "DM.Capture failed for
+                        // 1200,0,1840,420 ... ret=0 lastError=0 size=0"
+                        // observed on the 2nd scan of a dx.graphic.3d.10plus
+                        // session) throws out of FindPictures ->
+                        // OpenCVMatchTemplates -> CaptureByDMToMat and kills
+                        // the entire anchor detection. The candidate-level
+                        // try/catch in FindBarterAnchors then sees an empty
+                        // candidates list and the scan returns 0 anchors.
+                        //
+                        // Catching per-tile and continuing lets the surviving
+                        // tiles still cover the rest of the window. The bad
+                        // tile in practice is in the top-right (3rd column
+                        // tile of the first row, where the barter list is
+                        // not located), so we don't actually lose anchors -
+                        // we just lose a chunk of the screen's background
+                        // region which had no anchors anyway.
+                        //
+                        // Diagnostic log fires once per bad tile - frequency
+                        // is bounded (max ~6 tiles per scan fail in the
+                        // worst case), so this stays well below the WPF
+                        // glyph/handle pressure that triggered the OOM
+                        // before. The log line gives the exact capture
+                        // region for cross-referencing with the scan's
+                        // anchor count.
+                        List<PointPlus> tilePoints;
+                        try {
+                            // 2026-07-10: route through the dedicated STA
+                            // worker so FindPictures runs on the same
+                            // thread that owns the COM object. The
+                            // Task.Run thread we used to be on has no
+                            // COM apartment and was corrupting the OpenCV
+                            // template cache when it raced with the
+                            // DispatcherTimer reads.
+                            tilePoints = PureDmWorker.Call(() =>
+                                App.myPureDM.CV.FindPictures(
+                                    tileX,
+                                    tileY,
+                                    tileX2,
+                                    tileY2,
+                                    image,
+                                    similarity,
+                                    autoResize,
+                                    colorMode));
+                        }
+                        catch (PureDmWorkerUnavailableException) {
+                            throw;
+                        }
+                        catch (Exception tileEx) {
+                            Log("[DIAG-anchor-tile-failed] tile=("
+                                + tileX + "," + tileY + "," + tileX2 + "," + tileY2 + ")"
+                                + " ex=" + tileEx.GetType().Name + ": "
+                                + (tileEx.Message ?? "<null>"),
+                                Brushes.SlateGray);
+                            tilePoints = new List<PointPlus>();
+                        }
 
                         foreach (var p in tilePoints) {
                             bool isDuplicate = false;
@@ -1130,12 +1253,15 @@ namespace iBarter {
         }
 
         public async Task IdentifyRoutes() {
+            int scanId = Interlocked.Increment(ref _scanSeq);
             if (!await IdentifyRoutesGate.WaitAsync(0)) {
-                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.AlreadyRunning"), Brushes.Orange);
+                Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.AlreadyRunning")
+                    + " [DIAG-scan] #" + scanId + " ignored; previous scan still running.", Brushes.Orange);
                 return;
             }
 
             try {
+                Log("[DIAG-scan] #" + scanId + " acquired scan gate", Brushes.LightSlateGray);
                 // UI-thread setup: clear the result collection + clean the data grid.
                 // Both touch WPF bound collections and must run on the dispatcher.
                 if (Application.Current.Dispatcher.CheckAccess()) {
@@ -1143,7 +1269,7 @@ namespace iBarter {
                     CleanDataGrid();
                 }
                 else {
-                    Application.Current.Dispatcher.Invoke(new Action(() => {
+                    await Application.Current.Dispatcher.InvokeAsync(new Action(() => {
                         App.listBarterScanner.Clear();
                         CleanDataGrid();
                     }));
@@ -1152,10 +1278,9 @@ namespace iBarter {
                 // Offload the heavy synchronous work to a background thread.
                 //
                 // The body below does:
-                //   - DM.GetClientSize + GetScreenDataBmp (COM, blocking, ~50ms each)
-                //   - FindBarterAnchors: tiled capture + OpenCV tile loop
-                //     (avoids one fragile 2560x1369 GetScreenDataBmp call)
-                //   - 6× IdentifyBarterAsync: per-anchor capture + FindPicture +
+                //   - DM.GetClientSize + one full-client DM.Capture
+                //   - FindBarterAnchors: tiled OpenCV crops from that snapshot
+                //   - 6× IdentifyBarterAsync: per-anchor snapshot crops + FindPicture +
                 //     OCRString retry loop (5 attempts × 100ms) + MagickImage
                 //     5-stage pipeline (per anchor)
                 //
@@ -1163,37 +1288,198 @@ namespace iBarter {
                 // seconds per scan click. Log() and other UI-redirected calls work
                 // correctly from the background thread (they Dispatcher.Invoke back
                 // internally), so no other plumbing changes are required.
-                await Task.Run(() => DoIdentifyRoutesHeavy());
+                await Task.Run(() => DoIdentifyRoutesHeavy(scanId));
+            }
+            catch (Exception ex) {
+                Log("[DIAG-scan] #" + scanId + " fatal "
+                    + ex.GetType().Name + ": " + ex.Message + "\n" + ex.StackTrace, Brushes.Red);
+                throw;
             }
             finally {
                 IdentifyRoutesGate.Release();
+                Log("[DIAG-scan] #" + scanId + " released scan gate", Brushes.LightSlateGray);
             }
         }
 
-        private void DoIdentifyRoutesHeavy() {
+        // OCRString runs synchronously on the existing background scan
+        // worker. A previous Task.Run + Wait timeout returned while the
+        // uncancellable OCR task kept running and then started a retry.
+        // This retry cannot outlive the scan session, and both attempts
+        // read the same immutable frame.
+        //
+        // debugTag is a short label appended to the saved debug BMP
+        // filename when SaveOcrDebugCapture is true. Pass null/empty
+        // to skip the per-call label. Each anchor passes its Y position
+        // so the saved file identifies which row the capture came from.
+        private string OcrStringSafe(
+            int x1, int y1, int x2, int y2,
+            CV.OCRType type, CV.OCRMode mode, string language,
+            string debugTag) {
+            string first = OcrStringOnce(x1, y1, x2, y2, type, mode, language, debugTag);
+            if (!string.IsNullOrWhiteSpace(first)) {
+                return first;
+            }
+            Thread.Sleep(OcrRetryDelayMs);
+            return OcrStringOnce(x1, y1, x2, y2, type, mode, language, debugTag);
+        }
+
+        // 2026-07-08: when true, every OCR call first writes the capture
+        // rect to Resources\ocr_dbug\ so the user can see what the OCR
+        // engine actually saw. Set to false once the new-page OCR failure
+        // is diagnosed - each saved BMP is ~50-200 KB and a full scan
+        // produces 24 files (6 anchors × 2 modes × 2 OcrStringSafe calls).
+        //
+        // 2026-07-09: defaulted back to false to avoid unnecessary disk I/O.
+        // Debug images now crop the active immutable scan snapshot and do not
+        // issue additional DM captures. Flip this on only while diagnosing an
+        // OCR/new-page issue.
+        // 2026-07-11: flipped back to false after successful fix of
+        // (a) 乌鸦硬币 142/160 read as 40 due to R-channel ROI cutting
+        //     off "1" (lf 0.30→0.15),
+        // (b) 向阳岛 remaining=0 due to OCRType.Number whitelist
+        //     rejecting the Chinese "次" suffix (Words+Binary fallback added).
+        // Re-enable only when diagnosing a new OCR failure. Each saved BMP
+        // is ~50-200 KB and a full scan produces 40+ files.
+        // 2026-07-11: live item2/remaining/quantity diagnosis is complete.
+        // Keep this off during normal scans to avoid writing dozens of BMPs.
+        // Temporarily enable it only when fresh OCR crops are needed.
+        public static bool SaveOcrDebugCapture = false;
+
+        private string OcrStringOnce(
+            int x1, int y1, int x2, int y2,
+            CV.OCRType type, CV.OCRMode mode, string language,
+            string debugTag) {
+            if (SaveOcrDebugCapture && !string.IsNullOrEmpty(debugTag)) {
+                TrySaveOcrDebugCapture(x1, y1, x2, y2, type, mode, debugTag);
+            }
+            try {
+                // 2026-07-10: route through the dedicated STA worker
+                // so the OpenCV/Tesseract call runs on the COM-owning
+                // thread. The previous Task.Run thread had no apartment
+                // and would sometimes come back with "OCRString returned
+                // empty" even when the text was visually present.
+                return PureDmWorker.Call(() =>
+                    App.myPureDM.CV.OCRString(
+                        x1, y1, x2, y2, type, mode, false, "", language))
+                    ?? string.Empty;
+            }
+            catch (PureDmWorkerUnavailableException) {
+                throw;
+            }
+            catch {
+                return string.Empty;
+            }
+        }
+
+        // 2026-07-08: DEBUG - save every OCR capture to a BMP file so the
+        // user can inspect what the OCR engine actually saw. Per user
+        // request 2026-07-08, output an image for EVERY OCR call (not
+        // sampled) - all 4 captures per anchor (Color x retry + Binary x
+        // retry) for all 6 anchors. Each save logs its filename so the
+        // user can build a one-to-one map between log lines and BMPs.
+        //
+        // Failure of the debug capture never affects scan behavior.
+        //
+        // Debug images are crops from the active immutable scan snapshot.
+        // Enabling them never adds a DM/DX capture.
+        //
+        // 2026-07-08 (4th attempt, per user request): also save a
+        // CONTEXT capture (~440x50 px) covering the full island column
+        // around the OCR rect, so the user can see if the row is even
+        // there / what the surrounding text looks like. This second
+        // capture is what answers "did anchor.bmp match in empty space?"
+        // without needing the OCR to be honest about it.
+        private static int _ocrDbugSeq = 0;
+        private void TrySaveOcrDebugCapture(
+            int x1, int y1, int x2, int y2,
+            CV.OCRType type, CV.OCRMode mode, string debugTag) {
+            // 2026-07-09: gate inside the function so EVERY call site
+            // (parley, item1, item2, remaining count) is automatically
+            // suppressed when the flag is off. Previously only the
+            // island-name OCR call site (line 1363) had this check; the
+            // others were saving BMPs unconditionally.
+            if (!SaveOcrDebugCapture) return;
+            try {
+                CaptureSession? session = _activeScanCaptureSession;
+                if (session == null) return;
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string dbugDir = Path.Combine(baseDir, "Resources", "Images", "Testing");
+                try { Directory.CreateDirectory(dbugDir); } catch { }
+
+                int seq = System.Threading.Interlocked.Increment(ref _ocrDbugSeq);
+                string modeTag = mode == CV.OCRMode.Color ? "C" : (mode == CV.OCRMode.Binary ? "B" : "X");
+                string stamp = DateTime.Now.ToString("HHmmss");
+
+                // === Capture 1: exact OCR rect (what Tesseract sees) ===
+                byte[] ocrBytes = session.CaptureBmpBytes(x1, y1, x2, y2);
+                string ocrName = string.Format("ocrdbg_{0}_{1}_{2}_{3}_ocr.bmp",
+                    debugTag, modeTag, stamp, seq);
+                string ocrFinal = Path.Combine(dbugDir, ocrName);
+                File.WriteAllBytes(ocrFinal, ocrBytes);
+                Log("[DIAG-ocr-dbug] " + (x2 - x1 + 1) + "x" + (y2 - y1 + 1)
+                    + " snapshot rect -> " + ocrFinal, Brushes.LightSlateGray);
+
+                // === Capture 2: row context (~440x50 around the OCR rect) ===
+                // Shows whether anchor.bmp matched in an empty area of
+                // the panel or actually landed on a real row.
+                int ctxX1 = Math.Max(0, x1 - 200);
+                int ctxX2 = x2 + 50;
+                int ctxY1 = Math.Max(0, y1 - 10);
+                int ctxY2 = y2 + 25;
+                byte[] ctxBytes = session.CaptureBmpBytes(ctxX1, ctxY1, ctxX2, ctxY2);
+                string ctxName = string.Format("ocrdbg_{0}_{1}_{2}_{3}_ctx.bmp",
+                    debugTag, modeTag, stamp, seq);
+                string ctxFinal = Path.Combine(dbugDir, ctxName);
+                File.WriteAllBytes(ctxFinal, ctxBytes);
+            }
+            catch (Exception ex) {
+                Log("[DIAG-ocr-dbug] exception in debug capture: " + ex.Message,
+                    Brushes.Orange);
+            }
+        }
+
+        private void DoIdentifyRoutesHeavy(int scanId) {
             if (!TryRefreshGameWindowSize(out string scanReadyError)) {
                 Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.CaptureWindowFailed", scanReadyError), Brushes.OrangeRed);
                 return;
             }
 
-            // Pre-scan capture health check: in dx.graphic.3d.10plus mode the
-            // DirectX hook can silently go stale after the first scan session -
-            // IsBind() still returns 1 but GetScreenDataBmp() returns 0.
-            // User explicitly requested we NOT auto-rebind here - instead
-            // we unbind (which restores the hook to a known state) and
-            // prompt the user to manually re-bind via the menu button.
-            if (!TryValidateGameCapture(out string preScanCaptureError)
-                && preScanCaptureError.Contains("GetScreenDataBmp failed")) {
-                // Unbind first so the next manual bind starts from a clean
-                // state. BindWindow with hwnd=0 acts as an unbind in PureDM.
-                try {
-                    App.myPureDM.CV.BindWindow(0);
-                } catch { /* best-effort unbind */ }
-                System.Threading.Thread.Sleep(200);
-                Log(Localization.LanguageService.Instance.Localize(
-                    "str.Log.Scanner.CaptureDown"), Brushes.OrangeRed);
+            bool acquired = RunInCaptureSession(
+                App.myPureDM.CV,
+                session => {
+                    _activeScanCaptureSession = session;
+                    try {
+                        DoIdentifyRoutesFromSnapshot(scanId);
+                    }
+                    finally {
+                        _activeScanCaptureSession = null;
+                    }
+                },
+                out long frameId,
+                out int liveCaptureDelta,
+                out string captureError);
+
+            if (!acquired) {
+                Log("[DIAG-scan-capture-failed] #" + scanId
+                    + " could not acquire a new scan snapshot; recognition was not started. "
+                    + captureError,
+                    Brushes.OrangeRed);
                 return;
             }
+
+            Brush captureLogBrush = liveCaptureDelta == 1
+                ? Brushes.LightSlateGray
+                : Brushes.OrangeRed;
+            Log("[DIAG-capture-session] #" + scanId
+                + " frame=" + frameId
+                + " liveCaptures=" + liveCaptureDelta
+                + " ocrEnginesAfter=" + App.myPureDM.CV.CachedOcrEngineCount
+                + (liveCaptureDelta == 1 ? "" : " INVARIANT-VIOLATION expected=1"),
+                captureLogBrush);
+        }
+
+        private void DoIdentifyRoutesFromSnapshot(int scanId) {
+            var scanSw = System.Diagnostics.Stopwatch.StartNew();
 
             List<PointPlus> listAnchors = FindBarterAnchors(out string triedAnchors);
 
@@ -1258,18 +1544,10 @@ namespace iBarter {
             // the game but the user may not realise the barter UI must
             // be on screen for anchor.bmp to be found.
             if (listAnchors.Count == 0) {
-                // (Anchor-fail diagnostic was removed; see the note at the deleted
-                // CaptureAnchorFailDiagnostic stub above.)
-                string captureDiagnostic;
-                if (TryValidateGameCapture(out string captureReadyError)) {
-                    captureDiagnostic = " Capture diagnostic: capture succeeded; anchor template did not match.";
-                }
-                else {
-                    captureDiagnostic = " Capture diagnostic: " + captureReadyError + ". Bind the game window once, then scan again.";
-                }
-
                 Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.NoAnchor", App.myPureDM.WindowWidth, App.myPureDM.WindowHeight)
-                    + " (tried: " + triedAnchors + ")." + captureDiagnostic, Brushes.OrangeRed);
+                    + " (tried: " + triedAnchors + ")."
+                    + " Snapshot acquisition succeeded; anchor template did not match this frame.",
+                    Brushes.OrangeRed);
             }
 
 
@@ -1299,17 +1577,90 @@ namespace iBarter {
 
             List<Task<Barter>> tasks = new List<Task<Barter>>();
 
-            for (int i = 0; i < Math.Min(6, listAnchors.Count); i++) {
-                var myBarter = IdentifyBarterAsync(listAnchors[i]); // 一个一个来
-                if (myBarter == null) {
-                    continue;
-                }
+            int scanLimit = Math.Min(6, listAnchors.Count);
+            int processed = 0;
+            int added = 0;
+            int partial = 0;
+            int failed = 0;
+            int consecutiveFailures = 0;
+            bool hadSuccess = false;
+            for (int i = 0; i < scanLimit; i++) {
+                try {
+                    var anchor = listAnchors[i];
+                    Log("[DIAG-scan] #" + scanId + " anchor " + (i + 1) + "/" + scanLimit
+                        + " at (" + anchor.X + "," + anchor.Y + ")", Brushes.LightSlateGray);
 
-                if (myBarter.IsLand != null && myBarter.Item1 != null && myBarter.Item2 != null &&
-                    App.listBarterScanner.FirstOrDefault(b => b.IsLand.Island.ToString().Equals(myBarter.IsLand.Island.ToString())) == null) {
-                    App.listBarterScanner.Add(myBarter);
+                    var myBarter = IdentifyBarterAsync(anchor); // 一个一个来
+                    processed++;
+                    if (myBarter == null) {
+                        failed++;
+                        consecutiveFailures++;
+                        Log("[DIAG-scan] #" + scanId + " anchor " + (i + 1) + " returned null", Brushes.IndianRed);
+
+                        // 2026-07-08: smart skip. After the user scrolls
+                        // the in-game list to the next page, the panel
+                        // often shows only 1-2 real rows plus 4-5 panel-
+                        // background/footer positions where anchor.bmp
+                        // matches false positives. We were burning
+                        // 4-5s/anchor × 4-5 anchors of OCR time on those
+                        // panel-out positions. If we've already had at
+                        // least one real success AND now hit 2 failures
+                        // in a row, the rest of the anchors are almost
+                        // certainly below the visible panel - bail out
+                        // and let the summary log explain the truncation.
+                        //
+                        // Guard: only skip if hadSuccess. A run of
+                        // failures at the very start (no success yet)
+                        // is a different problem (edge.bmp template
+                        // drift, capture interface dead) and shouldn't
+                        // be masked by the early-bail.
+                        if (consecutiveFailures >= 2 && hadSuccess) {
+                            int skipped = scanLimit - i - 1;
+                            Log("[DIAG-skip-tail] " + skipped + " trailing anchor"
+                                + (skipped == 1 ? "" : "s") + " skipped (panel appears to end at row "
+                                + (i - consecutiveFailures + 1) + "); consecutiveFailures="
+                                + consecutiveFailures + ", hadSuccess=" + hadSuccess,
+                                Brushes.LightSlateGray);
+                            break;
+                        }
+                        continue;
+                    }
+                    consecutiveFailures = 0;
+                    hadSuccess = true;
+
+                    if (myBarter.IsLand != null && myBarter.Item1 != null && myBarter.Item2 != null &&
+                        App.listBarterScanner.FirstOrDefault(b => b.IsLand.Island.ToString().Equals(myBarter.IsLand.Island.ToString())) == null) {
+                        App.listBarterScanner.Add(myBarter);
+                        added++;
+                    }
+                    else {
+                        partial++;
+                        Log("[DIAG-scan] #" + scanId + " anchor " + (i + 1)
+                            + " partial island=" + (myBarter.IsLand != null ? myBarter.IsLand.IslandsNameDisplay : "null")
+                            + " item1=" + (myBarter.Item1 != null ? myBarter.Item1.ItemID : "null")
+                            + " item2=" + (myBarter.Item2 != null ? myBarter.Item2.ItemID : "null"),
+                            Brushes.LightSlateGray);
+                    }
+                }
+                catch (PureDmWorkerUnavailableException) {
+                    throw;
+                }
+                catch (Exception ex) {
+                    failed++;
+                    Log("[DIAG-scan] #" + scanId + " anchor " + (i + 1)
+                        + " exception " + ex.GetType().Name + ": " + ex.Message + "\n" + ex.StackTrace,
+                        Brushes.Red);
                 }
             }
+            scanSw.Stop();
+            Log("[DIAG-scan] #" + scanId + " summary anchors=" + listAnchors.Count
+                + " limit=" + scanLimit
+                + " processed=" + processed
+                + " added=" + added
+                + " partial=" + partial
+                + " failed=" + failed
+                + " elapsed=" + scanSw.ElapsedMilliseconds + "ms " + MemStat(),
+                Brushes.LightSlateGray);
 
             // Anchors were found and processed: reset the frozen-frame detector
             // so a genuine stale-frame condition on the NEXT scan is not masked
@@ -1357,6 +1708,10 @@ namespace iBarter {
             if (App.myBarterScanner != null) {
                 App.myBarterScanner.RefreshDataGrid();
             }
+
+            // Do not synchronously flush queued log rendering here. Log()
+            // already uses BeginInvoke; ordering may settle a moment later,
+            // but scanner completion must never wait on WPF text formatting.
         }
 
         // private async Task<Barter> IdentifyBarterAsync(PointPlus _pp) {
@@ -1651,19 +2006,74 @@ namespace iBarter {
         //  Init cost (~50-100 ms after first time) is paid once per worker
         //  thread the first time it calls into our OCR pipeline. With
         //  MaxDegreeOfParallelism = 4 we end up with up to 4 Tesseract
-        //  instances resident (~120-200 MB total) - well within the 4 GB
-        //  user-mode address space that LargeAddressAware gives us.
+        //  instances resident (~120-200 MB total). iBarter intentionally stays
+        //  non-LargeAddressAware x86, so native-memory use must remain within
+        //  the normal 2 GB user-mode address-space ceiling.
         private static readonly ThreadLocal<Tesseract> _tessPerThread =
             new ThreadLocal<Tesseract>(CreateTesseractForThisThread, trackAllValues: false);
 
+        // Native Tesseract/Emgu calls are synchronous and cannot be cancelled.
+        // Bound the caller's wait and permanently open the circuit after the
+        // first timeout, so at most one abandoned native OCR task can exist in
+        // this x86 process. Later scans fall back to PureDM/CSV immediately.
+        private static readonly object _localOcrCircuitLock = new object();
+        private static int _localOcrPoisoned;
+        private static string _localOcrPoisonReason = "";
+        private static int _localOcrPoisonLogged;
+
+        internal static bool IsLocalOcrPoisoned =>
+            System.Threading.Volatile.Read(ref _localOcrPoisoned) != 0;
+
+        internal static string LocalOcrPoisonReason => _localOcrPoisonReason;
+
+        internal static int RunLocalOcrBounded(
+                string stage,
+                Func<int> operation,
+                int timeoutMilliseconds = 2000) {
+            if (operation == null) throw new ArgumentNullException(nameof(operation));
+            if (timeoutMilliseconds <= 0) throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));
+
+            lock (_localOcrCircuitLock) {
+                if (IsLocalOcrPoisoned) return -1;
+
+                Task<int> task = Task.Run(operation);
+                _ = task.ContinueWith(
+                    completed => { _ = completed.Exception; },
+                    TaskContinuationOptions.OnlyOnFaulted
+                        | TaskContinuationOptions.ExecuteSynchronously);
+                try {
+                    if (task.Wait(timeoutMilliseconds)) {
+                        return task.GetAwaiter().GetResult();
+                    }
+                }
+                catch {
+                    return -1;
+                }
+
+                _localOcrPoisonReason = "Local OCR stage '" + stage
+                    + "' did not return within " + timeoutMilliseconds + "ms.";
+                System.Threading.Interlocked.Exchange(ref _localOcrPoisoned, 1);
+                return -1;
+            }
+        }
+
+        private int RunLocalOcrStage(string stage, Func<int> operation) {
+            bool wasPoisoned = IsLocalOcrPoisoned;
+            int result = RunLocalOcrBounded(stage, operation, 2000);
+            if (!wasPoisoned && IsLocalOcrPoisoned
+                && Interlocked.Exchange(ref _localOcrPoisonLogged, 1) == 0) {
+                Log("[DIAG-local-ocr-disabled] " + LocalOcrPoisonReason
+                    + " Further local Tesseract votes are disabled until restart;"
+                    + " using PureDM/CSV fallbacks.",
+                    Brushes.OrangeRed);
+            }
+            return result;
+        }
+
         // Serialises PureDM.CV.* and App.myPureDM.CV.* calls that were
-        // previously parallelised. PureDM's CaptureByDMToMat has its own
-        // internal lock on the DM object (PureDM/CV.cs:418), but concurrent
-        // ImageOCR (which creates a fresh Tesseract per call) returns empty
-        // strings when the COM layer is contended - observed in practice as
-        // every OCR mode returning "" / Tesseract returning null. So we
-        // serialise the OCRString calls at this outer level while keeping
-        // our own Tesseract paths (per-thread instances, no shared state)
+        // previously parallelised. PureDM serialises its cached Tesseract
+        // engines internally, while this outer gate also keeps each voting
+        // phase deterministic when several recognition strategies are used.
         // genuinely parallel. Net effect: ROI vote back to serial like
         // before, but TryRawOcr / TryTemplateDiffOcr / TryRemainingTess
         // still run concurrently with each other.
@@ -1677,7 +2087,14 @@ namespace iBarter {
                     TryWriteDebugLog("[OCR] tessdata MISSING: " + tessDataDir);
                     return null;
                 }
-                var tess = new Tesseract(tessDataDir, CurrentOcrLanguage(), OcrEngineMode.Default);
+                // This ThreadLocal engine is used exclusively by the local
+                // remaining/parley/quantity helpers and has a digit whitelist.
+                // Loading chi_sim+chi_tra here wastes native x86 address space
+                // and can stall Recognize() on a tiny numeric strip.
+                var tess = new Tesseract(
+                    tessDataDir,
+                    SelectOcrLanguage(CV.OCRType.Number),
+                    OcrEngineMode.Default);
                 tess.SetVariable("tessedit_char_whitelist", "0123456789");
                 // psm SetVariable throws 'Unable to set psm to X' on the
                 // Emgu.CV.OCR.Tesseract 4 + LSTM build shipped here. Default
@@ -1712,6 +2129,18 @@ namespace iBarter {
             }
             return "eng_best";
         }
+
+        // Digit recognition must not inherit the UI language. Loading the
+        // combined Chinese models for a 6-20px digit overlay makes Tesseract
+        // consider thousands of CJK glyphs even though the whitelist is
+        // numeric. The compact English model is both faster and more accurate
+        // for these ASCII-only regions.
+        internal static string NumericOcrLanguage() => "eng";
+
+        internal static string SelectOcrLanguage(CV.OCRType ocrType) =>
+            ocrType == CV.OCRType.Number
+                ? NumericOcrLanguage()
+                : CurrentOcrLanguage();
 
         private static bool IsTraditionalChineseUi() {
             try {
@@ -1769,7 +2198,9 @@ namespace iBarter {
             var candidates = ScanLabelImageCandidates(labelName, similarity);
             triedPaths = string.Join(", ", candidates.Select(c => c.Path + "@" + c.Similarity.ToString("0.00", CultureInfo.InvariantCulture)));
             foreach (var candidate in candidates) {
-                PointPlus point = App.myPureDM.CV.FindPicture(x1, y1, x2, y2, candidate.Path, candidate.Similarity, CV.Mode.OpenCV, false);
+                // 2026-07-10: route through the dedicated STA worker.
+                PointPlus point = PureDmWorker.Call(() =>
+                    App.myPureDM.CV.FindPicture(x1, y1, x2, y2, candidate.Path, candidate.Similarity, CV.Mode.OpenCV, false));
                 if (!point.IsEmpty) {
                     matchedPath = candidate.Path;
                     // DO NOT silently flip the global GameFont on a single 2.bmp
@@ -1791,7 +2222,9 @@ namespace iBarter {
         private List<ScanLabelMatch> FindScanLabelMatches(int x1, int y1, int x2, int y2, string labelName, double similarity, List<string> attempts) {
             var matches = new List<ScanLabelMatch>();
             foreach (var candidate in ScanLabelImageCandidates(labelName, similarity)) {
-                PointPlus point = App.myPureDM.CV.FindPicture(x1, y1, x2, y2, candidate.Path, candidate.Similarity, CV.Mode.OpenCV, false);
+                // 2026-07-10: route through the dedicated STA worker.
+                PointPlus point = PureDmWorker.Call(() =>
+                    App.myPureDM.CV.FindPicture(x1, y1, x2, y2, candidate.Path, candidate.Similarity, CV.Mode.OpenCV, false));
                 string status = point.IsEmpty
                     ? "not found"
                     : "at " + point.X + "," + point.Y + " size " + point.Size.Width + "x" + point.Size.Height;
@@ -1881,6 +2314,24 @@ namespace iBarter {
                 && x2 <= 99999 && y2 <= 99999; // catch overflow on degenerate inputs
         }
 
+        private static bool TryBuildRetryItem2OcrRectangle(
+            int parleyX,
+            int parleyY,
+            int parleyHeight,
+            int requiredX,
+            int windowWidth,
+            out int x1,
+            out int y1,
+            out int x2,
+            out int y2) {
+            int maxX = windowWidth > 0 ? windowWidth - 1 : 99999;
+            x1 = Math.Max(0, parleyX + 376);
+            y1 = Math.Max(0, parleyY - parleyHeight);
+            x2 = Math.Min(maxX, requiredX + 376 + 100);
+            y2 = Math.Max(y1, parleyY + 1);
+            return IsValidOcrRectangle(x1, y1, x2, y2);
+        }
+
         private int TryReadRemainingCount(PointPlus pointPlusAnchor, PointPlus pointPlusEdge, string strIsland) {
             PointPlus pointPlusRemaining = FindScanLabel(
                 0,
@@ -1894,10 +2345,44 @@ namespace iBarter {
                 return 0;
             }
 
+            const int RemainingShortWidth = 13;
+            const int RemainingLongWidth = 23;
+            const int RemainingTextWidth = 48;
             int x1 = pointPlusRemaining.X + pointPlusRemaining.Size.Width;
             int y1 = pointPlusRemaining.Y;
-            int x2 = pointPlusRemaining.X + pointPlusRemaining.Size.Width + 30;
+            int shortX2 = x1 + RemainingShortWidth - 1;
+            int x2 = x1 + RemainingLongWidth - 1;
+            int textX2 = x1 + RemainingTextWidth - 1;
             int y2 = pointPlusRemaining.Y + pointPlusRemaining.Size.Height + 2;
+
+            // 2026-07-09: debug capture for remaining count OCR
+            TrySaveOcrDebugCapture(x1, y1, textX2, y2,
+                CV.OCRType.Number, CV.OCRMode.Diff,
+                "rem_y" + pointPlusAnchor.Y);
+
+            // Primary path: recognize the complete semantic unit ("0次",
+            // "5次", "10次") instead of feeding a clipped Chinese suffix to
+            // numeric-only OCR. Color/Gray preserve disabled gray text that
+            // the old Binary-only Words fallback erased.
+            int semanticPick = -1;
+            foreach (CV.OCRMode semanticMode in new[] { CV.OCRMode.Color, CV.OCRMode.Gary, CV.OCRMode.Binary }) {
+                string semanticRaw = PureDmWorker.Call(() =>
+                    App.myPureDM.CV.OCRString(
+                        x1, y1, textX2, y2,
+                        CV.OCRType.Words, semanticMode, false, "", CurrentOcrLanguage()));
+                if (BarterOcrParsing.TryParseRemainingCount(semanticRaw, out int parsedSemantic)
+                    && parsedSemantic >= 0 && parsedSemantic <= 10) {
+                    semanticPick = parsedSemantic;
+                    break;
+                }
+            }
+
+            // The short crop contains one complete digit without reaching the
+            // suffix for 0..9. For 10 it intentionally sees only the leading
+            // 1; ResolveRemainingCount lets the long crop upgrade that to 10.
+            int shortPick = RunLocalOcrStage(
+                "remaining-short",
+                () => TryRemainingTesseractOcr(x1, y1, shortX2, y2));
 
             // 4-way vote: Diff / Color / Binary (PureDM) + Tess
             // (Tesseract with 5x scale + 78% threshold + morphology
@@ -1940,20 +2425,81 @@ namespace iBarter {
             // failed for every island). The three PureDM modes run serially
             // again, and the Tesseract paths run sequentially after.
             for (int i = 0; i < modes.Length; i++) {
-                try {
-                    modeRaws[i] = App.myPureDM.CV.OCRString(
-                        x1, y1, x2, y2,
-                        CV.OCRType.Number, modes[i], false, "", CurrentOcrLanguage());
-                    modeTried = modes[i].ToString();
+                CV.OCRMode mode = modes[i];
+                string numericLanguage = SelectOcrLanguage(CV.OCRType.Number);
+                var modeSw = System.Diagnostics.Stopwatch.StartNew();
+                modeTried = mode.ToString();
+                if (SaveOcrDebugCapture) {
+                    Log("[DIAG-rem-ocr] " + mode + " start lang=" + numericLanguage,
+                        Brushes.LightSlateGray);
                 }
-                catch { modeRaws[i] = null; }
+                try {
+                    // 2026-07-10: route through the dedicated STA worker
+                    // (3 modes serialised on COM-owning thread).
+                    modeRaws[i] = PureDmWorker.Call(() =>
+                        App.myPureDM.CV.OCRString(
+                            x1, y1, x2, y2,
+                            CV.OCRType.Number, mode, false, "", numericLanguage));
+                    modeSw.Stop();
+                    if (SaveOcrDebugCapture) {
+                        Log("[DIAG-rem-ocr] " + mode + " end "
+                            + modeSw.ElapsedMilliseconds + "ms",
+                            Brushes.LightSlateGray);
+                    }
+                }
+                catch (PureDmWorkerUnavailableException) {
+                    throw;
+                }
+                catch (Exception ex) {
+                    modeSw.Stop();
+                    modeRaws[i] = null;
+                    Log("[DIAG-rem-ocr] " + mode + " failed "
+                        + ex.GetType().Name + " after " + modeSw.ElapsedMilliseconds + "ms: "
+                        + ex.Message,
+                        Brushes.IndianRed);
+                }
             }
 
-            int tessPick2 = TryRemainingTesseractOcr(x1, y1, x2, y2);
-            if (tessPick2 <= 0) {
-                tessPick2 = TryRawOcr(x1, y1, x2, y2);
+            int tessPick2 = RunLocalOcrStage(
+                "remaining-tesseract",
+                () => TryRemainingTesseractOcr(x1, y1, x2, y2));
+            if (tessPick2 < 0 && !IsLocalOcrPoisoned) {
+                tessPick2 = RunLocalOcrStage(
+                    "remaining-raw",
+                    () => TryRawOcr(x1, y1, x2, y2));
+            }
+            // BDO barter 剩余交易次数 0..99。TryRemainingTesseractOcr 已强制 n<100，
+            // 但 TryRawOcr 接受 n<10000（数量徽章可能上千），fallback 路径在 30-px
+            // 窄条上会把 "10" 误读成 "100"（下一个数字的尾 0 漏进 OCR 框）。若
+            // >=100 出现在 remaining 上下文一定是 overread，直接当 -1 处理。
+            if (tessPick2 > 99) {
+                Log("[DIAG-rem-ocr] overread cap fired tessPick=" + tessPick2
+                    + " - dropping (BDO remaining is 0..99)",
+                    Brushes.DarkCyan);
+                tessPick2 = -1;
             }
             tessPick = tessPick2;
+
+            // 2026-07-10: Words+Binary 兜底通道。其它 4 路全是 OCRType.Number
+            // —— whitelist = "0123456789,: \\/-()+"，遇到"5次"这种中文混合
+            // 时 `次` 不在白名单，Tesseract 整个返空。BGO 的"剩余次数"在
+            // 高阶段（5/6阶段）会用"X次"格式显示，纯数字路径完全跳过。这一
+            // 通道走 Words + chi_sim + Binary，让中文模型自然输出"5次"，
+            // 再用 TryParseRemainingCount 抽出首段数字。
+            string wordRaw = null;
+            string modeWord = "Word";
+            try {
+                string wordLang = SelectOcrLanguage(CV.OCRType.Words);
+                wordRaw = PureDmWorker.Call(() =>
+                    App.myPureDM.CV.OCRString(
+                        x1, y1, x2, y2,
+                        CV.OCRType.Words, CV.OCRMode.Binary, false, "", wordLang));
+            } catch (PureDmWorkerUnavailableException) { throw; }
+              catch (Exception ex) {
+                Log("[DIAG-rem-ocr] Word failed " + ex.GetType().Name + ": " + ex.Message,
+                    Brushes.IndianRed);
+                wordRaw = null;
+            }
 
             // Mode votes are now all in. Apply priority weights.
             for (int i = 0; i < modes.Length; i++) {
@@ -1970,11 +2516,22 @@ namespace iBarter {
                 }
             }
             _ = rawPick;
-            if (tessPick > 0) {
+            if (tessPick >= 0) {
                 candidates.Add(("Tess", tessPick, 4));
+            }
+            // Word candidate — priority between Binary and Tess since
+            // it's a fallback for the "X次" Chinese-suffix case that
+            // number-mode OCR can't handle at all.
+            if (!string.IsNullOrWhiteSpace(wordRaw)
+                && BarterOcrParsing.TryParseRemainingCount(wordRaw, out int parsedFromWord)) {
+                candidates.Add(("Word", parsedFromWord, 3));
             }
 
             if (candidates.Count == 0) {
+                int resolvedFallback = ResolveRemainingCount(semanticPick, shortPick, -1);
+                if (resolvedFallback >= 0) {
+                    return resolvedFallback;
+                }
                 Log(Localization.LanguageService.Instance.Localize(
                     "str.Log.Scanner.RemainingCountFailed",
                     strIsland,
@@ -1988,10 +2545,26 @@ namespace iBarter {
             }
 
             int winningValue = candidates
+                .Where(c => c.value >= 0 && c.value <= 10)
                 .GroupBy(c => c.value)
                 .OrderByDescending(g => g.Count())
                 .ThenByDescending(g => g.Max(c => c.priority))
-                .First().Key;
+                .Select(g => g.Key)
+                .FirstOrDefault(-1);
+
+            winningValue = ResolveRemainingCount(semanticPick, shortPick, winningValue);
+            if (winningValue < 0) {
+                Log(Localization.LanguageService.Instance.Localize(
+                    "str.Log.Scanner.RemainingCountFailed",
+                    strIsland,
+                    triedRemainingPaths + "; semantic=" + semanticPick
+                        + " short=" + shortPick
+                        + " D=\"" + (rawDiff ?? "<null>") + "\""
+                        + " C=\"" + (rawColor ?? "<null>") + "\""
+                        + " B=\"" + (rawBinary ?? "<null>") + "\""),
+                    Brushes.IndianRed);
+                return 0;
+            }
 
             // Tess overread guard. Tesseract on the 30-px strip can
             // hallucinate a 2nd digit in low-contrast conditions
@@ -2050,6 +2623,15 @@ namespace iBarter {
             }
 
             return winningValue;
+        }
+
+        internal static int ResolveRemainingCount(int semanticPick, int shortPick, int longPick) {
+            if (semanticPick >= 0 && semanticPick <= 10) return semanticPick;
+            if (shortPick == 0) return 0;
+            if (longPick == 10) return 10;
+            if (shortPick >= 1 && shortPick <= 9) return shortPick;
+            if (longPick >= 0 && longPick <= 9) return longPick;
+            return -1;
         }
 
         // Lightweight file logger for static helpers (Log is an instance method
@@ -2194,9 +2776,8 @@ namespace iBarter {
             }
 
             // Phase G: full-icon BR-threshold + bottom-right crop. The
-            // screen rect is captured in-memory via CaptureScreenBytes
-            // (PureDM.GetScreenDataBmp); no disk file is touched at any
-            // point. Magick reads from a MemoryStream, transforms in
+            // screen rect is cropped through CaptureScreenBytes from the
+            // active scan snapshot. Magick reads from a MemoryStream, transforms in
             // memory, and writes the preprocessed bytes back to another
             // MemoryStream that Bitmap/Mat/Tesseract consume.
             //
@@ -2297,20 +2878,11 @@ namespace iBarter {
 // as it amplified signal for low-contrast icons, and F never uniquely
 // rescued a case where A + R + G already agreed. -1 outcomes stayed -1.)
 
-        private static byte[] CaptureScreenBytes(int x1, int y1, int x2, int y2) {
-            if (App.myPureDM == null || App.myPureDM.DM == null) return null;
-            // GetScreenDataBmp's internal pointer is freed on the next call;
-            // lock on the DM object so capture + Marshal.Copy is atomic.
+        private byte[] CaptureScreenBytes(int x1, int y1, int x2, int y2) {
+            CaptureSession? session = _activeScanCaptureSession;
+            if (session == null) return null;
             try {
-                lock (App.myPureDM.DM) {
-                    System.IntPtr data;
-                    int size;
-                    int ret = App.myPureDM.DM.GetScreenDataBmp(x1, y1, x2, y2, out data, out size);
-                    if (ret != 1 || data == System.IntPtr.Zero || size <= 0) return null;
-                    byte[] bytes = new byte[size];
-                    System.Runtime.InteropServices.Marshal.Copy(data, bytes, 0, size);
-                    return bytes;
-                }
+                return session.CaptureBmpBytes(x1, y1, x2, y2);
             }
             catch {
                 return null;
@@ -2342,7 +2914,7 @@ namespace iBarter {
         // Any change to this region (different barter session, different
         // game state, BDO redraw) flips the hash and invalidates ALL icon
         // cache entries - no explicit invalidation plumbing required.
-        private static void RefreshBarterUIHash(PointPlus firstAnchor) {
+        private void RefreshBarterUIHash(PointPlus firstAnchor) {
             if (firstAnchor == null || firstAnchor.X < 0 || firstAnchor.Y < 10) {
                 _currentBarterUIHash = 0;
                 return;
@@ -2435,7 +3007,9 @@ namespace iBarter {
                 using (var ms = new System.IO.MemoryStream(bmpBytes))
                 using (var bitmap = new System.Drawing.Bitmap(ms)) {
                     using (var src = bitmap.ToMat())
-                    using (var gray = new Emgu.CV.Mat()) {
+                    using (var gray = new Emgu.CV.Mat())
+                    using (var bin = new Emgu.CV.Mat())
+                    using (var up = new Emgu.CV.Mat()) {
                         if (src == null || src.IsEmpty) {
                             TryWriteDebugLog("OCR.R mat empty");
                             return -1;
@@ -2446,14 +3020,24 @@ namespace iBarter {
                         // returns colour, which Tesseract reads differently
                         // (and worse - 800031 used to give 3, now gives
                         // 173; 9057 used to give -1, now gives 1100).
-                        // PureDM.GetScreenDataBmp returns 32-bit BGRA BMPs,
+                        // DM.Capture commonly returns 32-bit BGRA BMPs,
                         // so ToMat can yield 4-channel BGRA. Branch on
                         // channel count to use the right CvtColor code.
                         Emgu.CV.CvEnum.ColorConversion conv = src.NumberOfChannels == 4
                             ? Emgu.CV.CvEnum.ColorConversion.Bgra2Gray
                             : Emgu.CV.CvEnum.ColorConversion.Bgr2Gray;
                         Emgu.CV.CvInvoke.CvtColor(src, gray, conv);
-                        tess.SetImage(gray);
+                        // 数量徽章是亮白数字叠在图标/深色底上。只做灰度直接喂
+                        // Tesseract 读不出（此前本通道几乎恒为 -1）。改为高阈值
+                        // 只保留最亮的白字并【反相】成黑字白底（金黄图标亮度低于
+                        // 阈值被滤掉），再 4x 放大 —— 与 remaining 计数(Phase T,
+                        // 带 Negate)一直读得准的管线同理。185 阈值实测能把清晰的
+                        // "142" 从金币背景里干净分出。
+                        Emgu.CV.CvInvoke.Threshold(gray, bin, 185, 255,
+                            Emgu.CV.CvEnum.ThresholdType.BinaryInv);
+                        Emgu.CV.CvInvoke.Resize(bin, up, new System.Drawing.Size(0, 0),
+                            4, 4, Emgu.CV.CvEnum.Inter.Nearest);
+                        tess.SetImage(up);
                     }
                     tess.Recognize();
                     string raw = (tess.GetUTF8Text() ?? "").Trim();
@@ -2466,6 +3050,48 @@ namespace iBarter {
             }
             catch (Exception ex) {
                 TryWriteDebugLog("OCR.R tesseract fail: " + ex.GetType().Name + " " + ex.Message);
+            }
+            return -1;
+        }
+
+        // 交涉力（Parley）专用本地读取：PureDM 的 Number+Auto-PSM 通道会把
+        // 121x26 的小图直接喂 Tesseract，连清晰的 "15,754" 都常返回空
+        // （放大过的 remaining/qty 通道就没这问题）。这里用与它们一致的
+        // "反相 + 放大" 管线：Otsu 自适应阈值把"橙黄字/深灰底"反相成黑字
+        // 白底，再 4x 放大后交给本地 Tesseract。whitelist 是纯数字，所以
+        // "15,754" 里的逗号会被自动丢弃直接得到 15754。
+        private int TryReadParley(int x1, int y1, int x2, int y2) {
+            var tess = _tessPerThread.Value;
+            if (tess == null) return -1;
+            try {
+                byte[] bmpBytes = CaptureScreenBytes(x1, y1, x2, y2);
+                if (bmpBytes == null) return -1;
+                using (var ms = new System.IO.MemoryStream(bmpBytes))
+                using (var bitmap = new System.Drawing.Bitmap(ms))
+                using (var src = bitmap.ToMat())
+                using (var gray = new Emgu.CV.Mat())
+                using (var bin = new Emgu.CV.Mat())
+                using (var up = new Emgu.CV.Mat()) {
+                    if (src == null || src.IsEmpty) return -1;
+                    Emgu.CV.CvEnum.ColorConversion conv = src.NumberOfChannels == 4
+                        ? Emgu.CV.CvEnum.ColorConversion.Bgra2Gray
+                        : Emgu.CV.CvEnum.ColorConversion.Bgr2Gray;
+                    Emgu.CV.CvInvoke.CvtColor(src, gray, conv);
+                    Emgu.CV.CvInvoke.Threshold(gray, bin, 0, 255,
+                        Emgu.CV.CvEnum.ThresholdType.BinaryInv | Emgu.CV.CvEnum.ThresholdType.Otsu);
+                    Emgu.CV.CvInvoke.Resize(bin, up, new System.Drawing.Size(0, 0),
+                        4, 4, Emgu.CV.CvEnum.Inter.Cubic);
+                    tess.SetImage(up);
+                    tess.Recognize();
+                    string raw = (tess.GetUTF8Text() ?? "").Trim();
+                    Match m = Regex.Match(raw, @"\d{4,6}");
+                    if (m.Success && int.TryParse(m.Value, out int n) && n >= 1000 && n <= 999999)
+                        return n;
+                    TryWriteDebugLog("parley local no-digits raw='" + raw + "'");
+                }
+            }
+            catch (Exception ex) {
+                TryWriteDebugLog("parley local fail: " + ex.Message);
             }
             return -1;
         }
@@ -2524,7 +3150,7 @@ namespace iBarter {
                             tess.Recognize();
                             string raw = (tess.GetUTF8Text() ?? "").Trim();
                             Match m = Regex.Match(raw, @"\d{1,2}");
-                            if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 100) {
+                            if (m.Success && int.TryParse(m.Value, out int n) && n >= 0 && n <= 10) {
                                 return n;
                             }
                         }
@@ -2542,26 +3168,22 @@ namespace iBarter {
         // dm.dll, so the merge vote is back to Tesseract F + G + screen-
         // coords A, just like before the Phase H experiments.)
 
-        private int TryReadQuantity(PointPlus icon, string strID) {
+        private int TryReadQuantity(PointPlus icon, string strID, bool preferLonger = false) {
             int oX = (int)icon.X;
             int oY = (int)icon.Y;
             int oW = (int)icon.Size.Width;
             int oH = (int)icon.Size.Height;
 
+            // 两个槽位的数量都是叠在图标【右下角】的覆盖徽章（付出的货物
+            // 是小徽章 1..99；乌鸦硬币等奖励也是右下角徽章，如 160/142，
+            // 并非图标右侧的行内文字 —— 图标右侧是物品名）。所以两槽用同一套
+            // 图标相对 ROI，靠 preferLonger 区分平局时偏向大数还是小数。
             // (leftFrac, topFrac, rightFrac, bottomFrac) - all relative inside icon.
             // 4-digit "1000" digit tail touches icon-right edge, so rf must
             //      stay at 1.00 (full icon width). bf pulls in slightly so we
             //      don't crop the digit top.
             // lf widened to -0.30 on the widest candidate (~13 px outside
-            //      icon-left edge) so the leftmost "1" of "1000" isn't
-            //      clipped.
-            // tf lowered to 0.40-0.50 - go up to roughly the icon's vertical
-            //      mid to give the OCR engine more pixel rows.
-            // 9999 cap + bounded ROI keep parley "10,432" style neighbour
-            //      digit bleed out of the result.
-            // (Briefly tried reducing to 2 ROIs for speed, but the right-half
-            // and bottom-strip candidates uniquely rescue 3 cases - Pirates=3,
-            // Cotton=10, Raft Toy=1. Keep all 4.)
+            //      icon-left edge) so the leftmost "1" of "1000" isn't clipped.
             var candidates = new (double lf, double tf, double rf, double bf)[] {
                 (-0.30, 0.40, 1.00, 0.98),   // widest - extends far left, full right
                 (-0.10, 0.50, 1.00, 0.98),   // medium width
@@ -2569,17 +3191,22 @@ namespace iBarter {
                 ( 0.00, 0.78, 1.00, 0.96),   // bottom strip safety net
             };
 
+            // 数量 ROI 调试存图（SaveOcrDebugCapture 打开时）：存的是 R 通道
+            // 实际读取的【收窄右下内部】区域，便于按真实像素微调下面的比例。
+            if (SaveOcrDebugCapture) {
+                TrySaveOcrDebugCapture(
+                    (int)(oX + oW * 0.30), (int)(oY + oH * 0.52),
+                    (int)(oX + oW * 0.97), (int)(oY + oH * 0.96),
+                    CV.OCRType.Number, CV.OCRMode.Diff,
+                    "qty_" + strID + "_y" + oY);
+            }
+
             var votes = new System.Collections.Generic.Dictionary<int, int>();
             string bestRaw = null;
 
-            // Phase A (4 ROI Diff-mode votes) runs in parallel. PureDM's
-            // OCRString internally locks the DM object inside
-            // CaptureByDMToMat (PureDM/CV.cs:418), and creates a fresh
-            // Tesseract per call inside ImageOCR (PureDM/CV.cs:807) so
-            // there's no shared Tesseract state. The capture is the only
-            // serialized piece; the Tesseract init + Diff preprocessing
-            // + Recognize work all runs in parallel across the 4 calls.
-            // Serial baseline was 4 x ~150-200 ms; parallel = ~200 ms.
+            // Phase A evaluates 4 ROI Diff-mode votes. All ROI pixels come
+            // from the immutable scan snapshot; PureDM protects the cached
+            // per-language/per-type Tesseract engine from concurrent use.
             // Reverted from Parallel.For - concurrent PureDM OCRString calls
             // return empty strings even with _pureDmLock in place. Run
             // the 4 ROI votes serially like before.
@@ -2589,8 +3216,10 @@ namespace iBarter {
                 int x2 = (int)(oX + oW * c.rf);
                 int y2 = (int)(oY + oH * c.bf);
                 try {
-                    string raw = App.myPureDM.CV.OCRString(x1, y1, x2, y2,
-                        CV.OCRType.Number, CV.OCRMode.Diff, false, strID, CurrentOcrLanguage()) ?? "";
+                    // 2026-07-10: route through the dedicated STA worker.
+                    string raw = PureDmWorker.Call(() =>
+                        App.myPureDM.CV.OCRString(x1, y1, x2, y2,
+                            CV.OCRType.Number, CV.OCRMode.Diff, false, strID, NumericOcrLanguage())) ?? "";
                     Match m = Regex.Match(raw, @"\d{1,4}");
                     if (m.Success && int.TryParse(m.Value, out int n) && n > 0 && n < 10000) {
                         votes.TryGetValue(n, out int prev);
@@ -2598,6 +3227,7 @@ namespace iBarter {
                         if (bestRaw == null || raw.Length > bestRaw.Length) bestRaw = raw;
                     }
                 }
+                catch (PureDmWorkerUnavailableException) { throw; }
                 catch { /* single ROI miss should not kill the call */ }
             }
 
@@ -2617,7 +3247,7 @@ namespace iBarter {
             try {
                 // (Phase A used to DM.Capture the medium ROI to disk here
                 // for Phase R to read. Now both R and G capture from the
-                // screen on demand via GetScreenDataBmp, so this capture
+                // screen on demand via CaptureScreenBytes, so this capture
                 // is gone entirely. The coordinates are still useful for
                 // computing the Phase R ROI below.)
                 var c = candidates[1];
@@ -2630,58 +3260,45 @@ namespace iBarter {
             }
             catch { }
 
-            // Phase R + G: full in-memory pipeline. Both run in parallel via
-            // Task.Run since each uses its own per-thread Tesseract (no
-            // shared state) and captures its own screen rect via the
-            // existing locked CaptureScreenBytes helper. Previously R and
-            // G ran serially; now they run concurrently and we just take
-            // whichever comes back. We always run G too (instead of
-            // skipping when R succeeds) because the merge vote below
-            // weights R and G equally - both should contribute.
-            int rRoiX1 = (int)(oX + oW * candidates[1].lf);
-            int rRoiY1 = (int)(oY + oH * candidates[1].tf);
-            int rRoiX2 = (int)(oX + oW * candidates[1].rf);
-            int rRoiY2 = (int)(oY + oH * candidates[1].bf);
+            // Phase R + G: full in-memory pipeline. Both read crops from the
+            // same immutable scan snapshot. They execute serially below so a
+            // successful raw read can skip the more expensive diff fallback.
+            // R 通道（本地"反相+放大"管线，现在是数量识别的主力）专用收窄
+            // ROI：只取图标【右下内部】。左侧 lf=0.15 让 3 位数字最左的 "1"
+            // 能进入（之前 0.30 会切掉 "1"，导致 142→42，酷斯 122→22），右侧
+            // 改到 1.00 覆盖完整数字位。之前担心的"亮白选中边框"问题在 lf=0.30
+            // 收紧时就已经出现过——而 0.15 仍在图标中心 15% 内，未进入四周边框
+            // 区，反相阈值 185 配合金色反光（~190）会被滤掉白底化，数字黑字化
+            // 干净。上半（含图标本体/金币）也排除。
+            int rRoiX1 = (int)(oX + oW * 0.15);
+            int rRoiY1 = (int)(oY + oH * 0.52);
+            int rRoiX2 = (int)(oX + oW * 1.00);
+            int rRoiY2 = (int)(oY + oH * 0.96);
             int gX1 = (int)oX;
             int gY1 = (int)oY;
             int gX2 = (int)oX + (int)oW;
             int gY2 = (int)oY + (int)oH;
-            // Reverted from Parallel.Invoke - serial execution. The Tesseract
-            // per-thread instances are kept (no harm), but the calls run
-            // sequentially for now. We can re-introduce a TryRawOcr /
-            // TryTemplateDiffOcr Parallel.Invoke later once we have a way
-            // to confirm PureDM doesn't break under that specific shape of
-            // concurrency (the failure mode here was tied to OCRString
-            // concurrent with capture from another thread, not necessarily
-            // to Tesseract-only concurrency).
-            int rawPick = TryRawOcr(rRoiX1, rRoiY1, rRoiX2, rRoiY2);
+            // Serial execution also keeps the cached Tesseract engine's use
+            // deterministic; PureDM protects it internally as a second line
+            // of defense.
+            int rawPick = RunLocalOcrStage(
+                "quantity-raw-" + strID,
+                () => TryRawOcr(rRoiX1, rRoiY1, rRoiX2, rRoiY2));
             int diffPick = -1;
-            if (rawPick <= 0) {
-                diffPick = TryTemplateDiffOcr(gX1, gY1, gX2, gY2);
+            if (!IsLocalOcrPoisoned) {
+                diffPick = RunLocalOcrStage(
+                    "quantity-template-diff-" + strID,
+                    () => TryTemplateDiffOcr(gX1, gY1, gX2, gY2));
             }
 
-            // 3-way merge vote (A screen-coords + R raw + G Magick fallback):
+            // Three independent pipelines get one vote each. The four Phase-A
+            // ROIs are correlated views of the same Diff pipeline; topCount is
+            // useful confidence telemetry but must not become 3-4 fake votes.
             var merged = new System.Collections.Generic.Dictionary<int, int>();
-            if (picked > 0) merged[picked] = merged.GetValueOrDefault(picked, 0) + System.Math.Max(1, topCount);
+            if (picked > 0) merged[picked] = merged.GetValueOrDefault(picked, 0) + 1;
             if (rawPick > 0) merged[rawPick] = merged.GetValueOrDefault(rawPick, 0) + 1;
             if (diffPick > 0) merged[diffPick] = merged.GetValueOrDefault(diffPick, 0) + 1;
-
-            // Tie-break: when 2+ candidates tie on vote count, prefer the one
-            // with MORE digits (the assumption is OCR noise produces truncated
-            // or merged-digit garbage like '4000' for a '1000' target, while
-            // the correct full read is more often 3+ digits; 1-digit "1" wins
-            // ties against 1-digit garbage). On second tie, prefer smaller.
-            int finalPick = -1, finalCount = 0;
-            foreach (var kvp in merged) {
-                int lenA = kvp.Key.ToString().Length;
-                int lenB = finalPick < 0 ? -1 : finalPick.ToString().Length;
-                if (kvp.Value > finalCount ||
-                    (kvp.Value == finalCount && lenA > lenB) ||
-                    (kvp.Value == finalCount && lenA == lenB && kvp.Key < finalPick)) {
-                    finalPick = kvp.Key;
-                    finalCount = kvp.Value;
-                }
-            }
+            int finalPick = ResolveQuantityPipelineVotes(picked, topCount, rawPick, diffPick, preferLonger);
 
             if (finalPick > 0) {
                 string tally = string.Join(",", merged.Select(kv => kv.Key + "x" + kv.Value));
@@ -2694,6 +3311,27 @@ namespace iBarter {
             return finalPick;
         }
 
+        internal static int ResolveQuantityPipelineVotes(
+            int phaseAPick,
+            int phaseATopCount,
+            int rawPick,
+            int diffPick,
+            bool preferLonger) {
+            _ = phaseATopCount;
+            _ = preferLonger;
+            var pipelines = new[] {
+                (value: phaseAPick, priority: 1),
+                (value: rawPick, priority: 3),
+                (value: diffPick, priority: 2),
+            }.Where(p => p.value > 0).ToList();
+            if (pipelines.Count == 0) return -1;
+            return pipelines
+                .GroupBy(p => p.value)
+                .OrderByDescending(g => g.Count())
+                .ThenByDescending(g => g.Max(p => p.priority))
+                .First().Key;
+        }
+
         private Barter IdentifyBarterAsync(PointPlus _pp) {
             // 检查锚点是否有效
             if (_pp.X == -1 || _pp.Y == -1)
@@ -2704,38 +3342,151 @@ namespace iBarter {
             // scan time. Stopped at the end of this method with a summary log.
             var _islandSw = System.Diagnostics.Stopwatch.StartNew();
 
-            // 1. 查找边缘图片以确定岛屿信息
-            PointPlus pointPlusEdge = App.myPureDM.CV.FindPicture(
-                Math.Max(0, pointPlusAnchor.X - 300),
-                pointPlusAnchor.Y - 5,
-                pointPlusAnchor.X - 5,
-                pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5,
-                "\\Images\\edge.bmp",
-                0.8,
-                CV.Mode.OpenCV,
-                false);
-            if (pointPlusEdge.X == -1 || pointPlusEdge.Y == -1)
+            // 1. 查找边缘图片以确定岛屿信息.
+            //
+            // 2026-07-08 redesign (post multi-theme-failure incident):
+            //
+            //   - edge.bmp search stays as the PRIMARY path. When it
+            //     matches, it gives the most accurate island-column
+            //     boundary (real pixel position from the template
+            //     match).
+            //
+            //   - When edge.bmp does NOT match, the fallback is no
+            //     longer a 298-px-wide rect that crosses into the
+            //     row's themed background (the previous
+            //     "TryBuildFallbackIslandOcrRectangle" path). That
+            //     path OCR'd green/gold/blue marble texture and
+            //     returned empty in both Color and Binary modes,
+            //     costing ~2 s/row of wasted GPU work and dragging
+            //     the DX hook down.
+            //
+            //     The new fallback is a HARDCODED offset from the
+            //     anchor position. The offset was measured by the
+            //     user at:
+            //         resolution = 2560x1440, UI scale = 100%
+            //     The earlier 245 was the distance to the panel left
+            //     edge decoration, but the actual island name text
+            //     starts ~69 px further right (953 in the user's
+            //     2560x1440 capture with anchor at X=1129). 176
+            //     puts X1 directly on the text origin.
+            //
+            //   - Threshold is 0.65 single-pass. The previous
+            //     0.65 + 0.50 two-pass design was dropped: the
+            //     soft 0.50 pass fired on noise (matched at 0.50 in
+            //     non-row regions during the incident, returning
+            //     bogus island names). 0.65 is empirical for clean
+            //     matches on the user's edge.bmp template.
+            //
+            //   - 2026-07-08: reverted to anchor-relative offset 176
+            //     per user request. The user states anchor.bmp's
+            //     match position has not changed in their workflow.
+            //     If the OCR rect lands on the wrong X (text not at
+            //     anchor.X - 176), the actual measurement needs to
+            //     be re-done. The debug BMPs in Resources\ocr_dbug\
+            //     will show the actual capture for visual check.
+            //
+            //   - If you change resolution, UI scale, or DPI,
+            //     REMEASURE 176 from a fresh screenshot and update
+            //     IslandOcrOffsetFromAnchorLeft.
+            const int IslandOcrOffsetFromAnchorLeft = 176;
+            // 2026-07-10: route through the dedicated STA worker so
+            // FindPicture runs on the COM-owning thread.
+            PointPlus pointPlusEdge = PureDmWorker.Call(() =>
+                App.myPureDM.CV.FindPicture(
+                    Math.Max(0, pointPlusAnchor.X - 300),
+                    pointPlusAnchor.Y - 5,
+                    pointPlusAnchor.X - 5,
+                    pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5,
+                    "\\Images\\edge.bmp",
+                    0.65,
+                    CV.Mode.OpenCV,
+                    false));
+            int islandOcrX1;
+            int islandOcrY1;
+            int islandOcrX2;
+            int islandOcrY2;
+            bool edgeMatched = pointPlusEdge.X != -1 && pointPlusEdge.Y != -1;
+            if (edgeMatched) {
+                islandOcrX1 = pointPlusEdge.X + pointPlusEdge.Size.Width;
+                islandOcrY1 = pointPlusAnchor.Y - 2;
+                islandOcrX2 = pointPlusAnchor.X - 2;
+                islandOcrY2 = pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5;
+            }
+            else {
+                // edge.bmp did not match - use the hardcoded island-column
+                // width as the offset. This is a focused 174-px-wide strip
+                // (vs. the old 298-px fallback rect that crossed into the
+                // row's themed background and OCR'd marble texture).
+                islandOcrX1 = pointPlusAnchor.X - IslandOcrOffsetFromAnchorLeft;
+                islandOcrY1 = pointPlusAnchor.Y - 2;
+                islandOcrX2 = pointPlusAnchor.X - 2;
+                islandOcrY2 = pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5;
+                Log("[DIAG-edge-missing] anchor=(" + pointPlusAnchor.X + "," + pointPlusAnchor.Y
+                    + ") using HARDCODED island OCR rect=(" + islandOcrX1 + "," + islandOcrY1
+                    + "," + islandOcrX2 + "," + islandOcrY2 + ") offset=" + IslandOcrOffsetFromAnchorLeft
+                    + " (assumes 2560x1440 + UI scale 100%)", Brushes.LightSlateGray);
+            }
+            if (!IsValidOcrRectangle(islandOcrX1, islandOcrY1, islandOcrX2, islandOcrY2)) {
+                Log("[DIAG-edge-missing] anchor=(" + pointPlusAnchor.X + "," + pointPlusAnchor.Y
+                    + ") island OCR rect invalid (offset=" + IslandOcrOffsetFromAnchorLeft
+                    + "; re-measure if you changed resolution or UI scale)",
+                    Brushes.IndianRed);
                 return (Barter)null;
+            }
 
-            // 通过 OCR 识别岛屿名称. If PureDM's capture transient failed
-            // (DX hook state issues the user has observed), strIsland comes
-            // back empty - bail out early so the rest of the island path
-            // doesn't waste PureDM calls on a half-dead capture interface.
-            string strIsland = App.myPureDM.CV.OCRString(
-                pointPlusEdge.X + pointPlusEdge.Size.Width,
-                pointPlusAnchor.Y - 2,
-                pointPlusAnchor.X - 2,
-                pointPlusAnchor.Y + pointPlusAnchor.Size.Height + 5,
-                CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage());
+            // 通过 OCR 识别岛屿名称.
+            //
+            // Each OCR call goes through OcrStringSafe and may retry once
+            // after OcrRetryDelayMs (500 ms) on empty. Both passes run
+            // synchronously and read the same immutable scan snapshot.
+            //
+            // Color first (default for both en-US and zh-TW UI). On empty,
+            // try Binary (binarizes the source at threshold 126 before
+            // OCR; more robust for game text with slight luminance drift).
+            // If both return empty, bail - per the original pre-i18n
+            // behavior - and let the caller skip this anchor.
+            //
+            // debugTag uses pointPlusAnchor.Y so the saved debug BMP
+            // (when SaveOcrDebugCapture is on) identifies the row.
+            string debugTag = "y" + pointPlusAnchor.Y;
+            string strIsland = OcrStringSafe(
+                islandOcrX1,
+                islandOcrY1,
+                islandOcrX2,
+                islandOcrY2,
+                CV.OCRType.Words, CV.OCRMode.Color, CurrentOcrLanguage(),
+                debugTag);
             if (string.IsNullOrWhiteSpace(strIsland)) {
-                // PureDM capture transient failed (DX hook issue). Bail
-                // out so we don't burn more PureDM calls on a half-dead
-                // interface. The next scan will start fresh.
+                strIsland = OcrStringSafe(
+                    islandOcrX1,
+                    islandOcrY1,
+                    islandOcrX2,
+                    islandOcrY2,
+                    CV.OCRType.Words, CV.OCRMode.Binary, CurrentOcrLanguage(),
+                    debugTag);
+            }
+            if (string.IsNullOrWhiteSpace(strIsland)) {
                 Log("[DIAG-empty-island-ocr] anchor=(" + pointPlusAnchor.X + "," + pointPlusAnchor.Y + ")"
-                    + " - capture interface likely down", Brushes.IndianRed);
+                    + " - OCR (Color+Binary) returned empty in rect "
+                    + islandOcrX1 + "," + islandOcrY1 + "," + islandOcrX2 + "," + islandOcrY2
+                    + " (edgeMatched=" + edgeMatched + ", offset=" + IslandOcrOffsetFromAnchorLeft
+                    + ")",
+                    Brushes.IndianRed);
                 return null;
             }
+            // Pre-check the OCR output against the island catalog. If
+            // IslandEnumSmart returns UnKnown, the captured region held some
+            // text (item label, parity label, leftover UI string) but no
+            // island name. Skip the row silently with a clear log instead of
+            // letting the rest of the identify path burn a parley/required
+            // FindPicture + icon OCR pipeline on a row that isn't a barter.
             EnumLists.Island islandEnum = IslandEnumSmart(strIsland);
+            if (islandEnum == EnumLists.Island.UnKnown) {
+                Log("[DIAG-skip-empty-island-row] anchor=(" + pointPlusAnchor.X + "," + pointPlusAnchor.Y + ")"
+                    + " - OCR text is not a known island: \"" + strIsland + "\"",
+                    Brushes.LightSlateGray);
+                return null;
+            }
 
             // 2. 捕获交易物品区域截图
             int intX1 = pointPlusAnchor.X + pointPlusAnchor.Size.Width + 1;
@@ -2789,25 +3540,59 @@ namespace iBarter {
 
             string strParley = "";
             if (hasParleyOcrRectangle) {
-                strParley = App.myPureDM.CV.OCRString(
-                    parleyOcrX1,
-                    parleyOcrY1,
-                    parleyOcrX2,
-                    parleyOcrY2,
-                    CV.OCRType.Number, CV.OCRMode.Binary, false, "", CurrentOcrLanguage());
+                // 2026-07-09: debug capture for parley OCR
+                TrySaveOcrDebugCapture(parleyOcrX1, parleyOcrY1, parleyOcrX2, parleyOcrY2,
+                    CV.OCRType.Number, CV.OCRMode.Binary,
+                    "parley_y" + pointPlusAnchor.Y);
+                // 2026-07-10: route through the dedicated STA worker.
+                strParley = PureDmWorker.Call(() =>
+                    App.myPureDM.CV.OCRString(
+                        parleyOcrX1,
+                        parleyOcrY1,
+                        parleyOcrX2,
+                        parleyOcrY2,
+                        CV.OCRType.Number, CV.OCRMode.Binary, false, "", NumericOcrLanguage()));
             }
 
-            // 获取岛屿的默认 Parley 值，并尝试解析 OCR 得到的数值
-            int intParley = App.listIslands.Where(land => land.Island == islandEnum)
+            // 交涉力是【每笔交易】的值：同一物品在不同航线需要的交涉力不同
+            // （例如残月与乌鸦商团都给"装有金币的破旧箱子"，却分别需要
+            // 10,395 与 15,754），所以岛屿默认值只能当回退占位，永远不保证
+            // 正确。必须以 OCR 为准，并在 OCR 失败时明确记录，而不是静默套用
+            // 默认值把失败伪装成看似合理的结果。
+            int parleyDefault = App.listIslands.Where(land => land.Island == islandEnum)
                 .Select(land => land.Parley).FirstOrDefault();
-            try {
-                intParley = int.Parse(strParley);
-                if (intParley < 5000)
-                    intParley = intParley * 10 + 6;
-                else if (intParley == 215712)
-                    intParley = 21572;
+            int intParley = parleyDefault;
+            // 取第一段"数字[逗号/点]数字"块，去掉千分位分隔符（逗号常被 OCR
+            // 读成点，两者都剥掉）。截图里的 "15,754" 之所以退回默认，正是因为
+            // 旧代码 int.Parse("15,754") 直接抛异常被 catch 吞掉。
+            Match parleyMatch = Regex.Match(strParley ?? "", @"\d[\d,\.]*");
+            string parleyDigits = parleyMatch.Success
+                ? parleyMatch.Value.Replace(",", "").Replace(".", "")
+                : "";
+            if (int.TryParse(parleyDigits, out int parsedParley)
+                && parsedParley >= 1000 && parsedParley <= 999999) {
+                intParley = parsedParley;
+                Log("[DIAG-parley] " + strIsland + " OCR原始=\"" + (strParley ?? "")
+                    + "\" => " + intParley, Brushes.Gray);
             }
-            catch {
+            else {
+                // PureDM 通道读空/无效 —— 用统一的 2 秒本地 OCR 熔断器
+                // 运行"反相+放大"兜底。首次原生卡住后，本进程不再启动
+                // 其他本地 Tesseract 任务，避免线程和 x86 原生内存累积。
+                int localParley = RunLocalOcrStage(
+                    "parley-local",
+                    () => TryReadParley(
+                        parleyOcrX1, parleyOcrY1, parleyOcrX2, parleyOcrY2));
+                if (localParley >= 1000 && localParley <= 999999) {
+                    intParley = localParley;
+                    Log("[DIAG-parley] " + strIsland + " PureDM原始=\"" + (strParley ?? "")
+                        + "\" 空/无效 → 本地放大管线 => " + intParley, Brushes.Gray);
+                }
+                else {
+                    Log("[DIAG-parley] " + strIsland + " OCR原始=\"" + (strParley ?? "")
+                        + "\" 本地兜底=" + localParley + "，回退岛屿默认=" + parleyDefault + "（此值可能不准）",
+                        Brushes.OrangeRed);
+                }
             }
 
             // 4. 识别剩余交易次数
@@ -2839,18 +3624,188 @@ namespace iBarter {
             // OCR the two trade-item labels directly from the screen via
             // PureDM.CV.OCRString (it captures the rect internally and
             // returns the recognised text). No disk file is involved.
-            string strItem1 = App.myPureDM.CV.OCRString(
-                pointPlusParley.X,
-                pointPlusParley.Y - pointPlusParley.Size.Height,
-                pointPlusRequired.X + 120,
-                pointPlusParley.Y + 1, CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage());
+            // 2026-07-09: debug capture for item1 OCR (Color)
+            int item1X1 = pointPlusParley.X;
+            int item1Y1 = pointPlusParley.Y - pointPlusParley.Size.Height;
+            int item1X2 = pointPlusRequired.X + 120;
+            int item1Y2 = pointPlusParley.Y + 1;
+            TrySaveOcrDebugCapture(item1X1, item1Y1, item1X2, item1Y2,
+                CV.OCRType.Words, CV.OCRMode.Color,
+                "item1_y" + pointPlusAnchor.Y);
+            string strItem1 = PureDmWorker.Call(() =>
+                App.myPureDM.CV.OCRString(
+                    item1X1, item1Y1, item1X2, item1Y2,
+                    CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage()));
+            // 2026-07-08: Color OCR can return empty when the dx hook
+            // delivers a frame where the item-name glyphs have drifted
+            // into off-white luminance. Retry with Binary mode (126
+            // threshold) which is more robust to that drift. Same
+            // pattern as the island-name OCR retry below.
+            if (string.IsNullOrWhiteSpace(strItem1)) {
+                // 2026-07-09: debug capture for item1 OCR (Binary retry)
+                TrySaveOcrDebugCapture(item1X1, item1Y1, item1X2, item1Y2,
+                    CV.OCRType.Words, CV.OCRMode.Binary,
+                    "item1B_y" + pointPlusAnchor.Y);
+                strItem1 = PureDmWorker.Call(() =>
+                    App.myPureDM.CV.OCRString(
+                        item1X1, item1Y1, item1X2, item1Y2,
+                        CV.OCRType.Words, CV.OCRMode.Binary, false, "", CurrentOcrLanguage()));
+            }
 
 
-            string strItem2 = App.myPureDM.CV.OCRString(
-                pointPlusParley.X + 376,
-                pointPlusParley.Y - pointPlusParley.Size.Height,
-                pointPlusRequired.X + 376 + 100,
-                pointPlusParley.Y + pointPlusParley.Size.Height, CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage());
+            // 2026-07-09: debug capture for item2 OCR (Color)
+            int item2X1 = pointPlusParley.X + 376;
+            int item2Y1 = pointPlusParley.Y - pointPlusParley.Size.Height;
+            int item2X2 = pointPlusRequired.X + 376 + 100;
+            // 2026-07-11: extend Y2 down by 1 extra parleyHeight so the
+            // rect covers 2-line item text. BDO barter slot2 wraps to
+            // 2 lines when the name is long (e.g. "[6阶段]阿利赫兹灯塔
+            // 雕像" — the 灯塔雕像 suffix wraps "像" to a 2nd line).
+            //
+            // The reason parley.Y is a valid Y anchor here even though
+            // "parley" is the 交涉力 label: FindScanLabel("Parley",...)
+            // searches a 700x62 box centered on anchor.Y
+            // (CFunctions.cs:3427-3430), and FindItemIconCompare uses
+            // the same box — so parley icon Y, required icon Y, item1
+            // icon Y, item2 icon Y are all in the same row, within
+            // ±30px of anchor.Y. parley.Y is the row's vertical center.
+            //
+            // User-reported vertical layout:
+            //   - 1-line text: vertically CENTERED on the row center
+            //     (parley.Y), spanning parley.Y ± lineHeight/2.
+            //   - 2-line text: TOP aligned with the icon top, so the
+            //     bottom of the 2nd line is at
+            //     parley.Y - lineHeight + 2*lineHeight = parley.Y + lineHeight.
+            //     If lineHeight ≈ parleyHeight, the 2-line bottom lands
+            //     right at Y2 = parley.Y + parleyHeight, easily clipped
+            //     by 1-2px of anti-aliasing.
+            //
+            // Original Y2 = parley.Y + parleyHeight was missing the 2nd
+            // line — observed: 阿尔纳哈岛 "全" (real: 偷窃的海贼团短刀)
+            // and 阿利赫恣村庄 "人" (real: 阿利赫兹灯塔雕像), both 1-char
+            // garbage from a stray stroke near icon top. Extending to
+            // parley.Y + 2*parleyHeight adds 1 line of buffer so the
+            // 2nd line is comfortably inside the rect; 1-line items
+            // still fit because their text is centered on parley.Y.
+            int item2Y2 = pointPlusParley.Y + 2 * pointPlusParley.Size.Height;
+            TrySaveOcrDebugCapture(item2X1, item2Y1, item2X2, item2Y2,
+                CV.OCRType.Words, CV.OCRMode.Color,
+                "item2_y" + pointPlusAnchor.Y);
+            string strItem2 = PureDmWorker.Call(() =>
+                App.myPureDM.CV.OCRString(
+                    item2X1, item2Y1, item2X2, item2Y2,
+                    CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage(),
+                    Emgu.CV.OCR.PageSegMode.Auto));
+            // 2026-07-08: same Binary retry for slot2 (matches the slot1
+            // pattern above). Empty OCR for slot2 was the dominant
+            // observation across the 2026-07-08 incident scans where
+            // dx hook degradation made the slot2 region ghost-grey.
+            //
+            // 2026-07-11: extended to also retry on "garbage" short reads
+            // like "全" (1 char, no [N阶段] prefix, no other Chinese
+            // lexical signal). Observed on 阿尔纳哈岛 where the actual
+            // item is "[4阶段]偷窃的海贼团短刀" - Color mode on the same
+            // crop collapsed the 12-char text to a single character and
+            // the subsequent fuzzy match bucketed it into Fig/Aloe/Beer,
+            // all icon-find-failed, falling back to CSV default qty=-1.
+            // Binary mode on the identical crop reads the full text in
+            // these cases (Tesseract's chi_sim is more robust than
+            // PureDM Color when the dx-hook frame is mid-ghost).
+            bool item2LooksGarbage = !string.IsNullOrWhiteSpace(strItem2)
+                && strItem2.Length < 4
+                && !strItem2.Contains("阶段")
+                && !strItem2.Contains("階段");
+            if (string.IsNullOrWhiteSpace(strItem2) || item2LooksGarbage) {
+                // 2026-07-09: debug capture for item2 OCR (Binary retry)
+                TrySaveOcrDebugCapture(item2X1, item2Y1, item2X2, item2Y2,
+                    CV.OCRType.Words, CV.OCRMode.Binary,
+                    "item2B_y" + pointPlusAnchor.Y);
+                string item2Binary = PureDmWorker.Call(() =>
+                    App.myPureDM.CV.OCRString(
+                        item2X1, item2Y1, item2X2, item2Y2,
+                        CV.OCRType.Words, CV.OCRMode.Binary, false, "", CurrentOcrLanguage(),
+                        Emgu.CV.OCR.PageSegMode.Auto));
+                // Prefer the Binary read if Color was empty, OR if Binary
+                // is materially longer (≥4 chars AND has Chinese lexical
+                // signal that Color lacked). Reject Binary if it's the
+                // same garbage length — no point overwriting.
+                if (string.IsNullOrWhiteSpace(strItem2)) {
+                    strItem2 = item2Binary;
+                }
+                else if (!string.IsNullOrWhiteSpace(item2Binary)
+                    && item2Binary.Length >= 4
+                    && item2Binary.Length > strItem2.Length
+                    && (item2Binary.Contains("阶段") || item2Binary.Contains("階段")
+                        || item2Binary.Length >= strItem2.Length * 3)) {
+                    Log("[DIAG-item-ocr] slot2 Color garbage=\""
+                        + TruncForLog(strItem2, 16)
+                        + "\" -> Binary=\"" + TruncForLog(item2Binary, 32) + "\"",
+                        Brushes.DarkCyan);
+                    strItem2 = item2Binary;
+                }
+            }
+            if (string.IsNullOrWhiteSpace(strItem2)
+                && TryBuildRetryItem2OcrRectangle(
+                    pointPlusParley.X,
+                    pointPlusParley.Y,
+                    pointPlusParley.Size.Height,
+                    pointPlusRequired.X,
+                    App.myPureDM.WindowWidth,
+                    out int item2RetryX1,
+                    out int item2RetryY1,
+                    out int item2RetryX2,
+                    out int item2RetryY2)) {
+                // 2026-07-09: debug capture for item2 OCR (retry rect)
+                TrySaveOcrDebugCapture(item2RetryX1, item2RetryY1, item2RetryX2, item2RetryY2,
+                    CV.OCRType.Words, CV.OCRMode.Color,
+                    "item2R_y" + pointPlusAnchor.Y);
+                strItem2 = PureDmWorker.Call(() =>
+                    App.myPureDM.CV.OCRString(
+                        item2RetryX1,
+                        item2RetryY1,
+                        item2RetryX2,
+                        item2RetryY2,
+                        CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage(),
+                        Emgu.CV.OCR.PageSegMode.Auto));
+                Log("[DIAG-item-ocr-retry] slot2 rect=(" + item2RetryX1 + "," + item2RetryY1
+                    + "," + item2RetryX2 + "," + item2RetryY2 + ") raw=\""
+                    + TruncForLog(strItem2, 48) + "\"", Brushes.LightSlateGray);
+            }
+
+            // PageSegMode.Auto preserves line breaks for wrapped slot2 names.
+            // The item catalog stores the same name as one logical line, so
+            // join only newline boundaries while preserving ordinary spaces
+            // used by English item names.
+            strItem2 = JoinItem2OcrLines(strItem2);
+
+            // 2026-07-08: always-fire diagnostic to surface the raw OCR
+            // text for both item slots on every island. Previously the
+            // operator only saw raw OCR text in the [DIAG-item-ocr] log,
+            // which is gated to fire only when candidates are empty -
+            // so "successful" (in-fuzzy-bucket) items never surfaced
+            // what OCR actually returned, and obvious OCR misreads
+            // (e.g. "[6阶段]黄铜器血箱子" with 血 instead of 皿) were
+            // indistinguishable from genuine item names.
+            //
+            // Field meanings:
+            //   slotN Raw: strItem verbatim. Replace any embedded "
+            //     characters with ' so the delimiter isn't ambiguous.
+            //   slotN Key : NormalizeBasic(...) form - this is the
+            //     exact key looked up in OCR_ALIASES. CJK OCR never
+            //     produces case drift so for Chinese strings
+            //     Raw == Key, but showing both makes copying into the
+            //     alias table unambiguous.
+            //
+            // Frequency: 6 lines per scan (one per island), ~120 chars
+            // each. Total ~720 chars per scan - well below the WPF
+            // glyph/handle pressure that triggered the OOM when high-
+            // freq [DIAG-ocr-slot1] was active pre-2026-07-08.
+            Log("[DIAG-item-ocr-raw] island=" + myIslands.IslandsNameDisplay
+                + " slot1Raw=\"" + (strItem1 ?? "<null>").Replace("\"", "'") + "\""
+                + " slot1Key=\"" + NormalizeBasic(strItem1 ?? "").Replace("\"", "'") + "\""
+                + " slot2Raw=\"" + (strItem2 ?? "<null>").Replace("\"", "'") + "\""
+                + " slot2Key=\"" + NormalizeBasic(strItem2 ?? "").Replace("\"", "'") + "\"",
+                Brushes.LightSlateGray);
 
             // (Removed two dead DM.Capture writes that produced
             // myItem1.bmp / myItem2.bmp on disk - the OCR text above
@@ -2891,6 +3846,16 @@ namespace iBarter {
             if (top2Candidates.Count == 0) {
                 top2Candidates = FindMostSimilarItemZhTwAware(strItem2, 3, ExtractLevelPrefix(strItem2).lv);
             }
+            if (top1Candidates.Count == 0 || top2Candidates.Count == 0) {
+                Log("[DIAG-item-ocr] island=" + myIslands.IslandsNameDisplay
+                    + " slot1Raw=\"" + TruncForLog(strItem1, 48) + "\" slot1Top=" + DescribeItemCandidates(top1Candidates)
+                    + " slot2Raw=\"" + TruncForLog(strItem2, 48) + "\" slot2Top=" + DescribeItemCandidates(top2Candidates)
+                    + " rect1=(" + pointPlusParley.X + "," + (pointPlusParley.Y - pointPlusParley.Size.Height)
+                    + "," + (pointPlusRequired.X + 120) + "," + (pointPlusParley.Y + 1) + ")"
+                    + " rect2=(" + (pointPlusParley.X + 376) + "," + (pointPlusParley.Y - pointPlusParley.Size.Height)
+                    + "," + (pointPlusRequired.X + 376 + 100) + "," + (pointPlusParley.Y + pointPlusParley.Size.Height) + ")",
+                    Brushes.IndianRed);
+            }
             Items myItems1 = top1Candidates.FirstOrDefault();
             Items myItems2 = top2Candidates.FirstOrDefault();
             // DIAG: dump raw OCR text + normalised form so we can see if
@@ -2914,9 +3879,16 @@ namespace iBarter {
 
             PointPlus myPP1 = new PointPlus();
             Items chosenItem1 = null;
+            bool skippedIconConfirm1 = false;
             var _slot1IconSw = System.Diagnostics.Stopwatch.StartNew();
             try {
                 if (top1Candidates.Count > 0) {
+                    if (ShouldSkipIconConfirmation(top1Candidates[0])) {
+                        chosenItem1 = top1Candidates[0];
+                        myPP1 = PointPlus.Empty;
+                        skippedIconConfirm1 = true;
+                    }
+                    else {
                     var cmp = FindItemIconCompare(top1Candidates, intX1, intY1, intX2, intY2);
                     // Fuzzy-vs-image decision. Image-best wins only when its
                     // Sim is at least 2x fuzzy's AND fuzzy's template match
@@ -2957,19 +3929,28 @@ namespace iBarter {
                     } else {
                         myPP1 = PointPlus.Empty;
                     }
+                    }
                 }
+            } catch (PureDmWorkerUnavailableException) {
+                throw;
             } catch (Exception ex) {
                 Log("[DIAG-icon-err] slot1 ex=" + ex.GetType().Name + " " + ex.Message, Brushes.LightSlateGray);
             }
             _slot1IconSw.Stop();
             if (!myPP1.IsEmpty)
                 listPointPlus.Add(myPP1);
-            else
+            else if (!skippedIconConfirm1) {
+                if (chosenItem1 == null && top1Candidates.Count > 0) {
+                    chosenItem1 = top1Candidates[0];
+                }
                 Log("[DIAG-icon-find-failed] slot1 chosen="
                     + (chosenItem1 != null ? chosenItem1.ItemID : "null")
+                    + " ocr=\"" + TruncForLog(strItem1, 32) + "\""
+                    + " top=" + DescribeItemCandidates(top1Candidates)
                     + " - TOP 3 candidates all failed icon FindPicture match"
                     + " (template not pixel-matched by any candidate)",
                     Brushes.IndianRed);
+            }
             // [DIAG-icon] (the normal "candidates=N found=X iconSearch=Yms"
             // version) removed - this fired 12+ times per scan and the
             // long Sim/handle/mngMB strings forced WPF to allocate
@@ -2983,10 +3964,28 @@ namespace iBarter {
 
             PointPlus myPP2 = new PointPlus();
             Items chosenItem2 = null;
+            bool skippedIconConfirm2 = false;
             var _slot2IconSw = System.Diagnostics.Stopwatch.StartNew();
             try {
                 if (top2Candidates.Count > 0) {
-                    var cmp = FindItemIconCompare(top2Candidates, intX1, intY1, intX2, intY2);
+                    if (ShouldSkipIconConfirmation(top2Candidates[0])) {
+                        chosenItem2 = top2Candidates[0];
+                        myPP2 = PointPlus.Empty;
+                        skippedIconConfirm2 = true;
+                    }
+                    else {
+                    // Position-filter the icon search to slot2's column.
+                    // The full-row wide search can match slot1's icon and
+                    // falsely "confirm" a wrong slot2 candidate. See the
+                    // note on TryBuildSlot2IconColumn / FindItemIconCompare
+                    // for the 2026-07-08 incident history.
+                    int slot2MinX = 0, slot2MaxX = int.MaxValue;
+                    bool hasSlot2Column = TryBuildSlot2IconColumn(
+                        pointPlusParley, out slot2MinX, out slot2MaxX);
+                    var cmp = hasSlot2Column
+                        ? FindItemIconCompare(top2Candidates, intX1, intY1, intX2, intY2,
+                            slot2MinX, slot2MaxX)
+                        : FindItemIconCompare(top2Candidates, intX1, intY1, intX2, intY2);
                     if (!cmp.Best.IsEmpty && !cmp.FuzzyTop.IsEmpty
                         && cmp.FuzzyTop.Sim < cmp.Best.Sim * 0.5) {
                         myPP2 = cmp.Best;
@@ -3005,18 +4004,62 @@ namespace iBarter {
                     } else {
                         myPP2 = PointPlus.Empty;
                     }
+
+                    // Gated diagnostic: surface the (rare) cases where
+                    // the resolved icon DID match a template but in the
+                    // WRONG slot, so we can see "fuzzy guessed X but
+                    // icon-search-only-found Y in slot1's column" instead
+                    // of the silent acceptance that produced the
+                    // 800243 -> 800006/7702 / 800246 -> 9213 /
+                    // 800030 -> 5827 mis-identifications on 2026-07-08.
+                    //
+                    // Gate conditions (all required to fire):
+                    //   1. icon confirmed in SOME column (cmp.Best not empty)
+                    //   2. icon ID != chosenItem2.ItemID (mismatch)
+                    //   3. chosenItem2 is non-null (we have a fuzzy pick)
+                    //
+                    // Conditions 1+2+3 only fire when the chosen item
+                    // and the best icon don't agree - the normal case
+                    // (fuzzy right, icon agrees) keeps the log quiet, so
+                    // the per-scan log budget stays at most a few lines.
+                    Items bestItemForDiag = !cmp.Best.IsEmpty
+                        ? ResolveItemFromIconID(cmp.Best.ImageID)
+                        : null;
+                    if (bestItemForDiag != null
+                        && chosenItem2 != null
+                        && bestItemForDiag.ItemID != chosenItem2.ItemID) {
+                        Log("[DIAG-slot2-icon-divergence] ocr=\""
+                            + TruncForLog(strItem2, 32) + "\""
+                            + " fuzzy=" + chosenItem2.ItemID
+                            + " iconBest=" + bestItemForDiag.ItemID
+                            + " iconBestX=" + cmp.Best.X
+                            + " iconBestSim=" + cmp.Best.Sim.ToString("0.000")
+                            + " fuzzySim=" + (cmp.FuzzyTop.IsEmpty ? "n/a" : cmp.FuzzyTop.Sim.ToString("0.000"))
+                            + " slot2RangeX=[" + slot2MinX + "," + slot2MaxX + "]"
+                            + " rowRectX=[" + intX1 + "," + intX2 + "]",
+                            Brushes.LightSlateGray);
+                    }
+                    }
                 }
+            } catch (PureDmWorkerUnavailableException) {
+                throw;
             } catch (Exception ex) {
                 Log("[DIAG-icon-err] slot2 ex=" + ex.GetType().Name + " " + ex.Message, Brushes.LightSlateGray);
             }
             _slot2IconSw.Stop();
             if (!myPP2.IsEmpty)
                 listPointPlus.Add(myPP2);
-            else
+            else if (!skippedIconConfirm2) {
+                if (chosenItem2 == null && top2Candidates.Count > 0) {
+                    chosenItem2 = top2Candidates[0];
+                }
                 Log("[DIAG-icon-find-failed] slot2 chosen="
                     + (chosenItem2 != null ? chosenItem2.ItemID : "null")
+                    + " ocr=\"" + TruncForLog(strItem2, 32) + "\""
+                    + " top=" + DescribeItemCandidates(top2Candidates)
                     + " - TOP 3 candidates all failed icon FindPicture match",
                     Brushes.IndianRed);
+            }
             // (slot2 DIAG-icon candidates= removed - same WPF pressure
             // reason as slot1 above)
 
@@ -3042,7 +4085,7 @@ namespace iBarter {
             // listPointPlus = PickTwoBest(listPointPlus);
             // listPointPlus.Sort((p1, p2) => p1.X.CompareTo(p2.X));
 
-            if (listPointPlus.Count < 1) {
+            if (top1Candidates.Count == 0 && top2Candidates.Count == 0) {
                 Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.CannotIdentifyItemIcons", myIslands.IslandsNameDisplay), Brushes.Red);
                 return myBarter;
             }
@@ -3074,12 +4117,12 @@ namespace iBarter {
             // is correct for OCR. If not (e.g. we trusted fuzzy over the
             // visual best), OCR quantity on the icon's position would read
             // the wrong number - fall back to CSV default.
-            string iconID1 = (listPointPlus.Count > 0 && listPointPlus[0] != null
-                && !string.IsNullOrEmpty(listPointPlus[0].ImageID)
-                && listPointPlus[0].ImageID.Length >= 18
-                && listPointPlus[0].ImageID.StartsWith("\\Images\\Items\\")
-                && listPointPlus[0].ImageID.EndsWith(".bmp"))
-                ? listPointPlus[0].ImageID.Substring(14, listPointPlus[0].ImageID.Length - 18)
+            string iconID1 = (!myPP1.IsEmpty
+                && !string.IsNullOrEmpty(myPP1.ImageID)
+                && myPP1.ImageID.Length >= 18
+                && myPP1.ImageID.StartsWith("\\Images\\Items\\")
+                && myPP1.ImageID.EndsWith(".bmp"))
+                ? myPP1.ImageID.Substring(14, myPP1.ImageID.Length - 18)
                 : null;
             bool iconMatchesChosen = iconID1 == strID1;
             // Pre-OCR skip for LV5+ items: per BDO barter rules these can
@@ -3094,7 +4137,7 @@ namespace iBarter {
                 // and the CSV fallback lookup. Saves real time on every
                 // LV5+ barter item.
                 Log(Localization.LanguageService.Instance.Localize("str.Log.LV5Skip", strID1, lv1Item.ItemNameDisplay), Brushes.Gold);
-            } else if (!iconMatchesChosen && chosenItem1 != null) {
+            } else if (myPP1.IsEmpty || !iconMatchesChosen) {
                 // Icon FindPicture found a different item than fuzzy - OCR
                 // quantity on the icon's position would read the wrong
                 // number. Skip the vote and go straight to CSV default
@@ -3105,15 +4148,13 @@ namespace iBarter {
                     + " icon=" + (iconID1 ?? "none")
                     + " - using CSV default qty=" + intNumber1, Brushes.LightSlateGray);
             } else {
-                if (listPointPlus.Count > 0) {
-                    // Multi-ROI voting for the bottom-right "50" overlay (Phase A+C+D).
-                    var _q1Sw = System.Diagnostics.Stopwatch.StartNew();
-                    intNumber1 = TryReadQuantity(listPointPlus[0], strID1);
-                    _q1Sw.Stop();
-                    // [DIAG-ocrQty] removed - the OCR result is already in
-                    // the standard "OcrQty.NoConsensus" or "OcrQty.Picked"
-                    // log line, no need for a separate diagnostic line.
-                }
+                // Multi-ROI voting for the bottom-right "50" overlay (Phase A+C+D).
+                var _q1Sw = System.Diagnostics.Stopwatch.StartNew();
+                intNumber1 = TryReadQuantity(myPP1, strID1);
+                _q1Sw.Stop();
+                // [DIAG-ocrQty] removed - the OCR result is already in
+                // the standard "OcrQty.NoConsensus" or "OcrQty.Picked"
+                // log line, no need for a separate diagnostic line.
                 if (intNumber1 <= 0) {
                     // OCR failed to agree - fall back to the CSV-default quantity and
                     // log so this case is visible.
@@ -3144,12 +4185,12 @@ namespace iBarter {
                 strID2 = "800012";
             else if (strID2 == "800012")
                 strID2 = "800011";
-            string iconID2 = (listPointPlus.Count > 1 && listPointPlus[1] != null
-                && !string.IsNullOrEmpty(listPointPlus[1].ImageID)
-                && listPointPlus[1].ImageID.Length >= 18
-                && listPointPlus[1].ImageID.StartsWith("\\Images\\Items\\")
-                && listPointPlus[1].ImageID.EndsWith(".bmp"))
-                ? listPointPlus[1].ImageID.Substring(14, listPointPlus[1].ImageID.Length - 18)
+            string iconID2 = (!myPP2.IsEmpty
+                && !string.IsNullOrEmpty(myPP2.ImageID)
+                && myPP2.ImageID.Length >= 18
+                && myPP2.ImageID.StartsWith("\\Images\\Items\\")
+                && myPP2.ImageID.EndsWith(".bmp"))
+                ? myPP2.ImageID.Substring(14, myPP2.ImageID.Length - 18)
                 : null;
             bool icon2MatchesChosen = iconID2 == strID2;
             // Same pre-OCR LV5+ skip as for item 1.
@@ -3157,9 +4198,11 @@ namespace iBarter {
             if (lv2Item != null && IsHighTier(lv2Item.ItemLV)) {
                 intNumber2 = 1;
                 Log(Localization.LanguageService.Instance.Localize("str.Log.LV5Skip", strID2, lv2Item.ItemNameDisplay), Brushes.Gold);
-            } else if (icon2MatchesChosen && listPointPlus.Count > 1) {
+            } else if (icon2MatchesChosen && !myPP2.IsEmpty) {
                 var _q2Sw = System.Diagnostics.Stopwatch.StartNew();
-                intNumber2 = TryReadQuantity(listPointPlus[1], strID2);
+                // 收取的奖励（乌鸦硬币等）数量可能是较大的多位数（142/160），
+                // 平局时偏向位数多，避免被截断噪声（42）盖过正确值。
+                intNumber2 = TryReadQuantity(myPP2, strID2, preferLonger: true);
                 _q2Sw.Stop();
                 // (slot2 DIAG-ocrQty removed - same reason as slot1)
             } else {
@@ -3190,16 +4233,8 @@ namespace iBarter {
 
 
             // 10. 构造交易物品对象
-            Items item1 = new Items(
-                App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemName).FirstOrDefault(),
-                strID1,
-                App.listItems.Where(i => i.ItemID == strID1).Select(i => i.ItemLV).FirstOrDefault(),
-                intNumber1);
-            Items item2 = new Items(
-                App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemName).FirstOrDefault(),
-                strID2,
-                App.listItems.Where(i => i.ItemID == strID2).Select(i => i.ItemLV).FirstOrDefault(),
-                intNumber2);
+            Items item1 = CreateScannerItemFromCatalog(strID1, intNumber1);
+            Items item2 = CreateScannerItemFromCatalog(strID2, intNumber2);
 
             Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.OcrSummary", myIslands.IslandsNameDisplay, myIslands.Remaining, myIslands.Parley, item1.ItemNameDisplay, intNumber1, item2.ItemNameDisplay, intNumber2), Brushes.Blue);
 
@@ -3214,6 +4249,11 @@ namespace iBarter {
         }
 
         // 规范化：小写、合并空白、去重音
+        internal static string JoinItem2OcrLines(string value) {
+            if (string.IsNullOrWhiteSpace(value)) return value?.Trim() ?? string.Empty;
+            return Regex.Replace(value.Trim(), @"\s*\r?\n\s*", string.Empty);
+        }
+
         private static string NormalizeBasic(string s) {
             if (string.IsNullOrWhiteSpace(s)) return string.Empty;
             s = Regex.Replace(s.Trim().ToLowerInvariant(), @"\s+", " ");
@@ -3223,6 +4263,16 @@ namespace iBarter {
                 if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
                     sb.Append(ch);
             return ChineseTextNormalizer.NormalizeForMatching(sb.ToString().Normalize(NormalizationForm.FormC));
+        }
+
+        private static string TruncForLog(string value, int maxLen) {
+            if (string.IsNullOrEmpty(value)) return "";
+            return value.Length <= maxLen ? value : value.Substring(0, maxLen) + "...";
+        }
+
+        private static string DescribeItemCandidates(System.Collections.Generic.List<Items> candidates) {
+            if (candidates == null || candidates.Count == 0) return "[]";
+            return "[" + string.Join(",", candidates.Take(3).Select(i => i?.ItemID ?? "null")) + "]";
         }
 
         // 切词（英文够用）：按非字母数字分割，保留整词
@@ -3413,10 +4463,12 @@ namespace iBarter {
             for (int i = 0; i < candidates.Count; i++) {
                 var item = candidates[i];
                 if (item == null || string.IsNullOrEmpty(item.ItemID)) continue;
-                PointPlus pp = App.myPureDM.CV.FindPicture(
-                    intX1, intY1, intX2, intY2,
-                    "\\Images\\Items\\" + item.ItemID + ".bmp",
-                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, false, 0.7);
+                // 2026-07-10: route through the dedicated STA worker.
+                PointPlus pp = PureDmWorker.Call(() =>
+                    App.myPureDM.CV.FindPicture(
+                        intX1, intY1, intX2, intY2,
+                        "\\Images\\Items\\" + item.ItemID + ".bmp",
+                        0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, false, 0.7));
                 if (pp.X != -1 && pp.Y != -1 && pp.X * pp.Y != 0) {
                     return pp;
                 }
@@ -3450,20 +4502,66 @@ namespace iBarter {
         // 0x80070008 OOM cascade. Accept Empty and fall through; the
         // user noted 'restart fixes it' so transient failures recover
         // on the next scan anyway.
+        // Run FindPicture on each top-N fuzzy candidate and return:
+        //   - FuzzyTop: the match for candidates[0] (or Empty if no match)
+        //   - Best: the highest-Sim match across all candidates
+        //
+        // Used by the fuzzy-vs-image comparison in IdentifyBarterAsync:
+        // if fuzzy's top-1 Sim is close to the best Sim, fuzzy is right;
+        // if fuzzy's Sim is much lower, the visual best is the more
+        // trustworthy signal.
+        //
+        // 2026-07-08: added optional X-range filter (minMatchX, maxMatchX)
+        // so slot2's confirmation call can reject matches that landed in
+        // slot1's column. The default is "no filter" (slot1 keeps its
+        // wide-row search, which historically works because slot1 is the
+        // leftmost item and there's no other icon at smaller X). Passing
+        // [slot2IconMinX, slot2IconMaxX] from IdentifyBarterAsync pins
+        // PureDM's matches to slot2's column only.
+        //
+        // Rationale for the filter (vs narrowing the search box): the
+        // search box (intX1..intX2) is the full barter row because some
+        // layouts place slot1's icon far to the right of its text. But
+        // the wide search means a slot1 icon at the matching-Y can falsely
+        // "confirm" any slot2 candidate whose template matches slot1 by
+        // coincidence (e.g., 800243 [whale] vs 800006 [sashimi] both render
+        // as decorative gold/cream items at 44x44 and can hit 0.5+ sim on
+        // D3D anti-aliased frames). Filtering by X position - not search
+        // box - is robust to layout shifts and only rejects wrong-slot
+        // confirmations.
+        //
+        // No retry on Empty - the previous version retried once and
+        // doubled the FindPicture calls per icon. On the user's
+        // machine that pushed total PureDM captures over the GDI/USER
+        // handle budget within a single island and triggered a
+        // 0x80070008 OOM cascade. Accept Empty and fall through; the
+        // user noted 'restart fixes it' so transient failures recover
+        // on the next scan anyway.
         private static TopNIconResult FindItemIconCompare(
                 System.Collections.Generic.List<Items> candidates,
-                int intX1, int intY1, int intX2, int intY2) {
+                int intX1, int intY1, int intX2, int intY2,
+                int minMatchX = int.MinValue, int maxMatchX = int.MaxValue) {
             var result = new TopNIconResult { FuzzyTop = PointPlus.Empty, Best = PointPlus.Empty };
             if (candidates == null) return result;
             double bestSim = 0;
             for (int i = 0; i < candidates.Count; i++) {
                 var item = candidates[i];
                 if (item == null || string.IsNullOrEmpty(item.ItemID)) continue;
-                PointPlus pp = App.myPureDM.CV.FindPicture(
-                    intX1, intY1, intX2, intY2,
-                    "\\Images\\Items\\" + item.ItemID + ".bmp",
-                    0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, false, 0.7);
+                // 2026-07-10: route through the dedicated STA worker.
+                PointPlus pp = PureDmWorker.Call(() =>
+                    App.myPureDM.CV.FindPicture(
+                        intX1, intY1, intX2, intY2,
+                        "\\Images\\Items\\" + item.ItemID + ".bmp",
+                        0.5, 0.8, 1, CV.Mode.OpenCV, true, CV.PictureColorMode.Color, false, 0.7));
                 if (pp.IsEmpty) continue;
+                // Position filter: reject any match whose X falls outside
+                // the requested column. pp.X is the top-left of the match;
+                // a 44 px icon ends at pp.X + pp.Size.Width. We require
+                // the *start* of the match (more restrictive than the
+                // end-of-icon) to be in [minMatchX, maxMatchX] - this
+                // rejects whole wrong-column matches without trimming
+                // partial overlaps at the boundary.
+                if (pp.X < minMatchX || pp.X > maxMatchX) continue;
                 if (i == 0) result.FuzzyTop = pp;
                 if (pp.Sim > bestSim) {
                     bestSim = pp.Sim;
@@ -3487,6 +4585,54 @@ namespace iBarter {
             }
             string itemID = imageID.Substring(14, imageID.Length - 18);
             return App.listItems.FirstOrDefault(i => i.ItemID == itemID);
+        }
+
+        // Compute the X range that slot2's icon lives in, for use as a
+        // FindItemIconCompare position filter.
+        //
+        // Geometric facts (verified against BDO barter UI screenshots in
+        // 2026-07-08 incidents):
+        //   - slot1 TEXT starts at parley.X (the OCRString x1).
+        //     slot1 ICON is to the LEFT of parley.X.
+        //   - slot2 TEXT starts at parley.X + 376 (hardcoded offset in
+        //     IdentifyBarterAsync).
+        //     slot2 ICON is to the LEFT of slot2 text.
+        //
+        // PureDM.FindPicture returns pp.X = top-left of the matched
+        // icon. For a 44 px icon centred on the parley baseline,
+        // slot2 icon's top-left sits roughly at parley.X + 340
+        // (+/- 20 px depending on locale text width drift).
+        //
+        // Safe filter band:
+        //   x1 = parley.X + 250  (well past slot1 icon's right edge,
+        //                         with > 200 px headroom even if slot1
+        //                         icon spans further right than observed)
+        //   x2 = parley.X + 376  (slot2 text start - icon's right edge
+        //                         can sit exactly here)
+        //
+        // Returns false if parley is empty/unreal (-1). Caller falls
+        // back to the full-row search in that case.
+        //
+        // 2026-07-08: added after observing that slot2's FindPicture was
+        // matching slot1's icon (false confirmation) when slot1's icon
+        // shared visual features with a slot2 candidate. 800243 [whale]
+        // and 800006 [sashimi] both render as decorative gold/cream
+        // items at 44x44 and the wide-row search returned slot1's icon
+        // match for slot2's candidate list.
+        private static bool TryBuildSlot2IconColumn(
+                PointPlus pointPlusParley,
+                out int x1, out int x2) {
+            x1 = 0;
+            x2 = 0;
+            if (pointPlusParley.IsEmpty || pointPlusParley.X < 0) {
+                return false;
+            }
+            x1 = pointPlusParley.X + 250;
+            x2 = pointPlusParley.X + 376;
+            if (x2 - x1 < 8) {
+                x2 = x1 + 8;
+            }
+            return true;
         }
 
         List<PointPlus> PickTwoBest(List<PointPlus> list) {

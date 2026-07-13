@@ -120,7 +120,18 @@ namespace iBarter {
                 }
 
                 if (!File.Exists(icon) && int.TryParse(ItemID, out int idNum) && idNum > 0) {
-                    App.myCFun.RefreshItems(ItemID);
+                    try {
+                        // Defensive parity with Barter.Item1Icon (Model/Barter.cs:287-298):
+                        // RefreshItems dispatches an HTTP fetch through Task.Run, which
+                        // can throw on dispatcher races or bdocodex hiccups. Without
+                        // the try/catch the exception propagates out of the property
+                        // getter and breaks the WPF binding pipeline - same failure
+                        // mode that previously nuked Barter.Item1Icon before its fix.
+                        App.myCFun.RefreshItems(ItemID);
+                    }
+                    catch (Exception ex) {
+                        System.Diagnostics.Debug.WriteLine("ItemIcon refresh fail " + ItemID + ": " + ex.Message);
+                    }
                     icon = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + ItemID + ".bmp";
                 }
 

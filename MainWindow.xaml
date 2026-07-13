@@ -118,12 +118,6 @@
                                     <Image Source="Images\refresh.png" />
                                 </MenuItem.Icon>
                             </MenuItem>
-                            <MenuItem x:Name="MenuItem_RebindGameWindow" Header="{loc:Localize str.Menu.RebindGameWindow}"
-                                  Tag="RebindGameWindow" Click="MenuItem_RebindGameWindow_Click" Height="30" Width="240">
-                                <MenuItem.Icon>
-                                    <Image Source="Images\refresh.png" />
-                                </MenuItem.Icon>
-                            </MenuItem>
                         </MenuItem>
                         <MenuItem Header="{loc:Localize str.Menu.Language}">
                             <!-- Phase 8 (i18n): live language toggle.  Click swaps

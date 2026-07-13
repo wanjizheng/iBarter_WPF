@@ -113,7 +113,7 @@
                 ToolTip="{loc:Localize str.Planner.Btn.AutoPlanTip}"
                 SizeMode="Small"
                 FontFamily="Microsoft YaHei"
-                SmallIcon="/Images/refresh.png" Click="ButtonAdv_AutoPlan_Click" />
+                SmallIcon="/Images/pilot.png" Click="ButtonAdv_AutoPlan_Click" />
             <Separator />
             <Label x:Name="Label_TotalBarters" Content="{loc:Localize str.Planner.TotalBarters}" VerticalAlignment="Center" />
             <Separator />

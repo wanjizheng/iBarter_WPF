@@ -133,11 +133,9 @@
     <sys:String x:Key="str.ShipCargo.Btn.Clean">清理</sys:String>
     <sys:String x:Key="str.ShipCargo.Btn.CleanTip">移除已完成的船货列</sys:String>
 
-    <sys:String x:Key="str.ShipCargo.Btn.SortByChain">依链排序</sys:String>
-    <sys:String x:Key="str.ShipCargo.Btn.SortByChainTip">依照交换链顺序重新排列：产出物会被其他船货消耗的交换排在前面；没有参与任何链的交换则保留原本顺序。</sys:String>
 
     <sys:String x:Key="str.ShipCargo.Btn.OptimalRoute">最短路径</sys:String>
-    <sys:String x:Key="str.ShipCargo.Btn.OptimalRouteTip">从「遇难的酷斯海贼船」出发，求最短航行路径并重新排列船货；同时保留交换链的先后顺序（必须先取得某物品，才能用它换下一项）。18 笔以下用精确解，更大则改用最近邻启发法。</sys:String>
+    <sys:String x:Key="str.ShipCargo.Btn.OptimalRouteTip">从存放第一笔交换物品的仓库出发，贪心选择最近的下一笔（保留交换链的先后顺序）。起点根据第一笔 Item1 在贝利利亚/伊利亚/伊菲利亚/安卡多四个仓库的库存量自动决定。</sys:String>
 
 
     <sys:String x:Key="str.ItemTier.Basic">[一般物品]</sys:String>
@@ -224,11 +222,10 @@
     <sys:String x:Key="str.Log.ShipCargo.CopiedToClipboard">{0} 已复制到剪贴簿。</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.Sorted">船舱已依交换链顺序排序。</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Solo">船舱只有一笔交换，无需优化。</sys:String>
-    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoStartIsland">找不到起点「遇难的酷斯海贼船」，已中止。</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoStartIsland">无法决定起点仓库岛屿，已中止。</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.MissingIsland">部分交换缺少岛屿资讯，改用交换链排序。</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoRoute">交换链存在循环，无符合优先顺序的完整路径，改用交换链排序。</sys:String>
-    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Done">最短路径已解出：{0} 站，总距离 {1}（地图归一化单位）。</sys:String>
-    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.DoneHeuristic">已用最近邻启发法求解最短路径：{0} 站。</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Done">最短路径已解出：{0} 站，起点仓库岛屿 {1}。</sys:String>
 
 
     <sys:String x:Key="str.Msg.Confirmation.Title">确认</sys:String>

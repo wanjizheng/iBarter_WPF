@@ -6,6 +6,8 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using iBarter.Localization;
+using iBarter.ViewModel;
+using iBarter.Navigation;
 using static iBarter.EnumLists;
 using Grid = System.Windows.Controls.Grid;
 using RowColumnIndex = Syncfusion.UI.Xaml.ScrollAxis.RowColumnIndex;
@@ -233,7 +235,16 @@ namespace iBarter.View {
                         myLabel.Height = Double.NaN;
                     }
 
-                    Grid_Image.Margin = new Thickness(myIslands.IslandsThickness.Left * Grid_MapMain.ActualWidth, myIslands.IslandsThickness.Top * Grid_MapMain.ActualHeight, myIslands.IslandsThickness.Right * Grid_MapMain.ActualWidth, myIslands.IslandsThickness.Bottom * Grid_MapMain.ActualHeight);
+                    // Use the same projected centre as DrawRouteOverlay.
+                    // Resetting this from raw IslandsThickness on every timer
+                    // tick made inset pins jump back to their old positions
+                    // while dashed route endpoints stayed projected.
+                    var displayCenter = GetDisplayCenterNormalized(myIslands);
+                    Grid_Image.Margin = new Thickness(
+                        displayCenter.X * Grid_MapMain.ActualWidth - 5,
+                        displayCenter.Y * Grid_MapMain.ActualHeight - 5,
+                        (1 - displayCenter.X) * Grid_MapMain.ActualWidth - 5,
+                        (1 - displayCenter.Y) * Grid_MapMain.ActualHeight - 5);
 
                     // Place the label BELOW the island block by default,
                     // but flip it ABOVE when the island sits too close
@@ -242,7 +253,7 @@ namespace iBarter.View {
                     // the gap from the island bottom to the map bottom;
                     // a small value means the label would overflow).
                     double labelTop;
-                    if (myIslands.IslandsThickness.Bottom < 0.08) {
+                    if (1 - displayCenter.Y < 0.08) {
                         // flip: position label above the island block
                         // (label baseline = top - label height)
                         labelTop = Grid_Image.Margin.Top - myLabel.ActualHeight;
@@ -283,6 +294,211 @@ namespace iBarter.View {
             }
 
             InvalidateVisual();
+
+            // Redraw the barter-route overlay (dashed gold lines connecting
+            // Cox_Pirate to each cargo island in order). This runs on every
+            // IslandsButtonRearrange cycle (timer tick + SizeChanged +
+            // docking resize) so the lines track the map's current size
+            // and pixel positions. Implemented as a full remove-then-add
+            // pass over our tagged lines - the alternative (diffing old
+            // vs new route and patching X1/Y1/X2/Y2 in place) saves a few
+            // allocations per tick but adds state-tracking complexity
+            // that bites whenever IslandsButtonInitialisation wipes the
+            // child list (e.g. after a map middle-click). Lines are
+            // lightweight enough that 10-20 of them per tick is free.
+            DrawRouteOverlay();
+        }
+
+        // ----- Route overlay (dashed lines between islands in route order) -----
+
+        // Tag we slap on every route line we add, so DrawRouteOverlay can
+        // tell our overlay lines apart from the per-island connector
+        // lines the rest of this file creates (those go inside each
+        // GridContainer_* and have a Line_<island> name; ours are added
+        // directly to Grid_MapMain). Tag-based discrimination avoids
+        // having to subclass Line or maintain a parallel list of routes.
+        private static readonly object ROUTE_LINE_TAG = new object();
+
+        // Rebuilds the dashed-line overlay that visualises the ship's
+        // current sailing route. The route is derived on the fly from
+        // App.myCVM.CargoDetails (in its current order, which is what
+        // SortByBarterChain / SolveOptimalRoute produced) prefixed with
+        // Cox_Pirate as the fixed start island. Consecutive duplicate
+        // islands are collapsed so a Cox_Pirate -> Cox_Pirate leg (when
+        // the first cargo barter is AT Cox_Pirate) does not draw a
+        // zero-length dot.
+        //
+        // Each leg is rendered as a dashed gold Line plus a small
+        // gold Polygon arrowhead at the destination, rotated to match
+        // the line's bearing so the sailing direction is obvious even
+        // at a glance. Both Line and Polygon carry the ROUTE_LINE_TAG
+        // so the cleanup pass below can recognise and remove them
+        // without touching the unrelated per-island connector lines
+        // (which live inside each GridContainer_*).
+        //
+        // The legs are added as the LAST children of Grid_MapMain so
+        // they sit on top of the island blocks (small 10x10 rectangles)
+        // - the visible portion of each line is across the map
+        // background anyway, and being on top means a tight cluster of
+        // island pins cannot hide the route segment passing through it.
+        private void DrawRouteOverlay() {
+            // Remove any previously drawn route overlay element. Tag
+            // check keeps us from deleting the per-island connector
+            // lines (which live inside GridContainer_* and never carry
+            // our tag). Matches Line AND Polygon so the next pass
+            // starts from a known-empty state.
+            for (int i = Grid_MapMain.Children.Count - 1; i >= 0; i--) {
+                if (Grid_MapMain.Children[i] is FrameworkElement elem
+                    && ReferenceEquals(elem.Tag, ROUTE_LINE_TAG)) {
+                    Grid_MapMain.Children.RemoveAt(i);
+                }
+            }
+
+            var route = ComputeRoute();
+            if (route.Count < 2) {
+                // 0 or 1 stop -> nothing to connect (start island with
+                // no cargo, or cargo entirely on the start island).
+                return;
+            }
+
+            for (int i = 0; i < route.Count - 1; i++) {
+                var from = GetIslandCenter(route[i]);
+                var to = GetIslandCenter(route[i + 1]);
+
+                // Skip degenerate (zero-length) legs - e.g. when both
+                // endpoints collapse to the same island after dedup.
+                // Even with the dedup above this can fire on islands
+                // whose normalized rectangles overlap to a degree
+                // that round-off gives the same centroid twice.
+                double dx = to.X - from.X;
+                double dy = to.Y - from.Y;
+                if (dx == 0 && dy == 0) {
+                    continue;
+                }
+
+                var line = new Line {
+                    X1 = from.X,
+                    Y1 = from.Y,
+                    X2 = to.X,
+                    Y2 = to.Y,
+                    Stroke = Brushes.Gold,
+                    StrokeThickness = 2.5,
+                    // Dashed: 4px on, 2px off. Picks up on the dark
+                    // navy map background without overpowering the
+                    // island labels (which use a light tint of the
+                    // group brush - see LightenForMapBg).
+                    StrokeDashArray = new DoubleCollection { 4, 2 },
+                    Tag = ROUTE_LINE_TAG,
+                    // IsHitTestVisible=false so the lines do not eat
+                    // clicks meant for the island pins behind them.
+                    IsHitTestVisible = false,
+                };
+                Grid_MapMain.Children.Add(line);
+
+                // Arrowhead: a small gold triangle whose tip sits on
+                // the leg's endpoint (to) and whose body points back
+                // along the line so it reads as an arrow pointing at
+                // the destination. Drawn in the local coordinate frame
+                // of "tip at origin, body pointing along +X" and then
+                // rotated+translated into screen space. The Transform
+                // composition order is [Rotate, Translate] (Children[0]
+                // applied first): tip stays at (0,0) under rotation,
+                // then Translate moves it to (to.X, to.Y). Back
+                // corners follow along, so the arrow always points
+                // exactly at the destination.
+                double angleRad = Math.Atan2(dy, dx);
+                double angleDeg = angleRad * 180.0 / Math.PI;
+                var arrow = new Polygon {
+                    Fill = Brushes.Gold,
+                    Stroke = Brushes.Gold,
+                    StrokeThickness = 1,
+                    // Tip at (0,0); back of the triangle 11px behind
+                    // the tip, 5px on each side. Filled + stroked with
+                    // the same gold so the arrow reads as one solid
+                    // shape regardless of background colour.
+                    Points = new PointCollection {
+                        new Point(0, 0),
+                        new Point(-11, -5),
+                        new Point(-11, 5),
+                    },
+                    Tag = ROUTE_LINE_TAG,
+                    IsHitTestVisible = false,
+                };
+                var arrowTransforms = new TransformGroup();
+                arrowTransforms.Children.Add(new RotateTransform(angleDeg));
+                arrowTransforms.Children.Add(new TranslateTransform(to.X, to.Y));
+                arrow.RenderTransform = arrowTransforms;
+                Grid_MapMain.Children.Add(arrow);
+            }
+        }
+
+        // Derives the current route from App.myCVM.CargoDetails. The starting
+        // island comes from ShipCargoViewModel.ResolveStartIslandFromCargo
+        // (warehouse of the first cargo barter's Item1) so the dashed-line
+        // overlay starts at the same point the SolveOptimalRoute solver
+        // does - otherwise the on-map route and the cargo's route would
+        // disagree. Consecutive duplicate islands are collapsed so e.g.
+        // two cargo barters at the same island render as one segment
+        // rather than a zero-length dot followed by a real segment.
+        private static List<Islands> ComputeRoute() {
+            var route = new List<Islands>();
+            var cargoList = App.myCVM?.CargoDetails;
+            var cargo = cargoList == null
+                ? null
+                : (IReadOnlyList<Barter>)cargoList.ToList();
+            var startIsland = ShipCargoViewModel.ResolveStartIslandFromCargo(cargo);
+            if (startIsland != null) {
+                route.Add(startIsland);
+            }
+            if (cargoList != null) {
+                foreach (var b in cargoList) {
+                    var isl = b.IsLand;
+                    if (isl == null) {
+                        continue;
+                    }
+                    if (route.Count == 0 || !ReferenceEquals(route[route.Count - 1], isl)) {
+                        route.Add(isl);
+                    }
+                }
+            }
+            return route;
+        }
+
+        private static readonly NormalizedBounds LEFT_INSET_BOUNDS = new(0, 0, 0.3775, 0.3267);
+        private static readonly NormalizedBounds RIGHT_INSET_BOUNDS = new(0.8175, 0, 1, 0.3267);
+        private const double INSET_PADDING = 0.0125;
+
+        private static NormalizedPoint GetDisplayCenterNormalized(Islands isl) {
+            var group = IslandNavigationGeometry.GetDisplayGroup(isl.IslandsName);
+            if (group is SpecialDisplayGroup.LeftInset or SpecialDisplayGroup.RightInset
+                && App.listIslands != null) {
+                var names = group == SpecialDisplayGroup.LeftInset
+                    ? IslandNavigationGeometry.LeftInsetNames
+                    : IslandNavigationGeometry.RightInsetNames;
+                var points = App.listIslands
+                    .Where(i => names.Contains(i.IslandsName) && i.HasNavigationCoordinates)
+                    .ToDictionary(i => i.IslandsName, i => i.NavigationPoint, StringComparer.Ordinal);
+                var bounds = group == SpecialDisplayGroup.LeftInset
+                    ? LEFT_INSET_BOUNDS
+                    : RIGHT_INSET_BOUNDS;
+                var projected = IslandNavigationGeometry.ProjectToInset(points, bounds, INSET_PADDING);
+                if (projected.TryGetValue(isl.IslandsName, out var point)) {
+                    return point;
+                }
+            }
+
+            var t = isl.IslandsThickness;
+            return new NormalizedPoint(
+                (t.Left + (1 - t.Right)) * 0.5,
+                (t.Top + (1 - t.Bottom)) * 0.5);
+        }
+
+        // Pixel position of the displayed pin. Inset members use their
+        // undistorted inset projection; main-map and bottom-edge members
+        // retain the authored display centroid.
+        private Point GetIslandCenter(Islands isl) {
+            var p = GetDisplayCenterNormalized(isl);
+            return new Point(p.X * Grid_MapMain.ActualWidth, p.Y * Grid_MapMain.ActualHeight);
         }
 
         private Point GetPosition(UIElement element) {
@@ -697,7 +913,12 @@ namespace iBarter.View {
             }
 
 
-            myGrid_Image.Margin = new Thickness(_barter.IsLand.IslandsThickness.Left * Grid_MapMain.ActualWidth, _barter.IsLand.IslandsThickness.Top * Grid_MapMain.ActualHeight, _barter.IsLand.IslandsThickness.Right * Grid_MapMain.ActualWidth, _barter.IsLand.IslandsThickness.Bottom * Grid_MapMain.ActualHeight);
+            var displayCenter = GetDisplayCenterNormalized(_barter.IsLand);
+            myGrid_Image.Margin = new Thickness(
+                displayCenter.X * Grid_MapMain.ActualWidth - 5,
+                displayCenter.Y * Grid_MapMain.ActualHeight - 5,
+                (1 - displayCenter.X) * Grid_MapMain.ActualWidth - 5,
+                (1 - displayCenter.Y) * Grid_MapMain.ActualHeight - 5);
             myGrid_Image.Width = 10;
             myGrid_Image.Height = 10;
 

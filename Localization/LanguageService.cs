@@ -80,17 +80,24 @@ namespace iBarter.Localization {
         public string Localize(string key, params object[] args) {
             string text;
             try {
-                if (_strings.TryGetValue(key, out var v)) {
-                    text = v;
-                }
-                else {
-                    // Last-ditch: also try Application.FindResource for any
-                    // other dictionary that might have the key (e.g. someone
-                    // added a WindowStyle-level resource).  Returns null on
-                    // miss; we fall back to the key as a visible stub so
-                    // missing translations are obvious in QA.
-                    text = System.Windows.Application.Current?.FindResource(key) as string ?? key;
-                }
+                // Dict is the single source of truth (loaded once per language
+                // swap from Resources/i18n/Strings.{lang}.xaml via XDocument).
+                // The previous Application.FindResource backstop was removed:
+                //   * FindResource throws ResourceReferenceKeyNotFoundException
+                //     on miss, which (despite the outer catch) surfaces as a
+                //     designer-time error for every {loc:Localize ...} call
+                //     before InitializeAtStartup populates the dict, breaking
+                //     the WPF designer for views with many Localize usages
+                //     (PlannerControl.xaml in particular — 24 Localize calls
+                //     accumulate enough recorded exceptions to fail the
+                //     designer's "Click here to reload the designer" path).
+                //   * At runtime the dict is always populated by
+                //     InitializeAtStartup, so this branch was never hit.
+                //   * The old comment claimed FindResource "Returns null on
+                //     miss" — that's wrong, it throws, so the `as string ?? key`
+                //     fallback was only reachable when Application.Current
+                //     was null.  Stale comment + misleading code, removed.
+                text = _strings.TryGetValue(key, out var v) ? v : key;
             }
             catch {
                 text = key;

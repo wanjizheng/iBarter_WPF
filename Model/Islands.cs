@@ -2,6 +2,7 @@
 using Syncfusion.Windows.Shared;
 using System.ComponentModel;
 using System.Windows;
+using iBarter.Navigation;
 
 namespace iBarter {
     public class Islands : NotificationObject {
@@ -91,6 +92,18 @@ namespace iBarter {
                 return IslandsName;
             }
         }
+
+        public double? NavigationX { get; set; }
+        public double? NavigationY { get; set; }
+        public string NavigationSource { get; set; } = string.Empty;
+
+        public bool HasNavigationCoordinates =>
+            NavigationX.HasValue && NavigationY.HasValue &&
+            double.IsFinite(NavigationX.Value) && double.IsFinite(NavigationY.Value);
+
+        public NavigationPoint NavigationPoint => HasNavigationCoordinates
+            ? new NavigationPoint(NavigationX!.Value, NavigationY!.Value)
+            : throw new InvalidOperationException($"Missing navigation coordinates for {IslandsName}");
 
         public int Parley {
             get { return intParley; }

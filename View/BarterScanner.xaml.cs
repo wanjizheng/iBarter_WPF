@@ -139,24 +139,27 @@ namespace iBarter.View {
 
 
         private async void ButtonAdv_Scan_ClickAsync(object sender, RoutedEventArgs e) {
-            // Thread myThread_SearchBarter = new Thread(App.myCFun.SearchBarter);
-            // myThread_SearchBarter.IsBackground = true;
-            // myThread_SearchBarter.Start();
+            // 2026-07-09: removed both the scan cooldown gate and the
+            // pre-scan capture probe. Both were failing on the user's
+            // dx hook build and blocking legitimate scans:
+            //   - cooldown's 10-s gate stopped the user from re-clicking
+            //     during a normal 1-2-anchor scan session.
+            //   - pre-scan probe's 3x retry/800ms backoff (and the
+            //     post-sleep probe before it) both returned ret=0 from
+            //     PureDM.DM.Capture even on a healthy hook, causing
+            //     the scan to bail with a "capture-stale" message
+            //     before any anchors were looked up.
+            // The user has opted to let the scan run unconditionally;
+            // the per-anchor fallback paths (smart skip after 2
+            // consecutive failures) already cover the rare case
+            // where the hook actually IS dead.
 
+            App.myCFun.Log("[DIAG-ui] scan click received", Brushes.LightSlateGray);
             ButtonAdv_Scan.IsEnabled = false;
 
             try {
                 App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.Starting"), Brushes.Blue);
-                //await Task.Run(() => { App.myCFun.SearchBarter(); });
-
-                // Explicit async lambda with inner await guarantees the outer
-                // Task.Run waits for IdentifyRoutes() to actually finish, even
-                // if overload resolution picks the Func<Task> wrapper that
-                // unwraps the inner task (instead of the Func<TResult> one
-                // that wouldn't). Previously a closed scanner window
-                // (App.myBarterScanner == null) would NRE inside the scan,
-                // get swallowed, and log "Done!" instantly with no scan.
-                await Task.Run(async () => await App.myCFun.IdentifyRoutes());
+                await App.myCFun.IdentifyRoutes();
             }
             catch (Exception ex) {
                 App.myCFun.Log(ex.Message, Brushes.Red);
@@ -169,7 +172,11 @@ namespace iBarter.View {
 
         public void RefreshDataGrid() {
             if (!Application.Current.Dispatcher.CheckAccess()) {
-                Application.Current.Dispatcher.Invoke(new Action(() => RefreshDataGrid()));
+                // Scanner completion runs on a background task. Never make it
+                // wait synchronously for WPF layout/text rendering; queue the
+                // refresh and let the UI dispatcher process it when available.
+                Application.Current.Dispatcher.BeginInvoke(new Action(RefreshDataGrid));
+                return;
             }
             else {
                 try {
@@ -197,6 +204,16 @@ namespace iBarter.View {
                 if (App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName.Equals(barter.IsLandName)) == null) {
                     App.myPVM.BarterCollection.Add(barter);
                 }
+            }
+
+            // 2026-07-08: auto-save planner on Add. The user previously had
+            // to also click Planner's "Save" button or risk losing changes
+            // if the app crashed / closed mid-session. The existing
+            // PlannerControl.SaveData() handles both the XML layout dump
+            // and the JSON bartered-items dump, so reusing it here keeps
+            // a single source of truth for the on-disk format.
+            if (App.myfmMain?.myPlannerControl != null) {
+                App.myfmMain.myPlannerControl.SaveData();
             }
 
             App.listBarterScanner.Clear();
@@ -262,7 +279,23 @@ namespace iBarter.View {
 
         private void BarterScanResults_CurrentCellEndEdit(object sender, CurrentCellEndEditEventArgs e) {
             try {
-                BarterScanResults.View.Refresh();
+                // Numeric-cell edits auto-refresh via their direct bindings
+                // (Parley / IslandRemaining / Item1Number / Item2Number all
+                // raise the right PropertyChanged in their own setters), so
+                // we skip the expensive full View.Refresh() for them. Only
+                // GridImageColumn (Item1Icon / Item2Icon) needs a forced
+                // refresh when the dropdown selection changes underneath
+                // it - the icon-path change after an item-name edit does
+                // NOT propagate automatically. Mirror the pattern in
+                // View/PlannerControl.xaml.cs:603-609. Visual index 0 is
+                // the row header; the actual columns start at index 1.
+                int colIdx = e.RowColumnIndex.ColumnIndex - 1;
+                if (colIdx >= 0 && colIdx < BarterScanResults.Columns.Count) {
+                    string mapping = BarterScanResults.Columns[colIdx].MappingName;
+                    if (mapping == "Item1Name" || mapping == "Item2Name") {
+                        BarterScanResults.View?.Refresh();
+                    }
+                }
             }
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);

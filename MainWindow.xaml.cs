@@ -60,6 +60,19 @@ namespace iBarter {
                 }
             }
             catch { }
+
+            // Release the DM COM object on the same STA thread that created it,
+            // then stop that thread. Stopping first would leave DmAutomation's
+            // finalizer to run on an arbitrary GC thread, outside its COM apartment.
+            try {
+                if (PureDmWorker.IsRunning && App.myPureDM != null) {
+                    PureDmWorker.Call(() => App.myPureDM.Dispose());
+                }
+            }
+            catch { }
+            finally {
+                try { PureDmWorker.Stop(); } catch { }
+            }
         }
 
         // [DllImport("user32.dll")]
@@ -70,26 +83,10 @@ namespace iBarter {
         //     var w32Mouse = new Win32Point();
         //     GetCursorPos(ref w32Mouse);
         //
-        //     return new PointPlus(w32Mouse.X, w32Mouse.Y);
-        // }
-
-        private void Timer_Tick(object sender, EventArgs e) {
-            //statusBarItem_XY.Text = "X: " + GetMousePosition().X + " | Y: " + GetMousePosition().Y;
-            int intX, intY;
-            App.myPureDM.DM.GetCursorPos(out intX, out intY);
-            statusBarItem_XY.Text = "X: " + intX + " | Y: " + intY;
-
-
-            int intWidth, intHeight;
-            App.myPureDM.DM.GetClientSize((int)App.myPureDM.WindowHandle, out intWidth, out intHeight);
-            if (intWidth > 0 && intHeight > 0) {
-                App.myPureDM.WindowWidth = intWidth;
-                App.myPureDM.WindowHeight = intHeight;
-                double x = (double)intX / App.myPureDM.WindowWidth;
-                double y = (double)intY / App.myPureDM.WindowHeight;
-                //toolStripStatusLabel_WinPercentage.Text = "X: " + x + " | Y: " + y;
-            }
-        }
+        // 2026-07-10: Timer_Tick method removed - it was the 200 calls/sec
+        // culprit calling DM.GetCursorPos + DM.GetClientSize on the UI
+        // thread. PureDmWorker.Call funnels the equivalent reads through
+        // the dedicated STA worker instead.
 
 
         /// <summary>
@@ -179,66 +176,80 @@ namespace iBarter {
 
             try {
                 // App.mySplashScreen.worker.ReportProgress(10);
-                Logging.SaveConsoleLog = false;
+                // 2026-07-10: turn ON file logging so that if init hangs
+                // before any UI log line is written we still have something
+                // on disk to diagnose from.
+                Logging.SaveConsoleLog = true;
                 Logging.myTextBoxWriter = new TextBoxWriter(richTextBox_Log);
-                App.myPureDM = new PureDM.DmAutomation("wanjizheng1c1f9b855a9f822cbf24afa526dfca3c");
-                App.myPureDM.AttachToProcessByName("BlackDesert64");
-                App.myPureDM.BindMode = 103;
-                // App.myPureDM.MouseMode = "dx.public.active.api|dx.public.active.message|dx.mouse.position.lock.api|dx.mouse.state.api|dx.mouse.api|dx.mouse.focus.input.api|dx.mouse.focus.input.message|dx.mouse.clip.lock.api|dx.mouse.input.lock.api| dx.mouse.cursor";
+                App.myCFun.Log("[INIT] 0 before PureDmWorker.Start", Brushes.Gray);
+                // Start the owner STA first, then construct DmAutomation on it.
+                // Its constructor creates the dm.dmsoft COM object immediately;
+                // constructing it on the WPF UI STA and merely calling it from
+                // this worker would still cross COM apartment boundaries.
+                PureDmWorker.Start();
+                App.myCFun.Log("[INIT] 1 after PureDmWorker.Start", Brushes.Gray);
+                App.myCFun.Log("[INIT] 2 before new DmAutomation", Brushes.Gray);
+                App.myPureDM = PureDmWorker.Call(() =>
+                    new PureDM.DmAutomation("wanjizheng1c1f9b855a9f822cbf24afa526dfca3c"));
+                App.myCFun.Log("[INIT] 3 after new DmAutomation", Brushes.Gray);
 
-
-
-
-                App.myPureDM.DisplayMode = "dx.graphic.3d.10plus";
-
-
-
-
-
-
-
-
-
-
-                App.myPureDM.MouseMode = "dx.mouse.position.lock.api|dx.mouse.focus.input.api|dx.mouse.focus.input.message|dx.mouse.clip.lock.api|dx.mouse.state.api|dx.mouse.api|dx.mouse.cursor";
-                App.myPureDM.KeyboardMode = "dx.keypad.input.lock.api|dx.keypad.state.api|dx.keypad.api";
-                App.myPureDM.PublicMode = "dx.public.graphic.protect|dx.public.anti.api|dx.public.km.protect|dx.public.input.ime|dx.public.focus.message";
-
-                // App.myPureDM.DisplayMode = "normal";
-                // App.myPureDM.MouseMode = "normal";
-                // App.myPureDM.KeyboardMode = "normal";
-                // App.myPureDM.PublicMode = "";
-
+                // All initialization and binding stays on the owner STA.
+                PureDmWorker.Call(() => {
+                    App.myPureDM.AttachToProcessByName("BlackDesert64");
+                    App.myCFun.Log("[INIT] 4 after AttachToProcessByName hwnd=" + App.myPureDM.WindowHandle, Brushes.Gray);
+                    App.myPureDM.BindMode = 103;
+                    App.myPureDM.DisplayMode = "dx.graphic.3d.10plus";
+                    App.myPureDM.MouseMode = "dx.mouse.position.lock.api|dx.mouse.focus.input.api|dx.mouse.focus.input.message|dx.mouse.clip.lock.api|dx.mouse.state.api|dx.mouse.api|dx.mouse.cursor";
+                    App.myPureDM.KeyboardMode = "dx.keypad.input.lock.api|dx.keypad.state.api|dx.keypad.api";
+                    App.myPureDM.PublicMode = "dx.public.graphic.protect|dx.public.anti.api|dx.public.km.protect|dx.public.input.ime|dx.public.focus.message";
+                });
 
                 // App.mySplashScreen.worker.ReportProgress(50);
                 if ((int)App.myPureDM.WindowHandle > 0) {
-                    App.myPureDM.DM.SetWindowState((int)App.myPureDM.WindowHandle, 1);
-                    //int bindResult = App.dmSoft.BindWindowEx((int)App.myHwnd, "dx.graphic.3d.10plus", "dx.mouse.cursor|dx.mouse.raw.input", "windows", "dx.mouse.raw.input", 101);
-
-                    int bindResult = App.myPureDM.CV.BindWindow((int)App.myPureDM.WindowHandle);
-
+                    App.myCFun.Log("[INIT] 5 before BindWindow hwnd=" + App.myPureDM.WindowHandle, Brushes.Gray);
+                    int bindResult = PureDmWorker.Call(() => {
+                        App.myPureDM.DM.SetWindowState((int)App.myPureDM.WindowHandle, 1);
+                        return App.myPureDM.CV.BindWindow((int)App.myPureDM.WindowHandle);
+                    });
+                    App.myCFun.Log("[INIT] 6 after BindWindow bindResult=" + bindResult, Brushes.Gray);
 
                     // App.mySplashScreen.worker.ReportProgress(90);
-                    //int bindResult = App.dmSoft.BindWindowEx((int)App.myHwnd, "dx2", "normal", "normal", "dx.public.km.protect|dx.public.anti.api|dx.public.inject.super|", 101);
                     if (bindResult == 1) {
                         App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Binding.Success"), Brushes.Blue);
-                        // App.myPureDM.DM.SetWindowState((int)App.myPureDM.Hwnd, 4); //Maximize the window
                     }
                     else {
                         App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Binding.Failed"), Brushes.Red);
                     }
 
-                    // App.mySplashScreen.worker.ReportProgress(100);
-                    var timer = new DispatcherTimer();
-
-                    timer.Interval = TimeSpan.FromMilliseconds(10);
-                    timer.Tick += Timer_Tick;
-                    timer.Start();
+                    // 2026-07-10: REMOVED the 10ms DispatcherTimer that
+                    // called DM.GetCursorPos + DM.GetClientSize on the
+                    // UI thread ~200 times/sec. Those calls are now
+                    // funnelled through the STA worker via the scan
+                    // path's TryRefreshGameWindowSize, which is plenty
+                    // for keeping WindowWidth/WindowHeight current.
+                    //
+                    // The status-bar XY readout is also removed - it
+                    // served no functional purpose and was the main
+                    // source of COM cross-thread contention.
                 }
                 else {
                     App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Binding.NoProcess"), Brushes.Red);
+                    // 2026-07-10: BDO not found - the previous code path
+                    // fell through to myShipCargo.RefreshData() (which then
+                    // misbehaves / throws) and the splash was never closed.
+                    // Close + shutdown splash here so the user gets a usable
+                    // main window instead of a stuck splash forever.
+                    App.myCFun.Log("[INIT] NoProcess - closing splash + InvokeShutdown", Brushes.Red);
+                    try {
+                        App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
+                        App.mySplashScreen.Dispatcher.InvokeShutdown();
+                    } catch (Exception splashEx) {
+                        App.myCFun.Log("[INIT] splash shutdown fail: " + splashEx.Message, Brushes.Red);
+                    }
+                    return;
                 }
 
+                App.myCFun.Log("[INIT] 7 before splash close", Brushes.Gray);
                 myShipCargo.RefreshData();
 
                 App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
@@ -260,7 +271,13 @@ namespace iBarter {
                 App.myCFun.DownloadMissingIcon();
             }
             catch (Exception exception) {
-                App.myCFun.Log(exception.Message, Brushes.Red);
+                App.myCFun.Log("[INIT] EXCEPTION: " + exception.Message, Brushes.Red);
+                // 2026-07-10: even on init exception, close splash so the
+                // user is not left looking at a stuck splash.
+                try {
+                    App.mySplashScreen?.Dispatcher.Invoke(new Action(() => App.mySplashScreen?.Close()));
+                    App.mySplashScreen?.Dispatcher.InvokeShutdown();
+                } catch { /* best effort */ }
             }
         }
 
@@ -303,27 +320,13 @@ namespace iBarter {
             });
         }
 
-        // Manual re-bind of the game window. Used when PureDM's DX
-        // capture interface goes stale mid-session (a common issue
-        // with the 'dx.graphic.3d.10plus' mode the user binds with):
-        // IsBind() may still return 1 but GetScreenDataBmp() returns 0
-        // and every subsequent scan finds zero anchors. The scan
-        // path detects this and emits a 'please re-bind manually'
-        // prompt; the user clicks this menu item to retry the bind
-        // themselves (on the UI thread - the same thread the original
-        // BindWindowEx was called from) so the DX capture pipeline
-        // gets reset.
-        private void MenuItem_RebindGameWindow_Click(object sender, RoutedEventArgs e) {
-            try {
-                App.myCFun.Log("Re-binding game window on UI thread...", Brushes.Orange);
-                App.myPureDM.CV.BindWindow((int)App.myPureDM.WindowHandle);
-                System.Threading.Thread.Sleep(200); // let DX hook reinitialise
-                App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Scanner.RebindSucceeded"), Brushes.Blue);
-            }
-            catch (Exception ex) {
-                App.myCFun.Log("Re-bind failed: " + ex.Message, Brushes.Red);
-            }
-        }
+        // 2026-07-08: manual re-bind menu item removed per user request.
+        // Rebinding the game window from the UI thread crashes the game
+        // client on the user's dx.graphic.3d.10plus build (see commit
+        // df859cc + the [DIAG-capture-down] message that says "DO NOT
+        // manually rebind via the menu"). The auto-unbind in the scan
+        // path is the only safe recovery - the user just waits 5-15 s
+        // and re-clicks Scan.
 
         // Phase 4 (i18n): one-shot bdocodex.com/tw/item/{id}/ scraper. Hits
         // every ItemID in App.listItems, extracts the zh-TW H1, and rewrites

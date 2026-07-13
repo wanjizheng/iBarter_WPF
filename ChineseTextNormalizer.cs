@@ -11,6 +11,19 @@ namespace iBarter {
                 return string.Empty;
             }
 
+            // Fast path: ASCII / pinyin inputs dominate IME composition
+            // and English label edits. Skip the LCMapStringEx P/Invoke
+            // and the per-char CJK compaction - only the OCR-variant
+            // map can change anything. This drops the per-keystroke
+            // cost to one StringBuilder pass for the most common case.
+            if (!ContainsCjk(input)) {
+                var ascii = new StringBuilder(input.Length);
+                foreach (char ch in input) {
+                    ascii.Append(MapOcrVariant(ch));
+                }
+                return ascii.ToString();
+            }
+
             string text = ToTraditionalChinese(input);
             bool hasCjk = ContainsCjk(text);
 
@@ -23,8 +36,13 @@ namespace iBarter {
                 return mapped.ToString();
             }
 
+            // Build compact directly from mapped via index access so we
+            // don't materialize `mapped.ToString()` once per iteration
+            // (the previous version did, allocating a fresh string on
+            // every char of the loop).
             var compact = new StringBuilder(mapped.Length);
-            foreach (char ch in mapped.ToString()) {
+            for (int i = 0; i < mapped.Length; i++) {
+                char ch = mapped[i];
                 if (ContainsCjk(ch) || char.IsLetterOrDigit(ch)) {
                     compact.Append(ch);
                 }

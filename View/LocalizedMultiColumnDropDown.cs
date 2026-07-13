@@ -13,15 +13,30 @@ namespace iBarter.View {
                 return true;
             }
 
+            // Hoist the query normalize out of the per-item loop. The
+            // previous version re-ran ChineseTextNormalizer.NormalizeForMatching
+            // on the query inside Matches() once per (item x candidate) pair
+            // -- with 275 items x 3 candidates = 825 redundant normalizations
+            // per keystroke. IME pinyin TextChanged fires ~20/sec, so the
+            // LCMapStringEx P/Invoke storms were stalling the UI thread.
+            //
+            // Now: normalize the query ONCE per keystroke, share it across
+            // all 275 candidates, and skip the normalized path entirely
+            // when the query has no CJK (the fast path in
+            // NormalizeForMatching returns the OCR-variant map only,
+            // which is already applied directly via MatchesCore).
+            string normalizedQuery = ChineseTextNormalizer.NormalizeForMatching(query);
+            bool queryHasCjk = ChineseTextNormalizer.ContainsCjk(normalizedQuery);
+
             if (item is Items barterItem) {
-                return MatchesAny(query,
+                return MatchesAny(query, normalizedQuery, queryHasCjk,
                     barterItem.ItemNameDisplay,
                     barterItem.ItemNameZhTw,
                     barterItem.ItemName);
             }
 
             if (item is Islands island) {
-                return MatchesAny(query,
+                return MatchesAny(query, normalizedQuery, queryHasCjk,
                     island.IslandsNameDisplay,
                     island.IslandsNameZhTw,
                     island.IslandsName);
@@ -35,19 +50,24 @@ namespace iBarter.View {
                 return true;
             }
 
-            if (MatchesAutoComplete(exactValue, filterText)) {
-                return true;
+            if (string.IsNullOrEmpty(filterText)) {
+                return false;
             }
 
+            // Same hoist as FilterRecord: normalize filterText once and
+            // share across all items instead of re-normalizing per row.
+            string normalizedFilter = ChineseTextNormalizer.NormalizeForMatching(filterText);
+            bool filterHasCjk = ChineseTextNormalizer.ContainsCjk(normalizedFilter);
+
             if (item is Items barterItem) {
-                return MatchesAnyAutoComplete(filterText,
+                return MatchesAnyAutoComplete(filterText, normalizedFilter, filterHasCjk,
                     barterItem.ItemNameDisplay,
                     barterItem.ItemNameZhTw,
                     barterItem.ItemName);
             }
 
             if (item is Islands island) {
-                return MatchesAnyAutoComplete(filterText,
+                return MatchesAnyAutoComplete(filterText, normalizedFilter, filterHasCjk,
                     island.IslandsNameDisplay,
                     island.IslandsNameZhTw,
                     island.IslandsName);
@@ -56,30 +76,38 @@ namespace iBarter.View {
             return false;
         }
 
-        private bool MatchesAny(string query, params string[] candidates) {
+        private bool MatchesAny(string query, string normalizedQuery, bool queryHasCjk, params string[] candidates) {
+            var comparison = AllowCaseSensitiveFiltering
+                ? StringComparison.CurrentCulture
+                : StringComparison.CurrentCultureIgnoreCase;
             foreach (var candidate in candidates) {
-                if (Matches(candidate, query)) {
+                if (Matches(candidate, query, normalizedQuery, queryHasCjk, comparison)) {
                     return true;
                 }
             }
             return false;
         }
 
-        private bool Matches(string candidate, string query) {
+        private bool Matches(string candidate, string query, string normalizedQuery, bool queryHasCjk, StringComparison comparison) {
             if (string.IsNullOrEmpty(candidate)) {
                 return false;
             }
 
-            var comparison = AllowCaseSensitiveFiltering
-                ? StringComparison.CurrentCulture
-                : StringComparison.CurrentCultureIgnoreCase;
-
+            // Cheap path first: raw candidate vs raw query.
             if (MatchesCore(candidate, query, comparison)) {
                 return true;
             }
 
+            // Skip the normalized path entirely when the query has no
+            // CJK -- the OCR-variant map is already applied to ASCII
+            // inputs by NormalizeForMatching's fast path, so a second
+            // pass on the candidate cannot find anything the direct
+            // IndexOf just missed.
+            if (!queryHasCjk) {
+                return false;
+            }
+
             string normalizedCandidate = ChineseTextNormalizer.NormalizeForMatching(candidate);
-            string normalizedQuery = ChineseTextNormalizer.NormalizeForMatching(query);
             if (string.IsNullOrEmpty(normalizedCandidate) || string.IsNullOrEmpty(normalizedQuery)) {
                 return false;
             }
@@ -87,33 +115,37 @@ namespace iBarter.View {
             return MatchesCore(normalizedCandidate, normalizedQuery, comparison);
         }
 
-        private bool MatchesAnyAutoComplete(string query, params string[] candidates) {
+        private bool MatchesAnyAutoComplete(string filterText, string normalizedFilter, bool filterHasCjk, params string[] candidates) {
+            var comparison = AllowCaseSensitiveFiltering
+                ? StringComparison.CurrentCulture
+                : StringComparison.CurrentCultureIgnoreCase;
             foreach (var candidate in candidates) {
-                if (MatchesAutoComplete(candidate, query)) {
+                if (MatchesAutoComplete(candidate, filterText, normalizedFilter, filterHasCjk, comparison)) {
                     return true;
                 }
             }
             return false;
         }
 
-        private bool MatchesAutoComplete(string candidate, string query) {
-            if (string.IsNullOrEmpty(candidate) || string.IsNullOrEmpty(query)) {
+        private bool MatchesAutoComplete(string candidate, string filterText, string normalizedFilter, bool filterHasCjk, StringComparison comparison) {
+            if (string.IsNullOrEmpty(candidate) || string.IsNullOrEmpty(filterText)) {
                 return false;
             }
 
-            var comparison = AllowCaseSensitiveFiltering
-                ? StringComparison.CurrentCulture
-                : StringComparison.CurrentCultureIgnoreCase;
-
-            if (candidate.StartsWith(query, comparison)) {
+            // Cheap path first: raw candidate vs raw filterText.
+            if (candidate.StartsWith(filterText, comparison)) {
                 return true;
             }
 
+            // Same skip-the-normalized-path logic as Matches: ASCII
+            // filters cannot benefit from the OCR-variant pass.
+            if (!filterHasCjk || string.IsNullOrEmpty(normalizedFilter)) {
+                return false;
+            }
+
             string normalizedCandidate = ChineseTextNormalizer.NormalizeForMatching(candidate);
-            string normalizedQuery = ChineseTextNormalizer.NormalizeForMatching(query);
             return !string.IsNullOrEmpty(normalizedCandidate)
-                   && !string.IsNullOrEmpty(normalizedQuery)
-                   && normalizedCandidate.StartsWith(normalizedQuery, comparison);
+                   && normalizedCandidate.StartsWith(normalizedFilter, comparison);
         }
 
         private bool MatchesCore(string candidate, string query, StringComparison comparison) {

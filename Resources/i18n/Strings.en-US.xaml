@@ -154,13 +154,9 @@
     <sys:String x:Key="str.ShipCargo.Btn.Clean">Clean</sys:String>
     <sys:String x:Key="str.ShipCargo.Btn.CleanTip">Remove finished cargo rows</sys:String>
 
-    <!-- ShipCargoControl.xaml toolbar button: sort by barter chain -->
-    <sys:String x:Key="str.ShipCargo.Btn.SortByChain">Sort by Chain</sys:String>
-    <sys:String x:Key="str.ShipCargo.Btn.SortByChainTip">Reorder barters by chain position: barters that produce items consumed by other cargo barters come first; barters that stand alone keep their insertion order.</sys:String>
-
-    <!-- ShipCargoControl.xaml toolbar button: solve optimal sailing route from Cox_Pirate -->
+    <!-- ShipCargoControl.xaml toolbar button: solve sailing route starting from the warehouse that holds the first cargo barter's input item. -->
     <sys:String x:Key="str.ShipCargo.Btn.OptimalRoute">Optimal Route</sys:String>
-    <sys:String x:Key="str.ShipCargo.Btn.OptimalRouteTip">Reorder barters as the shortest sailing route starting from Wrecked Coos Pirate Ship, while still respecting the chain (you must produce an item before you can spend it). Exact solution for up to 18 barters; nearest-neighbor heuristic above that.</sys:String>
+    <sys:String x:Key="str.ShipCargo.Btn.OptimalRouteTip">Reorder barters by sailing from the warehouse that holds the first cargo barter's input item, then greedily visiting the nearest unvisited barter whose chain is satisfied. Velia/Iliya/Epheria/Ancado stock counts decide which warehouse you start from.</sys:String>
     <!-- Phase 6 (i18n): Item tier labels shown in the Storage grid Tier column
          and the BarterPlanner LV column.  Keyed by ItemLV integer (0..7)
          plus an "8" sentinel for the unrecognised-LV bucket. -->
@@ -262,11 +258,10 @@
     <sys:String x:Key="str.Log.ShipCargo.CopiedToClipboard">{0} copied to the clipboard.</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.Sorted">Ship cargo sorted by barter chain.</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Solo">Ship cargo has only one barter; nothing to optimize.</sys:String>
-    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoStartIsland">Cannot resolve start island for optimal route (Wrecked Coos Pirate Ship); aborting.</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoStartIsland">Cannot determine a start warehouse island for the route; aborting.</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.MissingIsland">Some barters are missing an island; falling back to chain sort.</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoRoute">No precedence-respecting route found (likely a chain cycle); falling back to chain sort.</sys:String>
-    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Done">Optimal route solved: {0} stops, total distance {1} (normalized map units).</sys:String>
-    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.DoneHeuristic">Optimal route solved (nearest-neighbor heuristic): {0} stops.</sys:String>
+    <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Done">Optimal route solved: {0} stops, starting from warehouse island {1}.</sys:String>
 
 
     <!-- Phase 7 (i18n): dialog prompts (MessageBox.Show) -->

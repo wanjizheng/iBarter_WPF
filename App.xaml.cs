@@ -112,12 +112,45 @@ namespace iBarter {
         protected override void OnStartup(StartupEventArgs e) {
             base.OnStartup(e);
 
+            // Load storage data once at startup, before any UI renders. Previously
+            // this happened lazily inside Barter.InvQuantity (which `new`-ed a
+            // StorageManagement window on first read) and again every time the
+            // Storage window was opened. That had two visible problems:
+            //   1. First scanner "Add to Planner" click would silently trigger 80+
+            //      "资料已储存" log lines because the lazy-init load cascaded through
+            //      CollectionChanged -> SaveData for every hardcoded seed item.
+            //   2. Storage quantities were unavailable to Barter.InvQuantity until
+            //      the user opened the Storage window at least once.
+            // Hoisting the load to startup makes the data ready before any binding
+            // reads it and confines the seed cascade to a single, controlled load.
+            if (myStorageVM != null) {
+                myStorageVM.LoadData();
+            }
+
             myfmMain.Show();
             //mySplashScreen.Show();
         }
 
         private void App_DispatcherUnhandledException(object sender,
             System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e) {
+            // Detect the known WPF Popup + GDI/font memory exhaustion pattern:
+            //   NullReferenceException (thrown by Popup.OnWindowResize when _positionInfo
+            //   is null) wrapping a COMException 0x80070008 "Not enough memory resources"
+            //   from GlyphTypeface.GetGlyphMetricsOptimized.
+            // This is a system-level GDI resource issue, not a code bug — log it as a
+            // warning and continue rather than treating it as a hard crash.
+            bool isPopupGdiOom = e.Exception is NullReferenceException
+                && e.Exception.InnerException is System.Runtime.InteropServices.COMException com
+                && (uint)com.HResult == 0x80070008
+                && (e.Exception.StackTrace?.Contains("Popup.OnWindowResize") == true
+                    || e.Exception.StackTrace?.Contains("OnWindowResize") == true);
+
+            if (isPopupGdiOom) {
+                LogCrash("WPF-Popup-GDI-OOM [non-fatal, system resource exhaustion]", e.Exception);
+                e.Handled = true;
+                return;
+            }
+
             LogCrash("UI-thread", e.Exception);
             // Keep the app alive; the failed action is aborted but the user
             // doesn't lose their whole planning session to one bad edit.

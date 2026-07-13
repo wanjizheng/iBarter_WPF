@@ -1,5 +1,4 @@
-﻿using iBarter.View;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Syncfusion.Windows.Shared;
 using System.ComponentModel;
 using System.IO;
@@ -220,11 +219,20 @@ namespace iBarter {
         }
 
         public string Item1Name {
-            get {
-                if (item1Name.Equals("") && Item1 != null)
-                    item1Name = Item1.ItemName;
-                return item1Name;
-            }
+            // Pure read with on-read fallback. The legacy version wrote
+            // `item1Name = Item1.ItemName` from inside the getter, which
+            // (a) broke WPF TwoWay binding invariants by mutating the
+            // backing field without raising PropertyChanged, and
+            // (b) caused "clear has no effect" in the Scanner grid:
+            //   user types Chinese -> UpdateItem() resolves Item1 ->
+            //   user clears the cell -> binding writes "" via setter ->
+            //   WPF re-reads for any consumer -> getter rewrites the
+            //   backing field to Item1.ItemName -> cell shows old name
+            //   -> user perceives "delete did nothing" / "frozen".
+            // The Item1 setter (line ~188) and UpdateItem() (line ~398)
+            // are the only legitimate writers to item1Name; the getter
+            // computes the display value lazily and never mutates state.
+            get { return item1?.ItemName ?? item1Name; }
             set {
                 item1Name = value;
                 UpdateItem();
@@ -315,11 +323,10 @@ namespace iBarter {
         }
 
         public string Item2Name {
-            get {
-                if (item2Name.Equals("") && Item2 != null)
-                    item2Name = Item2.ItemName;
-                return item2Name;
-            }
+            // See Item1Name above for why the getter must not mutate
+            // the backing field. Item2 setter + UpdateItem() own the
+            // write-side; this getter only computes the display value.
+            get { return item2?.ItemName ?? item2Name; }
             set {
                 item2Name = value;
                 UpdateItem();
@@ -356,11 +363,25 @@ namespace iBarter {
 
         public int InvQuantity {
             get {
-                if (App.myStorageManagement == null) {
-                    App.myStorageManagement = new StorageManagement();
+                // Pure read: query the shared App.myStorageVM.StorageCollection
+                // without side effects. The previous version lazily `new`-ed a
+                // StorageManagement window on first access to guarantee the
+                // collection was loaded, but that had two bad consequences:
+                //   1. WPF data-binding fires this getter during render, so the
+                //      first time a Barter was bound (e.g. after a scan + "Add to
+                //      Planner" click) it would silently create and show a
+                //      Storage window, which then ran SeedHardcodedFallback and
+                //      triggered 80+ CollectionChanged -> SaveData cascades.
+                //   2. InvQuantity became coupled to a UI window existing,
+                //      making the data layer untestable on its own.
+                // The load now happens once at App.OnStartup via
+                // App.myStorageVM.LoadData(), so this getter can be a pure read.
+                var storage = App.myStorageVM?.StorageCollection;
+                if (storage == null) {
+                    return intInv;
                 }
 
-                Items myItem = App.myStorageVM.StorageCollection.FirstOrDefault(i => i.ItemName.Equals(Item1Name));
+                Items myItem = storage.FirstOrDefault(i => i.ItemName.Equals(Item1Name));
                 if (myItem != null) {
                     intInv = (myItem.StorageVeliaQuantity_Iliya + myItem.StorageVeliaQuantity_Velia + myItem.StorageVeliaQuantity_Epheria + myItem.StorageVeliaQuantity_Ancado);
                 }
@@ -537,6 +558,9 @@ namespace iBarter {
                 candidate?.Parley ?? catalog.Parley,
                 candidate?.Remaining ?? catalog.Remaining);
             island.IslandsNameZhTw = catalog.IslandsNameZhTw;
+            island.NavigationX = catalog.NavigationX;
+            island.NavigationY = catalog.NavigationY;
+            island.NavigationSource = catalog.NavigationSource;
             return island;
         }
 
