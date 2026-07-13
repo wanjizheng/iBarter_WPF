@@ -56,4 +56,34 @@ public sealed class AutomaticRouteHeuristicTests {
         Assert.All(result.Plan.Routes.SelectMany(x => x.Steps),
             step => Assert.True(step.Load.TotalWithExtraLT <= request.TotalLT));
     }
+
+    [Fact]
+    public void Local_moves_improve_a_nearest_neighbor_incumbent() {
+        var items = Enumerable.Range(0, 4).ToDictionary(
+            i => $"I{i}", i => new RouteItem($"I{i}", $"I{i}", 1, 100), StringComparer.Ordinal);
+        items["O"] = new RouteItem("O", "O", 1, 0);
+        var tasks = new[] {
+            new RouteBarterTask("A", "A", new RoutePoint(2, 0), "I0", 1, "O", 1),
+            new RouteBarterTask("B", "B", new RoutePoint(3, 0), "I1", 1, "O", 1),
+            new RouteBarterTask("C", "C", new RoutePoint(0, 2), "I2", 1, "O", 1),
+            new RouteBarterTask("D", "D", new RoutePoint(0, 3), "I3", 1, "O", 1),
+        };
+        var stock = Enumerable.Range(0, 4).ToDictionary(i => $"I{i}", _ => 1, StringComparer.Ordinal);
+
+        AutomaticRoutePlanningRequest Build(int moves) => new(
+            tasks, items, [new RouteWarehouse("W", "W", new RoutePoint(0, 0), stock)],
+            0, 1_000, new RouteSearchLimits(100_000, moves), "local-moves");
+        var greedyRequest = Build(0);
+        var improvedRequest = Build(100);
+
+        var greedy = AutomaticRouteHeuristic.TryBuildIncumbent(
+            greedyRequest, AutomaticRoutePreflight.Validate(greedyRequest), CancellationToken.None);
+        var improved = AutomaticRouteHeuristic.TryBuildIncumbent(
+            improvedRequest, AutomaticRoutePreflight.Validate(improvedRequest), CancellationToken.None);
+
+        Assert.NotNull(greedy);
+        Assert.NotNull(improved);
+        Assert.True(improved.Plan.Objective!.Value.TotalDistance < greedy.Plan.Objective!.Value.TotalDistance);
+        Assert.True(RoutePlanVerifier.Verify(improvedRequest, improved.Plan).Success);
+    }
 }

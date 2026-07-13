@@ -47,9 +47,127 @@ public static class AutomaticRouteHeuristic {
             return null;
         }
 
+        state = ImproveLocally(request, state, cancellationToken);
         var plan = RoutePlanFactory.FromState(
             request, state, RoutePlanStatus.BestKnownWithinLimit, []);
         return new RouteIncumbent(plan, state);
+    }
+
+    private static RouteSimulationState ImproveLocally(
+        AutomaticRoutePlanningRequest request,
+        RouteSimulationState initial,
+        CancellationToken cancellationToken) {
+        if (request.Limits.MaxLocalMoves == 0) return initial;
+
+        var current = initial;
+        var layout = ExtractLayout(current);
+        var currentPlan = RoutePlanFactory.FromState(
+            request, current, RoutePlanStatus.BestKnownWithinLimit, []);
+        int attempted = 0;
+
+        while (attempted < request.Limits.MaxLocalMoves) {
+            RouteSimulationState? bestState = null;
+            List<LocalRoute>? bestLayout = null;
+            RoutePlanObjective bestObjective = currentPlan.Objective!.Value;
+
+            void Evaluate(List<LocalRoute> candidate) {
+                if (attempted >= request.Limits.MaxLocalMoves) return;
+                attempted++;
+                cancellationToken.ThrowIfCancellationRequested();
+                var replayed = ReplayLayout(request, candidate);
+                if (replayed is null) return;
+                var candidatePlan = RoutePlanFactory.FromState(
+                    request, replayed, RoutePlanStatus.BestKnownWithinLimit, []);
+                var verification = RoutePlanVerifier.Verify(request, candidatePlan);
+                if (!verification.Success || candidatePlan.Objective!.Value.CompareTo(bestObjective) >= 0) return;
+                bestState = replayed;
+                bestLayout = candidate;
+                bestObjective = candidatePlan.Objective.Value;
+            }
+
+            // Relocate, then swap, then 2-opt. Every candidate is replayed from the
+            // original request, so dependency, per-warehouse stock and LT rules are
+            // authoritative rather than approximated by the local-move generator.
+            for (int routeIndex = 0; routeIndex < layout.Count && attempted < request.Limits.MaxLocalMoves; routeIndex++) {
+                int count = layout[routeIndex].Actions.Count;
+                for (int from = 0; from < count && attempted < request.Limits.MaxLocalMoves; from++) {
+                    for (int to = 0; to < count && attempted < request.Limits.MaxLocalMoves; to++) {
+                        if (from == to) continue;
+                        var candidate = CloneLayout(layout);
+                        var action = candidate[routeIndex].Actions[from];
+                        candidate[routeIndex].Actions.RemoveAt(from);
+                        candidate[routeIndex].Actions.Insert(to, action);
+                        Evaluate(candidate);
+                    }
+                }
+            }
+            for (int routeIndex = 0; routeIndex < layout.Count && attempted < request.Limits.MaxLocalMoves; routeIndex++) {
+                int count = layout[routeIndex].Actions.Count;
+                for (int left = 0; left < count - 1 && attempted < request.Limits.MaxLocalMoves; left++) {
+                    for (int right = left + 1; right < count && attempted < request.Limits.MaxLocalMoves; right++) {
+                        var candidate = CloneLayout(layout);
+                        (candidate[routeIndex].Actions[left], candidate[routeIndex].Actions[right]) =
+                            (candidate[routeIndex].Actions[right], candidate[routeIndex].Actions[left]);
+                        Evaluate(candidate);
+                    }
+                }
+            }
+            for (int routeIndex = 0; routeIndex < layout.Count && attempted < request.Limits.MaxLocalMoves; routeIndex++) {
+                int count = layout[routeIndex].Actions.Count;
+                for (int left = 0; left < count - 1 && attempted < request.Limits.MaxLocalMoves; left++) {
+                    for (int right = left + 1; right < count && attempted < request.Limits.MaxLocalMoves; right++) {
+                        var candidate = CloneLayout(layout);
+                        candidate[routeIndex].Actions.Reverse(left, right - left + 1);
+                        Evaluate(candidate);
+                    }
+                }
+            }
+
+            if (bestState is null || bestLayout is null) break;
+            current = bestState;
+            layout = bestLayout;
+            currentPlan = RoutePlanFactory.FromState(
+                request, current, RoutePlanStatus.BestKnownWithinLimit, []);
+        }
+        return current;
+    }
+
+    private static List<LocalRoute> ExtractLayout(RouteSimulationState state) =>
+        state.FinishedRoutes.Select(route => new LocalRoute(
+            route.Steps.Where(step => step is not WarehouseUnloadStep).ToList(),
+            route.EndWarehouseId)).ToList();
+
+    private static List<LocalRoute> CloneLayout(IEnumerable<LocalRoute> source) =>
+        source.Select(route => new LocalRoute(route.Actions.ToList(), route.EndWarehouseId)).ToList();
+
+    private static RouteSimulationState? ReplayLayout(
+        AutomaticRoutePlanningRequest request,
+        IReadOnlyList<LocalRoute> layout) {
+        var state = RouteSimulationState.CreateInitial(request);
+        foreach (var route in layout) {
+            foreach (var action in route.Actions) {
+                RouteTransitionResult result = action switch {
+                    WarehousePickupStep pickup => RouteStateTransition.TryPickup(
+                        request, state, pickup.WarehouseId, pickup.Items),
+                    BarterStep barter => RouteStateTransition.TryBarter(
+                        request, state, FindTaskIndex(request, barter.RowId)),
+                    _ => new RouteTransitionResult(false, state, null,
+                        new RouteDiagnostic("invalid-local-action")),
+                };
+                if (!result.Success) return null;
+                state = result.State;
+            }
+            var unload = RouteStateTransition.TryUnload(request, state, route.EndWarehouseId);
+            if (!unload.Success) return null;
+            state = unload.State;
+        }
+        return state;
+    }
+
+    private static int FindTaskIndex(AutomaticRoutePlanningRequest request, string rowId) {
+        for (int i = 0; i < request.Tasks.Count; i++)
+            if (string.Equals(request.Tasks[i].RowId, rowId, StringComparison.Ordinal)) return i;
+        return -1;
     }
 
     private static RouteTransitionResult? BestExecutableBarter(
@@ -112,4 +230,6 @@ public static class AutomaticRouteHeuristic {
         string WarehouseId,
         string StableKey,
         RouteTransitionResult Result);
+
+    private sealed record LocalRoute(List<RouteStep> Actions, string EndWarehouseId);
 }
