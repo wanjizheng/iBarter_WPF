@@ -551,6 +551,65 @@ public sealed class PlannerAutoPlannerTests {
         Assert.Equal(11, result.ProjectedInventory["Lv5Out"]);
     }
 
+    [Fact]
+    public void Restock_uncapped_skips_unbuildable_lowest_inventory_candidate() {
+        // Regression for the user's KeyNotFoundException crash:
+        // RestockFirst Phase 2 ranks by lowest projected inventory. A
+        // candidate (Baeza-style) with 0 input stock, no producer, and the
+        // lowest projected Item2 stock would otherwise rank FIRST and then
+        // crash when bundles[winner.RowId] is looked up. The ranker must
+        // skip unbuildable candidates; the strategy must pick the viable one.
+        var baeza = Route("58", 1, "Tough Hide", 0, 1, "Rakeflower Seed Pouch", 1, 1, 1_000, 5); // no stock
+        var seedProd = Route("seedProd", 2, "Fibers", 0, 1, "Seedling", 1, 1, 1_000, 5);
+        var viable = Route("viable", 2, "Fiber", 1, 1, "Weave", 2, 1, 1_000, 5); // Fiber=10 so bundle builds
+        var request = new AutoPlanningRequest(
+            [baeza, seedProd, viable],
+            new Dictionary<string, int> {
+                ["Tough Hide"] = 0,         // ← baeza's input is missing
+                ["Rakeflower Seed Pouch"] = 0,
+                ["Fibers"] = 10,
+                ["Seedling"] = 0,
+                ["Fiber"] = 10,
+                ["Weave"] = 0,
+            },
+            AutoPlanningStrategy.RestockFirst, 0, 0, 10_000);
+
+        // Currently throws KeyNotFoundException for key "58" — should not.
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success);
+        Assert.Equal(0, result.Multipliers["58"]);
+        Assert.True(result.Multipliers["viable"] >= 1);
+    }
+
+    [Fact]
+    public void Restock_capped_skips_unbuildable_candidate_with_highest_deficit() {
+        // RestockFirst Phase 1 ranks by largest deficit ratio (deficit/target).
+        // When two LV5 producers are candidates, the one with the *larger*
+        // deficit must NOT win if its bundle is unbuildable — otherwise the
+        // greedy loop crashes on bundles[winner.RowId]. Setup makes the
+        // unbuildable candidate have the larger deficit ratio (10/10) so it
+        // would naturally win on deficit alone.
+        var dead = Route("dead", 1, "Quux", 4, 1, "OutLv5", 5, 1, 5_000, 1); // Quux=0, no producer → fails
+        var ok = Route("ok", 1, "Hay", 4, 1, "Weave", 5, 1, 5_000, 1);     // Hay=10 → builds
+        var request = new AutoPlanningRequest(
+            [dead, ok],
+            new Dictionary<string, int> {
+                ["Quux"] = 0,
+                ["OutLv5"] = 0,    // deficit ratio 1.0 — winner if ranker uses deficit alone
+                ["Hay"] = 10,
+                ["Weave"] = 5,     // deficit ratio 0.5
+            },
+            AutoPlanningStrategy.RestockFirst, 10, 10, 50_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        // No crash; the unbuildable candidate is dropped, the viable one picks up.
+        Assert.True(result.Success);
+        Assert.Equal(0, result.Multipliers["dead"]);
+        Assert.True(result.Multipliers["ok"] >= 1, $"ok={result.Multipliers["ok"]}");
+    }
+
     // ------------------------------------------------------------------
     // Plan-relevant reserve behavior. The Universal Reserve Phase (which
     // pre-fills every LV5/LV6 item before the strategy runs) must NOT

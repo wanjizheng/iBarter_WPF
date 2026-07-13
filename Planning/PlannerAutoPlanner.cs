@@ -310,6 +310,15 @@ public sealed class PlannerAutoPlanner {
                 return;
             }
 
+            // Defensive filter: every ranker sorts the full candidate list,
+            // but the winner must come from `bundles`. We pre-trim the list
+            // to candidates with successful bundles so a misbehaving ranker
+            // cannot leak a no-bundle candidate to the top and crash the
+            // bundles[winner.RowId] lookup below.
+            candidates = candidates.Where(c => bundles.ContainsKey(c.RowId)).ToList();
+            if (candidates.Count == 0) {
+                return;
+            }
             candidates.Sort((a, b) => ranker(a, b, bundles, request, committed));
             var winner = candidates[0];
             var winnerBundle = bundles[winner.RowId];
@@ -417,6 +426,20 @@ public sealed class PlannerAutoPlanner {
         AutoPlanningRequest request,
         IReadOnlyDictionary<string, int> committed) {
 
+        var ba = bundlesByRow.TryGetValue(a.RowId, out var bna) ? bna : null;
+        var bb = bundlesByRow.TryGetValue(b.RowId, out var bnb) ? bnb : null;
+        // An unbuildable candidate must NEVER be selected as the winner;
+        // otherwise GreedyFillIncrements crashes on bundles[winner.RowId].
+        // Mirror CompareProfit / CompareRemainder / CompareCrowCoin: an a-row
+        // with no bundle ranks strictly after a b-row with a bundle, and
+        // vice versa. Tie-break for two-both-empty pairs uses row id so the
+        // selection is deterministic.
+        if (ba is null && bb is null) {
+            return StringComparer.Ordinal.Compare(a.RowId, b.RowId);
+        }
+        if (ba is null) return 1;
+        if (bb is null) return -1;
+
         int targetA = a.Item2Level == 5 ? request.Lv5Target : request.Lv6Target;
         int targetB = b.Item2Level == 5 ? request.Lv5Target : request.Lv6Target;
         int projA = ProjectedItemInventory(a.Item2Id, request, committed);
@@ -424,14 +447,9 @@ public sealed class PlannerAutoPlanner {
         int deficitA = targetA - projA;
         int deficitB = targetB - projB;
 
-        var ba = bundlesByRow.TryGetValue(a.RowId, out var bna) ? bna : null;
-        var bb = bundlesByRow.TryGetValue(b.RowId, out var bnb) ? bnb : null;
-        int pa = ba?.AdditionalParley ?? int.MaxValue;
-        int pb = bb?.AdditionalParley ?? int.MaxValue;
-
         int cmp = unchecked(deficitB * targetA).CompareTo(unchecked(deficitA * targetB));
         if (cmp != 0) return cmp;
-        cmp = pa.CompareTo(pb);
+        cmp = ba.AdditionalParley.CompareTo(bb.AdditionalParley);
         if (cmp != 0) return cmp;
         return StringComparer.Ordinal.Compare(a.RowId, b.RowId);
     }
@@ -442,19 +460,27 @@ public sealed class PlannerAutoPlanner {
         AutoPlanningRequest request,
         IReadOnlyDictionary<string, int> committed) {
 
-        int projA = ProjectedItemInventory(a.Item2Id, request, committed);
-        int projB = ProjectedItemInventory(b.Item2Id, request, committed);
-
         var ba = bundlesByRow.TryGetValue(a.RowId, out var bna) ? bna : null;
         var bb = bundlesByRow.TryGetValue(b.RowId, out var bnb) ? bnb : null;
-        int pa = ba?.AdditionalParley ?? int.MaxValue;
-        int pb = bb?.AdditionalParley ?? int.MaxValue;
+        // Same null-bundle contract as CompareCapped: a winner must always
+        // have a usable bundle. Without this guard, CompareUncapped ranks by
+        // projected inventory and the lowest-stock candidate (often the one
+        // whose bundle failed because its input is missing) ends up first,
+        // then crashes the greedy loop.
+        if (ba is null && bb is null) {
+            return StringComparer.Ordinal.Compare(a.RowId, b.RowId);
+        }
+        if (ba is null) return 1;
+        if (bb is null) return -1;
+
+        int projA = ProjectedItemInventory(a.Item2Id, request, committed);
+        int projB = ProjectedItemInventory(b.Item2Id, request, committed);
 
         int cmp = projA.CompareTo(projB);
         if (cmp != 0) return cmp;
         cmp = a.Item2Level.CompareTo(b.Item2Level);
         if (cmp != 0) return cmp;
-        cmp = pa.CompareTo(pb);
+        cmp = ba.AdditionalParley.CompareTo(bb.AdditionalParley);
         if (cmp != 0) return cmp;
         return StringComparer.Ordinal.Compare(a.RowId, b.RowId);
     }
