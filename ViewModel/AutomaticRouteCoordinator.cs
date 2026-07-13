@@ -96,6 +96,14 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    public void RefreshLocalization() {
+        if (currentPlan is null) return;
+        routeOptions = BuildRouteOptions(currentPlan);
+        UpdateVisibleRoute();
+        RaisePropertyChanged(nameof(RouteOptions));
+        RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public void ActivateManual() {
         mode = CargoMode.Manual;
         showAllRoutes = false;
@@ -139,9 +147,18 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
 
     private void Publish(RoutePlan plan) {
         currentPlan = plan;
-        mode = CargoMode.AutomaticRoute;
+        bool hasUsableRoutes = plan.Status is RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit
+            && plan.Routes.Count > 0;
+        mode = hasUsableRoutes ? CargoMode.AutomaticRoute : CargoMode.Manual;
         showAllRoutes = false;
-        routeOptions = plan.Routes.Count == 0
+        routeOptions = hasUsableRoutes ? BuildRouteOptions(plan) : [];
+        selectedRouteNumber = hasUsableRoutes ? plan.Routes[0].Number : null;
+        UpdateVisibleRoute();
+        NotifyAll();
+    }
+
+    private static IReadOnlyList<RouteSelectionOption> BuildRouteOptions(RoutePlan plan) =>
+        plan.Routes.Count == 0
             ? []
             : new[] { new RouteSelectionOption(null,
                     Localization.LanguageService.Instance.Localize("str.ShipCargo.AutoRoute.All"), true) }
@@ -149,10 +166,6 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                     x.Number,
                     Localization.LanguageService.Instance.Localize("str.ShipCargo.AutoRoute.RouteFormat", x.Number),
                     false))).ToArray();
-        selectedRouteNumber = plan.Routes.FirstOrDefault()?.Number;
-        UpdateVisibleRoute();
-        NotifyAll();
-    }
 
     private void UpdateVisibleRoute() {
         var route = currentPlan?.Routes.FirstOrDefault(x => x.Number == selectedRouteNumber);

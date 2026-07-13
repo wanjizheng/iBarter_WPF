@@ -69,3 +69,15 @@ In the map view, double-click an item will make it "CK" (remove it from the map 
 
 In the Ship Cargo view, click the left mouse button twice will copy the first item's name to your clickboard. Double click the right button will copy the second item's name.
 
+## 自动多路线规划
+
+点击 Planner 的 **Auto Plan** 后，程序会先保留原有逻辑计算所有未完成列的 `Eq.`，再根据四个仓库的独立库存、岛屿位置、交换前后重量与 `TotalLT` 自动生成航线。路线可能包含仓库装货、岛屿交换和终点卸货步骤；同一条路线可以先去伊利亚装 LV1–LV5，再在顺路时去贝利亚装 LV6。
+
+- 选择 **Route N**：船舱显示该路线的完整步骤，地图只绘制该路线；`InitialLT`、`CurrentLT` 和 `PeakLT` 使用求解器逐步骤验证后的数值。
+- 选择 **ALL**：地图同时用不同颜色显示全部路线；船舱和 LT 保持最近选择的具体路线不变。
+- 地图中键选岛、船舱拖动、Clean 和 Optimal Route 仍属于手动模式。切回手动模式后，原有船舱内容和顺序保持不变。
+- `Optimal` 表示搜索空间已完整检查；“最佳已知”表示已经找到并验证了可行方案，但在搜索限制内尚未证明它是全局最优。
+- 修改 Planner 的 Eq/CK、仓库数量、`ExtraLT` 或 `TotalLT` 会立即清除过期的自动路线，避免继续显示基于旧数据的结果。
+
+自动路线只存在于当前运行状态，不会覆盖或保存手动船舱 JSON。
+

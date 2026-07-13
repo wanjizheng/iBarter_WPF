@@ -1255,6 +1255,7 @@ namespace iBarter.View {
                 Convert.ToInt32(Math.Round(App.myCargoProperty.TotalLT, MidpointRounding.AwayFromZero)));
             var request = AutomaticRoutePlanningAdapter.BuildRequest(
                 routeRows, storageRows, islandRows, cargo, new RouteSearchLimits(250_000, 2_000));
+            App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Solving"), Brushes.SteelBlue);
             var routePlan = await App.myRouteCoordinator.GenerateAsync(request);
             switch (routePlan.Status) {
                 case RoutePlanStatus.Optimal:

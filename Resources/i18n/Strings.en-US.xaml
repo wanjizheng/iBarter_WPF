@@ -263,6 +263,28 @@
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoRoute">No precedence-respecting route found (likely a chain cycle); falling back to chain sort.</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Done">Optimal route solved: {0} stops, starting from warehouse island {1}.</sys:String>
 
+    <!-- Automatic multi-route planning -->
+    <sys:String x:Key="str.ShipCargo.AutoRoute.Selector">Automatic route</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.All">ALL</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.RouteFormat">Route {0}</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.Pickup">Load at {0}</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.Unload">Unload at {0}</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.Barter">Barter at {0}</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.LoadFormat">LT after step: {0:N0} · Peak: {1:N0}</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.PeakLT">Peak LT</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.Solving">Finding automatic routes…</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.Optimal">Optimal automatic plan: {0} route(s), distance {1:N1}.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.BestKnown">Best known automatic plan: {0} route(s), distance {1:N1}; search limit reached.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.Infeasible">No feasible automatic route. {0}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.NoFeasibleWithinLimit">No feasible route was found before the search limit.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.Cancelled">Automatic route search cancelled.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.InvalidInput">Automatic route input is invalid: {0}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.MissingIsland">Cannot draw automatic route because island '{0}' is missing.</sys:String>
+    <sys:String x:Key="str.Msg.AutoRoute.MissingStock">Warehouse stock is insufficient for item {0}.</sys:String>
+    <sys:String x:Key="str.Msg.AutoRoute.TaskOverweight">The barter at {0} cannot fit within Total LT.</sys:String>
+    <sys:String x:Key="str.Msg.AutoRoute.MissingCoordinate">Route coordinates are missing for {0}.</sys:String>
+    <sys:String x:Key="str.Msg.AutoRoute.Invalidated">The automatic route was cleared because its inputs changed.</sys:String>
+
 
     <!-- Phase 7 (i18n): dialog prompts (MessageBox.Show) -->
     <sys:String x:Key="str.Msg.Confirmation.Title">Confirmation</sys:String>

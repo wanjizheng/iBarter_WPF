@@ -227,6 +227,28 @@
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoRoute">交换链存在循环，无符合优先顺序的完整路径，改用交换链排序。</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Done">最短路径已解出：{0} 站，起点仓库岛屿 {1}。</sys:String>
 
+    <!-- 自动多路线规划 -->
+    <sys:String x:Key="str.ShipCargo.AutoRoute.Selector">自动路线</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.All">全部路线</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.RouteFormat">路线 {0}</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.Pickup">在 {0} 装货</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.Unload">在 {0} 卸货</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.Barter">在 {0} 交换</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.LoadFormat">步骤后 LT：{0:N0} · 峰值：{1:N0}</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.PeakLT">峰值 LT</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.Solving">正在计算自动路线…</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.Optimal">自动路线已达最优：{0} 条路线，距离 {1:N1}。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.BestKnown">自动路线目前最佳：{0} 条路线，距离 {1:N1}；已达到搜索限制。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.Infeasible">没有可行的自动路线。{0}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.NoFeasibleWithinLimit">达到搜索限制前尚未找到可行路线。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.Cancelled">自动路线搜索已取消。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.InvalidInput">自动路线输入无效：{0}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.MissingIsland">无法绘制自动路线，因为缺少岛屿「{0}」。</sys:String>
+    <sys:String x:Key="str.Msg.AutoRoute.MissingStock">仓库中的物品 {0} 库存不足。</sys:String>
+    <sys:String x:Key="str.Msg.AutoRoute.TaskOverweight">{0} 的单次交换无法满足总 LT 限制。</sys:String>
+    <sys:String x:Key="str.Msg.AutoRoute.MissingCoordinate">缺少 {0} 的路线坐标。</sys:String>
+    <sys:String x:Key="str.Msg.AutoRoute.Invalidated">输入资料已变更，自动路线已清除。</sys:String>
+
 
     <sys:String x:Key="str.Msg.Confirmation.Title">确认</sys:String>
     <sys:String x:Key="str.Msg.Planner.DeleteRow">确定要删除此列（{0} → {1}）？</sys:String>

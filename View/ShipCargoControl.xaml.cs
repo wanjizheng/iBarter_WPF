@@ -27,7 +27,10 @@ namespace iBarter.View {
             if (App.myCargoProperty == null)
                 App.myCargoProperty = new CargoProperty();
             Loaded += ShipCargoControl_Loaded;
-            Localization.LanguageService.Instance.LanguageChanged += (_, _) => RefreshLocalizedDisplay();
+            Localization.LanguageService.Instance.LanguageChanged += (_, _) => {
+                App.myRouteCoordinator?.RefreshLocalization();
+                RefreshLocalizedDisplay();
+            };
         }
 
         private bool updatingRouteSelector;
