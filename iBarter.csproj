@@ -25,6 +25,9 @@
     <Compile Remove="Tools\IslandNavigationTests\**\*.cs" />
     <None Remove="Tools\IslandNavigationTests\**\*" />
     <Content Remove="Tools\IslandNavigationTests\**\*" />
+    <Compile Remove="Tools\AutomaticRoutePlanningTests\**\*.cs" />
+    <None Remove="Tools\AutomaticRoutePlanningTests\**\*" />
+    <Content Remove="Tools\AutomaticRoutePlanningTests\**\*" />
     <!-- Magick.NET-Q16-AnyCPU only copies native on .NET Framework; this project
          targets .NET 10, so copy the x86 native manually and let Costura embed it. -->
     <None Include="$(NuGetPackageRoot)magick.net-q16-anycpu\14.14.0\runtimes\win-x86\native\Magick.Native-Q16-x86.dll">
