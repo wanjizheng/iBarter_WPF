@@ -119,8 +119,12 @@ public sealed class PlannerAutoPlanner {
         ref int committedParley,
         List<AutoPlanningDiagnostic> diagnostics) {
 
-        PlanReservePhase(request, routesById, committed, ref committedParley, diagnostics);
-        if (diagnostics.Any(d => d.Code.StartsWith("reserve-"))) return;
+        // Plan-relevant reserve (no Universal Reserve Phase): every LV5/LV6
+        // reserve is handled atomically inside TryAddRoute / TryBuildBundle
+        // when a selected bundle consumes the item as Item1. If a consumed
+        // reserve cannot be replenished, TryBuildBundle emits a reserve-*
+        // diagnostic and GreedyFillIncrements rolls back any committed
+        // progress so the plan can fail atomically.
 
         // Phase 1: Crow-Coin routes identified by Item2Id (locale-independent).
         // Higher coin output wins; on ties, lower full-bundle parley.
@@ -145,9 +149,8 @@ public sealed class PlannerAutoPlanner {
         ref int committedParley,
         List<AutoPlanningDiagnostic> diagnostics) {
 
-        PlanReservePhase(request, routesById, committed, ref committedParley, diagnostics);
-        if (diagnostics.Any(d => d.Code.StartsWith("reserve-"))) return;
-
+        // Plan-relevant reserve (no Universal Reserve Phase). Same note as
+        // PlanCrowCoinFirst: reserve handling is inside the bundle build.
         // Crow coin is excluded. Direct targets are restricted to LV4-LV6
         // input (LV6→LV7, LV5→LV6, LV4→LV5). LV1-LV3 routes never appear as
         // Profit First candidates — they only show up as upstream supply
@@ -166,184 +169,20 @@ public sealed class PlannerAutoPlanner {
         ref int committedParley,
         List<AutoPlanningDiagnostic> diagnostics) {
 
-        // Phase 1: LV5/LV6 capped restock by largest deficit ratio.
-        PlanReservePhase(request, routesById, committed, ref committedParley, diagnostics);
-        if (diagnostics.Any(d => d.Code.StartsWith("reserve-"))) return;
+        // Phase 1: LV5/LV6 capped restock by largest deficit ratio. Only
+        // routes whose produced LV5/LV6 stock is below target are
+        // candidates; reserve is satisfied by TryAddRoute's same-group
+        // producer pull-in inside each atomic bundle.
+        GreedyFillIncrements(
+            request, routesById, committed, ref committedParley, diagnostics,
+            filter: r => IsCappedRestockEligible(r, request, committed),
+            ranker: CompareCapped);
 
         // Phase 2: LV1-LV4 uncapped, lowest projected inventory first.
         GreedyFillIncrements(
             request, routesById, committed, ref committedParley, diagnostics,
             filter: r => IsUncappedRestockEligible(r),
             ranker: CompareUncapped);
-    }
-
-    // Universal reserve phase. Runs before every strategy's main loop and
-    // ensures every LV5/LV6 item with a non-zero target reaches its target by
-    // pulling in same-group upstream producers as needed. On hard failure
-    // (no producer, budget exceeded, cycle, ...) emits one of the three
-    // reserve-* diagnostic codes and the strategy main loop is skipped.
-    private static void PlanReservePhase(
-        AutoPlanningRequest request,
-        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
-        Dictionary<string, int> committed,
-        ref int committedParley,
-        List<AutoPlanningDiagnostic> diagnostics) {
-
-        while (true) {
-            // Find LV5/LV6 items below target.
-            (string ItemId, int Target, int Projected)? pick = null;
-            double bestRatio = -1;
-            int bestAbsDeficit = -1;
-            string? bestTieId = null;
-
-            // Consider every item ID that appears as either Item1Id or Item2Id in any
-            // route — that's where reserve targets could land. Items that aren't
-            // LV5/LV6 fall back to a non-reserve target (0) and are skipped.
-            var candidateItemIds = routesById.Values
-                .SelectMany(r => new[] { r.Item1Id, r.Item2Id })
-                .Distinct(StringComparer.Ordinal);
-
-            foreach (var itemId in candidateItemIds) {
-                int level = InferLevelFromRoutes(itemId, routesById);
-                int target = GetReserveTarget(itemId, level, request);
-                if (target <= 0) continue;
-                int projected = ProjectedItemInventory(itemId, request, committed);
-                if (projected >= target) continue;
-
-                double ratio = (double)(target - projected) / target;
-                int absDeficit = target - projected;
-
-                bool better = ratio > bestRatio
-                    || (ratio == bestRatio && absDeficit > bestAbsDeficit)
-                    || (ratio == bestRatio && absDeficit == bestAbsDeficit
-                        && (bestTieId == null || StringComparer.Ordinal.Compare(itemId, bestTieId) < 0));
-                if (better) {
-                    bestRatio = ratio;
-                    bestAbsDeficit = absDeficit;
-                    bestTieId = itemId;
-                    pick = (itemId, target, projected);
-                }
-            }
-
-            if (pick is null) return;
-
-            // Enumerate every available producer for this item and build a
-            // reserve-aware atomic bundle for each. The single best feasible
-            // bundle (largest per-exchange output, then cheapest bundle parley,
-            // then RowId) wins; producers whose bundle fails individually are
-            // skipped, so an unaffordable producer no longer masks an
-            // affordable alternative. Only when NO producer yields a feasible
-            // bundle do we fall through to the diagnostic classification. "Available" means
-            // (Remaining - already-committed-this-round) > 0: a producer with
-            // Remaining=1 that's already been committed once in this reserve
-            // pass has zero remaining capacity and must be excluded so the next
-            // iteration classifies the failure as reserve-no-producer instead of
-            // failing the bundle build with exceeds-remaining.
-            var candidateProducers = routesById.Values
-                .Where(r => r.Item2Id == pick.Value.ItemId
-                             && r.Remaining - committed.GetValueOrDefault(r.RowId) > 0)
-                .ToList();
-            if (candidateProducers.Count == 0) {
-                diagnostics.Add(new AutoPlanningDiagnostic("reserve-no-producer", pick.Value.ItemId));
-                committed.Clear();
-                committedParley = 0;
-                return;
-            }
-
-            Bundle? bestBundle = null;
-            string? bestRowId = null;
-            int bestOutput = -1;
-            var attemptedDiags = new List<AutoPlanningDiagnostic>();
-            int remainingBudget = request.ParleyBudget - committedParley;
-
-            foreach (var producer in candidateProducers) {
-                int cur = committed.TryGetValue(producer.RowId, out var cc) ? cc : 0;
-                int absoluteTarget = cur + 1;
-                var attemptInventory = ApplyMultipliers(request.CurrentInventory, routesById, committed);
-
-                var perAttemptDiags = new List<AutoPlanningDiagnostic>();
-                if (TryBuildBundle(producer.RowId, absoluteTarget, routesById,
-                        attemptInventory, committed, remainingBudget,
-                        out var bundle, perAttemptDiags, request)) {
-                    bool better = bestBundle is null
-                        || producer.Item2Number > bestOutput
-                        || (producer.Item2Number == bestOutput
-                            && bundle.AdditionalParley < bestBundle.AdditionalParley)
-                        || (producer.Item2Number == bestOutput
-                            && bundle.AdditionalParley == bestBundle.AdditionalParley
-                            && StringComparer.Ordinal.Compare(producer.RowId, bestRowId!) < 0);
-                    if (better) {
-                        bestBundle = bundle;
-                        bestRowId = producer.RowId;
-                        bestOutput = producer.Item2Number;
-                    }
-                }
-                attemptedDiags.AddRange(perAttemptDiags);
-            }
-
-            if (bestBundle is null) {
-                // Every candidate producer's bundle failed. Pick the most
-                // informative reserve code based on the failure mode:
-                //  - reserve-no-producer: no producer with Remaining > 0 (we
-                //    already checked above, so this branch is only reached if
-                //    every bundle failed for non-budget / non-producer reasons
-                //    and at least one producer had Remaining = 0)
-                //  - reserve-budget-exceeded: smallest bundle parley exceeds
-                //    the remaining budget
-                //  - reserve-unreachable: fallback (cycles, malformed, ...)
-                bool anyProducerWithRemaining = candidateProducers.Count > 0;
-                int minBundleParley = attemptedDiags.Count == 0
-                    ? candidateProducers.Min(r => r.Parley)
-                    : int.MaxValue;
-                bool anyBudgetExceeded = attemptedDiags.Any(d => d.Code == "budget-exceeded");
-                bool anyNoProducer = attemptedDiags.Any(d => d.Code == "no-producer");
-                string code;
-                if (anyNoProducer && !anyBudgetExceeded && candidateProducers.All(r => r.Remaining == 0)) {
-                    code = "reserve-no-producer";
-                } else if (anyBudgetExceeded || minBundleParley > remainingBudget) {
-                    code = "reserve-budget-exceeded";
-                } else {
-                    code = "reserve-unreachable";
-                }
-                // Surface any per-attempt diagnostics so the operator can see
-                // why each producer failed before the high-level code is shown.
-                diagnostics.AddRange(attemptedDiags);
-                diagnostics.Add(new AutoPlanningDiagnostic(code, pick.Value.ItemId));
-                committed.Clear();
-                committedParley = 0;
-                return;
-            }
-
-            foreach (var (rowId, bundleMul) in bestBundle.Multipliers) {
-                int existing = committed.TryGetValue(rowId, out var cv) ? cv : 0;
-                committed[rowId] = existing + bundleMul;
-            }
-            committedParley += bestBundle.AdditionalParley;
-        }
-    }
-
-    private static int InferLevelFromRoutes(
-        string itemId,
-        IReadOnlyDictionary<string, AutoPlanningRoute> routesById) {
-        // Returns the most common level seen across routes that produce OR
-        // consume this item. Used by PlanReservePhase to decide whether the
-        // item has a LV5/LV6 reserve target, even when no route produces it.
-        var counts = new Dictionary<int, int>();
-        int bestLevel = 0;
-        int bestCount = 0;
-        foreach (var r in routesById.Values) {
-            int? candidateLevel = null;
-            if (r.Item2Id == itemId) candidateLevel = r.Item2Level;
-            else if (r.Item1Id == itemId) candidateLevel = r.Item1Level;
-            if (candidateLevel is null) continue;
-            int lvl = candidateLevel.Value;
-            counts[lvl] = counts.TryGetValue(lvl, out var c) ? c + 1 : 1;
-            if (counts[lvl] > bestCount) {
-                bestCount = counts[lvl];
-                bestLevel = lvl;
-            }
-        }
-        return bestLevel;
     }
 
     private static bool IsCappedRestockEligible(
@@ -419,8 +258,17 @@ public sealed class PlannerAutoPlanner {
             }
 
             // Build one +1 bundle per candidate, each with its own working-inventory
-            // clone. A failed build attempt never pollutes the next attempt.
+            // clone. Per-candidate LOCAL diagnostics keep reserve-* failures
+            // inside the probe: a candidate that is not selected does NOT leak
+            // its reserve failure into the plan's final diagnostics. Only when
+            // this is the strategy's first iteration AND every candidate here
+            // fails (i.e. the strategy has no winner at all) is the diagnostic
+            // promoted — atomic failure. Once the strategy has committed at
+            // least one winner, a later iteration's failed probe is silently
+            // abandoned, preserving the prior commits.
             var bundles = new Dictionary<string, Bundle>(StringComparer.Ordinal);
+            var reserveFailures = new List<AutoPlanningDiagnostic>();
+
             foreach (var c in candidates) {
                 int currentCommitted = committed.TryGetValue(c.RowId, out var cc) ? cc : 0;
                 int absoluteTarget = currentCommitted + 1;
@@ -428,14 +276,37 @@ public sealed class PlannerAutoPlanner {
                 var attemptInventory = ApplyMultipliers(request.CurrentInventory, routesById, committed);
                 int remainingBudget = request.ParleyBudget - committedParley;
 
+                var localDiagnostics = new List<AutoPlanningDiagnostic>();
                 if (TryBuildBundle(c.RowId, absoluteTarget, routesById,
                         attemptInventory, committed, remainingBudget,
-                        out var bundle, diagnostics, request)) {
+                        out var bundle, localDiagnostics, request)) {
                     bundles[c.RowId] = bundle;
+                }
+                else {
+                    // A failed probe. The reserve-* entries are only promoted
+                    // to the global diagnostics if this iteration ends up with
+                    // no viable bundle AND no prior commit landed in this
+                    // greedy loop — see atomic-fail branch below.
+                    foreach (var d in localDiagnostics) {
+                        if (d.Code.StartsWith("reserve-")) {
+                            reserveFailures.Add(d);
+                        }
+                    }
                 }
             }
 
             if (bundles.Count == 0) {
+                // No viable bundle in this iteration. Atomic failure only when
+                // the strategy has never committed anything: in that case the
+                // reserve-constrained route the user intended is the only
+                // candidate and it cannot be honored (ApplySet=null).
+                // If we have already committed at least one viable bundle in
+                // a prior iteration, this iteration's failure is just noise —
+                // the strategy's earlier successes stand.
+                if (reserveFailures.Count > 0 && committed.Count == 0) {
+                    diagnostics.AddRange(reserveFailures);
+                    // committed is already empty; nothing to roll back.
+                }
                 return;
             }
 
@@ -446,7 +317,9 @@ public sealed class PlannerAutoPlanner {
             // Commit the winner's bundle multiplicities as additions to the master
             // committed map. bundle.Multipliers stores INCREMENTAL contributions
             // (additional exchanges this bundle brings in), so a simple sum is
-            // correct — no max() needed.
+            // correct — no max() needed. The winner's bundle build succeeded,
+            // so its reserve was already satisfied by TryAddRoute's pull-in;
+            // no diagnostic promotion is needed here.
             foreach (var (rowId, bundleMul) in winnerBundle.Multipliers) {
                 int existing = committed.TryGetValue(rowId, out var cv) ? cv : 0;
                 committed[rowId] = existing + bundleMul;
@@ -603,11 +476,17 @@ public sealed class PlannerAutoPlanner {
 
         bundle = new Bundle();
         var stack = new HashSet<(int, string)>();
+        // Plan-relevant reserve: a flag that tracks whether any producer pull-in
+        // inside this bundle was triggered by an LV5/LV6 reserve deficit. When
+        // set, TryBuildBundle's budget-exceeded classification upgrades to
+        // reserve-budget-exceeded, and TryAddRoute's failed producer pull-in
+        // emits reserve-no-producer instead of plain "no-producer".
+        bool reserveContext = false;
 
         bool ok = TryAddRoute(
             targetRowId, absoluteTarget, routesById, stack,
             workingInventory, committedMultipliers, bundle.Multipliers,
-            diagnostics, request);
+            diagnostics, request, ref reserveContext);
 
         if (!ok) {
             bundle.Multipliers.Clear();
@@ -634,7 +513,12 @@ public sealed class PlannerAutoPlanner {
         }
 
         if (bundleParley > remainingBudget) {
-            diagnostics.Add(new AutoPlanningDiagnostic("budget-exceeded", targetRowId));
+            // Reserve-pull-in expanded the bundle past the budget — surface a
+            // reserve-budget-exceeded so the caller can fail the plan
+            // atomically without losing the lower-level budget-exceeded context.
+            diagnostics.Add(new AutoPlanningDiagnostic(
+                reserveContext ? "reserve-budget-exceeded" : "budget-exceeded",
+                targetRowId));
             bundle.Multipliers.Clear();
             return false;
         }
@@ -652,7 +536,8 @@ public sealed class PlannerAutoPlanner {
         IReadOnlyDictionary<string, int> committedMultipliers,
         Dictionary<string, int> bundleMultipliers,
         List<AutoPlanningDiagnostic> diagnostics,
-        AutoPlanningRequest request) {
+        AutoPlanningRequest request,
+        ref bool reserveContext) {
 
         if (!routesById.TryGetValue(rowId, out var route)) {
             diagnostics.Add(new AutoPlanningDiagnostic("missing-route", rowId));
@@ -683,15 +568,22 @@ public sealed class PlannerAutoPlanner {
             int available = workingInventory.TryGetValue(route.Item1Id, out var cur) ? cur : 0;
             // Reserve-aware deficit: a reserved item's effective available stock
             // is whatever is above its reserve target. Anything at or below the
-            // target may not be consumed.
+            // target may not be consumed. Plan-relevant semantics — the deduction
+            // only fires for items the bundle is actually consuming; items the
+            // plan never touches are not protected here.
             int reserve = GetReserveTarget(route.Item1Id, route.Item1Level, request);
+            bool isReserveContext = reserve > 0
+                && (route.Item1Level == 5 || route.Item1Level == 6);
             int effectiveAvailable = Math.Max(0, available - reserve);
             int deficit = Math.Max(0, demand - effectiveAvailable);
 
             if (deficit > 0) {
+                if (isReserveContext) reserveContext = true;
                 var producers = FindProducers(route.Group, route.Item1Id, routesById);
                 if (producers.Count == 0) {
-                    diagnostics.Add(new AutoPlanningDiagnostic("no-producer", rowId));
+                    diagnostics.Add(new AutoPlanningDiagnostic(
+                        isReserveContext ? "reserve-no-producer" : "no-producer",
+                        rowId));
                     return false;
                 }
 
@@ -720,7 +612,8 @@ public sealed class PlannerAutoPlanner {
                         if (TryAddRoute(
                                 producer.RowId, producerAbsoluteTarget, routesById,
                                 attemptStack, attemptInventory, committedMultipliers,
-                                attemptBundleMultipliers, diagnostics, request)) {
+                                attemptBundleMultipliers, diagnostics, request,
+                                ref reserveContext)) {
                             // Validate the attempt's inventory before committing it.
                             foreach (var v in attemptInventory.Values) {
                                 if (v < 0) {
@@ -739,7 +632,9 @@ public sealed class PlannerAutoPlanner {
                     }
 
                     if (!anyProgress) {
-                        diagnostics.Add(new AutoPlanningDiagnostic("no-producer", rowId));
+                        diagnostics.Add(new AutoPlanningDiagnostic(
+                            isReserveContext ? "reserve-no-producer" : "no-producer",
+                            rowId));
                         return false;
                     }
                 }

@@ -57,6 +57,25 @@ public sealed class PlannerAutoPlanningAdapterTests {
         Assert.Equal(0, calculation.ApplySet!.Multipliers["r"]);
     }
 
+    [Fact]
+    public void Calculate_returns_no_apply_set_when_reserve_unfillable() {
+        // Plan-relevant reserve: when a bundle consumes LV5 stock that cannot
+        // be replenished via same-group producers, the planner must surface
+        // a reserve-* diagnostic and the adapter must return ApplySet=null
+        // so no partial multiplier is applied to the live WPF rows.
+        var adapter = new PlannerAutoPlanningAdapter();
+        var consumer = Snapshot("consumer", exchangeDone: false, existingMultiplier: 0,
+            new AutoPlanningRoute("consumer", 1, "X", 5, 1, "Top", 6, 1, false, 10_000, 5));
+        var inventory = new Dictionary<string, int> { ["X"] = 10, ["Top"] = 0 };
+
+        var calculation = adapter.Calculate(
+            [consumer], inventory, AutoPlanningStrategy.CrowCoinFirst, 10, 10, 1_000_000);
+
+        Assert.Null(calculation.ApplySet);
+        Assert.NotEmpty(calculation.Diagnostics);
+        Assert.Contains(calculation.Diagnostics, d => d.Code.StartsWith("reserve-"));
+    }
+
     private static PlannerRowSnapshot Snapshot(
         string rowId, bool exchangeDone, int existingMultiplier, AutoPlanningRoute route) =>
         new(rowId, exchangeDone, existingMultiplier, route);

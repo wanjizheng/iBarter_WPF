@@ -21,9 +21,13 @@ public sealed class PlannerAutoPlannerTests {
     public void Reverse_supply_uses_ceiling_quantity_not_equal_multiplier() {
         // A→2B upstream (3 exchanges make 6 B), B→C downstream (5 exchanges consume 5 B).
         // Parley = 20_000 * 3 + 4_000 * 5 = 60_000 + 20_000 = 80_000 (budget).
-        var rA = Route("rA", 7, "A", 1, 1, "B", 2, 2, 20_000, 3);
-        var rB = Route("rB", 7, "B", 2, 1, "C", 3, 1, 4_000, 5);
-        var request = PlanProfit([rA, rB], new Dictionary<string, int> { ["A"] = 10, ["B"] = 0 }, 80_000);
+        // Routes moved to LV4–LV6 so ProfitFirst's tier filter accepts them as
+        // direct targets; reserve is disabled to keep the test focused on chain
+        // pull-in semantics rather than LV5 reserve pull-in.
+        var rA = Route("rA", 7, "A", 4, 1, "B", 5, 2, 20_000, 3);
+        var rB = Route("rB", 7, "B", 5, 1, "C", 6, 1, 4_000, 5);
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.ProfitFirst, [rA, rB],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 0 }, 80_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
 
@@ -35,24 +39,27 @@ public sealed class PlannerAutoPlannerTests {
 
     [Fact]
     public void Reverse_supply_crosses_groups_via_inventory_after_producer_commits() {
-        // Profit ranks by tier desc: rB (LV3) wins first but its bundle fails
-        // (no in-group producer for B). The planner then commits rA (LV2) to
-        // produce B from A inventory. After rA commits, rB's bundle succeeds
-        // because the inventory is now available across the group boundary —
-        // cross-group reverse supply works through inventory, not the route graph.
-        // This documents that the planner correctly chains producers in different
-        // groups via the inventory dictionary.
-        var rA = Route("rA", 1, "A", 1, 1, "B", 2, 1, 1_000, 5);
-        var rB = Route("rB", 2, "B", 2, 1, "C", 3, 1, 1_000, 5);
-        var request = PlanProfit([rA, rB], new Dictionary<string, int> { ["A"] = 10, ["B"] = 0 }, 5_000);
+        // Routes moved to LV4–LV5 (ProfitFirst's tier filter accepts these).
+        // Reserve disabled (Lv5Target=0) to keep this test focused on
+        // cross-group reverse supply, not LV5 reserve pull-in.
+        // rA produces B (1 per exchange) in group 1; rB consumes B in group 2
+        // (no in-group producer for B). The planner commits rA first to
+        // produce B from A inventory; once rA=1 lands, rB's bundle succeeds
+        // because B is now available across the group boundary — cross-group
+        // reverse supply works through inventory, not the route graph.
+        var rA = Route("rA", 1, "A", 4, 1, "B", 5, 1, 1_000, 5);
+        var rB = Route("rB", 2, "B", 5, 1, "C", 6, 1, 1_000, 5);
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.ProfitFirst, [rA, rB],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 0 }, 5_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
 
         // rA produces B (1 per exchange); rB consumes B. With +1 per iter greedy:
-        //   Iter 1: rB bundle fails (no producer). rA wins, rA=1.
-        //   Iter 2: rB now feasible (B=1 from rA). rB wins, rB=1.
-        //   Iter 3: rA wins (tier parity) → produces another B for rB. rA=2, rB=2.
-        //   Iter 4: rA wins, rA=3 (parley 1000). Budget exhausted.
+        //   Iter 1: rB bundle's LV5→B deficit pulls no in-group producer for B in
+        //          group 2, but A=10 has no reserve (Lv5Target=0) so rA wins. rA=1.
+        //   Iter 2: rB now feasible (B=1 from rA). rB wins (tier parity). rB=1.
+        //   Iter 3: rA wins → produces another B. rA=2, rB=2.
+        //   Iter 4: rA wins (parley 1000 each, fits in 5k budget). rA=3.
         Assert.Equal(3, result.Multipliers["rA"]);
         Assert.Equal(2, result.Multipliers["rB"]);
         Assert.Equal(5_000, result.UsedParley);
@@ -60,10 +67,13 @@ public sealed class PlannerAutoPlannerTests {
 
     [Fact]
     public void Three_level_reverse_chain_is_added_atomically() {
-        var r1 = Route("r1", 3, "A", 1, 1, "B", 2, 1, 1_000, 2);
-        var r2 = Route("r2", 3, "B", 2, 1, "C", 3, 1, 1_000, 2);
-        var r3 = Route("r3", 3, "C", 3, 1, "D", 4, 1, 1_000, 2);
-        var request = PlanProfit([r1, r2, r3],
+        // Routes promoted to LV4–LV7 so ProfitFirst's tier filter accepts the
+        // chain end-to-end; reserve disabled so we exercise atomic chain
+        // pull-in without LV5/LV6 reserve pull-in entanglement.
+        var r1 = Route("r1", 3, "A", 4, 1, "B", 5, 1, 1_000, 2);
+        var r2 = Route("r2", 3, "B", 5, 1, "C", 6, 1, 1_000, 2);
+        var r3 = Route("r3", 3, "C", 6, 1, "D", 7, 1, 1_000, 2);
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.ProfitFirst, [r1, r2, r3],
             new Dictionary<string, int> { ["A"] = 10, ["B"] = 0, ["C"] = 0 }, 100_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
@@ -77,11 +87,12 @@ public sealed class PlannerAutoPlannerTests {
     [Fact]
     public void Failed_chain_fails_atomically() {
         // r1 needs Item X with no inventory and no producer → every bundle that
-        // tries to satisfy r3 fails the whole chain atomically.
-        var r1 = Route("r1", 3, "X", 1, 1, "B", 2, 1, 1_000, 1);
-        var r2 = Route("r2", 3, "B", 2, 1, "C", 3, 1, 1_000, 5);
-        var r3 = Route("r3", 3, "C", 3, 1, "D", 4, 1, 1_000, 2);
-        var request = PlanProfit([r1, r2, r3],
+        // tries to satisfy r3 fails the whole chain atomically. Routes promoted
+        // to LV4–LV6 to keep them in ProfitFirst's tier filter.
+        var r1 = Route("r1", 3, "X", 4, 1, "B", 5, 1, 1_000, 1);
+        var r2 = Route("r2", 3, "B", 5, 1, "C", 6, 1, 1_000, 5);
+        var r3 = Route("r3", 3, "C", 6, 1, "D", 7, 1, 1_000, 2);
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.ProfitFirst, [r1, r2, r3],
             new Dictionary<string, int> { ["X"] = 0, ["B"] = 0, ["C"] = 0 }, 100_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
@@ -96,11 +107,11 @@ public sealed class PlannerAutoPlannerTests {
         // r1.Remaining=1 limits the chain: r3=2 requires r1=2 (impossible) so the
         // planner keeps the successful r3=1 commit instead of reverting everything.
         // This documents the incremental semantics: prior commits survive a later
-        // failed increment.
-        var r1 = Route("r1", 3, "A", 1, 1, "B", 2, 1, 1_000, 1); // remaining 1
-        var r2 = Route("r2", 3, "B", 2, 1, "C", 3, 1, 1_000, 5);
-        var r3 = Route("r3", 3, "C", 3, 1, "D", 4, 1, 1_000, 2);
-        var request = PlanProfit([r1, r2, r3],
+        // failed increment. Routes promoted to LV4–LV6 for ProfitFirst filter.
+        var r1 = Route("r1", 3, "A", 4, 1, "B", 5, 1, 1_000, 1); // remaining 1
+        var r2 = Route("r2", 3, "B", 5, 1, "C", 6, 1, 1_000, 5);
+        var r3 = Route("r3", 3, "C", 6, 1, "D", 7, 1, 1_000, 2);
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.ProfitFirst, [r1, r2, r3],
             new Dictionary<string, int> { ["A"] = 10, ["B"] = 0, ["C"] = 0 }, 100_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
@@ -114,9 +125,10 @@ public sealed class PlannerAutoPlannerTests {
     public void Crow_partial_fill_when_full_remaining_exceeds_budget() {
         // rA.Remaining=5 at 60k each = 300k full, budget 100k only fits 1 exchange.
         // The shrink-to-fit algorithm should commit rA=1 and stop, leaving 40k
-        // unused because rA=2 already exceeds the budget.
+        // unused because rA=2 already exceeds the budget. No LV5/LV6 reserve
+        // required here (the test exercises shrink-to-fit, not reserve pull-in).
         var rA = Route("rA", 1, "A", 5, 1, "CrowCoin", 6, 190, 60_000, 5, crow: true);
-        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst, [rA],
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.CrowCoinFirst, [rA],
             new Dictionary<string, int> { ["A"] = 10 }, 100_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
@@ -127,14 +139,15 @@ public sealed class PlannerAutoPlannerTests {
 
     [Fact]
     public void Profit_partial_fill_when_full_remaining_exceeds_budget() {
+        // Full Remaining=3 costs 2.1M which exceeds budget. Shrink to fit: 1
+        // exchange fits within budget at 700k. No LV5/LV6 reserve required
+        // for this test (exercises shrink-to-fit, not reserve pull-in).
         var rLv7 = Route("rLv7", 1, "Lv7In", 6, 1, "Top", 7, 1, 700_000, 3);
-        var request = PlanStrategy(AutoPlanningStrategy.ProfitFirst, [rLv7],
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.ProfitFirst, [rLv7],
             new Dictionary<string, int> { ["Lv7In"] = 10 }, 1_000_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
 
-        // Full Remaining=3 costs 2.1M which exceeds budget. Shrink to fit: 1
-        // exchange fits within budget at 700k.
         Assert.Equal(1, result.Multipliers["rLv7"]);
         Assert.Equal(700_000, result.UsedParley);
     }
@@ -158,24 +171,26 @@ public sealed class PlannerAutoPlannerTests {
     [Fact]
     public void Shared_upstream_gets_added_when_second_target_requires_more() {
         // Two downstream targets (rB, rC) share producer rA in the same group.
+        // Routes promoted to LV4–LV5 tiers for ProfitFirst's filter, reserve
+        // disabled to keep this test focused on chain-pull-in semantics.
         // First bundle commits rA=1 + rB=1 (1 B produced, 1 consumed by rB).
         // Second bundle for rC needs 1 more B; rA must be pulled in again
         // because rA=1's single B was already consumed. The producer's final
         // multiplier is the SUM of bundle increments, not the max.
-        var rA = Route("rA", 5, "A", 1, 1, "B", 2, 1, 1_000, 10); // A→B producer
-        var rB = Route("rB", 5, "B", 2, 1, "C", 3, 1, 1_000, 1); // B→C consumer
-        var rC = Route("rC", 5, "B", 2, 1, "D", 4, 1, 1_000, 1); // B→D consumer
-        var request = PlanProfit([rA, rB, rC],
+        var rA = Route("rA", 5, "A", 4, 1, "B", 5, 1, 1_000, 2); // A→B producer, Remaining=2
+        var rB = Route("rB", 5, "B", 5, 1, "C", 6, 1, 1_000, 1); // B→C consumer
+        var rC = Route("rC", 5, "B", 5, 1, "D", 6, 1, 1_000, 1); // B→D consumer
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.ProfitFirst, [rA, rB, rC],
             new Dictionary<string, int> { ["A"] = 10, ["B"] = 0 }, 100_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
 
-        // Iter 1: rB wins on tier (LV3). Bundle rB=1 needs 1 B. deficit 1. rA=1
-        //         produces 1 B (Item2Number=1). Bundle parley = rA=1000 + rB=1000 = 2000.
-        // Iter 2: rC wins (LV4). Bundle rC=1 needs 1 B. Available B = 0 (rB consumed
-        //         the single B rA=1 produced). deficit 1. rA needs another exchange.
-        //         Bundle parley = rA=1000 + rC=1000 = 2000.
-        // Final: rA=2, rB=1, rC=1. Inventory: A=8, B=0, C=1, D=1.
+        // Iter 1: rB wins (LV5→LV6 tier tie with rC, lower row id wins).
+        //         Bundle pulls rA=1 to produce 1 B (Item2Number=1).
+        // Iter 2: rC wins. Bundle needs 1 more B, pulls rA=2 (uses rA's
+        //         last remaining exchange).
+        // Iter 3: rA ineligible (c=2, R=2). rB/rC ineligible. No candidates. Halt.
+        // Final: rA=2, rB=1, rC=1. Parley = 2000 + 2000 = 4000.
         Assert.Equal(2, result.Multipliers["rA"]);
         Assert.Equal(1, result.Multipliers["rB"]);
         Assert.Equal(1, result.Multipliers["rC"]);
@@ -185,25 +200,28 @@ public sealed class PlannerAutoPlannerTests {
     [Fact]
     public void Shared_upstream_cumulative_with_two_consumers_and_ceiling() {
         // rA produces 2 B per exchange. rB and rC each need 1 B. First bundle
-        // commits rA=1 + rC=1 (rA produces 2 B; rC consumes 1, leaving 1 B in
-        // inventory). Second bundle for rB finds 1 B available, no extra rA
-        // needed.
-        var rA = Route("rA", 5, "A", 1, 1, "B", 2, 2, 1_000, 10);
-        var rB = Route("rB", 5, "B", 2, 1, "C", 3, 1, 1_000, 1);
-        var rC = Route("rC", 5, "B", 2, 1, "D", 4, 1, 1_000, 1);
-        var request = PlanProfit([rA, rB, rC],
+        // commits rA=1 + rB=1 (rA produces 2 B; rB consumes 1, leaving 1 B in
+        // inventory). Second bundle for rC finds 1 B available, no extra rA
+        // needed. Routes promoted to LV4–LV6 for ProfitFirst's filter, reserve
+        // disabled so indivisible-oversupply is the focus. rA.Remaining=1
+        // limits rA to a single commit so the strategy halts cleanly once
+        // both consumers are filled (without reintroducing demand tracking).
+        var rA = Route("rA", 5, "A", 4, 1, "B", 5, 2, 1_000, 1);
+        var rB = Route("rB", 5, "B", 5, 1, "C", 6, 1, 1_000, 1);
+        var rC = Route("rC", 5, "B", 5, 1, "D", 6, 1, 1_000, 1);
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.ProfitFirst, [rA, rB, rC],
             new Dictionary<string, int> { ["A"] = 10, ["B"] = 0 }, 100_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
 
-        // Iter 1: rC wins (LV4). Bundle rC=1 needs 1 B. deficit 1. rA=1 produces
-        //         2 B (overshoot by 1). Bundle parley = rA=1000 + rC=1000 = 2000.
-        //         After commit: B inventory = 1 (one of the 2 produced is consumed).
-        // Iter 2: rB wins (LV3). Bundle rB=1 needs 1 B. Available = 1. deficit 0.
-        //         No producer needed. Bundle parley = rB=1000.
-        // Iter 3: rA is a candidate but downstream demand for B = 0 (both rB and
-        //         rC filled). Max useful target = currentCommitted = 1. Skip.
-        // Final: rA=1, rB=1, rC=1. Parley = 2000 + 1000 = 3000.
+        // Iter 1: rB wins (LV5→LV6 tier tie with rC, lower row id wins).
+        //         rB=1 needs 1 B, deficit 1 → rA=1 produces 2 B. After commit:
+        //         B = 2-1 = 1.
+        // Iter 2: rC wins. rC=1 needs 1 B, available=1, deficit 0. No
+        //         producer needed. Bundle = rC=1.
+        // Iter 3: rA ineligible (Remaining=1, committed=1). rB/rC ineligible.
+        //         No candidates. Halt.
+        // Final: rA=1, rB=1, rC=1. Parley = 2000 + 1000 = 3000. B = 0.
         Assert.Equal(1, result.Multipliers["rA"]);
         Assert.Equal(1, result.Multipliers["rB"]);
         Assert.Equal(1, result.Multipliers["rC"]);
@@ -296,12 +314,15 @@ public sealed class PlannerAutoPlannerTests {
 
     [Fact]
     public void Crow_first_maximizes_higher_coin_output_before_efficiency() {
-        // Spec (design.md line 75–79): "higher coin output first; on tie, full bundle
-        // efficiency". The higher-output route wins even though it's less efficient
-        // per parley.
-        var rA = Route("rA", 1, "A", 5, 1, "CrowCoin", 6, 190, 20_000, 1, crow: true);
-        var rB = Route("rB", 1, "B", 5, 1, "CrowCoin", 6, 180, 10_000, 1, crow: true);
-        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst, [rA, rB],
+        // Spec (design.md line 75–79): "higher coin output first; on tie, full
+        // bundle efficiency". The higher-output route wins even though it's
+        // less efficient per parley. Routes have Item1Level=4 (LV4) instead
+        // of LV5 so they qualify under Crow remainder's LV4–LV6 input filter
+        // and don't require LV5 reserve pull-in. Lv5Target=0 disables the
+        // reserve for the test (focusing the test on coin-output ranking).
+        var rA = Route("rA", 1, "A", 4, 1, "CrowCoin", 6, 190, 20_000, 1, crow: true);
+        var rB = Route("rB", 1, "B", 4, 1, "CrowCoin", 6, 180, 10_000, 1, crow: true);
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.CrowCoinFirst, [rA, rB],
             new Dictionary<string, int> { ["A"] = 10, ["B"] = 10 }, 20_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
@@ -314,9 +335,11 @@ public sealed class PlannerAutoPlannerTests {
 
     [Fact]
     public void Crow_first_uses_bundle_efficiency_when_coin_output_ties() {
-        var rA = Route("rA", 1, "A", 5, 1, "CrowCoin", 6, 190, 20_000, 1, crow: true);
-        var rB = Route("rB", 1, "B", 5, 1, "CrowCoin", 6, 190, 10_000, 1, crow: true);
-        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst, [rA, rB],
+        // Same output (190 Crow), different bundle parley. Reserve disabled so
+        // LV4 input has no deficit. rB wins on lower bundle parley.
+        var rA = Route("rA", 1, "A", 4, 1, "CrowCoin", 6, 190, 20_000, 1, crow: true);
+        var rB = Route("rB", 1, "B", 4, 1, "CrowCoin", 6, 190, 10_000, 1, crow: true);
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.CrowCoinFirst, [rA, rB],
             new Dictionary<string, int> { ["A"] = 10, ["B"] = 10 }, 10_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
@@ -328,10 +351,13 @@ public sealed class PlannerAutoPlannerTests {
 
     [Fact]
     public void Crow_first_never_exceeds_budget_when_all_coin_routes_cannot_fit() {
-        var rA = Route("rA", 1, "A", 5, 1, "CrowCoin", 6, 190, 400_000, 1, crow: true);
-        var rB = Route("rB", 1, "B", 5, 1, "CrowCoin", 6, 190, 400_000, 1, crow: true);
-        var rC = Route("rC", 1, "C", 5, 1, "CrowCoin", 6, 190, 400_000, 1, crow: true);
-        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst, [rA, rB, rC],
+        // Three Crow routes, each costs 400k, total budget 800k only fits 2.
+        // Reserves disabled; routes use LV4 inputs so they qualify for the
+        // Crow remainder filter without reserve pull-in.
+        var rA = Route("rA", 1, "A", 4, 1, "CrowCoin", 6, 190, 400_000, 1, crow: true);
+        var rB = Route("rB", 1, "B", 4, 1, "CrowCoin", 6, 190, 400_000, 1, crow: true);
+        var rC = Route("rC", 1, "C", 4, 1, "CrowCoin", 6, 190, 400_000, 1, crow: true);
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.CrowCoinFirst, [rA, rB, rC],
             new Dictionary<string, int> { ["A"] = 10, ["B"] = 10, ["C"] = 10 }, 800_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
@@ -359,9 +385,12 @@ public sealed class PlannerAutoPlannerTests {
 
     [Fact]
     public void Profit_first_excludes_every_crow_output() {
+        // ProfitFirst filter excludes Item2Id == Crow. Both routes consume A
+        // (LV6) which has no reserve (Lv6Target=0). rCrow's Item2Id is Crow
+        // (filtered out), so only rLv7 commits.
         var rCrow = Route("rCrow", 1, "A", 6, 1, "CrowCoin", 6, 190, 5_000, 1, crow: true);
         var rLv7 = Route("rLv7", 1, "A", 6, 1, "Top", 7, 1, 5_000, 1);
-        var request = PlanStrategy(AutoPlanningStrategy.ProfitFirst, [rCrow, rLv7],
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.ProfitFirst, [rCrow, rLv7],
             new Dictionary<string, int> { ["A"] = 10 }, 10_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
@@ -372,10 +401,14 @@ public sealed class PlannerAutoPlannerTests {
 
     [Fact]
     public void Profit_first_prefers_lv6_to_lv7_over_lower_targets() {
+        // ProfitFirst ranks by higher Item2Level (LV7 > LV6 > LV5), so rC wins
+        // first among the LV4→LV5→LV6→LV7 chain. Budget 100_000 only fits one
+        // 100k exchange, so rC commits; rA/rB stay at 0 (no chain pull-in
+        // required because C=10 ≥ rC's demand).
         var rA = Route("rA", 1, "A", 4, 1, "B", 5, 1, 100_000, 1);
         var rB = Route("rB", 1, "B", 5, 1, "C", 6, 1, 100_000, 1);
         var rC = Route("rC", 1, "C", 6, 1, "D", 7, 1, 100_000, 1);
-        var request = PlanStrategy(AutoPlanningStrategy.ProfitFirst, [rA, rB, rC],
+        var request = PlanStrategyNoReserve(AutoPlanningStrategy.ProfitFirst, [rA, rB, rC],
             new Dictionary<string, int> { ["A"] = 10, ["B"] = 10, ["C"] = 10 }, 100_000);
 
         var result = new PlannerAutoPlanner().Plan(request);
@@ -387,11 +420,14 @@ public sealed class PlannerAutoPlannerTests {
 
     [Fact]
     public void Strategy_ties_are_deterministic_by_row_id() {
+        // rA/rB both LV6→LV7, both in ProfitFirst filter. Available A/B = 10,
+        // reserve disabled so the LV6 input has no deficit. rA wins on row id
+        // (alphabetical); result is deterministic regardless of input order.
         var rA = Route("rA", 1, "A", 6, 1, "Top", 7, 1, 5_000, 1);
         var rB = Route("rB", 1, "B", 6, 1, "Top", 7, 1, 5_000, 1);
-        var fwdRequest = PlanStrategy(AutoPlanningStrategy.ProfitFirst, [rA, rB],
+        var fwdRequest = PlanStrategyNoReserve(AutoPlanningStrategy.ProfitFirst, [rA, rB],
             new Dictionary<string, int> { ["A"] = 10, ["B"] = 10 }, 5_000);
-        var revRequest = PlanStrategy(AutoPlanningStrategy.ProfitFirst, [rB, rA],
+        var revRequest = PlanStrategyNoReserve(AutoPlanningStrategy.ProfitFirst, [rB, rA],
             new Dictionary<string, int> { ["A"] = 10, ["B"] = 10 }, 5_000);
 
         var fwdResult = new PlannerAutoPlanner().Plan(fwdRequest);
@@ -515,6 +551,215 @@ public sealed class PlannerAutoPlannerTests {
         Assert.Equal(11, result.ProjectedInventory["Lv5Out"]);
     }
 
+    // ------------------------------------------------------------------
+    // Plan-relevant reserve behavior. The Universal Reserve Phase (which
+    // pre-fills every LV5/LV6 item before the strategy runs) must NOT
+    // block strategies when an LV5/LV6 item is unused by the plan. Reserve
+    // check fires only when a selected bundle consumes the item as Item1.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void Plan_relevant_reserve_does_not_block_Crow_Coin_on_unused_LV5() {
+        // 800072 (LV5) has 0 inventory and only 4 Ancient island producer
+        // exchanges (+1 each). Max LV5 = 5. CrowCoinFirst picks a Crow Coin
+        // route (crowA consumes an LV5 item A that DOES have an in-group
+        // producer aProd) and never touches 800072. The plan must succeed
+        // and must NOT commit any Ancient producer exchanges — 800072 is
+        // unconsumed inventory, not a target the user wants to pre-fill.
+        var ancient = Route("ancient", 1, "Dagger", 4, 1, "800072", 5, 1, 1_000_000, 4);
+        var aProd = Route("aProd", 2, "P", 1, 1, "A", 5, 1, 1_000, 5);
+        var crowA = Route("crowA", 2, "A", 5, 1, AutoPlanningRoute.CrowCoinItemId, 6, 190, 60_000, 1, crow: true);
+        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst,
+            [ancient, aProd, crowA],
+            new Dictionary<string, int> {
+                ["800072"] = 0,
+                ["Dagger"] = 100,
+                ["P"] = 100,
+                ["A"] = 10,
+            },
+            budget: 200_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success);
+        Assert.Equal(0, result.Multipliers["ancient"]);
+        Assert.Equal(1, result.Multipliers["crowA"]);
+    }
+
+    [Fact]
+    public void Plan_relevant_reserve_does_not_block_on_unused_LV5_with_zero_inventory() {
+        // LV5 item X has 0 inventory and no producer anywhere. Plan never
+        // touches X. Plan must succeed because X is not plan-relevant.
+        var route = Route("r", 1, "Y", 4, 1, "Z", 5, 1, 1_000, 5);
+        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst,
+            [route],
+            new Dictionary<string, int> { ["Y"] = 10, ["Z"] = 5, ["X"] = 0 },
+            budget: 10_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public void Plan_relevant_reserve_pulls_same_group_producer_for_consumed_LV5() {
+        // Bundled LV5 consumer drops stock below target. Same-group producer
+        // must be pulled into the bundle so projected inventory stays at or
+        // above Max LV5 after commit. Budget is comfortably above every
+        // iteration's cost so no reserve-budget-exceeded fires.
+        var consumer = Route("consumer", 1, "X", 5, 1, "Top", 6, 1, 10_000, 3);
+        var producer = Route("producer", 1, "Y", 1, 1, "X", 5, 1, 5_000, 10);
+        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst,
+            [consumer, producer],
+            new Dictionary<string, int> { ["X"] = 10, ["Y"] = 100, ["Top"] = 0 },
+            budget: 1_000_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success);
+        Assert.True(result.Multipliers["consumer"] >= 1);
+        Assert.True(result.Multipliers["producer"] >= 1);
+        Assert.True(result.ProjectedInventory["X"] >= 10,
+            $"projected X = {result.ProjectedInventory["X"]}, expected >= 10");
+    }
+
+    [Fact]
+    public void Plan_relevant_reserve_fails_when_consumed_LV5_has_no_producer() {
+        // Plan commits a bundle that consumes LV5 X. No same-group producer
+        // for X exists. The plan must fail with reserve-no-producer.
+        var consumer = Route("consumer", 1, "X", 5, 1, "Top", 6, 1, 10_000, 5);
+        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst,
+            [consumer],
+            new Dictionary<string, int> { ["X"] = 10, ["Top"] = 0 },
+            budget: 50_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics, d => d.Code == "reserve-no-producer");
+    }
+
+    [Fact]
+    public void Plan_relevant_reserve_isolated_by_BarterGroup() {
+        // Plan consumes LV5 X. The only producer for X is in a different
+        // BarterGroup. Cross-group supply is forbidden. Plan must fail
+        // with reserve-no-producer, NOT silently succeed.
+        var consumer = Route("consumer", 7, "X", 5, 1, "Top", 6, 1, 10_000, 5);
+        var crossProducer = Route("cross", 9, "Z", 1, 1, "X", 5, 1, 5_000, 10); // wrong group
+        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst,
+            [consumer, crossProducer],
+            new Dictionary<string, int> { ["X"] = 10, ["Z"] = 100, ["Top"] = 0 },
+            budget: 50_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics, d => d.Code == "reserve-no-producer");
+    }
+
+    [Fact]
+    public void Plan_relevant_reserve_does_not_prefill_unused_LV5_under_Restock_first() {
+        // RestockFirst must also not be blocked by an unconsumed LV5 item.
+        // LV5 X has low stock and no in-group producer; the only restock
+        // candidate is a LV1→LV2 route that never touches X.
+        var lv2 = Route("lv2", 1, "A", 1, 1, "B", 2, 1, 1_000, 5);
+        var request = new AutoPlanningRequest(
+            [lv2],
+            new Dictionary<string, int> { ["A"] = 100, ["B"] = 0, ["X"] = 0 },
+            AutoPlanningStrategy.RestockFirst, 10, 10, 10_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success);
+        Assert.Equal(5, result.Multipliers["lv2"]);
+    }
+
+    [Fact]
+    public void Plan_relevant_reserve_does_not_prefill_unused_LV5_under_Profit_first() {
+        // ProfitFirst must also not be blocked by an unconsumed LV5 item.
+        // 800072 has 0 inventory and only 4 Ancient producers; the user's
+        // profit target is a separate LV4→LV5 route that never touches
+        // 800072. Plan-relevant reserve must keep the profit plan alive.
+        var ancient = Route("ancient", 1, "Dagger", 4, 1, "800072", 5, 1, 1_000_000, 4);
+        var profit = Route("profit", 2, "Common", 4, 1, "Top", 5, 1, 10_000, 5);
+        var request = PlanStrategy(AutoPlanningStrategy.ProfitFirst,
+            [ancient, profit],
+            new Dictionary<string, int> {
+                ["800072"] = 0,
+                ["Dagger"] = 100,
+                ["Common"] = 100,
+                ["Top"] = 0,
+            },
+            budget: 100_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success);
+        Assert.Equal(0, result.Multipliers["ancient"]);
+        Assert.True(result.Multipliers["profit"] >= 1);
+    }
+
+    [Fact]
+    public void Plan_relevant_reserve_preserves_LV1_LV3_exclusion_in_Crow_remainder() {
+        // CrowCoinFirst remainder phase is restricted to LV4-LV6 inputs.
+        // LV1-LV3 are never direct remainder candidates even when below target.
+        var lv3 = Route("lv3", 1, "A", 1, 1, "B", 3, 1, 100_000, 1); // LV1→LV3
+        var lv4to5 = Route("lv4to5", 2, "C", 4, 1, "D", 5, 1, 100_000, 1); // LV4→LV5
+        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst,
+            [lv3, lv4to5],
+            new Dictionary<string, int> { ["A"] = 100, ["B"] = 0, ["C"] = 10, ["D"] = 0 },
+            budget: 100_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.Equal(0, result.Multipliers["lv3"]);
+        Assert.Equal(1, result.Multipliers["lv4to5"]);
+    }
+
+    [Fact]
+    public void Plan_relevant_reserve_discards_unselected_candidate_failure_under_Profit() {
+        // Group 1 has a viable LV4→LV5 route prefiller. Group 2 has a
+        // consumer that consumes LV5 X with NO same-group producer. Both
+        // appear in ProfitFirst candidates. Plan-relevant reserve semantics:
+        // the consumer probe fails reserve-no-producer inside its LOCAL
+        // diagnostics, but the strategy picks prefiller (the only viable
+        // winner) and commits it. Consumer's reserve failure must be
+        // discarded because consumer was NOT the winner. Success=true and
+        // diagnostics must contain zero reserve-* entries.
+        var prefiller = Route("prefiller", 1, "A", 4, 1, "B", 5, 1, 5_000, 5);
+        var consumer = Route("consumer", 2, "X", 5, 1, "Top", 6, 1, 10_000, 5);
+        var request = PlanStrategy(AutoPlanningStrategy.ProfitFirst,
+            [prefiller, consumer],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 0, ["X"] = 10, ["Top"] = 0 },
+            budget: 50_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success);
+        Assert.True(result.Multipliers["prefiller"] >= 1);
+        Assert.Equal(0, result.Multipliers["consumer"]);
+        Assert.DoesNotContain(result.Diagnostics, d => d.Code.StartsWith("reserve-"));
+    }
+
+    [Fact]
+    public void Plan_relevant_reserve_discards_unselected_candidate_under_Crow_remainder() {
+        // Same setup but under CrowCoinFirst remainder (LV4-LV6 input)
+        // candidates, where the loser was a Crow-coin remainder candidate.
+        var prefiller = Route("prefiller", 1, "A", 4, 1, "B", 5, 1, 5_000, 5);
+        var consumer = Route("consumer", 2, "X", 5, 1, "Top", 6, 1, 10_000, 5);
+        var request = PlanStrategy(AutoPlanningStrategy.CrowCoinFirst,
+            [prefiller, consumer],
+            new Dictionary<string, int> { ["A"] = 10, ["B"] = 0, ["X"] = 10, ["Top"] = 0 },
+            budget: 50_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success);
+        Assert.True(result.Multipliers["prefiller"] >= 1);
+        Assert.Equal(0, result.Multipliers["consumer"]);
+        Assert.DoesNotContain(result.Diagnostics, d => d.Code.StartsWith("reserve-"));
+    }
+
     private static AutoPlanningRequest PlanProfit(
         IReadOnlyList<AutoPlanningRoute> routes,
         IReadOnlyDictionary<string, int> inventory,
@@ -528,9 +773,24 @@ public sealed class PlannerAutoPlannerTests {
         int budget = 1_000_000) =>
         new(routes, inventory, strategy, 10, 10, budget);
 
+    private static AutoPlanningRequest PlanStrategyNoReserve(
+        AutoPlanningStrategy strategy,
+        IReadOnlyList<AutoPlanningRoute> routes,
+        IReadOnlyDictionary<string, int> inventory,
+        int budget = 1_000_000) =>
+        new(routes, inventory, strategy, 0, 0, budget);
+
     private static AutoPlanningRoute Route(
         string id, int group, string item1, int lv1, int n1,
         string item2, int lv2, int n2, int parley, int remaining,
         bool crow = false) =>
-        new(id, group, item1, lv1, n1, item2, lv2, n2, crow, parley, remaining);
+        // When crow=true, the route's Item2Id is forced to the locale-independent
+        // CrowCoinItemId constant ("10") rather than the descriptive "CrowCoin"
+        // string the test author wrote. This matches the design-doc contract for
+        // tests: only Item2Id == CrowCoinItemId is treated as a Crow route by
+        // the service. item2 here is just a label used to make test sources
+        // readable.
+        new(id, group, item1, lv1, n1,
+            crow ? AutoPlanningRoute.CrowCoinItemId : item2,
+            lv2, n2, crow, parley, remaining);
 }
