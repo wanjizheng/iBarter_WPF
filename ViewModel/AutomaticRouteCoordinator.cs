@@ -120,8 +120,13 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     }
 
     public RouteRenderSnapshot GetRenderSnapshot(IReadOnlyList<Barter> manualCargo) {
-        if (mode == CargoMode.Manual || currentPlan is null)
-            return RouteRenderSnapshotFactory.CreateManual(manualCargo.Select(x => x.IsLandName).ToArray());
+        if (mode == CargoMode.Manual || currentPlan is null) {
+            var islandIds = new List<string>();
+            var start = ShipCargoViewModel.ResolveStartIslandFromCargo(manualCargo);
+            if (start is not null) islandIds.Add(start.IslandsName);
+            islandIds.AddRange(manualCargo.Select(x => x.IsLandName));
+            return RouteRenderSnapshotFactory.CreateManual(islandIds);
+        }
         return RouteRenderSnapshotFactory.CreateAutomatic(currentPlan, selectedRouteNumber, showAllRoutes);
     }
 

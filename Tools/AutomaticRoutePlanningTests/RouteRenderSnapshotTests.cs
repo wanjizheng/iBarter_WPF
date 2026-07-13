@@ -55,6 +55,24 @@ public sealed class RouteRenderSnapshotTests {
         Assert.Equal(["Velia", "A", "Velia"], snapshot.Paths.Single().IslandIds);
     }
 
+    [Fact]
+    public void Warehouse_and_barter_order_keeps_non_adjacent_return_visits() {
+        var load = new RouteLoadSnapshot(0, 0, 0);
+        var route = new PlannedRoute(1, "Iliya", "Velia", [
+            new WarehousePickupStep("Iliya", "Iliya", [], load),
+            new BarterStep("rA", "A", new("X", 1), new("Y", 1), load),
+            new WarehousePickupStep("Velia", "Velia", [], load),
+            new BarterStep("rB", "B", new("X", 1), new("Y", 1), load),
+            new WarehouseUnloadStep("Velia", "Velia", [], load),
+        ], 1, 0, 0, 0);
+        var plan = new RoutePlan(RoutePlanStatus.Optimal, [route],
+            new RoutePlanObjective(1, 1, 2, 0, ""), [], "f");
+
+        var snapshot = RouteRenderSnapshotFactory.CreateAutomatic(plan, 1, false);
+
+        Assert.Equal(["Iliya", "A", "Velia", "B", "Velia"], snapshot.Paths.Single().IslandIds);
+    }
+
     private static RoutePlan BuildPlan(IReadOnlyList<string>? route1Islands = null) {
         route1Islands ??= ["Velia", "A", "Velia"];
         var load = new RouteLoadSnapshot(0, 0, 0);

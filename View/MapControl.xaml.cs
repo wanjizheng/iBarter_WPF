@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using iBarter.Localization;
 using iBarter.ViewModel;
 using iBarter.Navigation;
+using iBarter.Routing;
 using static iBarter.EnumLists;
 using Grid = System.Windows.Controls.Grid;
 using RowColumnIndex = Syncfusion.UI.Xaml.ScrollAxis.RowColumnIndex;
@@ -318,6 +319,22 @@ namespace iBarter.View {
         // directly to Grid_MapMain). Tag-based discrimination avoids
         // having to subclass Line or maintain a parallel list of routes.
         private static readonly object ROUTE_LINE_TAG = new object();
+        private readonly HashSet<string> routeResolutionDiagnostics = new(StringComparer.Ordinal);
+        private static readonly Brush[] AutomaticRouteBrushes = [
+            Brushes.DeepSkyBlue,
+            Brushes.Orange,
+            Brushes.LimeGreen,
+            Brushes.Violet,
+            Brushes.Tomato,
+            Brushes.Cyan,
+            Brushes.Yellow,
+            Brushes.HotPink,
+        ];
+        private static readonly double[][] AutomaticDashPatterns = [
+            [4, 2],
+            [8, 3],
+            [2, 2],
+        ];
 
         // Rebuilds the dashed-line overlay that visualises the ship's
         // current sailing route. The route is derived on the fly from
@@ -354,68 +371,71 @@ namespace iBarter.View {
                 }
             }
 
-            var route = ComputeRoute();
-            if (route.Count < 2) {
-                // 0 or 1 stop -> nothing to connect (start island with
-                // no cargo, or cargo entirely on the start island).
-                return;
+            var coordinator = App.myRouteCoordinator;
+            IReadOnlyList<Barter> manualCargo = coordinator?.Mode == CargoMode.Manual
+                ? App.myCVM.CargoDetails.ToList()
+                : Array.Empty<Barter>();
+            var snapshot = coordinator?.GetRenderSnapshot(manualCargo)
+                ?? RouteRenderSnapshotFactory.CreateManual(manualCargo.Select(x => x.IsLandName).ToArray());
+            foreach (var path in snapshot.Paths) {
+                var route = ResolveRoute(path, snapshot);
+                if (route is null || route.Count < 2) continue;
+                Brush stroke = snapshot.IsManual
+                    ? Brushes.Gold
+                    : AutomaticRouteBrushes[path.ColorIndex % AutomaticRouteBrushes.Length];
+                int patternRound = snapshot.IsManual ? 0 : path.ColorIndex / AutomaticRouteBrushes.Length;
+                var dash = new DoubleCollection(AutomaticDashPatterns[patternRound % AutomaticDashPatterns.Length]);
+                DrawRoutePath(route, stroke, dash);
             }
+        }
 
+        private List<Islands>? ResolveRoute(RouteRenderPath path, RouteRenderSnapshot snapshot) {
+            var route = new List<Islands>(path.IslandIds.Count);
+            foreach (string islandId in path.IslandIds) {
+                var island = App.listIslands?.FirstOrDefault(x => x.IslandsName == islandId);
+                if (island is null) {
+                    string fingerprint = snapshot.IsManual
+                        ? "manual"
+                        : App.myRouteCoordinator?.CurrentPlan?.InputFingerprint ?? "automatic";
+                    string key = fingerprint + "|" + islandId;
+                    if (routeResolutionDiagnostics.Add(key))
+                        App.myCFun.Log(LanguageService.Instance.Localize(
+                            "str.Log.AutoRoute.MissingIsland", islandId), Brushes.OrangeRed);
+                    return null;
+                }
+                route.Add(island);
+            }
+            return route;
+        }
+
+        private void DrawRoutePath(
+            IReadOnlyList<Islands> route,
+            Brush stroke,
+            DoubleCollection dashArray) {
             for (int i = 0; i < route.Count - 1; i++) {
                 var from = GetIslandCenter(route[i]);
                 var to = GetIslandCenter(route[i + 1]);
-
-                // Skip degenerate (zero-length) legs - e.g. when both
-                // endpoints collapse to the same island after dedup.
-                // Even with the dedup above this can fire on islands
-                // whose normalized rectangles overlap to a degree
-                // that round-off gives the same centroid twice.
                 double dx = to.X - from.X;
                 double dy = to.Y - from.Y;
-                if (dx == 0 && dy == 0) {
-                    continue;
-                }
+                if (dx == 0 && dy == 0) continue;
 
-                var line = new Line {
+                Grid_MapMain.Children.Add(new Line {
                     X1 = from.X,
                     Y1 = from.Y,
                     X2 = to.X,
                     Y2 = to.Y,
-                    Stroke = Brushes.Gold,
+                    Stroke = stroke,
                     StrokeThickness = 2.5,
-                    // Dashed: 4px on, 2px off. Picks up on the dark
-                    // navy map background without overpowering the
-                    // island labels (which use a light tint of the
-                    // group brush - see LightenForMapBg).
-                    StrokeDashArray = new DoubleCollection { 4, 2 },
+                    StrokeDashArray = dashArray,
                     Tag = ROUTE_LINE_TAG,
-                    // IsHitTestVisible=false so the lines do not eat
-                    // clicks meant for the island pins behind them.
                     IsHitTestVisible = false,
-                };
-                Grid_MapMain.Children.Add(line);
+                });
 
-                // Arrowhead: a small gold triangle whose tip sits on
-                // the leg's endpoint (to) and whose body points back
-                // along the line so it reads as an arrow pointing at
-                // the destination. Drawn in the local coordinate frame
-                // of "tip at origin, body pointing along +X" and then
-                // rotated+translated into screen space. The Transform
-                // composition order is [Rotate, Translate] (Children[0]
-                // applied first): tip stays at (0,0) under rotation,
-                // then Translate moves it to (to.X, to.Y). Back
-                // corners follow along, so the arrow always points
-                // exactly at the destination.
-                double angleRad = Math.Atan2(dy, dx);
-                double angleDeg = angleRad * 180.0 / Math.PI;
+                double angleDeg = Math.Atan2(dy, dx) * 180.0 / Math.PI;
                 var arrow = new Polygon {
-                    Fill = Brushes.Gold,
-                    Stroke = Brushes.Gold,
+                    Fill = stroke,
+                    Stroke = stroke,
                     StrokeThickness = 1,
-                    // Tip at (0,0); back of the triangle 11px behind
-                    // the tip, 5px on each side. Filled + stroked with
-                    // the same gold so the arrow reads as one solid
-                    // shape regardless of background colour.
                     Points = new PointCollection {
                         new Point(0, 0),
                         new Point(-11, -5),
@@ -424,44 +444,12 @@ namespace iBarter.View {
                     Tag = ROUTE_LINE_TAG,
                     IsHitTestVisible = false,
                 };
-                var arrowTransforms = new TransformGroup();
-                arrowTransforms.Children.Add(new RotateTransform(angleDeg));
-                arrowTransforms.Children.Add(new TranslateTransform(to.X, to.Y));
-                arrow.RenderTransform = arrowTransforms;
+                var transforms = new TransformGroup();
+                transforms.Children.Add(new RotateTransform(angleDeg));
+                transforms.Children.Add(new TranslateTransform(to.X, to.Y));
+                arrow.RenderTransform = transforms;
                 Grid_MapMain.Children.Add(arrow);
             }
-        }
-
-        // Derives the current route from App.myCVM.CargoDetails. The starting
-        // island comes from ShipCargoViewModel.ResolveStartIslandFromCargo
-        // (warehouse of the first cargo barter's Item1) so the dashed-line
-        // overlay starts at the same point the SolveOptimalRoute solver
-        // does - otherwise the on-map route and the cargo's route would
-        // disagree. Consecutive duplicate islands are collapsed so e.g.
-        // two cargo barters at the same island render as one segment
-        // rather than a zero-length dot followed by a real segment.
-        private static List<Islands> ComputeRoute() {
-            var route = new List<Islands>();
-            var cargoList = App.myCVM?.CargoDetails;
-            var cargo = cargoList == null
-                ? null
-                : (IReadOnlyList<Barter>)cargoList.ToList();
-            var startIsland = ShipCargoViewModel.ResolveStartIslandFromCargo(cargo);
-            if (startIsland != null) {
-                route.Add(startIsland);
-            }
-            if (cargoList != null) {
-                foreach (var b in cargoList) {
-                    var isl = b.IsLand;
-                    if (isl == null) {
-                        continue;
-                    }
-                    if (route.Count == 0 || !ReferenceEquals(route[route.Count - 1], isl)) {
-                        route.Add(isl);
-                    }
-                }
-            }
-            return route;
         }
 
         private static readonly NormalizedBounds LEFT_INSET_BOUNDS = new(0, 0, 0.3775, 0.3267);
@@ -1065,6 +1053,7 @@ namespace iBarter.View {
 
         private void MyGrid_Container_MouseDown(object sender, MouseButtonEventArgs e) {
             if (e.ChangedButton == MouseButton.Middle && e.ButtonState == MouseButtonState.Pressed) {
+                App.myRouteCoordinator?.ActivateManual();
                 var clickedGrid = sender as Grid;
                 if (clickedGrid != null) {
                     Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == clickedGrid.Name.Substring(14, clickedGrid.Name.Length - 14))!;
