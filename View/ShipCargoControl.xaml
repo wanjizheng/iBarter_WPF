@@ -4,13 +4,15 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="clr-namespace:iBarter.View"
+    xmlns:domain="clr-namespace:iBarter"
+    xmlns:vm="clr-namespace:iBarter.ViewModel"
     xmlns:loc="clr-namespace:iBarter.Localization"
     xmlns:Syncfusion="http://schemas.syncfusion.com/wpf" x:Class="iBarter.View.ShipCargoControl"
     xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
     mc:Ignorable="d"
     d:DesignHeight="850" d:DesignWidth="300">
     <Control.Resources>
-        <DataTemplate x:Key="ListBoxTemplate">
+        <DataTemplate DataType="{x:Type domain:Barter}">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="{Binding IsLandNameDisplay, StringFormat='{}{0}: '}" FontWeight="Bold"
                            VerticalAlignment="Center" />
@@ -31,6 +33,30 @@
                     </ToolTip>
                 </StackPanel.ToolTip>
             </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:WarehouseRouteStepViewModel}">
+            <Border Padding="7" Margin="3,2" Background="#223B5B" BorderBrush="#416C94" BorderThickness="1" CornerRadius="3">
+                <StackPanel>
+                    <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="#FFD166" />
+                    <TextBlock Text="{Binding Detail}" Margin="0,3,0,0" TextWrapping="Wrap" Foreground="White" />
+                    <TextBlock Text="{Binding LoadText}" Margin="0,3,0,0" FontFamily="Consolas" Foreground="#9ED8FF" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:BarterRouteStepViewModel}">
+            <Border Padding="7" Margin="3,2" Background="#182532" BorderBrush="#2D4355" BorderThickness="1" CornerRadius="3">
+                <StackPanel>
+                    <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="White" />
+                    <StackPanel Margin="0,3,0,0" Orientation="Horizontal">
+                        <Image Source="{Binding Item1Icon}" Width="24" Height="24" />
+                        <TextBlock Text="{Binding Detail}" Margin="6,0" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="White" />
+                        <Image Source="{Binding Item2Icon}" Width="24" Height="24" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding LoadText}" Margin="0,3,0,0" FontFamily="Consolas" Foreground="#9ED8FF" />
+                </StackPanel>
+            </Border>
         </DataTemplate>
 
         <Style TargetType="Syncfusion:PropertyGrid" x:Key="PropertyStyle">
@@ -60,6 +86,13 @@
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/pilot.png" Click="ButtonAdv_OptimalRoute_Click" />
             <Separator />
+            <StackPanel x:Name="Panel_AutomaticRouteSelector" Margin="6,0" VerticalAlignment="Center" Visibility="Collapsed">
+                <TextBlock Text="{loc:Localize str.ShipCargo.AutoRoute.Selector}" FontSize="10" Foreground="#5B7184" />
+                <ComboBox x:Name="ComboBoxAdv_RouteSelector" Width="126"
+                          ItemsSource="{Binding RouteOptions}" DisplayMemberPath="DisplayName"
+                          SelectionChanged="ComboBoxAdv_RouteSelector_SelectionChanged" />
+            </StackPanel>
+            <Separator />
             <Syncfusion:ButtonAdv
                 x:Name="ButtonAdv_Clean"
                 Margin="4,0,4,0"
@@ -72,7 +105,7 @@
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/clean.png" Click="ButtonAdv_Clean_Click" />
         </Syncfusion:ToolBarAdv>
-        <ListBox x:Name="ListBox_ShipCargo" Grid.Row="1" ItemTemplate="{StaticResource ListBoxTemplate}"
+        <ListBox x:Name="ListBox_ShipCargo" Grid.Row="1" Background="#101B26" BorderThickness="0"
                  AllowDrop="True" PreviewMouseLeftButtonDown="ListBox_PreviewMouseLeftButtonDown" Drop="ListBox_Drop">
             <ListBox.ItemContainerStyle>
                 <Style TargetType="ListBoxItem">

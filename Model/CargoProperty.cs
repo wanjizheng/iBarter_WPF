@@ -100,7 +100,10 @@ namespace iBarter.Model {
                     pg.ViewBackgroundColor = new SolidColorBrush(Color.FromRgb(0xF5, 0xF8, 0xFC)); // very light blue
                 }
 
-                SaveData();
+                bool isAutomaticDisplayValue = App.myRouteCoordinator?.Mode == ViewModel.CargoMode.AutomaticRoute
+                    && propertyName is nameof(InitialLT) or nameof(CurrentLT) or nameof(PeakLT);
+                if (!isAutomaticDisplayValue)
+                    SaveData();
             });
         }
 

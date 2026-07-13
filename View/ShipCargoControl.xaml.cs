@@ -1,5 +1,7 @@
 ﻿using System.Collections;
 using iBarter.Model;
+using iBarter.Routing;
+using iBarter.ViewModel;
 using Newtonsoft.Json;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -22,8 +24,63 @@ namespace iBarter.View {
             DataContext = App.myCVM;
             //PropertyGrid_Ship.Items = App.myCVM.CargoProperty;
 
-            App.myCargoProperty = new CargoProperty();
+            if (App.myCargoProperty == null)
+                App.myCargoProperty = new CargoProperty();
+            Loaded += ShipCargoControl_Loaded;
             Localization.LanguageService.Instance.LanguageChanged += (_, _) => RefreshLocalizedDisplay();
+        }
+
+        private bool updatingRouteSelector;
+
+        private void ShipCargoControl_Loaded(object sender, RoutedEventArgs e) {
+            if (App.myRouteCoordinator != null) {
+                App.myRouteCoordinator.RouteDisplayChanged -= RouteCoordinator_RouteDisplayChanged;
+                App.myRouteCoordinator.RouteDisplayChanged += RouteCoordinator_RouteDisplayChanged;
+            }
+            RefreshRouteMode();
+        }
+
+        private void RouteCoordinator_RouteDisplayChanged(object? sender, EventArgs e) {
+            if (!Dispatcher.CheckAccess()) {
+                Dispatcher.Invoke(RefreshRouteMode);
+                return;
+            }
+            RefreshRouteMode();
+        }
+
+        private void RefreshRouteMode() {
+            var coordinator = App.myRouteCoordinator;
+            bool automatic = coordinator?.Mode == CargoMode.AutomaticRoute;
+            ListBox_ShipCargo.ItemsSource = automatic
+                ? App.myCVM.AutomaticSteps
+                : App.myCVM.CargoDetails;
+            ListBox_ShipCargo.AllowDrop = !automatic;
+            ButtonAdv_OptimalRoute.IsEnabled = !automatic;
+            ButtonAdv_Clean.IsEnabled = !automatic;
+            Panel_AutomaticRouteSelector.Visibility = automatic && coordinator!.RouteOptions.Count > 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+            updatingRouteSelector = true;
+            try {
+                ComboBoxAdv_RouteSelector.SelectedItem = automatic
+                    ? coordinator!.RouteOptions.FirstOrDefault(x => coordinator.ShowAllRoutes
+                        ? x.IsAll
+                        : x.RouteNumber == coordinator.SelectedRouteNumber)
+                    : null;
+            }
+            finally {
+                updatingRouteSelector = false;
+            }
+            PropertyGrid_Ship.SelectedObject = App.myCargoProperty;
+            CollectionViewSource.GetDefaultView(ListBox_ShipCargo.ItemsSource)?.Refresh();
+        }
+
+        private void ComboBoxAdv_RouteSelector_SelectionChanged(object sender, SelectionChangedEventArgs e) {
+            if (updatingRouteSelector || ComboBoxAdv_RouteSelector.SelectedItem is not RouteSelectionOption option)
+                return;
+            if (option.IsAll) App.myRouteCoordinator.SelectAll();
+            else if (option.RouteNumber is int routeNumber) App.myRouteCoordinator.SelectRoute(routeNumber);
         }
 
         private void RefreshLocalizedDisplay() {
@@ -42,6 +99,7 @@ namespace iBarter.View {
         private object _draggedItem;
 
         private void ListBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
+            if (App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute) return;
             // 找到被点击的 ListBoxItem
             var item = FindAncestor<ListBoxItem>((DependencyObject)e.OriginalSource);
             if (item != null) {
@@ -52,6 +110,7 @@ namespace iBarter.View {
         }
 
         private void ListBox_Drop(object sender, System.Windows.DragEventArgs e) {
+            if (App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute) return;
             if (_draggedItem != null) {
                 // 获取原项目的位置和新放置位置
                 var targetItem = FindAncestor<ListBoxItem>((DependencyObject)e.OriginalSource);
@@ -61,7 +120,7 @@ namespace iBarter.View {
                     var draggedIndex = ListBox_ShipCargo.Items.IndexOf(_draggedItem);
 
                     // 这里假设你的 ItemsSource 是 ObservableCollection 类型
-                    (ListBox_ShipCargo.ItemsSource as ObservableCollection<Barter>).Move(draggedIndex, targetIndex);
+                    (ListBox_ShipCargo.ItemsSource as ObservableCollection<Barter>)?.Move(draggedIndex, targetIndex);
                 }
             }
         }
@@ -80,6 +139,7 @@ namespace iBarter.View {
         }
 
         public void RefreshData() {
+            App.myRouteCoordinator?.ActivateManual();
             if (App.myfmMain != null) {
                 string strPath_Data = AppDomain.CurrentDomain.BaseDirectory +
                                       "\\Resources\\myShipCargoItems_Data.json";
@@ -104,7 +164,14 @@ namespace iBarter.View {
                         if (File.Exists(strPath_Data)) {
                             readJsonData = File.ReadAllText(strPath_Data);
                             if (readJsonData.Length > 0) {
-                                App.myCargoProperty = JsonConvert.DeserializeObject<CargoProperty>(readJsonData);
+                                var loaded = JsonConvert.DeserializeObject<CargoProperty>(readJsonData);
+                                if (loaded != null) {
+                                    App.myCargoProperty.ExtraLT = loaded.ExtraLT;
+                                    App.myCargoProperty.TotalLT = loaded.TotalLT;
+                                    App.myCargoProperty.CurrentLT = loaded.CurrentLT;
+                                    App.myCargoProperty.InitialLT = loaded.InitialLT;
+                                    App.myCargoProperty.PeakLT = loaded.PeakLT;
+                                }
                             }
                             else {
                                 App.myCargoProperty = new CargoProperty();
@@ -164,6 +231,7 @@ namespace iBarter.View {
         }
 
         public void UpdateCurrentLV() {
+            if (App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute) return;
             foreach (Barter myCvmCargoDetail in App.myCVM.CargoDetails) {
                 myCvmCargoDetail.CalculatedAlready = false;
                 myCvmCargoDetail.TotalItem1ExchangeQuantity = myCvmCargoDetail.ExchangeQuantity * myCvmCargoDetail.Item1Number;
@@ -211,12 +279,13 @@ namespace iBarter.View {
 
 
             foreach (Barter barter in myList) {
-                App.myCargoProperty.InitialLT += GetWeight(barter.Item1.ItemLV) * barter.TotalItem1ExchangeQuantity;
-                App.myCargoProperty.CurrentLT += GetWeight(barter.Item2.ItemLV) * (int)htItem2[barter.Item2Name];
+                App.myCargoProperty.InitialLT += GetWeightFromLevel(barter.Item1.ItemLV) * barter.TotalItem1ExchangeQuantity;
+                App.myCargoProperty.CurrentLT += GetWeightFromLevel(barter.Item2.ItemLV) * (int)htItem2[barter.Item2Name];
             }
 
             App.myCargoProperty.CurrentLT += App.myCargoProperty.ExtraLT;
             App.myCargoProperty.InitialLT += App.myCargoProperty.ExtraLT;
+            App.myCargoProperty.PeakLT = Math.Max(App.myCargoProperty.InitialLT, App.myCargoProperty.CurrentLT);
             UpdateCargoList();
             // foreach (Barter myCvmCargoDetail in App.myCVM.CargoDetails) {
             //     App.myCFun.Log(myCvmCargoDetail.Item1Name+"=>"+myCvmCargoDetail.TotalItem1ExchangeQuantity,Brushes.Blue);
@@ -224,6 +293,7 @@ namespace iBarter.View {
         }
 
         public void UpdateCargoList() {
+            if (App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute) return;
             for (int i = App.myCVM.CargoDetails.Count - 1; i >= 0; i--) {
                 Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == App.myCVM.CargoDetails[i].IsLandName);
                 if (myBarter != null && (myBarter.ExchangeDone || myBarter.ExchangeQuantity == 0)) {
@@ -236,43 +306,13 @@ namespace iBarter.View {
             ListBox_ShipCargo.ItemsSource = App.myCVM.CargoDetails;
         }
 
-        // LT weights by LV (sourced from BDO official news and bdocodex).
-        // LV1=100, LV2=400, LV3=900, LV4=1000, LV5=1000, LV6=2000, LV7=2000.
-        // LV2 was 800 pre-balance but was reduced to 400 by BDO; iBarter
-        // was still shipping the old value, which double-counted LV2
-        // cargo weight in ShipCargoControl.CurrentLT.
-        private int GetWeight(string _lv) {
-            int intWeight = 0;
-            switch (_lv) {
-                case "1":
-                    intWeight = 100;
-                    break;
-                case "2":
-                    intWeight = 400;
-                    break;
-                case "3":
-                    intWeight = 900;
-                    break;
-                case "4":
-                case "5":
-                    intWeight = 1000;
-                    break;
-                case "6":
-                case "7":
-                    intWeight = 2000;
-                    break;
-                default:
-                    intWeight = 0;
-                    break;
-            }
-
-            return intWeight;
-        }
+        private static int GetWeightFromLevel(string level) =>
+            int.TryParse(level, out int parsed) ? CargoWeightTable.GetWeightForLevel(parsed) : 0;
 
         private void IdentifyChain(Barter _barter, int _lv) {
             Barter myBarter = App.myCVM.CargoDetails.FirstOrDefault(b => b.Item1.ItemLV.Equals(Convert.ToString(_lv + 1)) && b.Item1Name.Equals(_barter.Item2Name))!;
             if (myBarter != null) {
-                App.myCargoProperty.CurrentLT += (_barter.TotalItem2ExchangeQuantity - myBarter.TotalItem1ExchangeQuantity) * GetWeight(_barter.Item2.ItemLV);
+                App.myCargoProperty.CurrentLT += (_barter.TotalItem2ExchangeQuantity - myBarter.TotalItem1ExchangeQuantity) * GetWeightFromLevel(_barter.Item2.ItemLV);
                 // App.myCargoProperty.InitialLT += _barter.TotalItem1ExchangeQuantity * GetWeight(_barter.Item1.ItemLV);
                 // Barter myBarter2 = App.myCVM.CargoDetails.FirstOrDefault(b => b.Item2Name.Equals(_barter.Item1Name) && b.CalculatedAlready == false)!;
                 // if (myBarter2 == null)
@@ -284,7 +324,7 @@ namespace iBarter.View {
             }
             else {
                 if (!_barter.CalculatedAlready) {
-                    App.myCargoProperty.CurrentLT += GetWeight(_barter.Item2.ItemLV) * _barter.TotalItem2ExchangeQuantity;
+                    App.myCargoProperty.CurrentLT += GetWeightFromLevel(_barter.Item2.ItemLV) * _barter.TotalItem2ExchangeQuantity;
                     // App.myCargoProperty.InitialLT += GetWeight(_barter.Item1.ItemLV) * _barter.TotalItem1ExchangeQuantity;
                     _barter.CalculatedAlready = true;
                     Barter barterTemp = App.myCVM.CargoDetails.FirstOrDefault(b => b.Item2Name.Equals(_barter.Item1Name));
@@ -299,6 +339,7 @@ namespace iBarter.View {
         }
 
         private void ButtonAdv_Clean_Click(object sender, RoutedEventArgs e) {
+            if (App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute) return;
             if (App.myCVM != null) {
                 App.myCVM.CargoDetails.Clear();
                 App.myCargoProperty.CurrentLT = 0;
@@ -316,6 +357,7 @@ namespace iBarter.View {
         // cargoes); we refresh the ListBox here and call SaveData so the
         // new order is written to disk.
         private void ButtonAdv_OptimalRoute_Click(object sender, RoutedEventArgs e) {
+            if (App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute) return;
             if (App.myCVM == null) {
                 return;
             }
@@ -329,6 +371,14 @@ namespace iBarter.View {
             if (e.ClickCount == 2) {
                 try {
                     ListBoxItem myItem = sender as ListBoxItem;
+                    if (myItem?.Content is BarterRouteStepViewModel automaticStep) {
+                        Barter? automaticBarter = ResolveAutomaticBarter(automaticStep.RowId);
+                        if (automaticBarter != null) {
+                            Clipboard.SetText(automaticBarter.Item1Name);
+                            App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.ShipCargo.CopiedToClipboard", automaticBarter.Item1NameDisplay), Brushes.DarkGreen);
+                        }
+                        return;
+                    }
                     Barter myBarter = (Barter)myItem.Content;
                     if (myBarter != null) {
                         Clipboard.SetText(myBarter.Item1Name);
@@ -345,6 +395,14 @@ namespace iBarter.View {
             try {
                 if (e.ClickCount == 2) {
                     ListBoxItem myItem = sender as ListBoxItem;
+                    if (myItem?.Content is BarterRouteStepViewModel automaticStep) {
+                        Barter? automaticBarter = ResolveAutomaticBarter(automaticStep.RowId);
+                        if (automaticBarter != null) {
+                            Clipboard.SetText(automaticBarter.Item2Name);
+                            App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.ShipCargo.CopiedToClipboard", automaticBarter.Item2NameDisplay), Brushes.DarkGreen);
+                        }
+                        return;
+                    }
                     Barter myBarter = (Barter)myItem.Content;
                     if (myBarter != null) {
                         Clipboard.SetText(myBarter.Item2Name);
@@ -355,6 +413,14 @@ namespace iBarter.View {
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);
             }
+        }
+
+        private static Barter? ResolveAutomaticBarter(string rowId) {
+            int separator = rowId.IndexOf(':');
+            if (separator <= 0 || !int.TryParse(rowId[..separator], out int index)) return null;
+            return index >= 0 && index < App.myPVM.BarterCollection.Count
+                ? App.myPVM.BarterCollection[index]
+                : null;
         }
     }
 }
