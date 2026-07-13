@@ -4761,6 +4761,8 @@ namespace iBarter {
                     return EnumLists.Island.Hakoven;
                 case string s when s.Contains("Halmad"):
                     return EnumLists.Island.Halmad;
+                case string s when s.Contains("Velia"):
+                    return EnumLists.Island.Velia;
                 case string s when s.Contains("Iliya") || s.Contains("liya") || s.Contains("Miya") || s.Contains("lia"):
                     return EnumLists.Island.Iliya;
                 case string s when s.Contains("Unfinished") || s.Contains("UnfinishedAdriftVessel") || s.Contains("Unfinished Adrift"):

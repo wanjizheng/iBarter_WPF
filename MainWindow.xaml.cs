@@ -154,6 +154,11 @@ namespace iBarter {
             // here on; we only seed the initial state.
             ApplyLocalizedChrome();
 
+            // Saved cargo capacity is application state, not game-process
+            // state. Load it before PureDM attachment so Planner auto-routing
+            // has valid ExtraLT/TotalLT even when Black Desert is not running.
+            myShipCargo.RefreshData();
+
             // Phase 9 hotfix 8: the dropdown is empty when clicked and the
             // user has been unable to see the diagnostic from PlannerControl
             // ctor because Syncfusion's DockingManager lazily creates
@@ -250,8 +255,6 @@ namespace iBarter {
                 }
 
                 App.myCFun.Log("[INIT] 7 before splash close", Brushes.Gray);
-                myShipCargo.RefreshData();
-
                 App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
                 // Shut down the background STA Dispatcher so Dispatcher.Run() exits
                 // and the SplashScreen thread terminates. Without this the thread

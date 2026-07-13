@@ -3,6 +3,20 @@ using iBarter;
 using PureDM;
 using PureDM.DmSoft;
 
+var islandResolver = new CFunctions();
+if (islandResolver.IslandEnum("Velia") != EnumLists.Island.Velia) {
+    Console.Error.WriteLine("Expected the canonical Velia catalog row to resolve to Velia.");
+    return 1;
+}
+
+string startupSource = File.ReadAllText(Path.Combine(FindIBarterRepoRoot(), "MainWindow.xaml.cs"));
+int cargoLoadIndex = startupSource.IndexOf("myShipCargo.RefreshData();", StringComparison.Ordinal);
+int gameWorkerIndex = startupSource.IndexOf("PureDmWorker.Start();", StringComparison.Ordinal);
+if (cargoLoadIndex < 0 || gameWorkerIndex < 0 || cargoLoadIndex > gameWorkerIndex) {
+    Console.Error.WriteLine("Expected saved ship cargo properties to load before game-process attachment.");
+    return 1;
+}
+
 var cv = new CV(
     () => IntPtr.Zero,
     () => null!,
