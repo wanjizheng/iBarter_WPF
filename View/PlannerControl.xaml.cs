@@ -1,5 +1,6 @@
 ﻿using iBarter.Localization;
 using iBarter.Planning;
+using iBarter.Routing;
 using Newtonsoft.Json;
 using Syncfusion.Pdf.Grid;
 using Syncfusion.UI.Xaml.Grid;
@@ -469,6 +470,7 @@ namespace iBarter.View {
         }
 
         private void ButtonAdv_Load_Click(object sender, RoutedEventArgs e) {
+            App.myRouteCoordinator?.Invalidate("planner-load");
             string strPath_Setting = AppDomain.CurrentDomain.BaseDirectory +
                                      "\\Resources\\myPlan_Setting.xml";
             string strPath_Data = AppDomain.CurrentDomain.BaseDirectory +
@@ -577,6 +579,7 @@ namespace iBarter.View {
         }
 
         private void DataGrid_Planner_CurrentCellEndEdit(object sender, CurrentCellEndEditEventArgs e) {
+            App.myRouteCoordinator?.Invalidate("planner-edit");
             if (e.RowColumnIndex.ColumnIndex == 5) {
                 Barter barter = DataGrid_Planner.CurrentItem as Barter;
                 Barter myBarter = barter == null
@@ -614,6 +617,7 @@ namespace iBarter.View {
 
         private void DataGrid_Planner_CurrentCellValueChanged(object sender, CurrentCellValueChangedEventArgs e) {
             if (e.Column.MappingName == "ExchangeDone") {
+                App.myRouteCoordinator?.Invalidate("planner-check");
                 Barter myBarter = (Barter)e.Record;
                 if (App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName) != null) {
                     App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName));
@@ -695,6 +699,7 @@ namespace iBarter.View {
             }
 
             App.myPVM.BarterCollection.Remove(barter);
+            App.myRouteCoordinator?.Invalidate("planner-delete");
             App.listBarterPlanner.Remove(barter);
 
             // Sync CargoDetails: when the user ticks ExchangeDone the
@@ -970,6 +975,7 @@ namespace iBarter.View {
 
 
         private void ButtonAdv_New_Click(object sender, RoutedEventArgs e) {
+            App.myRouteCoordinator?.Invalidate("planner-new");
             DataGrid_Planner.BeginInit();
             if (App.myPVM != null) {
                 App.myPVM.BarterCollection.Clear();
@@ -986,6 +992,7 @@ namespace iBarter.View {
                 MessageBoxButton.YesNo, MessageBoxImage.Question);
 
             if (result == MessageBoxResult.Yes) {
+                App.myRouteCoordinator?.Invalidate("planner-clean");
                 foreach (Barter barter in App.myPVM.BarterCollection) {
                     barter.ExchangeDone = false;
                     barter.ExchangeQuantity = 0;
@@ -1074,8 +1081,11 @@ namespace iBarter.View {
         // grid only re-renders once. On planner failure (ApplySet is null) the
         // multipliers stay byte-for-byte unchanged — the failure path never enters
         // BeginInit and never writes a multiplier.
-        private void ButtonAdv_AutoPlan_Click(object sender, RoutedEventArgs e) {
+        private async void ButtonAdv_AutoPlan_Click(object sender, RoutedEventArgs e) {
             var svc = Localization.LanguageService.Instance;
+            ButtonAdv_AutoPlan.IsEnabled = false;
+            App.myRouteCoordinator?.Invalidate("auto-plan-start");
+            try {
 
             // End any in-progress edit so the just-typed value makes it into the
             // snapshot (otherwise we'd plan against a stale ExchangeQuantity).
@@ -1214,6 +1224,69 @@ namespace iBarter.View {
                 usedParley.ToString("N0", CultureInfo.InvariantCulture),
                 selectedRoutes.ToString(CultureInfo.InvariantCulture)),
                 selectedRoutes > 0 ? Brushes.DarkOliveGreen : Brushes.Orange);
+
+            var routeRows = liveRows.Select((b, index) => new PlannerRouteSnapshot(
+                RowId: $"{index}:{b.IsLandName}:{b.Item1.ItemID}:{b.Item2.ItemID}",
+                ExchangeDone: b.ExchangeDone,
+                ExchangeQuantity: b.ExchangeQuantity,
+                IslandId: b.IsLandName,
+                Item1Id: b.Item1.ItemID,
+                Item1DisplayName: b.Item1NameDisplay,
+                Item1Level: int.TryParse(b.Item1.ItemLV, NumberStyles.Integer, CultureInfo.InvariantCulture, out int item1Level) ? item1Level : 0,
+                Item1Number: b.Item1Number,
+                Item2Id: b.Item2.ItemID,
+                Item2DisplayName: b.Item2NameDisplay,
+                Item2Level: int.TryParse(b.Item2.ItemLV, NumberStyles.Integer, CultureInfo.InvariantCulture, out int item2Level) ? item2Level : 0,
+                Item2Number: b.Item2Number)).ToArray();
+            var storageRows = App.myStorageVM.StorageCollection.Select(item => new StorageItemSnapshot(
+                item.ItemID,
+                int.TryParse(item.ItemLV, NumberStyles.Integer, CultureInfo.InvariantCulture, out int level) ? level : 0,
+                item.StorageVeliaQuantity_Velia,
+                item.StorageVeliaQuantity_Iliya,
+                item.StorageVeliaQuantity_Epheria,
+                item.StorageVeliaQuantity_Ancado)).ToArray();
+            var islandRows = App.listIslands.Where(island => island.HasNavigationCoordinates)
+                .Select(island => new IslandRouteSnapshot(
+                    island.IslandsName,
+                    new RoutePoint(island.NavigationX!.Value, island.NavigationY!.Value)))
+                .ToArray();
+            var cargo = new CargoCapacitySnapshot(
+                Convert.ToInt32(Math.Round(App.myCargoProperty.ExtraLT, MidpointRounding.AwayFromZero)),
+                Convert.ToInt32(Math.Round(App.myCargoProperty.TotalLT, MidpointRounding.AwayFromZero)));
+            var request = AutomaticRoutePlanningAdapter.BuildRequest(
+                routeRows, storageRows, islandRows, cargo, new RouteSearchLimits(250_000, 2_000));
+            var routePlan = await App.myRouteCoordinator.GenerateAsync(request);
+            switch (routePlan.Status) {
+                case RoutePlanStatus.Optimal:
+                    App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Optimal",
+                        routePlan.Routes.Count, routePlan.Objective?.TotalDistance ?? 0), Brushes.DarkOliveGreen);
+                    break;
+                case RoutePlanStatus.BestKnownWithinLimit:
+                    App.myCFun.Log(svc.Localize("str.Log.AutoRoute.BestKnown",
+                        routePlan.Routes.Count, routePlan.Objective?.TotalDistance ?? 0), Brushes.Orange);
+                    break;
+                case RoutePlanStatus.Infeasible:
+                    App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Infeasible",
+                        routePlan.Diagnostics.FirstOrDefault()?.Detail ?? ""), Brushes.Red);
+                    break;
+                case RoutePlanStatus.NoFeasibleSolutionWithinLimit:
+                    App.myCFun.Log(svc.Localize("str.Log.AutoRoute.NoFeasibleWithinLimit"), Brushes.OrangeRed);
+                    break;
+                case RoutePlanStatus.Cancelled:
+                    App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Cancelled"), Brushes.Gray);
+                    break;
+                case RoutePlanStatus.InvalidInput:
+                    App.myCFun.Log(svc.Localize("str.Log.AutoRoute.InvalidInput",
+                        routePlan.Diagnostics.FirstOrDefault()?.Detail ?? ""), Brushes.Red);
+                    break;
+            }
+            }
+            catch (Exception exception) {
+                App.myCFun.Log(svc.Localize("str.Log.AutoRoute.InvalidInput", exception.Message), Brushes.Red);
+            }
+            finally {
+                ButtonAdv_AutoPlan.IsEnabled = true;
+            }
         }
     }
 }
