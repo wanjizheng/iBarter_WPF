@@ -1109,7 +1109,7 @@ namespace iBarter.View {
                     lv1 = -1;
                 }
 
-                bool producesCrowCoin = b.Item2.ItemName == "Crow Coin";
+                bool producesCrowCoin = b.Item2.ItemID == AutoPlanningRoute.CrowCoinItemId;
                 int parley = GetEffectiveParley(b);
 
                 // AutoPlanningRoute's Item1Id/Item2Id and the inventory dictionary MUST
@@ -1168,8 +1168,16 @@ namespace iBarter.View {
             var calculation = adapter.Calculate(snapshots, inventory, strategy, lv5Target, lv6Target, 1_000_000);
 
             if (calculation.ApplySet is null) {
-                string code = calculation.Diagnostics.FirstOrDefault()?.Code ?? "unknown";
-                App.myCFun.Log(svc.Localize("str.Msg.Planner.AutoPlan.Invalid", code), Brushes.Red);
+                var diag = calculation.Diagnostics.FirstOrDefault();
+                string code = diag?.Code ?? "unknown";
+                string arg = diag?.RowId ?? code;
+                string key = code switch {
+                    "reserve-no-producer"     => "str.Msg.Planner.AutoPlan.ReserveNoProducer",
+                    "reserve-budget-exceeded" => "str.Msg.Planner.AutoPlan.ReserveBudgetExceeded",
+                    "reserve-unreachable"     => "str.Msg.Planner.AutoPlan.ReserveUnreachable",
+                    _                         => "str.Msg.Planner.AutoPlan.Invalid",
+                };
+                App.myCFun.Log(svc.Localize(key, arg), Brushes.Red);
                 return;
             }
 

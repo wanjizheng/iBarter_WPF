@@ -67,6 +67,9 @@
     <sys:String x:Key="str.Msg.Planner.AutoPlan.NoRows">自動規劃:沒有可規劃的列。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.Invalid">自動規劃失敗:輸入無效 ({0})。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.NoFeasible">自動規劃:在貢獻度預算內沒有可行路線。</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveNoProducer">自動規劃:同一商團內沒有 {0} 的上游生產路線。</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveBudgetExceeded">自動規劃:貢獻度預算不足,無法達成 LV5/LV6 庫存目標 ({0})。</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveUnreachable">自動規劃:無法滿足 LV5/LV6 庫存目標 ({0})。</sys:String>
 
     <sys:String x:Key="str.Planner.TotalBarters">交换总数：</sys:String>
     <sys:String x:Key="str.Planner.MaxLV5">最大 LV5：</sys:String>
@@ -135,6 +138,7 @@
 
     <sys:String x:Key="str.ShipCargo.Btn.OptimalRoute">最短路径</sys:String>
     <sys:String x:Key="str.ShipCargo.Btn.OptimalRouteTip">从「遇难的酷斯海贼船」出发，求最短航行路径并重新排列船货；同时保留交换链的先后顺序（必须先取得某物品，才能用它换下一项）。18 笔以下用精确解，更大则改用最近邻启发法。</sys:String>
+
 
     <sys:String x:Key="str.ItemTier.Basic">[一般物品]</sys:String>
     <sys:String x:Key="str.ItemTier.Lv1">[等级 1]</sys:String>
@@ -225,6 +229,7 @@
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoRoute">交换链存在循环，无符合优先顺序的完整路径，改用交换链排序。</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Done">最短路径已解出：{0} 站，总距离 {1}（地图归一化单位）。</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.DoneHeuristic">已用最近邻启发法求解最短路径：{0} 站。</sys:String>
+
 
     <sys:String x:Key="str.Msg.Confirmation.Title">确认</sys:String>
     <sys:String x:Key="str.Msg.Planner.DeleteRow">确定要删除此列（{0} → {1}）？</sys:String>

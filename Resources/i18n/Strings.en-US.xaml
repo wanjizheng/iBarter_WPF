@@ -79,6 +79,9 @@
     <sys:String x:Key="str.Msg.Planner.AutoPlan.NoRows">Auto Plan: no rows to plan.</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.Invalid">Auto Plan failed: invalid input ({0}).</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.NoFeasible">Auto Plan: no feasible route under the parley budget.</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveNoProducer">Auto Plan: no producer in the same BarterGroup for {0}.</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveBudgetExceeded">Auto Plan: parley budget exhausted before reaching the LV5/LV6 reserve target ({0}).</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveUnreachable">Auto Plan: cannot satisfy the LV5/LV6 reserve target for {0}.</sys:String>
 
     <!-- PlannerControl.xaml toolbar labels -->
     <sys:String x:Key="str.Planner.TotalBarters">Total Barters: </sys:String>
@@ -158,7 +161,6 @@
     <!-- ShipCargoControl.xaml toolbar button: solve optimal sailing route from Cox_Pirate -->
     <sys:String x:Key="str.ShipCargo.Btn.OptimalRoute">Optimal Route</sys:String>
     <sys:String x:Key="str.ShipCargo.Btn.OptimalRouteTip">Reorder barters as the shortest sailing route starting from Wrecked Coos Pirate Ship, while still respecting the chain (you must produce an item before you can spend it). Exact solution for up to 18 barters; nearest-neighbor heuristic above that.</sys:String>
-
     <!-- Phase 6 (i18n): Item tier labels shown in the Storage grid Tier column
          and the BarterPlanner LV column.  Keyed by ItemLV integer (0..7)
          plus an "8" sentinel for the unrecognised-LV bucket. -->
@@ -265,6 +267,7 @@
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.NoRoute">No precedence-respecting route found (likely a chain cycle); falling back to chain sort.</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.Done">Optimal route solved: {0} stops, total distance {1} (normalized map units).</sys:String>
     <sys:String x:Key="str.Log.ShipCargo.OptimalRoute.DoneHeuristic">Optimal route solved (nearest-neighbor heuristic): {0} stops.</sys:String>
+
 
     <!-- Phase 7 (i18n): dialog prompts (MessageBox.Show) -->
     <sys:String x:Key="str.Msg.Confirmation.Title">Confirmation</sys:String>

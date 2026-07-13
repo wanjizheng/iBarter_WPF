@@ -91,8 +91,14 @@ public sealed class PlannerAutoPlanner {
             }
         }
 
-        var finalInventory = ApplyMultipliers(request.CurrentInventory, routesById, committed);
-        return new AutoPlanningResult(true, committed, finalInventory, committedParley, diagnostics);
+        // All-or-nothing: any reserve-* diagnostic means the reserve constraint
+        // could not be satisfied. Mark the result failed so the adapter returns
+        // ApplySet=null and no live Eq. multiplier is touched.
+        bool success = !diagnostics.Any(d => d.Code.StartsWith("reserve-"));
+        var finalInventory = success
+            ? ApplyMultipliers(request.CurrentInventory, routesById, committed)
+            : new Dictionary<string, int>(request.CurrentInventory, StringComparer.Ordinal);
+        return new AutoPlanningResult(success, committed, finalInventory, committedParley, diagnostics);
     }
 
     private static AutoPlanningResult Failure(params AutoPlanningDiagnostic[] diagnostics) =>
@@ -113,18 +119,22 @@ public sealed class PlannerAutoPlanner {
         ref int committedParley,
         List<AutoPlanningDiagnostic> diagnostics) {
 
-        // Phase 1: Crow-Coin routes. Higher coin output wins; on ties, lower
-        // full-bundle parley (cheap chain beats expensive chain).
+        PlanReservePhase(request, routesById, committed, ref committedParley, diagnostics);
+        if (diagnostics.Any(d => d.Code.StartsWith("reserve-"))) return;
+
+        // Phase 1: Crow-Coin routes identified by Item2Id (locale-independent).
+        // Higher coin output wins; on ties, lower full-bundle parley.
         GreedyFillIncrements(
             request, routesById, committed, ref committedParley, diagnostics,
-            filter: r => r.ProducesCrowCoin,
+            filter: r => r.Item2Id == AutoPlanningRoute.CrowCoinItemId,
             ranker: CompareCrowCoin);
 
-        // Phase 2: remainder budget, no crow coin output allowed. Lowest input LV
-        // first (LV4 → LV5 → LV6 → LV7).
+        // Phase 2: remainder budget, restricted to LV4-LV6 input so LV1-LV3
+        // routes are never direct Crow Coin remainder targets.
         GreedyFillIncrements(
             request, routesById, committed, ref committedParley, diagnostics,
-            filter: r => !r.ProducesCrowCoin,
+            filter: r => r.Item2Id != AutoPlanningRoute.CrowCoinItemId
+                         && r.Item1Level >= 4 && r.Item1Level <= 6,
             ranker: CompareRemainder);
     }
 
@@ -135,12 +145,17 @@ public sealed class PlannerAutoPlanner {
         ref int committedParley,
         List<AutoPlanningDiagnostic> diagnostics) {
 
-        // Crow coin is excluded. Strict tier-desc ranking — no leaf filter.
-        // When the top tier can't fit any increment, the planner degrades to
-        // the next tier.
+        PlanReservePhase(request, routesById, committed, ref committedParley, diagnostics);
+        if (diagnostics.Any(d => d.Code.StartsWith("reserve-"))) return;
+
+        // Crow coin is excluded. Direct targets are restricted to LV4-LV6
+        // input (LV6→LV7, LV5→LV6, LV4→LV5). LV1-LV3 routes never appear as
+        // Profit First candidates — they only show up as upstream supply
+        // inside an atomic bundle.
         GreedyFillIncrements(
             request, routesById, committed, ref committedParley, diagnostics,
-            filter: r => !r.ProducesCrowCoin,
+            filter: r => r.Item2Id != AutoPlanningRoute.CrowCoinItemId
+                         && r.Item1Level >= 4 && r.Item1Level <= 6,
             ranker: CompareProfit);
     }
 
@@ -152,10 +167,8 @@ public sealed class PlannerAutoPlanner {
         List<AutoPlanningDiagnostic> diagnostics) {
 
         // Phase 1: LV5/LV6 capped restock by largest deficit ratio.
-        GreedyFillIncrements(
-            request, routesById, committed, ref committedParley, diagnostics,
-            filter: r => IsCappedRestockEligible(r, request, committed),
-            ranker: CompareCapped);
+        PlanReservePhase(request, routesById, committed, ref committedParley, diagnostics);
+        if (diagnostics.Any(d => d.Code.StartsWith("reserve-"))) return;
 
         // Phase 2: LV1-LV4 uncapped, lowest projected inventory first.
         GreedyFillIncrements(
@@ -164,11 +177,180 @@ public sealed class PlannerAutoPlanner {
             ranker: CompareUncapped);
     }
 
+    // Universal reserve phase. Runs before every strategy's main loop and
+    // ensures every LV5/LV6 item with a non-zero target reaches its target by
+    // pulling in same-group upstream producers as needed. On hard failure
+    // (no producer, budget exceeded, cycle, ...) emits one of the three
+    // reserve-* diagnostic codes and the strategy main loop is skipped.
+    private static void PlanReservePhase(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        Dictionary<string, int> committed,
+        ref int committedParley,
+        List<AutoPlanningDiagnostic> diagnostics) {
+
+        while (true) {
+            // Find LV5/LV6 items below target.
+            (string ItemId, int Target, int Projected)? pick = null;
+            double bestRatio = -1;
+            int bestAbsDeficit = -1;
+            string? bestTieId = null;
+
+            // Consider every item ID that appears as either Item1Id or Item2Id in any
+            // route — that's where reserve targets could land. Items that aren't
+            // LV5/LV6 fall back to a non-reserve target (0) and are skipped.
+            var candidateItemIds = routesById.Values
+                .SelectMany(r => new[] { r.Item1Id, r.Item2Id })
+                .Distinct(StringComparer.Ordinal);
+
+            foreach (var itemId in candidateItemIds) {
+                int level = InferLevelFromRoutes(itemId, routesById);
+                int target = GetReserveTarget(itemId, level, request);
+                if (target <= 0) continue;
+                int projected = ProjectedItemInventory(itemId, request, committed);
+                if (projected >= target) continue;
+
+                double ratio = (double)(target - projected) / target;
+                int absDeficit = target - projected;
+
+                bool better = ratio > bestRatio
+                    || (ratio == bestRatio && absDeficit > bestAbsDeficit)
+                    || (ratio == bestRatio && absDeficit == bestAbsDeficit
+                        && (bestTieId == null || StringComparer.Ordinal.Compare(itemId, bestTieId) < 0));
+                if (better) {
+                    bestRatio = ratio;
+                    bestAbsDeficit = absDeficit;
+                    bestTieId = itemId;
+                    pick = (itemId, target, projected);
+                }
+            }
+
+            if (pick is null) return;
+
+            // Enumerate every available producer for this item and build a
+            // reserve-aware atomic bundle for each. The single best feasible
+            // bundle (largest per-exchange output, then cheapest bundle parley,
+            // then RowId) wins; producers whose bundle fails individually are
+            // skipped, so an unaffordable producer no longer masks an
+            // affordable alternative. Only when NO producer yields a feasible
+            // bundle do we fall through to the diagnostic classification. "Available" means
+            // (Remaining - already-committed-this-round) > 0: a producer with
+            // Remaining=1 that's already been committed once in this reserve
+            // pass has zero remaining capacity and must be excluded so the next
+            // iteration classifies the failure as reserve-no-producer instead of
+            // failing the bundle build with exceeds-remaining.
+            var candidateProducers = routesById.Values
+                .Where(r => r.Item2Id == pick.Value.ItemId
+                             && r.Remaining - committed.GetValueOrDefault(r.RowId) > 0)
+                .ToList();
+            if (candidateProducers.Count == 0) {
+                diagnostics.Add(new AutoPlanningDiagnostic("reserve-no-producer", pick.Value.ItemId));
+                committed.Clear();
+                committedParley = 0;
+                return;
+            }
+
+            Bundle? bestBundle = null;
+            string? bestRowId = null;
+            int bestOutput = -1;
+            var attemptedDiags = new List<AutoPlanningDiagnostic>();
+            int remainingBudget = request.ParleyBudget - committedParley;
+
+            foreach (var producer in candidateProducers) {
+                int cur = committed.TryGetValue(producer.RowId, out var cc) ? cc : 0;
+                int absoluteTarget = cur + 1;
+                var attemptInventory = ApplyMultipliers(request.CurrentInventory, routesById, committed);
+
+                var perAttemptDiags = new List<AutoPlanningDiagnostic>();
+                if (TryBuildBundle(producer.RowId, absoluteTarget, routesById,
+                        attemptInventory, committed, remainingBudget,
+                        out var bundle, perAttemptDiags, request)) {
+                    bool better = bestBundle is null
+                        || producer.Item2Number > bestOutput
+                        || (producer.Item2Number == bestOutput
+                            && bundle.AdditionalParley < bestBundle.AdditionalParley)
+                        || (producer.Item2Number == bestOutput
+                            && bundle.AdditionalParley == bestBundle.AdditionalParley
+                            && StringComparer.Ordinal.Compare(producer.RowId, bestRowId!) < 0);
+                    if (better) {
+                        bestBundle = bundle;
+                        bestRowId = producer.RowId;
+                        bestOutput = producer.Item2Number;
+                    }
+                }
+                attemptedDiags.AddRange(perAttemptDiags);
+            }
+
+            if (bestBundle is null) {
+                // Every candidate producer's bundle failed. Pick the most
+                // informative reserve code based on the failure mode:
+                //  - reserve-no-producer: no producer with Remaining > 0 (we
+                //    already checked above, so this branch is only reached if
+                //    every bundle failed for non-budget / non-producer reasons
+                //    and at least one producer had Remaining = 0)
+                //  - reserve-budget-exceeded: smallest bundle parley exceeds
+                //    the remaining budget
+                //  - reserve-unreachable: fallback (cycles, malformed, ...)
+                bool anyProducerWithRemaining = candidateProducers.Count > 0;
+                int minBundleParley = attemptedDiags.Count == 0
+                    ? candidateProducers.Min(r => r.Parley)
+                    : int.MaxValue;
+                bool anyBudgetExceeded = attemptedDiags.Any(d => d.Code == "budget-exceeded");
+                bool anyNoProducer = attemptedDiags.Any(d => d.Code == "no-producer");
+                string code;
+                if (anyNoProducer && !anyBudgetExceeded && candidateProducers.All(r => r.Remaining == 0)) {
+                    code = "reserve-no-producer";
+                } else if (anyBudgetExceeded || minBundleParley > remainingBudget) {
+                    code = "reserve-budget-exceeded";
+                } else {
+                    code = "reserve-unreachable";
+                }
+                // Surface any per-attempt diagnostics so the operator can see
+                // why each producer failed before the high-level code is shown.
+                diagnostics.AddRange(attemptedDiags);
+                diagnostics.Add(new AutoPlanningDiagnostic(code, pick.Value.ItemId));
+                committed.Clear();
+                committedParley = 0;
+                return;
+            }
+
+            foreach (var (rowId, bundleMul) in bestBundle.Multipliers) {
+                int existing = committed.TryGetValue(rowId, out var cv) ? cv : 0;
+                committed[rowId] = existing + bundleMul;
+            }
+            committedParley += bestBundle.AdditionalParley;
+        }
+    }
+
+    private static int InferLevelFromRoutes(
+        string itemId,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById) {
+        // Returns the most common level seen across routes that produce OR
+        // consume this item. Used by PlanReservePhase to decide whether the
+        // item has a LV5/LV6 reserve target, even when no route produces it.
+        var counts = new Dictionary<int, int>();
+        int bestLevel = 0;
+        int bestCount = 0;
+        foreach (var r in routesById.Values) {
+            int? candidateLevel = null;
+            if (r.Item2Id == itemId) candidateLevel = r.Item2Level;
+            else if (r.Item1Id == itemId) candidateLevel = r.Item1Level;
+            if (candidateLevel is null) continue;
+            int lvl = candidateLevel.Value;
+            counts[lvl] = counts.TryGetValue(lvl, out var c) ? c + 1 : 1;
+            if (counts[lvl] > bestCount) {
+                bestCount = counts[lvl];
+                bestLevel = lvl;
+            }
+        }
+        return bestLevel;
+    }
+
     private static bool IsCappedRestockEligible(
         AutoPlanningRoute r,
         AutoPlanningRequest request,
         IReadOnlyDictionary<string, int> committed) {
-        if (r.ProducesCrowCoin) return false;
+        if (r.Item2Id == AutoPlanningRoute.CrowCoinItemId) return false;
         if (r.Item2Level != 5 && r.Item2Level != 6) return false;
         int target = r.Item2Level == 5 ? request.Lv5Target : request.Lv6Target;
         if (target <= 0) return false;
@@ -177,8 +359,14 @@ public sealed class PlannerAutoPlanner {
     }
 
     private static bool IsUncappedRestockEligible(AutoPlanningRoute r) {
-        if (r.ProducesCrowCoin) return false;
+        if (r.Item2Id == AutoPlanningRoute.CrowCoinItemId) return false;
         return r.Item2Level >= 1 && r.Item2Level <= 4;
+    }
+
+    private static int GetReserveTarget(string itemId, int itemLevel, AutoPlanningRequest request) {
+        if (itemLevel == 5) return request.Lv5Target;
+        if (itemLevel == 6) return request.Lv6Target;
+        return 0;
     }
 
     private static int ProjectedItemInventory(
@@ -224,13 +412,6 @@ public sealed class PlannerAutoPlanner {
             var candidates = request.Routes
                 .Where(filter)
                 .Where(r => committed.TryGetValue(r.RowId, out var c) ? c < r.Remaining : r.Remaining > 0)
-                .Where(r => {
-                    int cur = committed.TryGetValue(r.RowId, out var cc) ? cc : 0;
-                    // Skip intermediate routes whose downstream demand is already
-                    // saturated by committed producers — picking them as targets
-                    // would burn budget on inventory nobody reads.
-                    return ComputeMaxUsefulTarget(r, committed, request, routesById) > cur;
-                })
                 .ToList();
 
             if (candidates.Count == 0) {
@@ -249,7 +430,7 @@ public sealed class PlannerAutoPlanner {
 
                 if (TryBuildBundle(c.RowId, absoluteTarget, routesById,
                         attemptInventory, committed, remainingBudget,
-                        out var bundle, diagnostics)) {
+                        out var bundle, diagnostics, request)) {
                     bundles[c.RowId] = bundle;
                 }
             }
@@ -259,7 +440,6 @@ public sealed class PlannerAutoPlanner {
             }
 
             candidates.Sort((a, b) => ranker(a, b, bundles, request, committed));
-
             var winner = candidates[0];
             var winnerBundle = bundles[winner.RowId];
 
@@ -274,58 +454,6 @@ public sealed class PlannerAutoPlanner {
 
             committedParley += winnerBundle.AdditionalParley;
         }
-    }
-
-    // ------------------------------------------------------------------
-    // Demand-aware target computation
-    // ------------------------------------------------------------------
-
-    private static int ComputeMaxUsefulTarget(
-        AutoPlanningRoute candidate,
-        IReadOnlyDictionary<string, int> committed,
-        AutoPlanningRequest request,
-        IReadOnlyDictionary<string, AutoPlanningRoute> routesById) {
-
-        int currentCommitted = committed.TryGetValue(candidate.RowId, out var cc) ? cc : 0;
-        int maxByRemaining = candidate.Remaining;
-
-        bool isLeaf = !IsConsumedByAny(candidate.Item2Id, candidate.RowId, request.Routes);
-        if (isLeaf) {
-            return maxByRemaining;
-        }
-
-        int downstreamDemand = SumDownstreamDemand(candidate.Item2Id, committed, request, routesById);
-        int producerExchangesNeeded = downstreamDemand > 0
-            ? CeilingDivide(downstreamDemand, candidate.Item2Number)
-            : 0;
-
-        return Math.Min(maxByRemaining, Math.Max(currentCommitted, producerExchangesNeeded));
-    }
-
-    private static bool IsConsumedByAny(
-        string itemId, string excludeRowId, IReadOnlyList<AutoPlanningRoute> routes) {
-        foreach (var r in routes) {
-            if (r.RowId == excludeRowId) continue;
-            if (r.Item1Id == itemId) return true;
-        }
-        return false;
-    }
-
-    private static int SumDownstreamDemand(
-        string itemId,
-        IReadOnlyDictionary<string, int> committed,
-        AutoPlanningRequest request,
-        IReadOnlyDictionary<string, AutoPlanningRoute> routesById) {
-
-        int totalDemand = 0;
-        foreach (var consumer in request.Routes) {
-            if (consumer.Item1Id != itemId) continue;
-            if (consumer.Item1Number <= 0) continue;
-            int currentCommitted = committed.TryGetValue(consumer.RowId, out var cc) ? cc : 0;
-            int remainingDemand = Math.Max(0, consumer.Remaining - currentCommitted);
-            totalDemand += remainingDemand * consumer.Item1Number;
-        }
-        return totalDemand;
     }
 
     // ------------------------------------------------------------------
@@ -360,17 +488,21 @@ public sealed class PlannerAutoPlanner {
         AutoPlanningRequest request,
         IReadOnlyDictionary<string, int> committed) {
 
+        // Crow Coin remainder phase: prefer HIGHER target tier (LV6→LV7 first,
+        // then LV5→LV6, then LV4→LV5). This matches CompareProfit's tier
+        // preference. LV1–LV3 are excluded from the candidate filter upstream
+        // and never reach this ranker.
         var ba = bundlesByRow.TryGetValue(a.RowId, out var bna) ? bna : null;
         var bb = bundlesByRow.TryGetValue(b.RowId, out var bnb) ? bnb : null;
         if (ba is null && bb is null) {
-            int cmpA = a.Item1Level.CompareTo(b.Item1Level);
+            int cmpA = b.Item2Level.CompareTo(a.Item2Level);
             if (cmpA != 0) return cmpA;
             return StringComparer.Ordinal.Compare(a.RowId, b.RowId);
         }
         if (ba is null) return 1;
         if (bb is null) return -1;
 
-        int cmp1 = a.Item1Level.CompareTo(b.Item1Level);
+        int cmp1 = b.Item2Level.CompareTo(a.Item2Level);
         if (cmp1 != 0) return cmp1;
         int cmp2 = b.Item2Number.CompareTo(a.Item2Number);
         if (cmp2 != 0) return cmp2;
@@ -466,7 +598,8 @@ public sealed class PlannerAutoPlanner {
         IReadOnlyDictionary<string, int> committedMultipliers,
         int remainingBudget,
         out Bundle bundle,
-        List<AutoPlanningDiagnostic> diagnostics) {
+        List<AutoPlanningDiagnostic> diagnostics,
+        AutoPlanningRequest request) {
 
         bundle = new Bundle();
         var stack = new HashSet<(int, string)>();
@@ -474,7 +607,7 @@ public sealed class PlannerAutoPlanner {
         bool ok = TryAddRoute(
             targetRowId, absoluteTarget, routesById, stack,
             workingInventory, committedMultipliers, bundle.Multipliers,
-            diagnostics);
+            diagnostics, request);
 
         if (!ok) {
             bundle.Multipliers.Clear();
@@ -518,7 +651,8 @@ public sealed class PlannerAutoPlanner {
         Dictionary<string, int> workingInventory,
         IReadOnlyDictionary<string, int> committedMultipliers,
         Dictionary<string, int> bundleMultipliers,
-        List<AutoPlanningDiagnostic> diagnostics) {
+        List<AutoPlanningDiagnostic> diagnostics,
+        AutoPlanningRequest request) {
 
         if (!routesById.TryGetValue(rowId, out var route)) {
             diagnostics.Add(new AutoPlanningDiagnostic("missing-route", rowId));
@@ -547,7 +681,12 @@ public sealed class PlannerAutoPlanner {
         try {
             int demand = checked(additionalIncrement * route.Item1Number);
             int available = workingInventory.TryGetValue(route.Item1Id, out var cur) ? cur : 0;
-            int deficit = Math.Max(0, demand - available);
+            // Reserve-aware deficit: a reserved item's effective available stock
+            // is whatever is above its reserve target. Anything at or below the
+            // target may not be consumed.
+            int reserve = GetReserveTarget(route.Item1Id, route.Item1Level, request);
+            int effectiveAvailable = Math.Max(0, available - reserve);
+            int deficit = Math.Max(0, demand - effectiveAvailable);
 
             if (deficit > 0) {
                 var producers = FindProducers(route.Group, route.Item1Id, routesById);
@@ -581,7 +720,7 @@ public sealed class PlannerAutoPlanner {
                         if (TryAddRoute(
                                 producer.RowId, producerAbsoluteTarget, routesById,
                                 attemptStack, attemptInventory, committedMultipliers,
-                                attemptBundleMultipliers, diagnostics)) {
+                                attemptBundleMultipliers, diagnostics, request)) {
                             // Validate the attempt's inventory before committing it.
                             foreach (var v in attemptInventory.Values) {
                                 if (v < 0) {
