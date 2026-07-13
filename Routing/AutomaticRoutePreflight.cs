@@ -75,7 +75,10 @@ public static class AutomaticRoutePreflight {
             diagnostics.Add(new RouteDiagnostic("missing-item", rowId, itemId));
             return;
         }
-        if (item.Level <= 0 || item.UnitWeight < 0)
+        // Misc rewards such as Crow Coin use level -1 but have zero cargo
+        // weight. Route feasibility depends on the canonical unit weight, not
+        // on whether the catalog classifies an item as a barter tier.
+        if (item.UnitWeight < 0)
             diagnostics.Add(new RouteDiagnostic("invalid-item", rowId, itemId));
     }
 

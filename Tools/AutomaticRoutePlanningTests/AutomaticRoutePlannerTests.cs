@@ -5,6 +5,18 @@ namespace AutomaticRoutePlanningTests;
 
 public sealed class AutomaticRoutePlannerTests {
     [Fact]
+    public void Large_task_sets_publish_a_verified_incumbent_without_exact_enumeration() {
+        var request = RouteTestData.IndependentTasks(
+            28, new RouteSearchLimits(1, 100));
+
+        var plan = new AutomaticRoutePlanner().Plan(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(RoutePlanStatus.BestKnownWithinLimit, plan.Status);
+        Assert.Contains(plan.Diagnostics, x => x.Code == "exact-search-skipped");
+        Assert.True(RoutePlanVerifier.Verify(request, plan).Success);
+    }
+
+    [Fact]
     public void Complete_search_returns_verified_optimal_plan() {
         var request = RouteTestData.SingleTask();
         var plan = new AutomaticRoutePlanner().Plan(request, TestContext.Current.CancellationToken);

@@ -29,6 +29,17 @@ public sealed class AutomaticRoutePlanner {
                 incumbent = checkedIncumbent.Success ? checkedIncumbent.VerifiedPlan : null;
             }
 
+            if (request.Tasks.Count > AutomaticRouteSearchPolicy.ExactTaskLimit) {
+                var diagnostic = new RouteDiagnostic(
+                    "exact-search-skipped",
+                    Detail: $"{request.Tasks.Count}>{AutomaticRouteSearchPolicy.ExactTaskLimit}");
+                if (incumbent is null)
+                    return new RoutePlan(RoutePlanStatus.NoFeasibleSolutionWithinLimit,
+                        [], null, [diagnostic], fingerprint);
+                return new RoutePlan(RoutePlanStatus.BestKnownWithinLimit,
+                    incumbent.Routes, incumbent.Objective, [diagnostic], fingerprint);
+            }
+
             var initial = RouteSimulationState.CreateInitial(request);
             var queue = new PriorityQueue<RouteSimulationState, SearchPriority>();
             long sequence = 0;
@@ -196,4 +207,11 @@ public sealed class AutomaticRoutePlanner {
             return result != 0 ? result : StringComparer.Ordinal.Compare(StableKey, other.StableKey);
         }
     }
+}
+
+internal static class AutomaticRouteSearchPolicy {
+    // Exact subset search is exponential. Above this boundary the planner
+    // publishes the fully replayed heuristic incumbent and reports its status
+    // truthfully as BestKnownWithinLimit instead of freezing before UI publish.
+    public const int ExactTaskLimit = 12;
 }

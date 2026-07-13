@@ -3,6 +3,30 @@ using iBarter.Routing;
 namespace AutomaticRoutePlanningTests;
 
 internal static class RouteTestData {
+    public static AutomaticRoutePlanningRequest IndependentTasks(
+        int count,
+        RouteSearchLimits? limits = null) {
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["OUT"] = new("OUT", "Output", 1, 0),
+        };
+        var inventory = new Dictionary<string, int>(StringComparer.Ordinal);
+        var tasks = new List<RouteBarterTask>();
+        for (int i = 0; i < count; i++) {
+            string itemId = $"IN{i:D2}";
+            items[itemId] = new RouteItem(itemId, itemId, 1, 100);
+            inventory[itemId] = 1;
+            tasks.Add(new RouteBarterTask(
+                $"r{i:D2}", $"I{i:D2}", new RoutePoint(i + 1, i % 3),
+                itemId, 1, "OUT", 1));
+        }
+        return new AutomaticRoutePlanningRequest(
+            tasks, items,
+            [new RouteWarehouse("W", "W", new RoutePoint(0, 0), inventory)],
+            0, count * 100,
+            limits ?? new RouteSearchLimits(100_000, 100),
+            "large-independent");
+    }
+
     public static AutomaticRoutePlanningRequest SingleTask(
         int inputStock = 10,
         int inputQuantity = 2,

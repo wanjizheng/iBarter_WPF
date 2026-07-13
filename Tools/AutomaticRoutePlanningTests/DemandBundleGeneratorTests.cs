@@ -55,6 +55,21 @@ public sealed class DemandBundleGeneratorTests {
         Assert.Equal(a.Select(x => x.StableKey), b.Select(x => x.StableKey));
     }
 
+    [Fact]
+    public void Large_task_sets_use_a_bounded_number_of_demand_bundles() {
+        const int taskCount = 28;
+        var request = RouteTestData.IndependentTasks(taskCount);
+
+        var bundles = DemandBundleGenerator.Generate(
+            request, RouteSimulationState.CreateInitial(request), "W", (1UL << taskCount) - 1);
+
+        Assert.NotEmpty(bundles);
+        Assert.True(bundles.Count <= taskCount * taskCount,
+            $"Expected bounded generation, but got {bundles.Count} bundles.");
+        Assert.Contains(bundles, bundle =>
+            System.Numerics.BitOperations.PopCount(bundle.SupportedTaskMask) == taskCount);
+    }
+
     private static AutomaticRoutePlanningRequest ChainRequest() {
         var items = new Dictionary<string, RouteItem> {
             ["A"] = new("A", "A", 1, 100),

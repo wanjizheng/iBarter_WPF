@@ -86,9 +86,10 @@
                 FontFamily="Microsoft YaHei"
                 SmallIcon="/Images/pilot.png" Click="ButtonAdv_OptimalRoute_Click" />
             <Separator />
-            <StackPanel x:Name="Panel_AutomaticRouteSelector" Margin="6,0" VerticalAlignment="Center" Visibility="Collapsed">
+            <StackPanel x:Name="Panel_AutomaticRouteSelector" Margin="6,0" VerticalAlignment="Center" Visibility="Visible">
                 <TextBlock Text="{loc:Localize str.ShipCargo.AutoRoute.Selector}" FontSize="10" Foreground="#5B7184" />
                 <ComboBox x:Name="ComboBoxAdv_RouteSelector" Width="126"
+                          IsEnabled="False"
                           ItemsSource="{Binding RouteOptions}" DisplayMemberPath="DisplayName"
                           SelectionChanged="ComboBoxAdv_RouteSelector_SelectionChanged" />
             </StackPanel>

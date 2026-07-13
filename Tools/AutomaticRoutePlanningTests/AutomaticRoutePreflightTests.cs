@@ -75,6 +75,21 @@ public sealed class AutomaticRoutePreflightTests {
         Assert.Equal(1UL << 0, result.ProducerMasks[1]);
     }
 
+    [Fact]
+    public void Weightless_misc_currency_is_a_valid_output() {
+        var seed = RouteTestData.SingleTask();
+        var items = seed.Items.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+        items["OUT"] = new RouteItem("OUT", "Crow Coin", -1, 0);
+        var request = new AutomaticRoutePlanningRequest(
+            seed.Tasks, items, seed.Warehouses, seed.ExtraLT, seed.TotalLT,
+            seed.Limits, seed.ConfigurationVersion);
+
+        var result = AutomaticRoutePreflight.Validate(request);
+
+        Assert.True(result.IsValid);
+        Assert.DoesNotContain(result.Diagnostics, x => x.Code == "invalid-item");
+    }
+
     private static AutomaticRoutePlanningRequest Copy(
         AutomaticRoutePlanningRequest source,
         IReadOnlyList<RouteBarterTask>? tasks = null) =>

@@ -60,9 +60,8 @@ namespace iBarter.View {
             ListBox_ShipCargo.AllowDrop = !automatic;
             ButtonAdv_OptimalRoute.IsEnabled = !automatic;
             ButtonAdv_Clean.IsEnabled = !automatic;
-            Panel_AutomaticRouteSelector.Visibility = automatic && coordinator!.RouteOptions.Count > 0
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+            Panel_AutomaticRouteSelector.Visibility = Visibility.Visible;
+            ComboBoxAdv_RouteSelector.IsEnabled = automatic && coordinator!.RouteOptions.Count > 0;
 
             updatingRouteSelector = true;
             try {
