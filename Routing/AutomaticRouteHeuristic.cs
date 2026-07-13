@@ -47,19 +47,8 @@ public static class AutomaticRouteHeuristic {
             return null;
         }
 
-        var routes = state.FinishedRoutes;
-        var objective = new RoutePlanObjective(
-            routes.Count,
-            state.TotalDistance,
-            state.PickupStopCount,
-            routes.Count == 0 ? request.ExtraLT : routes.Max(x => x.PeakLT),
-            StableRouteKey(routes));
-        var plan = new RoutePlan(
-            RoutePlanStatus.BestKnownWithinLimit,
-            routes,
-            objective,
-            [],
-            RoutePlanFingerprint.Compute(request));
+        var plan = RoutePlanFactory.FromState(
+            request, state, RoutePlanStatus.BestKnownWithinLimit, []);
         return new RouteIncumbent(plan, state);
     }
 
@@ -115,14 +104,6 @@ public static class AutomaticRouteHeuristic {
             .ThenBy(x => x.Warehouse.WarehouseId, StringComparer.Ordinal)
             .Select(x => x.Result)
             .FirstOrDefault();
-
-    private static string StableRouteKey(IEnumerable<PlannedRoute> routes) =>
-        string.Join("|", routes.SelectMany(route => route.Steps.Select(step => step switch {
-            WarehousePickupStep pickup => $"P:{pickup.WarehouseId}",
-            BarterStep barter => $"B:{barter.RowId}",
-            WarehouseUnloadStep unload => $"U:{unload.WarehouseId}",
-            _ => step.IslandId,
-        })));
 
     private sealed record PickupCandidate(
         double Distance,
