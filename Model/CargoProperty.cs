@@ -8,7 +8,7 @@ using Syncfusion.Windows.PropertyGrid;
 
 namespace iBarter.Model {
     public class CargoProperty : INotifyPropertyChanged {
-        private double propExtraLT, propTotalLT, doubCurrentLT, doubInitialLT;
+        private double propExtraLT, propTotalLT, doubCurrentLT, doubInitialLT, doubPeakLT;
 
         public CargoProperty(double _extralLT = -1, double _totalLT = -1, double _currentLT = 0, double _initialLT = 0) {
             propExtraLT = _extralLT;
@@ -49,6 +49,15 @@ namespace iBarter.Model {
             get { return doubInitialLT; }
             set {
                 doubInitialLT = value;
+                OnPropertyChanged();
+            }
+        }
+
+        [Category("CargoProperty"), Description("Peak LT"), DisplayName("PeakLT")]
+        public double PeakLT {
+            get { return doubPeakLT; }
+            set {
+                doubPeakLT = value;
                 OnPropertyChanged();
             }
         }

@@ -2,6 +2,7 @@
 using iBarter.Model;
 using iBarter.View;
 using iBarter.ViewModel;
+using iBarter.Routing;
 using Syncfusion.Licensing;
 using Syncfusion.SfSkinManager;
 using System.Windows;
@@ -39,6 +40,7 @@ namespace iBarter {
         public static StorageViewModel myStorageVM = null!;
         public static ShipCargoViewModel myCVM = null!;
         public static CargoProperty myCargoProperty = null;
+        public static AutomaticRouteCoordinator myRouteCoordinator = null!;
 
         // Single lock guarding all App.list* mutations. Children windows / scanner threads
         // take this around any read-then-mutate of the shared lists (e.g.
@@ -93,6 +95,7 @@ namespace iBarter {
 
             //mySplashScreen = new SplashScreen();
             myfmMain = new MainWindow();
+            myRouteCoordinator = new AutomaticRouteCoordinator(myStorageVM, myCargoProperty, myCVM);
 
             // Phase 6 (i18n): the "Version: " prefix is now a resource key
             // so the status-bar label flips with the active language; the

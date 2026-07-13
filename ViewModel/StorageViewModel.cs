@@ -15,6 +15,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.ComponentModel;
+using System.Collections.Specialized;
 using System.Windows.Media;
 
 namespace iBarter.ViewModel {
@@ -43,6 +45,10 @@ namespace iBarter.ViewModel {
         // meaning clicking the scanner's "Add to Planner" button would silently trigger
         // 80+ storage saves on its first run. See Barter.InvQuantity for the UI fix.
         private bool _suppressSave;
+        private bool _storageChangedPending;
+        private readonly HashSet<Items> _subscribedStorageItems = new();
+
+        public event EventHandler? StorageChanged;
 
         #region Constructor
         /// <summary>
@@ -50,14 +56,51 @@ namespace iBarter.ViewModel {
         /// </summary>
         public StorageViewModel() {
             StorageCollection = new ObservableCollection<Items>();
-            StorageCollection.CollectionChanged += StorageCollection_CollectionChanged;
         }
 
-        private void StorageCollection_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
+        private void StorageCollection_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) {
+            if (e.OldItems is not null)
+                foreach (Items item in e.OldItems)
+                    UnsubscribeStorageItem(item);
+            if (e.NewItems is not null)
+                foreach (Items item in e.NewItems)
+                    SubscribeStorageItem(item);
+            if (e.Action == NotifyCollectionChangedAction.Reset) {
+                foreach (Items item in _subscribedStorageItems.ToArray())
+                    UnsubscribeStorageItem(item);
+                foreach (Items item in StorageCollection)
+                    SubscribeStorageItem(item);
+            }
             // Skip auto-save during bulk loads; the using-block in LoadData restores
             // the flag and runs a single trailing SaveData() to persist the result.
-            if (_suppressSave) return;
+            if (_suppressSave) {
+                _storageChangedPending = true;
+                return;
+            }
             SaveData();
+            StorageChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void StorageItem_PropertyChanged(object? sender, PropertyChangedEventArgs e) {
+            if (e.PropertyName is not (nameof(Items.StorageVeliaQuantity_Velia)
+                or nameof(Items.StorageVeliaQuantity_Iliya)
+                or nameof(Items.StorageVeliaQuantity_Epheria)
+                or nameof(Items.StorageVeliaQuantity_Ancado))) return;
+            if (_suppressSave) {
+                _storageChangedPending = true;
+                return;
+            }
+            StorageChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void SubscribeStorageItem(Items item) {
+            if (_subscribedStorageItems.Add(item))
+                item.PropertyChanged += StorageItem_PropertyChanged;
+        }
+
+        private void UnsubscribeStorageItem(Items item) {
+            if (_subscribedStorageItems.Remove(item))
+                item.PropertyChanged -= StorageItem_PropertyChanged;
         }
 
         public void SaveData() {
@@ -145,6 +188,10 @@ namespace iBarter.ViewModel {
             return new RestoreOnDispose(() => {
                 _suppressSave = false;
                 SaveData();
+                if (_storageChangedPending) {
+                    _storageChangedPending = false;
+                    StorageChanged?.Invoke(this, EventArgs.Empty);
+                }
             });
         }
 
@@ -166,7 +213,15 @@ namespace iBarter.ViewModel {
         public ObservableCollection<Items> StorageCollection {
             get { return storagecollection; }
             set {
+                if (storagecollection is not null) {
+                    storagecollection.CollectionChanged -= StorageCollection_CollectionChanged;
+                    foreach (Items item in _subscribedStorageItems.ToArray())
+                        UnsubscribeStorageItem(item);
+                }
                 storagecollection = value;
+                storagecollection.CollectionChanged += StorageCollection_CollectionChanged;
+                foreach (Items item in storagecollection)
+                    SubscribeStorageItem(item);
                 RaisePropertyChanged("StorageCollectionChange");
             }
         }

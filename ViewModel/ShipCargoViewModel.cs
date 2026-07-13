@@ -8,6 +8,7 @@ using iBarter.Navigation;
 
 namespace iBarter.ViewModel {
     public class ShipCargoViewModel : NotificationObject {
+        private AutomaticRouteCoordinator? routeCoordinator;
         public ShipCargoViewModel() {
             CargoDetails = new ObservableCollection<Barter>();
             CargoDetails.CollectionChanged += CargoDetails_CollectionChanged;
@@ -24,6 +25,30 @@ namespace iBarter.ViewModel {
         public ObservableCollection<Barter> CargoDetails {
             get { return _cargodetails; }
             set { _cargodetails = value; }
+        }
+
+        public CargoMode Mode => routeCoordinator?.Mode ?? CargoMode.Manual;
+        public IReadOnlyList<AutomaticRouteStepViewModel> AutomaticSteps =>
+            routeCoordinator?.VisibleAutomaticSteps ?? [];
+        public IReadOnlyList<RouteSelectionOption> RouteOptions => routeCoordinator?.RouteOptions ?? [];
+
+        public void AttachRouteCoordinator(AutomaticRouteCoordinator coordinator) {
+            if (routeCoordinator is not null)
+                routeCoordinator.PropertyChanged -= RouteCoordinator_PropertyChanged;
+            routeCoordinator = coordinator;
+            routeCoordinator.PropertyChanged += RouteCoordinator_PropertyChanged;
+            RaisePropertyChanged(nameof(Mode));
+            RaisePropertyChanged(nameof(AutomaticSteps));
+            RaisePropertyChanged(nameof(RouteOptions));
+        }
+
+        private void RouteCoordinator_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) {
+            if (e.PropertyName is nameof(AutomaticRouteCoordinator.Mode))
+                RaisePropertyChanged(nameof(Mode));
+            if (e.PropertyName is nameof(AutomaticRouteCoordinator.VisibleAutomaticSteps))
+                RaisePropertyChanged(nameof(AutomaticSteps));
+            if (e.PropertyName is nameof(AutomaticRouteCoordinator.RouteOptions))
+                RaisePropertyChanged(nameof(RouteOptions));
         }
 
         // Re-orders CargoDetails so barters that belong to a chain appear
