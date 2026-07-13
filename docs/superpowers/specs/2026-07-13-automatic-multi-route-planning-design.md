@@ -1,210 +1,231 @@
-# Automatic Multi-Route Planning Design
+# 自动多路线规划设计
 
-## Goal
+## 目标
 
-Extend Planner Auto Plan into a complete sailing itinerary:
+把 Planner 的“自动规划”扩展成一套完整的航行方案：
 
-1. select every unfinished barter whose resulting `Eq.` is greater than zero;
-2. plan warehouse pickups, barter stops, route boundaries, and route order;
-3. keep the ship within `TotalLT` after every pickup and barter;
-4. minimize the number of routes first and total sailing distance second;
-5. let the Ship Cargo panel select an individual route while the map can display either one route or all routes;
-6. preserve the existing manual map-selection, cargo sorting, and gold dashed-route workflow.
+1. 选出所有尚未完成并且自动规划后 `Eq. > 0` 的交换项目；
+2. 自动安排仓库装货、岛屿交换、路线分组和访问顺序；
+3. 每次装货和交换后，船舱重量都不能超过 `TotalLT`；
+4. 首先减少路线数量，其次缩短总航程；
+5. 船舱界面可以选择某一条路线，地图可以显示单条路线或全部路线；
+6. 完整保留现有的手动选岛、船舱自动排序和金色虚线路线功能。
 
-The feature is an addition to Planner Auto Plan. It does not change how the existing three Planner strategies choose barter multipliers.
+本功能建立在 Planner 自动规划结果之上，不改变现有三种自动规划策略计算交换次数的方式。
 
-## Confirmed Domain Rules
+## 已确认的业务规则
 
-### Warehouses
+### 仓库规则
 
-The first implementation supports every storage location already represented by `StorageManager`. The currently relevant case has two populated warehouse islands: LV1-LV5 goods and LV6 goods can be stored on different islands.
+第一版支持 StorageManager 中已经存在的全部仓库。目前最重要的实际情况是：LV1–LV5 物品和 LV6 物品可能分别存放在两个不同的仓库岛。
 
-A route may visit a different warehouse as an intermediate pickup. For example, this is one route:
-
-```text
-Iliya pickup -> barter A -> Velia pickup -> barter B -> finish at Velia
-```
-
-Within one route, a warehouse can be used as a pickup stop at most once. Arriving again at a warehouse already visited by the current route closes the route. The solver may also deliberately finish a route at any warehouse without first using it as an intermediate pickup.
-
-When a route finishes, all remaining ship cargo is unloaded into the ending warehouse. Those items become warehouse inventory available to later routes. The next route starts at that same warehouse; the solver must not add an invisible repositioning jump.
-
-### Cargo and exchanges
-
-The solver treats a selected Planner row as one indivisible barter task. Version 1 does not split one row's `ExchangeQuantity` across multiple routes.
-
-For every barter step, the ship must contain:
+一条路线可以在途中前往另一个仓库装货。例如，下面整个过程算作一条路线：
 
 ```text
-ExchangeQuantity * Item1Number
+伊利亚装货 → A 岛交换 → 贝利亚装货 → B 岛交换 → 在贝利亚结束
 ```
 
-units of the input item. The step removes those units and adds:
+同一条路线内，每个仓库最多作为装货点访问一次。如果再次到达本路线已经访问过的仓库，则当前路线结束。求解器也可以主动选择在任意仓库结束路线，不要求该仓库此前已经作为途中装货点。
+
+路线结束时，船上剩余的全部物品都卸入终点仓库。这些物品会立即成为后续路线可以使用的仓库库存。下一条路线从同一个终点仓库出发，求解器不允许在两条路线之间加入不可见的“瞬移”。
+
+### 船舱和交换规则
+
+Planner 中一个被选中的交换行视为不可拆分的任务。第一版不允许把同一行的 `ExchangeQuantity` 拆到多条路线中执行。
+
+执行一条交换前，船上必须具有：
 
 ```text
-ExchangeQuantity * Item2Number
+ExchangeQuantity × Item1Number
 ```
 
-units of the output item.
-
-If one selected barter produces an item consumed by another selected barter, the producer must execute first unless the required consumer quantity is already available on the ship or in a reachable warehouse. Item IDs, not localized names, are the authoritative dependency and inventory keys.
-
-### Weight
-
-Every state transition must satisfy:
+个输入物品。执行交换时扣除这些输入物品，并加入：
 
 ```text
-ExtraLT + sum(onBoardQuantity[item] * unitWeight[item]) <= TotalLT
+ExchangeQuantity × Item2Number
 ```
 
-The check runs after every warehouse pickup and every barter. `InitialLT` and final `CurrentLT` alone are not sufficient because an intermediate step can have the highest load.
+个输出物品。
 
-The selected route exposes:
+如果一个已选交换会生产另一个已选交换所需的物品，生产者必须先执行；但是，如果消费者所需的数量已经存在于船上或某个可到达仓库，则不应强制执行多余的生产者前置关系。
 
-- `InitialLT`: load after its first pickup;
-- `CurrentLT`: load after its final barter and before its finishing unload;
-- `PeakLT`: the maximum load observed anywhere in the route.
+物品依赖和库存匹配必须使用稳定的 ItemID，不能使用会随语言变化的显示名称。
 
-All three values include `ExtraLT`, and none may exceed `TotalLT`. `PeakLT` is a new route metric; the existing manual-cargo meanings of `InitialLT` and `CurrentLT` remain unchanged.
+### 重量规则
 
-## Terminology and Route Boundaries
-
-A **route** is one selectable itinerary in the Ship Cargo dropdown. It starts at a warehouse, may contain barter stops and at most one pickup visit to each distinct warehouse, and finishes at a warehouse.
-
-A **route step** is one of:
-
-- `WarehousePickupStep`: visit a warehouse and load explicitly listed items;
-- `BarterStep`: execute one selected Planner barter;
-- `WarehouseUnloadStep`: finish the route and unload all remaining cargo.
-
-The unload step may share an island with the most recent pickup step but remains explicit in the model so inventory transitions and route boundaries are unambiguous. Zero-distance visual legs are not drawn.
-
-## Optimization Model
-
-This is a single-ship, multi-warehouse pickup-and-delivery problem with intermediate replenishment, precedence, changing inventory, and dynamic capacity. It is not a standard capacitated vehicle-routing problem: warehouses are transit-capable replenishment nodes, and barter steps both consume and produce goods.
-
-Relevant background:
-
-- Google OR-Tools pickup and delivery constraints: <https://developers.google.com/optimization/routing/pickup_delivery>
-- Multi-depot routing with inter-depot replenishment: <https://doi.org/10.1016/j.ejor.2005.08.015>
-- Vehicle routing with intermediate replenishment facilities: <https://doi.org/10.1287/ijoc.1070.0230>
-- Exact branch-and-price work for intermediate replenishment: <https://doi.org/10.1016/j.cor.2025.107084>
-
-Version 1 will not add OR-Tools. Its standard routing model does not directly express iBarter's inventory-producing barter transitions and dynamic warehouse unloading, while a CP formulation would introduce a large native dependency and still require extensive custom constraints.
-
-### Hard constraints
-
-A candidate is rejected immediately if it:
-
-- leaves any selected barter unfinished;
-- withdraws more of an item than a warehouse contains at that time;
-- executes a barter without its required input quantity;
-- exceeds `TotalLT` after any action;
-- violates a required producer/consumer ordering;
-- uses an unresolved island or non-finite navigation coordinate;
-- revisits a warehouse as a pickup inside the same route;
-- creates an invisible transfer between consecutive routes.
-
-No infeasible solution is retained or scored. In particular, an "overweight count" is not an optimization objective.
-
-### Lexicographic objective
-
-Feasible solutions are compared in this strict order:
-
-1. fewer routes;
-2. shorter total sailing distance, including every pickup, barter, and final return leg;
-3. fewer warehouse pickup stops;
-4. lower maximum `PeakLT` across all routes;
-5. canonical Planner row ID and warehouse ID ordering as the deterministic final tie-break.
-
-The implementation must compare an objective tuple. It must not approximate the priorities with arbitrary weighted sums.
-
-## Solver Architecture
-
-### Immutable input snapshot
-
-`AutomaticRoutePlanningRequest` contains only immutable data:
-
-- selected barter tasks with stable row IDs and resolved navigation coordinates;
-- per-item unit weights;
-- per-warehouse item quantities;
-- warehouse island coordinates;
-- `ExtraLT` and `TotalLT`;
-- deterministic search limits.
-
-The WPF layer builds the request on the UI thread. The solver never reads `App`, `ObservableCollection`, controls, or localized display names.
-
-### Shared transition simulator
-
-`RouteStateTransition` is the single authority for pickup, barter, and unload transitions. Both the solver and the post-solve verifier call it. UI cargo calculations must consume its recorded load snapshots rather than reimplementing the arithmetic.
-
-The state contains:
+每次状态变化后都必须满足：
 
 ```text
-current island
-current route index
-warehouses visited in current route
-completed barter bitset
-on-board quantities by ItemID
-dynamic quantities by warehouse and ItemID
-current load and current-route peak load
-route steps
-route count, distance, and pickup count
+ExtraLT + Σ(船上物品数量 × 该物品单位重量) <= TotalLT
 ```
 
-The usual plan size is currently around 19 active barter rows, so the completed set fits in a `ulong`. Inputs above 64 tasks must be rejected with a localized diagnostic in version 1 rather than silently overflowing.
+检查时机包括：
 
-### Dependency graph
+- 每次从仓库装货后；
+- 每次完成交换、扣除输入并获得输出后。
 
-Before searching, construct a DAG candidate graph from ItemIDs. A cycle is not assumed to be impossible: initial warehouse stock can break an apparent producer cycle. Therefore graph edges constrain a consumer only for the quantity that cannot be satisfied from initial or previously deposited stock.
+只检查 `InitialLT` 和最终 `CurrentLT` 不够，因为路线中途可能出现更高的载重峰值。
 
-The preflight phase reports permanently unreachable inputs before route search begins. A diagnostic must name the Planner row, required item, required quantity, and all warehouse quantities examined.
+选中某条自动路线时显示：
 
-### Anytime exact search
+- `InitialLT`：第一次装货完成后的载重；
+- `CurrentLT`：最后一次交换完成、最终卸货之前的载重；
+- `PeakLT`：整条路线任何步骤出现过的最大载重。
 
-Use a deterministic branch-and-bound/best-first search:
+三个数值都包含 `ExtraLT`，并且都不能超过 `TotalLT`。`PeakLT` 是自动路线新增的指标；手动船舱中 `InitialLT` 和 `CurrentLT` 的现有含义保持不变。
 
-1. create a fast feasible incumbent with precedence-aware nearest-neighbor packing;
-2. improve the incumbent with precedence-safe relocate, swap, and 2-opt moves;
-3. explore exact states in optimistic objective order;
-4. prune states whose lower-bound objective cannot beat the incumbent;
-5. cache and dominance-prune equivalent states;
-6. finish with either `Optimal` or `BestKnownWithinLimit` status.
+## 路线和步骤的定义
 
-Search actions are:
+一条 **路线（Route）** 对应船舱下拉列表中的一个可选项目。它从一个仓库出发，可以包含多个交换岛以及不同仓库的途中补给，最终在一个仓库结束。
 
-- travel to a warehouse and load a demand-derived bundle;
-- travel to and execute an eligible barter;
-- travel to a warehouse and finish the current route.
+一条 **路线步骤（RouteStep）** 分为三类：
 
-Pickup quantities are not arbitrary integers. Candidate bundles are derived from the unmet inputs of reachable barter subsets up to the next warehouse opportunity. This keeps the action space finite and prevents loading goods that no remaining step can consume.
+- `WarehousePickupStep`：到达仓库并装载明确列出的物品；
+- `BarterStep`：执行一个 Planner 中被选中的交换；
+- `WarehouseUnloadStep`：结束路线，把船上剩余物品全部卸入仓库。
 
-Useful admissible lower bounds include:
+卸货步骤可能与上一个装货步骤发生在同一个岛，但数据模型仍然必须明确保存它，以保证库存变化和路线边界没有歧义。地图不绘制零距离的线段。
 
-- the minimum number of additional routes implied by remaining required weight and reachable replenishment capacity;
-- the distance from the current location to the nearest remaining required stop;
-- a minimum-spanning-tree bound over remaining barter islands and a reachable finishing warehouse;
-- mandatory producer/consumer connection distances.
+## 优化问题的性质
 
-For the dominance cache, one state dominates another only when position, completed set, current-route warehouse mask, and route boundary status match, and it is no worse in the objective prefix, current load, on-board usable inventory, and relevant dynamic warehouse inventory. Dominance comparisons must be conservative; an uncertain comparison may reduce performance but must never remove a potentially optimal solution.
+该问题属于“单船、多仓库、途中补给、取货与交付、交换前置依赖、动态库存和动态载重”的路线问题，并不是普通的容量车辆路径问题：
 
-### Search limits and truthfulness
+- 仓库既可以是起点和终点，也可以是途中补给节点；
+- 交换步骤会同时消耗和生产物品；
+- 路线结束后会改变终点仓库库存；
+- 后续路线依赖前面路线产生并落库的物品。
 
-The solver runs on a background task with cancellation. Search limits are deterministic counts (expanded states and local-improvement iterations), not wall-clock time alone, so identical inputs remain reproducible across machines. The UI may also enforce a safety timeout and cancel the task.
+相关研究资料：
 
-Results contain:
+- Google OR-Tools Pickup and Delivery：<https://developers.google.com/optimization/routing/pickup_delivery>
+- 带仓库间补给的多仓库路线问题：<https://doi.org/10.1016/j.ejor.2005.08.015>
+- 带途中补给设施的车辆路径问题：<https://doi.org/10.1287/ijoc.1070.0230>
+- 使用 Branch-and-Price 的途中补给精确算法：<https://doi.org/10.1016/j.cor.2025.107084>
 
-- `Optimal`: exhaustive proof completed;
-- `BestKnownWithinLimit`: a valid incumbent exists but optimality was not proved;
-- `Infeasible`: exhaustive search proved no valid solution;
-- `NoFeasibleSolutionWithinLimit`: the limit expired without an incumbent;
-- `Cancelled` or `InvalidInput`.
+第一版不引入 OR-Tools。标准 RoutingModel 不能直接表达 iBarter 的“交换产生库存”和“路线结束动态落库”等状态变化；如果改用 CP 建模，仍需要大量自定义约束，同时会引入较大的原生依赖。
 
-Logs and UI text must distinguish "optimal" from "best known".
+## 硬约束
 
-## Data Model
+出现以下任意情况时，候选方案立即判定为不可行并剪枝：
 
-Add pure models under `Routing` or `Planning/Routes`:
+- 存在任何已选交换没有完成；
+- 从仓库取出的物品超过该仓库当时的实际库存；
+- 执行交换时船上没有足够的输入物品；
+- 任意步骤后的重量超过 `TotalLT`；
+- 违反必要的生产者/消费者执行顺序；
+- 岛屿无法解析，或者导航坐标不是有限数值；
+- 同一条路线再次把已经访问过的仓库当作途中装货点；
+- 在连续两条路线之间产生不可见的位置跳转。
+
+不可行方案不会进入评分阶段。“超重次数”不是优化目标，因为超重方案根本不允许成为候选结果。
+
+## 优化目标
+
+所有可行方案使用严格的字典序比较：
+
+1. 路线数量更少；
+2. 总航行距离更短，包括装货、交换以及最后返回仓库的每一段；
+3. 仓库装货停靠次数更少；
+4. 所有路线中的最大 `PeakLT` 更低；
+5. 如果仍然相同，按照稳定的 Planner RowId 和仓库 ID 排序，保证结果可重复。
+
+实现必须直接比较目标元组，不能使用随意设置的加权分数模拟优先级。
+
+## 求解器架构
+
+### 不可变输入快照
+
+`AutomaticRoutePlanningRequest` 只包含不可变数据：
+
+- 具有稳定 RowId 的已选交换任务；
+- 每个交换岛和仓库岛的导航坐标；
+- 每种物品的单位重量；
+- 每个仓库的物品数量；
+- `ExtraLT` 和 `TotalLT`；
+- 确定性的搜索限制配置。
+
+WPF 适配层在 UI 线程构造请求。纯求解器不能读取 `App`、`ObservableCollection`、WPF 控件或本地化显示名称。
+
+### 统一状态转换器
+
+`RouteStateTransition` 是装货、交换和卸货状态变化的唯一实现。求解器和结果验证器都必须调用它。UI 中的载重显示直接使用它记录的载重快照，不能再次实现另一套重量算法。
+
+搜索状态至少包含：
+
+```text
+当前位置
+当前路线编号
+当前路线已经访问的仓库集合
+已完成交换的位图
+船上各 ItemID 的数量
+每个仓库各 ItemID 的动态库存
+当前载重和当前路线的载重峰值
+已经生成的路线步骤
+路线数、累计距离和仓库装货次数
+```
+
+当前实际自动规划通常约有 19 个有效交换行，因此已完成集合可以使用 `ulong` 位图。第一版遇到超过 64 个交换任务时，必须返回本地化的 `InvalidInput` 诊断，不能发生静默溢出。
+
+### 依赖和可达性预检查
+
+搜索前，根据 ItemID 建立生产和消费关系。
+
+表面上的生产环不一定代表无解，因为初始仓库库存可能直接满足环内某个消费者，从而打破循环。因此，只有无法由初始库存或之前落库库存满足的数量，才需要建立强制生产前置关系。
+
+预检查应在正式搜索前发现永久不可获得的输入物品。诊断信息必须指出：
+
+- Planner 行；
+- 缺少的 ItemID 和显示名称；
+- 需要数量；
+- 检查过的各仓库数量；
+- 是否存在已选生产者。
+
+### Anytime 精确搜索
+
+采用确定性的 Branch-and-Bound / Best-First Search：
+
+1. 用快速启发式生成第一份可行方案，作为搜索上界；
+2. 用不破坏前置关系的 relocate、swap 和 2-opt 改善初始方案；
+3. 按乐观目标顺序展开精确搜索状态；
+4. 当某个状态的理论最好结果也无法击败当前方案时剪枝；
+5. 对等价状态使用缓存和支配剪枝；
+6. 最终返回“已证明最优”或“搜索限制内的最佳已知方案”。
+
+搜索动作只有三类：
+
+- 前往仓库并装载一个由实际需求生成的物品组合；
+- 前往某个当前可执行的交换岛并完成交换；
+- 前往仓库，结束当前路线并卸货。
+
+装货数量不能枚举任意整数。候选装货组合必须来自“下一次可能补给之前，可到达交换集合实际尚缺少的输入物品”，避免装入后续任务永远不会使用的物品，并把搜索空间保持为有限集合。
+
+可以使用的乐观下界包括：
+
+- 剩余任务重量和可达补给能力所要求的最少新增路线数；
+- 当前地点到最近一个剩余必经节点的距离；
+- 剩余交换岛和一个可到达终点仓库构成的最小生成树距离；
+- 必须存在的生产者/消费者连接距离。
+
+状态支配判断必须保守。只有两个状态的位置、已完成集合、当前路线仓库访问集合和路线边界状态相同，并且其中一个状态在目标前缀、当前重量、可用船上库存和相关仓库库存上都不更差时，才允许删除另一个状态。判断不确定时宁可不剪枝，不能错误删除潜在最优解。
+
+### 搜索限制和结果真实性
+
+求解器在后台任务运行，并支持取消。主要搜索限制使用确定性的“已展开状态数”和“局部改进迭代次数”，而不是只依赖墙钟时间，这样同样的输入和配置可以在不同机器上得到相同结果。UI 可以另外设置安全超时并取消任务。
+
+结果状态包括：
+
+- `Optimal`：搜索完整结束，已经证明结果最优；
+- `BestKnownWithinLimit`：存在有效方案，但在限制内没有证明最优；
+- `Infeasible`：完整搜索已经证明不存在可行方案；
+- `NoFeasibleSolutionWithinLimit`：达到限制时仍未找到可行方案；
+- `Cancelled`：被新请求或用户操作取消；
+- `InvalidInput`：输入数据不合法。
+
+日志和 UI 必须明确区分“最优方案”和“最佳已知方案”。
+
+## 数据模型
+
+在 `Routing` 或 `Planning/Routes` 下增加不依赖 WPF 的模型：
 
 ```text
 AutomaticRoutePlanningRequest
@@ -220,54 +241,56 @@ RoutePlanStatus
 RoutePlanObjective
 ```
 
-`RouteStep` stores stable IDs and computed quantities. It may carry the source Planner row ID, but it must not require a live `Barter` reference. The WPF adapter resolves IDs back to live rows for display and actions.
+`RouteStep` 保存稳定 ID 和已经计算出的数量。它可以保存来源 Planner RowId，但不能依赖实时 `Barter` 对象。WPF 适配层负责把 RowId 解析回当前 Planner 行，以提供显示和交互功能。
 
-`RoutePlan` also stores an input fingerprint covering:
+`RoutePlan` 还要保存输入指纹，覆盖：
 
-- selected row IDs and all quantities affecting exchanges;
-- `ExchangeDone` and `ExchangeQuantity`;
-- warehouse quantities by ItemID;
-- `ExtraLT` and `TotalLT`;
-- island navigation coordinates;
-- the solver configuration version.
+- 已选 RowId 以及影响交换的全部数量；
+- `ExchangeDone` 和 `ExchangeQuantity`；
+- 各仓库按 ItemID 记录的库存；
+- `ExtraLT` 和 `TotalLT`；
+- 岛屿导航坐标；
+- 求解器配置版本。
 
-## Manual and Automatic Cargo Modes
+## 手动和自动船舱模式
 
-`CargoMode` has two values:
+增加两种明确的船舱模式：
 
-- `Manual`;
-- `AutomaticRoute`.
+```text
+CargoMode.Manual
+CargoMode.AutomaticRoute
+```
 
-The existing `CargoDetails` collection remains the authoritative manual cargo and continues to be persisted by the current cargo JSON path. Automatic route selection must not overwrite or save over it.
+现有 `CargoDetails` 继续作为手动船舱的权威数据，并继续通过当前船舱 JSON 文件保存。选择自动路线时，绝不能覆盖或保存替换这份手动数据。
 
-In automatic mode, the Ship Cargo panel binds to the selected route's step view models. Exchange-step commands resolve their source Planner row. Switching back to manual mode restores the existing manual list without reconstruction.
+自动模式下，船舱界面绑定到当前路线的步骤 ViewModel。交换步骤通过 RowId 解析对应的 Planner 行。切回手动模式时，原有手动船舱无需重建即可恢复。
 
-Manual behavior remains unchanged:
+以下手动行为必须保持不变：
 
-- map middle-click adds/removes a barter from manual cargo;
-- Optimal Route sorts manual cargo;
-- the manual map route remains a single gold dashed line;
-- manual cargo save/load continues to use the current files.
+- 在地图上用鼠标中键添加或移除交换项目；
+- “Optimal Route”继续对手动船舱排序；
+- 手动路线继续使用单条金色虚线；
+- 手动船舱继续按现有文件保存和加载。
 
-Starting a manual add/remove action switches the visible mode to `Manual`. A still-valid generated `RoutePlan` may remain cached so selecting one of its routes switches back to automatic mode. Any input-fingerprint change invalidates and discards it.
+用户在地图上执行手动添加或移除时，界面切换到 `Manual`。只要输入指纹仍然有效，已经生成的 `RoutePlan` 可以保留在内存中；用户重新选择某条自动路线时再切回自动模式。输入指纹变化后必须彻底丢弃旧路线计划。
 
-## Planner Integration
+## Planner 集成
 
-After Planner Auto Plan successfully applies multipliers:
+Planner 自动规划成功应用 Eq. 后：
 
-1. complete the existing Planner refresh and save operations;
-2. build the immutable route-planning request from `Eq. > 0 && !CK` rows;
-3. cancel any older route-planning operation;
-4. run the solver off the UI thread;
-5. verify the returned plan by replaying every transition from the original snapshot;
-6. publish the plan atomically on the UI thread;
-7. switch to `AutomaticRoute` and select Route 1 when a valid plan exists.
+1. 先完成现有的 Planner 刷新、统计和保存操作；
+2. 从 `Eq. > 0 && !CK` 的行构造不可变路线请求；
+3. 取消仍在运行的旧路线求解；
+4. 在 UI 线程之外运行求解器；
+5. 使用原始输入快照逐步重放返回结果，验证每个库存和重量变化；
+6. 在 UI 线程一次性发布验证通过的 `RoutePlan`；
+7. 如果存在有效路线，切换到 `AutomaticRoute` 并默认选择 Route 1。
 
-A route-planning failure does not roll back the Planner multipliers. It leaves manual cargo untouched, clears any stale automatic overlay, and logs a localized actionable diagnostic.
+路线求解失败时不回滚 Planner 已经生成的 Eq.。失败只能清除过期的自动路线和自动虚线，保留手动船舱，并输出本地化且可执行的错误信息。
 
-## Ship Cargo UI
+## 船舱界面
 
-Add a route selector with:
+新增路线下拉列表：
 
 ```text
 ALL
@@ -276,141 +299,146 @@ Route 2
 ...
 ```
 
-Selecting a concrete route:
+选择具体路线时：
 
-- switches to automatic mode;
-- shows that route's complete ordered steps;
-- updates `InitialLT`, `CurrentLT`, and `PeakLT` from recorded snapshots;
-- asks the map to show only that route.
+- 切换到自动路线模式；
+- 按顺序显示该路线的全部步骤；
+- 使用求解器记录的快照更新 `InitialLT`、`CurrentLT` 和 `PeakLT`；
+- 通知地图只显示这一条路线。
 
-The automatic list uses two visibly distinct templates:
+自动路线列表使用明显不同的模板：
 
-- warehouse row: warehouse name, item names and quantities to load or unload, and load after the action;
-- barter row: the existing island/input/output presentation plus load after the exchange.
+- 仓库行：显示仓库名、需要装卸的物品及数量，以及操作后的载重；
+- 交换行：保持现有岛屿、输入物品、输出物品的主要显示方式，并增加交换后的载重。
 
-Warehouse rows cannot be dragged, marked complete, or treated as barters. Barter rows retain applicable copy and navigation actions. Automatic steps are solver-owned and are not manually reorderable; users can return to manual mode for custom ordering.
+仓库行不能拖动、不能标记交换完成，也不能执行交换行的复制操作。交换行保留适用的复制和定位功能。自动步骤由求解器负责排序，不允许手动拖动；需要自定义顺序时，用户可以切回手动模式。
 
-Selecting `ALL` affects only the map. The cargo panel and LT values remain on the most recently selected concrete route. If no concrete route has been selected yet, Route 1 is the cargo context.
+选择 `ALL` 只改变地图。船舱内容和 LT 数值继续保持最近一次选择的具体路线。如果此前尚未选择具体路线，则以 Route 1 作为船舱上下文。
 
-## Map Rendering
+## 地图渲染
 
-The map must stop deriving automatic paths from `CargoDetails`. It receives a route-render snapshot from `RoutePlan` containing ordered island IDs and a stable route color.
+自动模式下，地图不能再从 `CargoDetails` 推测路线。它直接读取 `RoutePlan` 生成的只读渲染快照，其中包含有序岛屿 ID 和稳定的路线颜色。
 
-- Manual mode: preserve the current gold dashed line and arrows.
-- Concrete automatic route: draw that route in its assigned color.
-- `ALL`: draw every route simultaneously, each in a distinct deterministic color.
-- Warehouse stops participate in the polyline and have a distinct waypoint marker or tooltip.
-- Consecutive identical islands collapse visually, but the underlying pickup/unload steps remain intact.
-- Overlay elements remain non-hit-testable and are rebuilt safely when the map resizes.
+- 手动模式：保持现有金色虚线和箭头；
+- 选择具体自动路线：只绘制该路线的颜色；
+- 选择 `ALL`：同时绘制所有路线，每条路线使用不同且确定的颜色；
+- 仓库步骤参与路线折线，并具有不同的节点标记或提示；
+- 连续相同岛屿在视觉上合并，但底层装货和卸货步骤仍然保留；
+- 虚线不参与鼠标命中，并且在地图缩放或调整尺寸时安全重建。
 
-Use a fixed color palette with sufficient contrast against the dark map. If routes outnumber the palette, cycle hues while also varying dash patterns so color is not the only distinction.
+使用固定的高对比度颜色表。如果路线数量超过颜色表，除了循环色相，还要改变虚线样式，不能只依赖颜色区分。
 
-## Invalidation and Concurrency
+## 路线失效和并发
 
-The current `RoutePlan` becomes stale when any fingerprint input changes, including:
+以下任意输入发生变化时，现有 `RoutePlan` 立即失效：
 
-- Planner row `Eq.`, `CK`, item, island, remaining count, or exchange quantity;
-- StorageManager quantity;
-- `ExtraLT` or `TotalLT`;
-- planner load/new/clean operations;
-- navigation coordinate data or solver configuration version.
+- Planner 行的 Eq.、CK、物品、岛屿、剩余次数或交换数量；
+- StorageManager 中任何相关库存；
+- `ExtraLT` 或 `TotalLT`；
+- Planner 的新建、加载或清空操作；
+- 导航坐标数据或求解器配置版本。
 
-Invalidation cancels an in-flight solve, removes automatic overlays, and returns the visible cargo mode to `Manual`. Versioned request IDs prevent a late background result from replacing a newer plan.
+失效处理必须：
 
-The first version does not persist generated route plans. They are derived data and are regenerated by Auto Plan, avoiding stale saved routes after Planner or StorageManager changes.
+1. 取消正在运行的求解；
+2. 移除自动路线虚线；
+3. 切回手动船舱模式；
+4. 保持现有手动 `CargoDetails` 不变。
 
-## Error Handling
+每次请求使用递增版本号或唯一 RequestId，防止较早启动但较晚完成的后台结果覆盖新结果。
 
-Diagnostics must be actionable and localized. Important cases include:
+第一版不保存自动生成的 `RoutePlan`。它属于可重新生成的数据；不持久化可以避免程序重启后 Planner、仓库数据已经变化而路线仍然过期的问题。
 
-- required item absent from every reachable warehouse and producer;
-- one indivisible barter cannot fit under `TotalLT` even with an otherwise empty ship;
-- unresolved warehouse or barter island;
-- invalid/non-finite navigation coordinates;
-- dependency or inventory state proven infeasible;
-- search limit reached with or without a valid incumbent;
-- post-solve replay mismatch, which is treated as an internal error and never published.
+## 错误处理
 
-No failure may mutate manual cargo or leave a stale automatic route visible.
+错误信息必须本地化并能指导用户处理。至少包括：
 
-## Testing Strategy
+- 所需物品在所有可达仓库和已选生产者中都不存在；
+- 某个不可拆分交换即使空船也会超过 `TotalLT`；
+- 仓库岛或交换岛无法解析；
+- 导航坐标缺失或不是有限数值；
+- 已经证明依赖或库存状态无解；
+- 达到搜索限制，并区分是否已经存在有效方案；
+- 结果重放与求解结果不一致。
 
-Create a pure test project that links only route-planning and navigation source files. WPF controls and global `App` state must not be required.
+结果重放失败属于内部错误，该方案绝不能发布到 UI。任何失败都不能修改手动船舱，也不能留下过期的自动虚线。
 
-### Transition tests
+## 测试方案
 
-- pickup decrements the correct warehouse and increases ship load;
-- barter removes inputs, adds outputs, and records load;
-- intermediate load peaks are detected even when initial and final loads are safe;
-- unload transfers every on-board item into the ending warehouse;
-- insufficient stock, missing inputs, and overweight transitions are rejected without mutation.
+新增一个纯 C# 测试项目，只链接路线规划和导航相关源文件，不依赖 WPF 控件和全局 `App` 状态。
 
-### Solver tests
+### 状态转换测试
 
-- nearby A+B and nearby C+D are grouped instead of cross-pairing when two routes are necessary;
-- a route visits Iliya for LV1-LV5 and Velia for LV6 when that is shorter and feasible;
-- a producer precedes its consumer;
-- initial warehouse stock can satisfy a consumer without forcing an unnecessary producer edge;
-- a route ending inventory is available to the next route;
-- route count dominates distance, and distance dominates pickup count;
-- identical requests return identical plans and statuses;
-- exhaustive small fixtures are compared with brute-force enumeration to verify optimality claims;
-- state-limit fixtures return a valid `BestKnownWithinLimit` plan and never label it optimal;
-- an indivisible overweight barter returns a precise infeasibility diagnostic;
-- more than 64 barter tasks returns `InvalidInput`.
+- 装货减少正确仓库的库存，并增加正确的船舱载重；
+- 交换扣除输入、增加输出，并记录正确载重；
+- 即使初始和最终载重安全，也能发现中途超重峰值；
+- 卸货把船上所有物品转入终点仓库；
+- 库存不足、输入不足和超重转换失败时不修改原状态。
 
-### Integration tests
+### 求解器测试
 
-- Planner Auto Plan publishes Route 1 without modifying manual `CargoDetails`;
-- changing Eq., CK, storage quantity, or LT invalidates the generated plan;
-- stale background results are ignored;
-- selecting a route changes the automatic step list and single-route overlay;
-- selecting `ALL` changes only the overlay and preserves the last concrete cargo context;
-- switching to manual mode restores the saved manual cargo and gold route;
-- map route snapshots include warehouse waypoints in solver order.
+- 当载重要求必须分成两条路线时，距离相近的 A+B 和 C+D 应分别组合，不能交叉组合；
+- 当伊利亚存放 LV1–LV5、贝利亚存放 LV6 时，可以在同一条可行路线中依次到两个仓库；
+- 生产者必须排在依赖它的消费者之前；
+- 初始仓库库存足够时，不建立多余的生产者强制边；
+- 路线结束后的落库物品可供下一条路线使用；
+- 路线数量优先于距离，距离优先于仓库停靠数；
+- 相同请求产生相同路线和结果状态；
+- 对小型测试同时使用暴力枚举，验证 `Optimal` 声明确实正确；
+- 达到状态限制时返回有效的 `BestKnownWithinLimit`，不能错误标记为最优；
+- 单个不可拆分交换必然超重时，返回明确的无解诊断；
+- 超过 64 个交换任务时返回 `InvalidInput`。
 
-### Regression verification
+### 集成测试
 
-- build `iBarter.csproj` with zero errors;
-- run Planner Auto Planner tests;
-- run Island Navigation tests;
-- run the new automatic-route-planning tests;
-- manually verify both English and Traditional Chinese UI resources.
+- Planner 自动规划可以发布 Route 1，同时不修改手动 `CargoDetails`；
+- 修改 Eq.、CK、仓库库存或 LT 后，自动路线立即失效；
+- 过期后台任务的返回结果被忽略；
+- 选择具体路线时更新自动步骤列表和单路线虚线；
+- 选择 `ALL` 时只改变地图，保留最近的具体船舱上下文；
+- 切回手动模式时恢复原有手动船舱和金色路线；
+- 地图渲染快照按照求解器顺序包含仓库节点。
 
-## Delivery Stages
+### 回归验证
 
-Implementation should be reviewable in six independently testable stages:
+- `iBarter.csproj` 构建零错误；
+- Planner Auto Planner 测试全部通过；
+- Island Navigation 测试全部通过；
+- 新增的自动路线规划测试全部通过；
+- 手工检查英文和繁体中文界面的本地化资源。
 
-1. immutable route models and transition/load simulator;
-2. dependency preflight and anytime solver;
-3. Planner adapter, cancellation, verification, and invalidation;
-4. manual/automatic cargo-mode separation and Ship Cargo route-step UI;
-5. map route snapshots, single-route rendering, and `ALL` rendering;
-6. localization, diagnostics, full regression tests, and documentation.
+## 实施阶段
 
-The solver and simulator must be accepted before UI integration begins. The map and Ship Cargo panel must consume the same published `RoutePlan`; neither may independently infer an automatic route.
+整个功能分成六个可以独立测试和 Review 的阶段：
 
-## Out of Scope
+1. 不可变路线模型、状态转换器和逐步骤载重模拟；
+2. 依赖预检查和 Anytime 路线求解器；
+3. Planner 适配、后台取消、结果重放验证和失效机制；
+4. 手动/自动船舱模式分离，以及船舱路线步骤 UI；
+5. 地图路线快照、单路线渲染和 `ALL` 分色渲染；
+6. 本地化、错误诊断、完整回归测试和文档更新。
 
-Version 1 does not include:
+必须先验收纯求解器和状态转换器，再开始 UI 集成。地图和船舱必须读取同一个已经发布的 `RoutePlan`，不能各自重新推断自动路线。
 
-- splitting one Planner row across routes;
-- currents, wind, collision avoidance, reefs, or autopath travel time;
-- automatic in-game input or inventory manipulation;
-- persisted automatic route plans;
-- arbitrary manual editing of automatic route steps;
-- more than 64 selected barter tasks;
-- replacing the existing Planner multiplier strategies.
+## 第一版不包含的功能
 
-## Success Criteria
+- 把同一 Planner 行拆到多条路线；
+- 洋流、风向、礁石、碰撞规避或游戏自动寻路时间；
+- 自动操作游戏或自动搬运游戏内库存；
+- 持久化自动生成的路线计划；
+- 手动拖动修改自动路线步骤；
+- 支持超过 64 个已选交换任务；
+- 修改现有 Planner 自动规划策略。
 
-The feature is complete when:
+## 完成标准
 
-1. every published automatic plan replays successfully against its immutable input snapshot;
-2. no transition exceeds `TotalLT` or consumes unavailable inventory;
-3. warehouse pickups, barter dependencies, unloads, and later-route inventory are modeled explicitly;
-4. a completed exact search truthfully reports `Optimal`, while limited searches report `BestKnownWithinLimit`;
-5. Route selection updates the automatic cargo steps and one colored map route;
-6. `ALL` shows every colored route without changing cargo or LT context;
-7. the existing manual cargo, optimal sorting, persistence, and gold dashed route continue to work;
-8. all new and existing relevant tests pass without overwriting unrelated dirty-worktree changes.
+满足以下条件时，本功能才算完成：
+
+1. 每个发布到 UI 的自动方案都能从原始不可变快照完整重放；
+2. 任意步骤都不超过 `TotalLT`，也不消费不存在的物品；
+3. 仓库装货、交换依赖、终点卸货和后续路线库存都被明确建模；
+4. 完整搜索只能如实报告 `Optimal`，受限搜索只能报告 `BestKnownWithinLimit`；
+5. 选择具体路线会更新船舱自动步骤和地图上的单条彩色路线；
+6. `ALL` 会显示全部彩色路线，但不改变船舱和 LT 上下文；
+7. 现有手动船舱、自动排序、存档和金色虚线继续正常工作；
+8. 全部新增测试和相关旧测试通过，并且不覆盖当前工作区中的其他用户改动。
