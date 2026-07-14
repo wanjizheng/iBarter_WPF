@@ -94,6 +94,32 @@ if (!mapControlSource.Contains("MeasureLabelForPlacement(myLabel)", StringCompar
         "Expected highlighted map labels to be remeasured before placement so bold text is not clipped.");
     return 1;
 }
+if (mapControlSource.Contains("label.Arrange(new Rect(measured))", StringComparison.Ordinal)) {
+    Console.Error.WriteLine(
+        "Map label measurement must not manually arrange child controls because the layout timer will cause position flicker.");
+    return 1;
+}
+if (!mapControlSource.Contains("label.Width = measured.Width", StringComparison.Ordinal)
+    || !mapControlSource.Contains("label.Height = measured.Height", StringComparison.Ordinal)) {
+    Console.Error.WriteLine(
+        "Expected the measured natural size to be pinned without bypassing the parent layout pass.");
+    return 1;
+}
+if (mapControlSource.Contains("myLabel.Width = Double.NaN", StringComparison.Ordinal)
+    || !mapControlSource.Contains("visual.LastMeasuredHighlight != routeHighlight", StringComparison.Ordinal)
+    || !mapControlSource.Contains("visual.LastMeasuredContent != labelContent", StringComparison.Ordinal)) {
+    Console.Error.WriteLine(
+        "Map labels must only be remeasured when their highlight state or content changes, not on every timer tick.");
+    return 1;
+}
+if (!mapControlSource.Contains("LabelPlacementWidth(_label1)", StringComparison.Ordinal)
+    || !mapControlSource.Contains("LabelPlacementHeight(_label1)", StringComparison.Ordinal)
+    || !mapControlSource.Contains("LabelPlacementWidth(_label)", StringComparison.Ordinal)
+    || !mapControlSource.Contains("LabelPlacementHeight(_label)", StringComparison.Ordinal)) {
+    Console.Error.WriteLine(
+        "Collision and edge placement must use the newly measured explicit size instead of stale ActualWidth/ActualHeight values.");
+    return 1;
+}
 
 var cv = new CV(
     () => IntPtr.Zero,

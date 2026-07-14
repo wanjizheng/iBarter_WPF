@@ -55,6 +55,9 @@ namespace iBarter.View {
             public double BaseFontSize;
             public Brush BaseRectangleStroke;
             public double BaseRectangleStrokeThickness;
+            public bool? LastMeasuredHighlight;
+            public string LastMeasuredContent = String.Empty;
+            public Size LabelPlacementSize;
         }
 
         private bool routeDisplaySubscribed;
@@ -236,18 +239,6 @@ namespace iBarter.View {
                 }
 
                 if (myIslands != null && myLabel != null && Grid_Image != null) {
-                    if (myLabel.ActualWidth != 0 && myLabel.ActualHeight != 0) {
-                        myLabel.Width = myLabel.ActualWidth;
-                        myLabel.Height = myLabel.ActualHeight;
-                    }
-                    else {
-                        var size = new Size(Double.PositiveInfinity, Double.PositiveInfinity);
-                        myLabel.Measure(size);
-                        myLabel.Arrange(new Rect(myLabel.DesiredSize));
-                        myLabel.Width = myLabel.ActualWidth;
-                        myLabel.Height = myLabel.ActualHeight;
-                    }
-
                     bool routeHighlight = renderSnapshot.HighlightedIslandIds.Contains(
                         myIslands.IslandsName);
                     if (routeHighlight) {
@@ -259,8 +250,6 @@ namespace iBarter.View {
                         myLabel.Background = new SolidColorBrush(Color.FromArgb(155, 5, 22, 30));
                         visual.Rectangle.Stroke = highlightBrush;
                         visual.Rectangle.StrokeThickness = 3;
-                        myLabel.Width = Double.NaN;
-                        myLabel.Height = Double.NaN;
                     }
                     else {
                         myLabel.FontWeight = visual.BaseFontWeight;
@@ -270,10 +259,17 @@ namespace iBarter.View {
                         myLabel.Background = visual.BaseBackground;
                         visual.Rectangle.Stroke = visual.BaseRectangleStroke;
                         visual.Rectangle.StrokeThickness = visual.BaseRectangleStrokeThickness;
-                        myLabel.Width = Double.NaN;
-                        myLabel.Height = Double.NaN;
                     }
-                    Size labelSize = MeasureLabelForPlacement(myLabel);
+                    string labelContent = myLabel.Content?.ToString() ?? String.Empty;
+                    if (visual.LastMeasuredHighlight != routeHighlight
+                        || visual.LastMeasuredContent != labelContent
+                        || visual.LabelPlacementSize.Width <= 0
+                        || visual.LabelPlacementSize.Height <= 0) {
+                        visual.LabelPlacementSize = MeasureLabelForPlacement(myLabel);
+                        visual.LastMeasuredHighlight = routeHighlight;
+                        visual.LastMeasuredContent = labelContent;
+                    }
+                    Size labelSize = visual.LabelPlacementSize;
 
                     // Use the same projected centre as DrawRouteOverlay.
                     // Resetting this from raw IslandsThickness on every timer
@@ -603,11 +599,13 @@ namespace iBarter.View {
                     for (int j = i + 1; j < labels.Count; j++) {
                         if (AreOverlapping(labels[i], labels[j])) {
                             // Calculate distances to move down or up
-                            double moveDownDistance = labels[i].Margin.Top + labels[i].ActualHeight - labels[j].Margin.Top;
-                            double moveUpDistance = labels[j].Margin.Top - (labels[i].Margin.Top + labels[i].ActualHeight);
+                            double firstHeight = LabelPlacementHeight(labels[i]);
+                            double secondHeight = LabelPlacementHeight(labels[j]);
+                            double moveDownDistance = labels[i].Margin.Top + firstHeight - labels[j].Margin.Top;
+                            double moveUpDistance = labels[j].Margin.Top - (labels[i].Margin.Top + firstHeight);
 
 
-                            labels[j].Margin = new Thickness(labels[j].Margin.Left, labels[i].Margin.Top + labels[i].ActualHeight, labels[j].Margin.Right, labels[j].Margin.Bottom - labels[j].ActualHeight * 2);
+                            labels[j].Margin = new Thickness(labels[j].Margin.Left, labels[i].Margin.Top + firstHeight, labels[j].Margin.Right, labels[j].Margin.Bottom - secondHeight * 2);
                             adjusted = true;
                             // Determine the feasible and shorter movement
                             // bool canMoveDown = moveDownDistance > 0 && (labels[j].Margin.Top + moveDownDistance + labels[j].ActualHeight <= Grid_MapMain.ActualHeight);
@@ -739,14 +737,14 @@ namespace iBarter.View {
 
         private bool AreOverlapping(Label _label1, Label _label2) {
             double left1 = _label1.Margin.Left;
-            double right1 = left1 + _label1.ActualWidth;
+            double right1 = left1 + LabelPlacementWidth(_label1);
             double top1 = _label1.Margin.Top;
-            double bottom1 = top1 + _label1.ActualHeight;
+            double bottom1 = top1 + LabelPlacementHeight(_label1);
 
             double left2 = _label2.Margin.Left;
-            double right2 = left2 + _label2.ActualWidth;
+            double right2 = left2 + LabelPlacementWidth(_label2);
             double top2 = _label2.Margin.Top;
-            double bottom2 = top2 + _label2.ActualHeight;
+            double bottom2 = top2 + LabelPlacementHeight(_label2);
 
             bool horizontalOverlap = (left1 < right2 && right1 > left2);
             bool verticalOverlap = (top1 < bottom2 && bottom1 > top2);
@@ -754,30 +752,49 @@ namespace iBarter.View {
             return horizontalOverlap && verticalOverlap;
         }
 
+        private static double LabelPlacementWidth(Label label) {
+            if (!Double.IsNaN(label.Width) && label.Width > 0) return label.Width;
+            if (label.DesiredSize.Width > 0) return label.DesiredSize.Width;
+            return label.ActualWidth;
+        }
+
+        private static double LabelPlacementHeight(Label label) {
+            if (!Double.IsNaN(label.Height) && label.Height > 0) return label.Height;
+            if (label.DesiredSize.Height > 0) return label.DesiredSize.Height;
+            return label.ActualHeight;
+        }
+
         private static Size MeasureLabelForPlacement(Label label) {
-            // FontWeight/FontSize and border thickness can change when a route is
-            // selected. ActualWidth/ActualHeight still describe the previous visual
-            // state until WPF's next layout pass, which clipped long bold labels at
-            // the map edge. Force one measure/arrange pass before calculating margins.
+            // Measure the natural size after a route style change, but leave Arrange
+            // to the parent panel. Manually arranging this live child bypasses its
+            // Margin and made the 100 ms layout timer move labels back and forth.
+            Thickness originalMargin = label.Margin;
+            label.Margin = new Thickness(0);
             label.Width = Double.NaN;
             label.Height = Double.NaN;
             label.InvalidateMeasure();
             label.Measure(new Size(Double.PositiveInfinity, Double.PositiveInfinity));
-            Size measured = label.DesiredSize;
-            label.Arrange(new Rect(measured));
+            Size measured = new Size(
+                Math.Ceiling(label.DesiredSize.Width),
+                Math.Ceiling(label.DesiredSize.Height));
+            label.Margin = originalMargin;
+            label.Width = measured.Width;
+            label.Height = measured.Height;
             return measured;
         }
 
         private void NewMargin(Label _label) {
-            double rightEdge = _label.Margin.Left + _label.ActualWidth;
-            double bottomEdge = _label.Margin.Top + _label.ActualHeight;
+            double labelWidth = LabelPlacementWidth(_label);
+            double labelHeight = LabelPlacementHeight(_label);
+            double rightEdge = _label.Margin.Left + labelWidth;
+            double bottomEdge = _label.Margin.Top + labelHeight;
 
             double newLeftMargin = _label.Margin.Left;
             double newTopMargin = _label.Margin.Top;
 
             // 检查并调整右边界
             if (rightEdge > this.ActualWidth) {
-                newLeftMargin = this.ActualWidth - _label.ActualWidth;
+                newLeftMargin = this.ActualWidth - labelWidth;
                 newLeftMargin = Math.Max(0, newLeftMargin); // 避免负边距
             }
 
@@ -788,7 +805,7 @@ namespace iBarter.View {
 
             // 检查并调整底边界
             if (bottomEdge > this.ActualHeight) {
-                newTopMargin = this.ActualHeight - _label.ActualHeight;
+                newTopMargin = this.ActualHeight - labelHeight;
                 newTopMargin = Math.Max(0, newTopMargin); // 避免负边距
             }
 
