@@ -273,6 +273,7 @@ namespace iBarter.View {
                         myLabel.Width = Double.NaN;
                         myLabel.Height = Double.NaN;
                     }
+                    Size labelSize = MeasureLabelForPlacement(myLabel);
 
                     // Use the same projected centre as DrawRouteOverlay.
                     // Resetting this from raw IslandsThickness on every timer
@@ -295,13 +296,17 @@ namespace iBarter.View {
                     if (1 - displayCenter.Y < 0.08) {
                         // flip: position label above the island block
                         // (label baseline = top - label height)
-                        labelTop = Grid_Image.Margin.Top - myLabel.ActualHeight;
+                        labelTop = Grid_Image.Margin.Top - labelSize.Height;
                     }
                     else {
                         // default: position label below the island block
                         labelTop = Grid_Image.Margin.Top + Grid_Image.ActualHeight;
                     }
-                    myLabel.Margin = new Thickness(Grid_Image.Margin.Left - myLabel.ActualWidth / 2, labelTop, Grid_Image.Margin.Right - myLabel.ActualWidth, Grid_Image.Margin.Bottom - myLabel.ActualHeight);
+                    myLabel.Margin = new Thickness(
+                        Grid_Image.Margin.Left - labelSize.Width / 2,
+                        labelTop,
+                        Grid_Image.Margin.Right - labelSize.Width,
+                        Grid_Image.Margin.Bottom - labelSize.Height);
 
 
                     NewMargin(myLabel);
@@ -747,6 +752,20 @@ namespace iBarter.View {
             bool verticalOverlap = (top1 < bottom2 && bottom1 > top2);
 
             return horizontalOverlap && verticalOverlap;
+        }
+
+        private static Size MeasureLabelForPlacement(Label label) {
+            // FontWeight/FontSize and border thickness can change when a route is
+            // selected. ActualWidth/ActualHeight still describe the previous visual
+            // state until WPF's next layout pass, which clipped long bold labels at
+            // the map edge. Force one measure/arrange pass before calculating margins.
+            label.Width = Double.NaN;
+            label.Height = Double.NaN;
+            label.InvalidateMeasure();
+            label.Measure(new Size(Double.PositiveInfinity, Double.PositiveInfinity));
+            Size measured = label.DesiredSize;
+            label.Arrange(new Rect(measured));
+            return measured;
         }
 
         private void NewMargin(Label _label) {

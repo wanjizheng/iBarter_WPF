@@ -89,6 +89,11 @@ if (!mapControlSource.Contains("renderSnapshot.HighlightedIslandIds", StringComp
     Console.Error.WriteLine("Expected current route warehouse and barter islands to use strong map highlighting.");
     return 1;
 }
+if (!mapControlSource.Contains("MeasureLabelForPlacement(myLabel)", StringComparison.Ordinal)) {
+    Console.Error.WriteLine(
+        "Expected highlighted map labels to be remeasured before placement so bold text is not clipped.");
+    return 1;
+}
 
 var cv = new CV(
     () => IntPtr.Zero,
