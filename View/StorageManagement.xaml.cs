@@ -1,6 +1,7 @@
 ﻿using iBarter.Localization;
 using Syncfusion.UI.Xaml.Grid;
 using Syncfusion.Windows.Shared;
+using System.ComponentModel;
 using System.Windows.Media;
 
 namespace iBarter.View {
@@ -8,6 +9,7 @@ namespace iBarter.View {
     /// Interaction logic for StorageManagement.xaml
     /// </summary>
     public partial class StorageManagement : ChromelessWindow {
+        private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
 
         // Phase 2 (i18n): SfDataGrid GridTextColumn.MappingName -> resource key.
         // HeaderText is a CLR property (not a DP) so {DynamicResource} cannot
@@ -26,6 +28,7 @@ namespace iBarter.View {
 
         public StorageManagement() {
             InitializeComponent();
+            if (IsDesignMode) return;
             DataContext = App.myStorageVM;
             DataGrid_Storage.ItemsSource = App.myStorageVM.StorageCollection;
             RefreshData();

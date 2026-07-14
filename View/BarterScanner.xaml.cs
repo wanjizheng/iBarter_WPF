@@ -2,6 +2,7 @@
 using Syncfusion.UI.Xaml.Grid;
 using Syncfusion.Windows.Shared;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media;
 using Syncfusion.UI.Xaml.ScrollAxis;
@@ -11,6 +12,7 @@ namespace iBarter.View {
     /// Interaction logic for MainWindow.xaml
     /// </summary>
     public partial class BarterScanner : ChromelessWindow {
+        private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
 
         // Phase 2 (i18n): MappingName -> resource key for direct GridTextColumns,
         // plus a separate map for the GridMultiColumnDropDownList outer HeaderText.
@@ -49,6 +51,7 @@ namespace iBarter.View {
 
         public BarterScanner() {
             InitializeComponent();
+            if (IsDesignMode) return;
 
             this.DataContext = App.mySVM;
             BarterScanResults.ItemsSource = App.mySVM.BarterDetails;

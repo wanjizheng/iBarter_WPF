@@ -3,6 +3,7 @@ using iBarter.Model;
 using iBarter.Routing;
 using iBarter.ViewModel;
 using Newtonsoft.Json;
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -17,9 +18,11 @@ namespace iBarter.View {
     public partial class ShipCargoControl : System.Windows.Controls.UserControl {
         // Highest barter item LV in the game; IdentifyChain recursion stops one step before reaching this.
         private const int MAX_BARTER_LV = 7;
+        private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
 
         public ShipCargoControl() {
             InitializeComponent();
+            if (IsDesignMode) return;
             DataContext = App.myCVM;
             //PropertyGrid_Ship.Items = App.myCVM.CargoProperty;
 
@@ -53,6 +56,7 @@ namespace iBarter.View {
         }
 
         private void RefreshRouteMode() {
+            if (IsDesignMode || App.myCVM is null) return;
             var coordinator = App.myRouteCoordinator;
             bool automatic = coordinator?.Mode == CargoMode.AutomaticRoute;
             ListBox_ShipCargo.ItemsSource = automatic

@@ -24,6 +24,7 @@ namespace iBarter.View {
     public partial class PlannerControl : UserControl {
         // Highest barter item LV in the game; chain recursion stops one step before reaching this.
         private const int MAX_BARTER_LV = 7;
+        private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
 
         // Phase 2 (i18n): column-header MappingName -> resource key for every
         // direct GridTextColumn on DataGrid_Planner. HeaderText is a plain CLR
@@ -71,6 +72,7 @@ namespace iBarter.View {
 
         public PlannerControl() {
             InitializeComponent();
+            if (IsDesignMode) return;
             this.DataContext = App.myPVM;
             DataGrid_Planner.ItemsSource = App.myPVM.BarterCollection;
 

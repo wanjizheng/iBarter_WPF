@@ -1,4 +1,5 @@
 ﻿using Syncfusion.Windows.Controls.PivotGrid;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -23,6 +24,7 @@ namespace iBarter.View {
         // Highest barter item LV to render on the map. 7 keeps every catalog tier visible
         // after the LV6/LV7 extension; lower this if you want to hide high-tier pins.
         private const int MAX_MAP_LV = 7;
+        private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
 
         public List<Grid> listGrid_Islands = new List<Grid>();
         private List<Label> listLabels = null;
@@ -59,6 +61,7 @@ namespace iBarter.View {
 
         public MapControl() {
             InitializeComponent();
+            if (IsDesignMode) return;
             //InitTempGrid();
 
             myTimer.Interval = TimeSpan.FromMilliseconds(100);

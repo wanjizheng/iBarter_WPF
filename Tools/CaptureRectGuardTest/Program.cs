@@ -55,6 +55,25 @@ if (!shipCargoControlSource.Contains(
         "Expected retained automatic routes to remain selectable and manual cargo to use projected cards.");
     return 1;
 }
+if (!shipCargoControlSource.Contains("DesignerProperties.GetIsInDesignMode(this)", StringComparison.Ordinal)
+    || !shipCargoControlSource.Contains("if (IsDesignMode || App.myCVM is null) return;", StringComparison.Ordinal)) {
+    Console.Error.WriteLine(
+        "Expected ShipCargoControl to avoid runtime-only App state while Visual Studio renders the designer.");
+    return 1;
+}
+foreach (string viewName in new[] {
+    "StorageManagement.xaml.cs",
+    "PlannerControl.xaml.cs",
+    "BarterScanner.xaml.cs",
+    "MapControl.xaml.cs",
+}) {
+    string source = File.ReadAllText(Path.Combine(FindIBarterRepoRoot(), "View", viewName));
+    if (!source.Contains("DesignerProperties.GetIsInDesignMode(this)", StringComparison.Ordinal)) {
+        Console.Error.WriteLine(
+            $"Expected {viewName} to skip App runtime state while Visual Studio renders the designer.");
+        return 1;
+    }
+}
 
 string routeStepViewModelSource = File.ReadAllText(Path.Combine(
     FindIBarterRepoRoot(), "ViewModel", "AutomaticRouteStepViewModels.cs"));
