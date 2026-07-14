@@ -125,7 +125,9 @@ public sealed class AutomaticRoutePlanner {
             if (state.VisitedWarehouseIds.Contains(warehouse.WarehouseId)) continue;
             foreach (var bundle in DemandBundleGenerator.Generate(request, state, warehouse.WarehouseId, remaining)) {
                 var result = RouteStateTransition.TryPickup(request, state, warehouse.WarehouseId, bundle.Items);
-                if (result.Success) yield return result.State;
+                if (result.Success && AutomaticRouteSearchPolicy.HasExecutableBarter(
+                        request, result.State, remaining))
+                    yield return result.State;
             }
         }
 
@@ -233,4 +235,16 @@ internal static class AutomaticRouteSearchPolicy {
         taskCount >= LargeTaskBeamThreshold
             ? Math.Min(requestedBudget, LargeTaskBeamStateLimit)
             : requestedBudget;
+
+    public static bool HasExecutableBarter(
+        AutomaticRoutePlanningRequest request,
+        RouteSimulationState state,
+        ulong remainingMask) {
+        for (int index = 0; index < request.Tasks.Count; index++) {
+            if ((remainingMask & (1UL << index)) == 0) continue;
+            if (RouteStateTransition.TryBarter(request, state, index).Success)
+                return true;
+        }
+        return false;
+    }
 }

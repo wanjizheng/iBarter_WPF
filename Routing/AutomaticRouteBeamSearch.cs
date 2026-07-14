@@ -93,7 +93,9 @@ public static class AutomaticRouteBeamSearch {
                 request, state, warehouse.WarehouseId, remaining)) {
                 var pickup = RouteStateTransition.TryPickup(
                     request, state, warehouse.WarehouseId, bundle.Items);
-                if (pickup.Success) yield return pickup.State;
+                if (pickup.Success && AutomaticRouteSearchPolicy.HasExecutableBarter(
+                        request, pickup.State, remaining))
+                    yield return pickup.State;
             }
         }
 

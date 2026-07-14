@@ -79,6 +79,8 @@ public static class AutomaticRouteHeuristic {
             foreach (var bundle in DemandBundleGenerator.Generate(request, state, warehouse.WarehouseId, remainingMask)) {
                 var result = RouteStateTransition.TryPickup(request, state, warehouse.WarehouseId, bundle.Items);
                 if (!result.Success) continue;
+                if (!AutomaticRouteSearchPolicy.HasExecutableBarter(
+                        request, result.State, remainingMask)) continue;
                 candidates.Add(new PickupCandidate(
                     result.State.TotalDistance - state.TotalDistance,
                     BitOperations.PopCount(bundle.SupportedTaskMask),

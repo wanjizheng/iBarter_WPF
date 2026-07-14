@@ -364,4 +364,43 @@ public sealed class AutomaticRouteHeuristicTests {
             request, improved, RoutePlanStatus.BestKnownWithinLimit, []);
         Assert.True(RoutePlanVerifier.Verify(request, plan).Success);
     }
+
+    [Fact]
+    public void Large_planner_rejects_a_pickup_bundle_that_cannot_execute_its_first_barter() {
+        const int chainCount = 7;
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal);
+        var stock = new Dictionary<string, int>(StringComparer.Ordinal);
+        var tasks = new List<RouteBarterTask>();
+        for (int i = 0; i < chainCount; i++) {
+            string input = $"INPUT{i}";
+            string heavy = $"HEAVY{i}";
+            string output = $"OUTPUT{i}";
+            items[input] = new RouteItem(input, input, 1, 100);
+            items[heavy] = new RouteItem(heavy, heavy, 6, 2_000);
+            items[output] = new RouteItem(output, output, -1, 0);
+            stock[input] = 1;
+            tasks.Add(new RouteBarterTask(
+                $"source-{i}", $"SOURCE{i}", new RoutePoint(i + 1, 0),
+                input, 1, heavy, 1));
+            tasks.Add(new RouteBarterTask(
+                $"sink-{i}", $"SINK{i}", new RoutePoint(i + 1, 1),
+                heavy, 1, output, 1));
+        }
+        var request = new AutomaticRoutePlanningRequest(
+            tasks,
+            items,
+            [new RouteWarehouse("W", "W", new RoutePoint(0, 0), stock)],
+            0,
+            2_000,
+            new RouteSearchLimits(20_000, 0),
+            "pickup-first-step-feasibility");
+
+        var incumbent = AutomaticRouteHeuristic.TryBuildIncumbent(
+            request, AutomaticRoutePreflight.Validate(request), TestContext.Current.CancellationToken);
+
+        Assert.NotNull(incumbent);
+        Assert.Equal(tasks.Count, incumbent.Plan.Routes
+            .SelectMany(route => route.Steps).OfType<BarterStep>().Count());
+        Assert.True(RoutePlanVerifier.Verify(request, incumbent.Plan).Success);
+    }
 }
