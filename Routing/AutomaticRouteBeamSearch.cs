@@ -14,7 +14,8 @@ public static class AutomaticRouteBeamSearch {
     public static RouteIncumbent? TryBuildIncumbent(
         AutomaticRoutePlanningRequest request,
         RoutePreflightResult preflight,
-        CancellationToken cancellationToken) {
+        CancellationToken cancellationToken,
+        int? maxExpandedStates = null) {
         if (!preflight.IsValid || request.Tasks.Count == 0) return null;
         ulong fullMask = request.Tasks.Count == 64 ? ulong.MaxValue : (1UL << request.Tasks.Count) - 1;
         var frontier = new[] { RouteSimulationState.CreateInitial(request) };
@@ -40,7 +41,7 @@ public static class AutomaticRouteBeamSearch {
             var candidates = new Dictionary<string, RouteSimulationState>(StringComparer.Ordinal);
             foreach (var state in frontier) {
                 if (state.CompletedMask == fullMask && state.CurrentRouteSteps.Count == 0) continue;
-                if (++expanded > request.Limits.MaxExpandedStates) return bestComplete;
+                if (++expanded > (maxExpandedStates ?? request.Limits.MaxExpandedStates)) return bestComplete;
                 foreach (var successor in Expand(request, state, fullMask)) {
                     string key = SearchKey(successor);
                     if (!candidates.TryGetValue(key, out var existing) || IsBetter(successor, existing))

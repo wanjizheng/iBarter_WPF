@@ -31,7 +31,8 @@ public sealed class AutomaticRoutePlanner {
 
             if (request.Tasks.Count > AutomaticRouteSearchPolicy.ExactTaskLimit) {
                 var beamPlan = AutomaticRouteBeamSearch.TryBuildIncumbent(
-                    request, preflight, cancellationToken)?.Plan;
+                    request, preflight, cancellationToken,
+                    AutomaticRouteSearchPolicy.BeamStateBudget(request.Tasks.Count, request.Limits.MaxExpandedStates))?.Plan;
                 if (beamPlan is not null) {
                     var checkedBeam = RoutePlanVerifier.Verify(request, beamPlan);
                     if (checkedBeam.Success && checkedBeam.VerifiedPlan?.Objective is { } beamObjective
@@ -221,4 +222,15 @@ internal static class AutomaticRouteSearchPolicy {
     // publishes the fully replayed heuristic incumbent and reports its status
     // truthfully as BestKnownWithinLimit instead of freezing before UI publish.
     public const int ExactTaskLimit = 12;
+
+    // The planner must return a usable route promptly for a normal 28-route
+    // barter reset.  Small large-plans still receive their requested beam
+    // budget; only the much wider real-world plans are capped.
+    private const int LargeTaskBeamThreshold = 20;
+    private const int LargeTaskBeamStateLimit = 2_000;
+
+    public static int BeamStateBudget(int taskCount, int requestedBudget) =>
+        taskCount >= LargeTaskBeamThreshold
+            ? Math.Min(requestedBudget, LargeTaskBeamStateLimit)
+            : requestedBudget;
 }

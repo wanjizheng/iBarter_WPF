@@ -17,6 +17,20 @@ public sealed class AutomaticRoutePlannerTests {
     }
 
     [Fact]
+    public void Large_task_sets_cap_the_beam_search_without_blocking_route_publish() {
+        var request = RouteTestData.IndependentTasks(
+            28, new RouteSearchLimits(250_000, 100));
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        var plan = new AutomaticRoutePlanner().Plan(request, TestContext.Current.CancellationToken);
+
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3),
+            $"large-plan elapsed {stopwatch.Elapsed}");
+        Assert.Equal(RoutePlanStatus.BestKnownWithinLimit, plan.Status);
+        Assert.True(RoutePlanVerifier.Verify(request, plan).Success);
+    }
+
+    [Fact]
     public void Complete_search_returns_verified_optimal_plan() {
         var request = RouteTestData.SingleTask();
         var plan = new AutomaticRoutePlanner().Plan(request, TestContext.Current.CancellationToken);
