@@ -46,6 +46,13 @@ namespace iBarter.View {
             public Label Label;
             public Line Line;
             public Rectangle Rectangle;
+            public Brush BaseBackground;
+            public Brush BaseBorderBrush;
+            public Thickness BaseBorderThickness;
+            public FontWeight BaseFontWeight;
+            public double BaseFontSize;
+            public Brush BaseRectangleStroke;
+            public double BaseRectangleStrokeThickness;
         }
 
         private bool routeDisplaySubscribed;
@@ -238,19 +245,28 @@ namespace iBarter.View {
                         myLabel.Height = myLabel.ActualHeight;
                     }
 
-                    bool manualHighlight = App.myCVM.CargoDetails.Any(
-                        barter => barter.IsLandName == myIslands.IslandsName);
-                    bool automaticHighlight = App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute
-                        && renderSnapshot.BarterIslandIds.Contains(myIslands.IslandsName);
-                    if (manualHighlight || automaticHighlight) {
-                        myLabel.FontWeight = FontWeights.Bold;
-                        myLabel.FontSize = 14;
+                    bool routeHighlight = renderSnapshot.HighlightedIslandIds.Contains(
+                        myIslands.IslandsName);
+                    if (routeHighlight) {
+                        Brush highlightBrush = ResolveHighlightBrush(renderSnapshot, myIslands.IslandsName);
+                        myLabel.FontWeight = FontWeights.ExtraBold;
+                        myLabel.FontSize = 16;
+                        myLabel.BorderBrush = highlightBrush;
+                        myLabel.BorderThickness = new Thickness(2);
+                        myLabel.Background = new SolidColorBrush(Color.FromArgb(155, 5, 22, 30));
+                        visual.Rectangle.Stroke = highlightBrush;
+                        visual.Rectangle.StrokeThickness = 3;
                         myLabel.Width = Double.NaN;
                         myLabel.Height = Double.NaN;
                     }
-                    else if (myLabel.FontWeight == FontWeights.Bold) {
-                        myLabel.FontWeight = FontWeights.Normal;
-                        myLabel.FontSize = 12;
+                    else {
+                        myLabel.FontWeight = visual.BaseFontWeight;
+                        myLabel.FontSize = visual.BaseFontSize;
+                        myLabel.BorderBrush = visual.BaseBorderBrush;
+                        myLabel.BorderThickness = visual.BaseBorderThickness;
+                        myLabel.Background = visual.BaseBackground;
+                        visual.Rectangle.Stroke = visual.BaseRectangleStroke;
+                        visual.Rectangle.StrokeThickness = visual.BaseRectangleStrokeThickness;
                         myLabel.Width = Double.NaN;
                         myLabel.Height = Double.NaN;
                     }
@@ -354,6 +370,14 @@ namespace iBarter.View {
             [8, 3],
             [2, 2],
         ];
+
+        private static Brush ResolveHighlightBrush(RouteRenderSnapshot snapshot, string islandId) {
+            if (snapshot.IsManual) return Brushes.Gold;
+            var path = snapshot.Paths.FirstOrDefault(candidate => candidate.IslandIds.Contains(islandId));
+            return path is null
+                ? Brushes.DeepSkyBlue
+                : AutomaticRouteBrushes[path.ColorIndex % AutomaticRouteBrushes.Length];
+        }
 
         // Rebuilds the dashed-line overlay that visualises the ship's
         // current sailing route. The route is derived on the fly from
@@ -1120,6 +1144,13 @@ namespace iBarter.View {
                 Label = myLabel,
                 Line = myLine,
                 Rectangle = myRectangle,
+                BaseBackground = myLabel.Background,
+                BaseBorderBrush = myLabel.BorderBrush,
+                BaseBorderThickness = myLabel.BorderThickness,
+                BaseFontWeight = myLabel.FontWeight,
+                BaseFontSize = myLabel.FontSize,
+                BaseRectangleStroke = myRectangle.Stroke,
+                BaseRectangleStrokeThickness = myRectangle.StrokeThickness,
             };
 
             Grid_MapMain.Children.Add(myGrid_Container);
@@ -1155,6 +1186,8 @@ namespace iBarter.View {
                     existing.IsTemp = false;
                     existing.Rectangle.Stroke = Brushes.Gold;
                     existing.Rectangle.StrokeThickness = 2;
+                    existing.BaseRectangleStroke = Brushes.Gold;
+                    existing.BaseRectangleStrokeThickness = 2;
                     if (string.IsNullOrWhiteSpace(existing.Label.Content?.ToString())) {
                         existing.Label.Content = label;
                         existing.Label.Foreground = Brushes.Gold;

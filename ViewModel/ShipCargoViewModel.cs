@@ -5,10 +5,12 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Media;
 using iBarter.Navigation;
+using iBarter.Routing;
 
 namespace iBarter.ViewModel {
     public class ShipCargoViewModel : NotificationObject {
         private AutomaticRouteCoordinator? routeCoordinator;
+        private IReadOnlyList<BarterRouteStepViewModel> manualSteps = [];
         public ShipCargoViewModel() {
             CargoDetails = new ObservableCollection<Barter>();
             CargoDetails.CollectionChanged += CargoDetails_CollectionChanged;
@@ -30,7 +32,44 @@ namespace iBarter.ViewModel {
         public CargoMode Mode => routeCoordinator?.Mode ?? CargoMode.Manual;
         public IReadOnlyList<AutomaticRouteStepViewModel> AutomaticSteps =>
             routeCoordinator?.VisibleAutomaticSteps ?? [];
+        public IReadOnlyList<BarterRouteStepViewModel> ManualSteps => manualSteps;
         public IReadOnlyList<RouteSelectionOption> RouteOptions => routeCoordinator?.RouteOptions ?? [];
+
+        public ManualCargoProjection RefreshManualSteps(int extraLT) {
+            var barters = CargoDetails.ToArray();
+            var inputs = barters.Select((barter, index) => new ManualCargoStepInput(
+                $"manual:{index}:{barter.IsLandName}",
+                barter.IsLandName,
+                barter.Item1.ItemID,
+                barter.ExchangeQuantity * barter.Item1Number,
+                GetWeightFromLevel(barter.Item1.ItemLV),
+                barter.Item2.ItemID,
+                barter.ExchangeQuantity * barter.Item2Number,
+                GetWeightFromLevel(barter.Item2.ItemLV))).ToArray();
+            var projection = ManualCargoProjector.Project(inputs, Math.Max(0, extraLT));
+            manualSteps = projection.Steps.Select((projected, index) => {
+                var barter = barters[index];
+                var routeStep = new BarterStep(
+                    projected.Step.RowId,
+                    projected.Step.IslandId,
+                    new RouteItemQuantity(projected.Step.Item1Id, projected.Step.InputQuantity),
+                    new RouteItemQuantity(projected.Step.Item2Id, projected.Step.OutputQuantity),
+                    projected.Load);
+                var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+                    [projected.Step.Item1Id] = new(
+                        projected.Step.Item1Id, barter.Item1NameDisplay, 0, projected.Step.Item1UnitWeight),
+                    [projected.Step.Item2Id] = new(
+                        projected.Step.Item2Id, barter.Item2NameDisplay, 0, projected.Step.Item2UnitWeight),
+                };
+                return new BarterRouteStepViewModel(
+                    routeStep, barter.IsLandNameDisplay, items, barter);
+            }).ToArray();
+            RaisePropertyChanged(nameof(ManualSteps));
+            return projection;
+        }
+
+        private static int GetWeightFromLevel(string level) =>
+            int.TryParse(level, out int parsed) ? CargoWeightTable.GetWeightForLevel(parsed) : 0;
 
         public void AttachRouteCoordinator(AutomaticRouteCoordinator coordinator) {
             if (routeCoordinator is not null)

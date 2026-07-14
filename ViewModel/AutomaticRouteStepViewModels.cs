@@ -68,11 +68,13 @@ public sealed class BarterRouteStepViewModel : AutomaticRouteStepViewModel {
     public string RowId { get; }
     public string Item1Icon { get; }
     public string Item2Icon { get; }
+    public Barter? SourceBarter { get; }
 
     public BarterRouteStepViewModel(
         BarterStep step,
         string islandDisplayName,
-        IReadOnlyDictionary<string, RouteItem> items)
+        IReadOnlyDictionary<string, RouteItem> items,
+        Barter? sourceBarter = null)
         : base(
             LanguageService.Instance.Localize("str.ShipCargo.AutoRoute.Barter", islandDisplayName),
             $"{Display(items, step.Consumed.ItemId)} × {step.Consumed.Quantity} → " +
@@ -82,6 +84,7 @@ public sealed class BarterRouteStepViewModel : AutomaticRouteStepViewModel {
         RowId = step.RowId;
         Item1Icon = Icon(step.Consumed.ItemId);
         Item2Icon = Icon(step.Produced.ItemId);
+        SourceBarter = sourceBarter;
     }
 
     private static string Display(IReadOnlyDictionary<string, RouteItem> items, string itemId) =>

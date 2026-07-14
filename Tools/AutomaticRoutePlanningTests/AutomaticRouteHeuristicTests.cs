@@ -227,4 +227,141 @@ public sealed class AutomaticRouteHeuristicTests {
             .SelectMany(route => route.Steps).OfType<BarterStep>().Count());
         Assert.True(RoutePlanVerifier.Verify(request, incumbent.Plan).Success);
     }
+
+    [Fact]
+    public void Large_planner_uses_existing_intermediate_stock_before_replenishing_it_later() {
+        const int chainLength = 11;
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["CHAIN0"] = new("CHAIN0", "Chain 0", 1, 100),
+            ["PRODUCER_INPUT"] = new("PRODUCER_INPUT", "Producer input", 1, 100),
+            ["INTERMEDIATE"] = new("INTERMEDIATE", "Intermediate", 6, 100),
+            ["AFTER_CONSUMER"] = new("AFTER_CONSUMER", "After consumer", 6, 100),
+            ["REWARD"] = new("REWARD", "Reward", -1, 0),
+        };
+        for (int i = 1; i < chainLength; i++)
+            items[$"CHAIN{i}"] = new($"CHAIN{i}", $"Chain {i}", 1, 100);
+
+        var tasks = new List<RouteBarterTask>();
+        for (int i = 0; i < chainLength; i++) {
+            string output = i == chainLength - 1 ? "REWARD" : $"CHAIN{i + 1}";
+            tasks.Add(new RouteBarterTask(
+                $"chain-{i:D2}", $"CHAIN_ISLAND_{i:D2}", new RoutePoint(0, 100),
+                $"CHAIN{i}", 1, output, 1));
+        }
+        tasks.Add(new RouteBarterTask(
+            "producer", "PRODUCER", new RoutePoint(1_000, 0),
+            "PRODUCER_INPUT", 1, "INTERMEDIATE", 1));
+        tasks.Add(new RouteBarterTask(
+            "consumer", "SANCTUARY", new RoutePoint(0, 100),
+            "INTERMEDIATE", 1, "AFTER_CONSUMER", 1));
+        tasks.Add(new RouteBarterTask(
+            "after-consumer", "AFTER_CONSUMER_ISLAND", new RoutePoint(1_000, 100),
+            "AFTER_CONSUMER", 1, "REWARD", 1));
+
+        var request = new AutomaticRoutePlanningRequest(
+            tasks,
+            items,
+            [new RouteWarehouse("Velia", "Velia", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) {
+                    ["CHAIN0"] = 1,
+                    ["PRODUCER_INPUT"] = 1,
+                    ["INTERMEDIATE"] = 1,
+                })],
+            0,
+            10_000,
+            new RouteSearchLimits(100_000, 2_000),
+            "inventory-first-large");
+
+        var planned = new AutomaticRoutePlanner().Plan(request, TestContext.Current.CancellationToken);
+        var withoutStoredIntermediate = new AutomaticRoutePlanningRequest(
+            tasks,
+            items,
+            [new RouteWarehouse("Velia", "Velia", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) {
+                    ["CHAIN0"] = 1,
+                    ["PRODUCER_INPUT"] = 1,
+                })],
+            0,
+            10_000,
+            new RouteSearchLimits(100_000, 2_000),
+            "inventory-first-large-no-stock");
+        var noStockPlan = new AutomaticRoutePlanner().Plan(
+            withoutStoredIntermediate, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(planned.Objective);
+        Assert.NotNull(noStockPlan.Objective);
+        Assert.True(planned.Objective.Value.TotalDistance < noStockPlan.Objective.Value.TotalDistance,
+            $"stored={planned.Objective.Value.TotalDistance}, no-stock={noStockPlan.Objective.Value.TotalDistance}, status={planned.Status}");
+        var route = Assert.Single(planned.Routes);
+        var order = route.Steps.OfType<BarterStep>().Select(step => step.RowId).ToArray();
+        Assert.True(Array.IndexOf(order, "consumer") < Array.IndexOf(order, "producer"));
+        var finalUnload = route.Steps.OfType<WarehouseUnloadStep>().Last();
+        Assert.Contains(finalUnload.Items,
+            item => item.ItemId == "INTERMEDIATE" && item.Quantity == 1);
+        Assert.True(RoutePlanVerifier.Verify(request, planned).Success);
+    }
+
+    [Fact]
+    public void Long_route_relocation_moves_a_late_passed_island_into_the_nearby_sequence() {
+        const int straightTaskCount = 18;
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["REWARD"] = new("REWARD", "Reward", -1, 0),
+        };
+        var stock = new Dictionary<string, int>(StringComparer.Ordinal);
+        var tasks = new List<RouteBarterTask>();
+        for (int i = 0; i < straightTaskCount; i++) {
+            string id = $"INPUT{i:D2}";
+            items[id] = new RouteItem(id, id, 1, 10);
+            stock[id] = 1;
+            tasks.Add(new RouteBarterTask(
+                $"straight-{i:D2}", $"STRAIGHT_{i:D2}", new RoutePoint(i + 1, 0),
+                id, 1, "REWARD", 1));
+        }
+        items["MISSED_INPUT"] = new("MISSED_INPUT", "Missed input", 1, 10);
+        stock["MISSED_INPUT"] = 1;
+        items["ANCHOR_INPUT"] = new("ANCHOR_INPUT", "Anchor input", 1, 10);
+        stock["ANCHOR_INPUT"] = 1;
+        tasks.Add(new RouteBarterTask(
+            "anchor", "ANCHOR", new RoutePoint(18, 100),
+            "ANCHOR_INPUT", 1, "REWARD", 1));
+        tasks.Add(new RouteBarterTask(
+            "missed", "MISSED", new RoutePoint(5, 1),
+            "MISSED_INPUT", 1, "REWARD", 1));
+
+        var request = new AutomaticRoutePlanningRequest(
+            tasks,
+            items,
+            [new RouteWarehouse("W", "W", new RoutePoint(0, 0), stock)],
+            0,
+            10_000,
+            new RouteSearchLimits(100_000, 2_000),
+            "long-relocation");
+        var state = RouteSimulationState.CreateInitial(request);
+        var pickup = RouteStateTransition.TryPickup(
+            request,
+            state,
+            "W",
+            stock.OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .Select(pair => new RouteItemQuantity(pair.Key, pair.Value)).ToArray());
+        Assert.True(pickup.Success);
+        state = pickup.State;
+        for (int i = 0; i < tasks.Count; i++) {
+            var barter = RouteStateTransition.TryBarter(request, state, i);
+            Assert.True(barter.Success, barter.Diagnostic?.Code);
+            state = barter.State;
+        }
+        state = WarehouseUnloadPlanner.TryCompleteRoute(request, state).State;
+
+        var improved = IntraRouteOrderOptimizer.Improve(
+            request, state, TestContext.Current.CancellationToken);
+
+        var improvedRoute = Assert.Single(improved.FinishedRoutes);
+        var order = improvedRoute.Steps.OfType<BarterStep>().Select(step => step.RowId).ToArray();
+        Assert.True(Array.IndexOf(order, "missed") < Array.IndexOf(order, "anchor"),
+            string.Join(",", order));
+        Assert.True(improved.TotalDistance < state.TotalDistance);
+        var plan = RoutePlanFactory.FromState(
+            request, improved, RoutePlanStatus.BestKnownWithinLimit, []);
+        Assert.True(RoutePlanVerifier.Verify(request, plan).Success);
+    }
 }

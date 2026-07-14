@@ -18,6 +18,7 @@ public sealed class RouteRenderSnapshot {
     public IReadOnlyList<RouteRenderPath> Paths { get; }
     public IReadOnlySet<string> BarterIslandIds { get; }
     public IReadOnlySet<string> WarehouseIslandIds { get; }
+    public IReadOnlySet<string> HighlightedIslandIds { get; }
 
     public RouteRenderSnapshot(
         bool isManual,
@@ -30,6 +31,9 @@ public sealed class RouteRenderSnapshot {
         Paths = ModelCopies.List(paths);
         BarterIslandIds = new HashSet<string>(barterIslandIds ?? [], StringComparer.Ordinal);
         WarehouseIslandIds = new HashSet<string>(warehouseIslandIds ?? [], StringComparer.Ordinal);
+        HighlightedIslandIds = new HashSet<string>(
+            BarterIslandIds.Concat(WarehouseIslandIds).Concat(Paths.SelectMany(path => path.IslandIds)),
+            StringComparer.Ordinal);
     }
 }
 

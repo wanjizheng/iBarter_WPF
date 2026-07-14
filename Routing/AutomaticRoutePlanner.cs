@@ -24,15 +24,21 @@ public sealed class AutomaticRoutePlanner {
 
             RoutePlan? incumbent = AutomaticRouteHeuristic.TryBuildIncumbent(
                 request, preflight, cancellationToken)?.Plan;
-            if (incumbent is null && request.Tasks.Count > AutomaticRouteSearchPolicy.ExactTaskLimit)
-                incumbent = AutomaticRouteBeamSearch.TryBuildIncumbent(
-                    request, preflight, cancellationToken)?.Plan;
             if (incumbent is not null) {
                 var checkedIncumbent = RoutePlanVerifier.Verify(request, incumbent);
                 incumbent = checkedIncumbent.Success ? checkedIncumbent.VerifiedPlan : null;
             }
 
             if (request.Tasks.Count > AutomaticRouteSearchPolicy.ExactTaskLimit) {
+                var beamPlan = AutomaticRouteBeamSearch.TryBuildIncumbent(
+                    request, preflight, cancellationToken)?.Plan;
+                if (beamPlan is not null) {
+                    var checkedBeam = RoutePlanVerifier.Verify(request, beamPlan);
+                    if (checkedBeam.Success && checkedBeam.VerifiedPlan?.Objective is { } beamObjective
+                        && (incumbent?.Objective is null
+                            || beamObjective.CompareTo(incumbent.Objective.Value) < 0))
+                        incumbent = checkedBeam.VerifiedPlan;
+                }
                 var diagnostic = new RouteDiagnostic(
                     "exact-search-skipped",
                     Detail: $"{request.Tasks.Count}>{AutomaticRouteSearchPolicy.ExactTaskLimit}");

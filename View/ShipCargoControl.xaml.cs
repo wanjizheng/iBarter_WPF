@@ -3,7 +3,6 @@ using iBarter.Model;
 using iBarter.Routing;
 using iBarter.ViewModel;
 using Newtonsoft.Json;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -29,6 +28,8 @@ namespace iBarter.View {
             Loaded += ShipCargoControl_Loaded;
             Localization.LanguageService.Instance.LanguageChanged += (_, _) => {
                 App.myRouteCoordinator?.RefreshLocalization();
+                if (App.myRouteCoordinator?.Mode != CargoMode.AutomaticRoute)
+                    UpdateCurrentLV();
                 RefreshLocalizedDisplay();
             };
         }
@@ -56,11 +57,11 @@ namespace iBarter.View {
             bool automatic = coordinator?.Mode == CargoMode.AutomaticRoute;
             ListBox_ShipCargo.ItemsSource = automatic
                 ? App.myCVM.AutomaticSteps
-                : App.myCVM.CargoDetails;
+                : App.myCVM.ManualSteps;
             ListBox_ShipCargo.AllowDrop = !automatic;
             ButtonAdv_Clean.IsEnabled = !automatic;
             Panel_AutomaticRouteSelector.Visibility = Visibility.Visible;
-            ComboBoxAdv_RouteSelector.IsEnabled = automatic && coordinator!.RouteOptions.Count > 0;
+            ComboBoxAdv_RouteSelector.IsEnabled = coordinator?.RouteOptions.Count > 0;
 
             updatingRouteSelector = true;
             try {
@@ -97,7 +98,7 @@ namespace iBarter.View {
             ListBox_ShipCargo.InvalidateVisual();
         }
 
-        private object _draggedItem;
+        private Barter? _draggedItem;
 
         private void ListBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
             if (App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute) return;
@@ -105,8 +106,9 @@ namespace iBarter.View {
             var item = FindAncestor<ListBoxItem>((DependencyObject)e.OriginalSource);
             if (item != null) {
                 // 开始拖动操作
-                _draggedItem = item.DataContext;
-                DragDrop.DoDragDrop(item, _draggedItem, System.Windows.DragDropEffects.Move);
+                _draggedItem = ResolveContentBarter(item.DataContext);
+                if (_draggedItem is not null)
+                    DragDrop.DoDragDrop(item, _draggedItem, System.Windows.DragDropEffects.Move);
             }
         }
 
@@ -115,13 +117,17 @@ namespace iBarter.View {
             if (_draggedItem != null) {
                 // 获取原项目的位置和新放置位置
                 var targetItem = FindAncestor<ListBoxItem>((DependencyObject)e.OriginalSource);
-                if (targetItem != null && targetItem.DataContext != _draggedItem) {
+                Barter? targetBarter = targetItem is null ? null : ResolveContentBarter(targetItem.DataContext);
+                if (targetBarter != null && !ReferenceEquals(targetBarter, _draggedItem)) {
                     // 将项目在集合中移动到新位置
-                    var targetIndex = ListBox_ShipCargo.Items.IndexOf(targetItem.DataContext);
-                    var draggedIndex = ListBox_ShipCargo.Items.IndexOf(_draggedItem);
+                    var targetIndex = App.myCVM.CargoDetails.IndexOf(targetBarter);
+                    var draggedIndex = App.myCVM.CargoDetails.IndexOf(_draggedItem);
 
-                    // 这里假设你的 ItemsSource 是 ObservableCollection 类型
-                    (ListBox_ShipCargo.ItemsSource as ObservableCollection<Barter>)?.Move(draggedIndex, targetIndex);
+                    if (draggedIndex >= 0 && targetIndex >= 0) {
+                        App.myCVM.CargoDetails.Move(draggedIndex, targetIndex);
+                        UpdateCurrentLV();
+                        SaveData();
+                    }
                 }
             }
         }
@@ -179,7 +185,7 @@ namespace iBarter.View {
                     //PropertyGrid_Ship.SelectedObject = App.myCargoProperty;
                 }
 
-                ListBox_ShipCargo.ItemsSource = App.myCVM.CargoDetails;
+                UpdateCurrentLV();
                 PropertyGrid_Ship.SelectedObject = App.myCargoProperty;
             }
         }
@@ -241,56 +247,14 @@ namespace iBarter.View {
                 myCvmCargoDetail.TotalItem1ExchangeQuantity = myCvmCargoDetail.ExchangeQuantity * myCvmCargoDetail.Item1Number;
             }
 
-            App.myCargoProperty.CurrentLT = 0;
-            App.myCargoProperty.InitialLT = 0;
-            List<Barter> myList = (List<Barter>)App.myCVM.CargoDetails.ToList();
-            myList.Sort((b1, b2) => { return int.Parse(b1.Item1.ItemLV).CompareTo(int.Parse(b2.Item1.ItemLV)); });
-
-            Hashtable htItem1 = new Hashtable();
-            Hashtable htItem2 = new Hashtable();
-
-            foreach (Barter barter in myList) {
-                //IdentifyChain(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == barter.IsLandName), int.Parse(barter.Item1.ItemLV));
-
-                if (htItem1.ContainsKey(barter.Item1Name)) {
-                    htItem1[barter.Item1Name] = (int)htItem1[barter.Item1Name] + barter.TotalItem1ExchangeQuantity;
-                }
-                else {
-                    htItem1.Add(barter.Item1Name, barter.TotalItem1ExchangeQuantity);
-                }
-
-                if (htItem2.ContainsKey(barter.Item2Name)) {
-                    htItem2[barter.Item2Name] = (int)htItem2[barter.Item2Name] + barter.TotalItem2ExchangeQuantity;
-                }
-                else {
-                    htItem2.Add(barter.Item2Name, barter.TotalItem2ExchangeQuantity);
-                }
-
-                // int intWeight = GetWeight(barter.Item2.ItemLV);
-                //
-                // App.myCargoProperty.CurrentLT += intWeight * barter.TotalItem2ExchangeQuantity;
-            }
-
-            foreach (Barter barter in myList) {
-                if (htItem2.ContainsKey(barter.Item1Name) && (int)htItem2[barter.Item1Name] >= barter.TotalItem1ExchangeQuantity) {
-                    int availableQty = (int)htItem2[barter.Item1Name]; 
-                    htItem2[barter.Item1Name] = Math.Max(0, availableQty - barter.TotalItem1ExchangeQuantity);
-
-                    barter.CalculatedAlready = true;
-                    barter.TotalItem1ExchangeQuantity = 0;
-                }
-            }
-
-
-            foreach (Barter barter in myList) {
-                App.myCargoProperty.InitialLT += GetWeightFromLevel(barter.Item1.ItemLV) * barter.TotalItem1ExchangeQuantity;
-                App.myCargoProperty.CurrentLT += GetWeightFromLevel(barter.Item2.ItemLV) * (int)htItem2[barter.Item2Name];
-            }
-
-            App.myCargoProperty.CurrentLT += App.myCargoProperty.ExtraLT;
-            App.myCargoProperty.InitialLT += App.myCargoProperty.ExtraLT;
-            App.myCargoProperty.PeakLT = Math.Max(App.myCargoProperty.InitialLT, App.myCargoProperty.CurrentLT);
             UpdateCargoList();
+            int extraLT = Convert.ToInt32(Math.Round(
+                App.myCargoProperty.ExtraLT, MidpointRounding.AwayFromZero));
+            var projection = App.myCVM.RefreshManualSteps(extraLT);
+            App.myCargoProperty.InitialLT = projection.InitialLT;
+            App.myCargoProperty.CurrentLT = projection.CurrentLT;
+            App.myCargoProperty.PeakLT = projection.PeakLT;
+            RefreshRouteMode();
             // foreach (Barter myCvmCargoDetail in App.myCVM.CargoDetails) {
             //     App.myCFun.Log(myCvmCargoDetail.Item1Name+"=>"+myCvmCargoDetail.TotalItem1ExchangeQuantity,Brushes.Blue);
             // }
@@ -305,9 +269,6 @@ namespace iBarter.View {
                 }
             }
 
-            ListBox_ShipCargo.ItemsSource = null;
-            ListBox_ShipCargo.Items.Clear();
-            ListBox_ShipCargo.ItemsSource = App.myCVM.CargoDetails;
         }
 
         private static int GetWeightFromLevel(string level) =>
@@ -355,13 +316,15 @@ namespace iBarter.View {
 
         private void ListBoxItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
             if (sender is ListBoxItem { Content: BarterRouteStepViewModel focusedStep }) {
-                App.myRouteCoordinator?.FocusBarterStep(focusedStep.RowId);
+                if (focusedStep.SourceBarter is null)
+                    App.myRouteCoordinator?.FocusBarterStep(focusedStep.RowId);
             }
             if (e.ClickCount == 2) {
                 try {
                     ListBoxItem myItem = sender as ListBoxItem;
                     if (myItem?.Content is BarterRouteStepViewModel automaticStep) {
-                        Barter? automaticBarter = ResolveAutomaticBarter(automaticStep.RowId);
+                        Barter? automaticBarter = automaticStep.SourceBarter
+                            ?? ResolveAutomaticBarter(automaticStep.RowId);
                         if (automaticBarter != null) {
                             Clipboard.SetText(automaticBarter.Item1Name);
                             App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.ShipCargo.CopiedToClipboard", automaticBarter.Item1NameDisplay), Brushes.DarkGreen);
@@ -385,7 +348,8 @@ namespace iBarter.View {
                 if (e.ClickCount == 2) {
                     ListBoxItem myItem = sender as ListBoxItem;
                     if (myItem?.Content is BarterRouteStepViewModel automaticStep) {
-                        Barter? automaticBarter = ResolveAutomaticBarter(automaticStep.RowId);
+                        Barter? automaticBarter = automaticStep.SourceBarter
+                            ?? ResolveAutomaticBarter(automaticStep.RowId);
                         if (automaticBarter != null) {
                             Clipboard.SetText(automaticBarter.Item2Name);
                             App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.ShipCargo.CopiedToClipboard", automaticBarter.Item2NameDisplay), Brushes.DarkGreen);
@@ -411,5 +375,11 @@ namespace iBarter.View {
                 ? App.myPVM.BarterCollection[index]
                 : null;
         }
+
+        private static Barter? ResolveContentBarter(object? content) => content switch {
+            Barter barter => barter,
+            BarterRouteStepViewModel step => step.SourceBarter,
+            _ => null,
+        };
     }
 }

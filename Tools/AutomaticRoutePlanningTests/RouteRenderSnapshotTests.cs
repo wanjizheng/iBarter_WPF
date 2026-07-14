@@ -46,6 +46,7 @@ public sealed class RouteRenderSnapshotTests {
         Assert.Equal(["Iliya", "C", "Velia"], selected.IslandIds);
         Assert.Equal(["C"], one.BarterIslandIds);
         Assert.Equal(["Iliya", "Velia"], one.WarehouseIslandIds.OrderBy(x => x).ToArray());
+        Assert.Equal(["C", "Iliya", "Velia"], one.HighlightedIslandIds.OrderBy(x => x).ToArray());
         Assert.Equal(["A", "C"], all.BarterIslandIds.OrderBy(x => x).ToArray());
         Assert.Equal(2, all.Paths.Count);
         Assert.NotEqual(all.Paths[0].ColorIndex, all.Paths[1].ColorIndex);
@@ -74,6 +75,13 @@ public sealed class RouteRenderSnapshotTests {
         var snapshot = RouteRenderSnapshotFactory.CreateAutomatic(plan, 1, false);
 
         Assert.Equal(["Iliya", "A", "Velia", "B", "Velia"], snapshot.Paths.Single().IslandIds);
+    }
+
+    [Fact]
+    public void Manual_snapshot_highlights_every_selected_barter_island() {
+        var snapshot = RouteRenderSnapshotFactory.CreateManual(["Velia", "A", "B"]);
+
+        Assert.Equal(["A", "B", "Velia"], snapshot.HighlightedIslandIds.OrderBy(x => x).ToArray());
     }
 
     private static RoutePlan BuildPlan(IReadOnlyList<string>? route1Islands = null) {

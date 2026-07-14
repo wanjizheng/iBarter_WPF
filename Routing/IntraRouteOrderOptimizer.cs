@@ -37,54 +37,107 @@ public static class IntraRouteOrderOptimizer {
         PlannedRoute route,
         CancellationToken cancellationToken) {
         var actions = route.Steps.Where(step => step is not WarehouseUnloadStep).ToArray();
-        if (actions.Length == 0 || actions.Length > 20) return ReplayOriginal(request, start, actions);
+        if (actions.Length == 0) return ReplayOriginal(request, start, actions);
 
         var original = ReplayOriginal(request, start, actions);
         if (original is null) return null;
         var best = original;
+        var bestActions = actions;
         var bestObjective = RoutePlanFactory.FromState(
             request, best, RoutePlanStatus.BestKnownWithinLimit, []).Objective!.Value;
 
-        var frontier = new Dictionary<SearchKey, RouteSimulationState> {
-            [new SearchKey(0, start.CurrentIslandId)] = start,
-        };
-        int expanded = 0;
+        if (actions.Length <= 12) {
+            var frontier = new Dictionary<SearchKey, RouteSimulationState> {
+                [new SearchKey(0, start.CurrentIslandId)] = start,
+            };
+            int expanded = 0;
 
-        for (int depth = 0; depth < actions.Length && frontier.Count > 0; depth++) {
-            var next = new Dictionary<SearchKey, RouteSimulationState>();
-            foreach (var entry in frontier
-                .OrderBy(x => x.Value.TotalDistance)
-                .ThenBy(x => x.Key.IslandId, StringComparer.Ordinal)
-                .ThenBy(x => x.Key.Mask)) {
-                for (int actionIndex = 0; actionIndex < actions.Length; actionIndex++) {
-                    if ((entry.Key.Mask & (1UL << actionIndex)) != 0) continue;
-                    if (++expanded > request.Limits.MaxLocalMoves) break;
-                    cancellationToken.ThrowIfCancellationRequested();
+            for (int depth = 0; depth < actions.Length && frontier.Count > 0; depth++) {
+                var next = new Dictionary<SearchKey, RouteSimulationState>();
+                foreach (var entry in frontier
+                    .OrderBy(x => x.Value.TotalDistance)
+                    .ThenBy(x => x.Key.IslandId, StringComparer.Ordinal)
+                    .ThenBy(x => x.Key.Mask)) {
+                    for (int actionIndex = 0; actionIndex < actions.Length; actionIndex++) {
+                        if ((entry.Key.Mask & (1UL << actionIndex)) != 0) continue;
+                        if (++expanded > request.Limits.MaxLocalMoves) break;
+                        cancellationToken.ThrowIfCancellationRequested();
 
-                    var transition = Apply(request, entry.Value, actions[actionIndex]);
-                    if (!transition.Success) continue;
-                    ulong mask = entry.Key.Mask | (1UL << actionIndex);
-                    var key = new SearchKey(mask, transition.State.CurrentIslandId);
-                    if (!next.TryGetValue(key, out var incumbent)
-                        || IsBetterPartial(transition.State, incumbent))
-                        next[key] = transition.State;
+                        var transition = Apply(request, entry.Value, actions[actionIndex]);
+                        if (!transition.Success) continue;
+                        ulong mask = entry.Key.Mask | (1UL << actionIndex);
+                        var key = new SearchKey(mask, transition.State.CurrentIslandId);
+                        if (!next.TryGetValue(key, out var incumbent)
+                            || IsBetterPartial(transition.State, incumbent))
+                            next[key] = transition.State;
+                    }
+                    if (expanded >= request.Limits.MaxLocalMoves) break;
                 }
-                if (expanded >= request.Limits.MaxLocalMoves) break;
+                frontier = next;
             }
-            frontier = next;
+
+            ulong fullMask = (1UL << actions.Length) - 1;
+            foreach (var state in frontier
+                .Where(x => x.Key.Mask == fullMask)
+                .Select(x => x.Value)) {
+                var unload = WarehouseUnloadPlanner.TryCompleteRoute(request, state);
+                if (!unload.Success) continue;
+                var plan = RoutePlanFactory.FromState(
+                    request, unload.State, RoutePlanStatus.BestKnownWithinLimit, []);
+                if (plan.Objective is null || plan.Objective.Value.CompareTo(bestObjective) >= 0) continue;
+                best = unload.State;
+                bestObjective = plan.Objective.Value;
+                bestActions = state.CurrentRouteSteps.ToArray();
+            }
         }
 
-        ulong fullMask = (1UL << actions.Length) - 1;
-        foreach (var state in frontier
-            .Where(x => x.Key.Mask == fullMask)
-            .Select(x => x.Value)) {
-            var unload = WarehouseUnloadPlanner.TryCompleteRoute(request, state);
-            if (!unload.Success) continue;
-            var plan = RoutePlanFactory.FromState(
-                request, unload.State, RoutePlanStatus.BestKnownWithinLimit, []);
-            if (plan.Objective is null || plan.Objective.Value.CompareTo(bestObjective) >= 0) continue;
-            best = unload.State;
-            bestObjective = plan.Objective.Value;
+        return ImproveByRelocation(
+            request, start, bestActions, best, bestObjective, cancellationToken);
+    }
+
+    private static RouteSimulationState ImproveByRelocation(
+        AutomaticRoutePlanningRequest request,
+        RouteSimulationState start,
+        IReadOnlyList<RouteStep> initialActions,
+        RouteSimulationState initialBest,
+        RoutePlanObjective initialObjective,
+        CancellationToken cancellationToken) {
+        var actions = initialActions.ToList();
+        var best = initialBest;
+        var bestObjective = initialObjective;
+        int evaluated = 0;
+
+        while (evaluated < request.Limits.MaxLocalMoves) {
+            RouteSimulationState? roundBest = null;
+            RoutePlanObjective? roundObjective = null;
+            List<RouteStep>? roundActions = null;
+
+            for (int from = 0; from < actions.Count && evaluated < request.Limits.MaxLocalMoves; from++) {
+                for (int to = 0; to < actions.Count && evaluated < request.Limits.MaxLocalMoves; to++) {
+                    if (from == to) continue;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    evaluated++;
+                    var candidateActions = actions.ToList();
+                    var moved = candidateActions[from];
+                    candidateActions.RemoveAt(from);
+                    candidateActions.Insert(to, moved);
+                    var candidate = ReplayOriginal(request, start, candidateActions);
+                    if (candidate is null) continue;
+                    var objective = RoutePlanFactory.FromState(
+                        request, candidate, RoutePlanStatus.BestKnownWithinLimit, []).Objective!.Value;
+                    if (objective.CompareTo(bestObjective) >= 0
+                        || roundObjective is { } existing && objective.CompareTo(existing) >= 0)
+                        continue;
+                    roundBest = candidate;
+                    roundObjective = objective;
+                    roundActions = candidateActions;
+                }
+            }
+
+            if (roundBest is null || roundObjective is null || roundActions is null) break;
+            best = roundBest;
+            bestObjective = roundObjective.Value;
+            actions = roundActions;
         }
         return best;
     }

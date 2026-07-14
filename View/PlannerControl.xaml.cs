@@ -97,6 +97,9 @@ namespace iBarter.View {
 
         public void LoadSavedDataAndAutomaticRouteAtStartup() {
             ButtonAdv_Load_Click(this, new RoutedEventArgs());
+        }
+
+        private void TryRestoreAutomaticRouteAfterLoad() {
             try {
                 var request = BuildCurrentAutomaticRouteRequest();
                 if (request is not null)
@@ -588,6 +591,7 @@ namespace iBarter.View {
             UpdateParley();
 
             App.myfmMain.myShipCargo.RefreshData();
+            TryRestoreAutomaticRouteAfterLoad();
         }
 
         private void ButtonAdv_Save_Click(object sender, RoutedEventArgs e) {

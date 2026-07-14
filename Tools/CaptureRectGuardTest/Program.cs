@@ -39,6 +39,38 @@ if (!fluentControlsSource.Contains(
     return 1;
 }
 
+string plannerControlSource = File.ReadAllText(Path.Combine(
+    FindIBarterRepoRoot(), "View", "PlannerControl.xaml.cs"));
+if (!plannerControlSource.Contains("TryRestoreAutomaticRouteAfterLoad();", StringComparison.Ordinal)) {
+    Console.Error.WriteLine("Expected every Planner load to restore a matching persisted automatic route.");
+    return 1;
+}
+
+string shipCargoControlSource = File.ReadAllText(Path.Combine(
+    FindIBarterRepoRoot(), "View", "ShipCargoControl.xaml.cs"));
+if (!shipCargoControlSource.Contains(
+        "ComboBoxAdv_RouteSelector.IsEnabled = coordinator?.RouteOptions.Count > 0", StringComparison.Ordinal)
+    || !shipCargoControlSource.Contains("App.myCVM.ManualSteps", StringComparison.Ordinal)) {
+    Console.Error.WriteLine(
+        "Expected retained automatic routes to remain selectable and manual cargo to use projected cards.");
+    return 1;
+}
+
+string routeStepViewModelSource = File.ReadAllText(Path.Combine(
+    FindIBarterRepoRoot(), "ViewModel", "AutomaticRouteStepViewModels.cs"));
+if (!routeStepViewModelSource.Contains("SourceBarter", StringComparison.Ordinal)) {
+    Console.Error.WriteLine("Expected manual route cards to retain their source Barter for drag and copy actions.");
+    return 1;
+}
+
+string mapControlSource = File.ReadAllText(Path.Combine(
+    FindIBarterRepoRoot(), "View", "MapControl.xaml.cs"));
+if (!mapControlSource.Contains("renderSnapshot.HighlightedIslandIds", StringComparison.Ordinal)
+    || !mapControlSource.Contains("FontWeights.ExtraBold", StringComparison.Ordinal)) {
+    Console.Error.WriteLine("Expected current route warehouse and barter islands to use strong map highlighting.");
+    return 1;
+}
+
 var cv = new CV(
     () => IntPtr.Zero,
     () => null!,

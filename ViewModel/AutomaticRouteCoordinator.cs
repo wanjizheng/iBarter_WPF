@@ -120,6 +120,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
 
     public void SelectRoute(int routeNumber) {
         if (currentPlan?.Routes.All(x => x.Number != routeNumber) != false) return;
+        mode = CargoMode.AutomaticRoute;
         selectedRouteNumber = routeNumber;
         showAllRoutes = false;
         ClearFocus();
@@ -130,6 +131,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
 
     public void SelectAll() {
         if (currentPlan?.Routes.Count > 0 != true) return;
+        mode = CargoMode.AutomaticRoute;
         showAllRoutes = true;
         ClearFocus();
         RaisePropertyChanged(nameof(ShowAllRoutes));

@@ -20,16 +20,27 @@ public static class AutomaticRouteBeamSearch {
         var frontier = new[] { RouteSimulationState.CreateInitial(request) };
         int expanded = 0;
         int maxDepth = Math.Max(64, request.Tasks.Count * 4 + request.Warehouses.Count * request.Tasks.Count);
+        RouteIncumbent? bestComplete = null;
 
         for (int depth = 0; depth < maxDepth && frontier.Length > 0; depth++) {
             cancellationToken.ThrowIfCancellationRequested();
-            var complete = frontier.FirstOrDefault(state =>
-                state.CompletedMask == fullMask && state.CurrentRouteSteps.Count == 0);
-            if (complete is not null) return VerifyAndImprove(request, complete, cancellationToken);
+            var complete = frontier
+                .Where(state => state.CompletedMask == fullMask && state.CurrentRouteSteps.Count == 0)
+                .OrderBy(state => Objective(request, state))
+                .ThenBy(StableKey, StringComparer.Ordinal)
+                .FirstOrDefault();
+            if (complete is not null) {
+                var candidate = VerifyAndImprove(request, complete, cancellationToken);
+                if (candidate?.Plan.Objective is { } candidateObjective
+                    && (bestComplete?.Plan.Objective is null
+                        || candidateObjective.CompareTo(bestComplete.Plan.Objective.Value) < 0))
+                    bestComplete = candidate;
+            }
 
             var candidates = new Dictionary<string, RouteSimulationState>(StringComparer.Ordinal);
             foreach (var state in frontier) {
-                if (++expanded > request.Limits.MaxExpandedStates) return null;
+                if (state.CompletedMask == fullMask && state.CurrentRouteSteps.Count == 0) continue;
+                if (++expanded > request.Limits.MaxExpandedStates) return bestComplete;
                 foreach (var successor in Expand(request, state, fullMask)) {
                     string key = SearchKey(successor);
                     if (!candidates.TryGetValue(key, out var existing) || IsBetter(successor, existing))
@@ -47,7 +58,7 @@ public static class AutomaticRouteBeamSearch {
                 .Take(BeamWidth)
                 .ToArray();
         }
-        return null;
+        return bestComplete;
     }
 
     private static RouteIncumbent? VerifyAndImprove(
@@ -126,4 +137,9 @@ public static class AutomaticRouteBeamSearch {
 
     private static string StableKey(RouteSimulationState state) =>
         RoutePlanFactory.StableRouteKey(state.FinishedRoutes, state.CurrentRouteSteps);
+
+    private static RoutePlanObjective Objective(
+        AutomaticRoutePlanningRequest request,
+        RouteSimulationState state) => RoutePlanFactory.FromState(
+            request, state, RoutePlanStatus.BestKnownWithinLimit, []).Objective!.Value;
 }
