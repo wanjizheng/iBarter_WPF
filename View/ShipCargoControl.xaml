@@ -42,12 +42,12 @@
                     <ItemsControl ItemsSource="{Binding Items}" Margin="0,4,0,0">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <WrapPanel />
+                                <StackPanel Orientation="Vertical" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,10,4" ToolTip="{Binding DisplayName}">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4" ToolTip="{Binding DisplayName}">
                                     <Image Source="{Binding Icon}" Width="24" Height="24" />
                                     <TextBlock Margin="5,0,0,0" VerticalAlignment="Center" Foreground="White">
                                         <Run Text="{Binding DisplayName}" />

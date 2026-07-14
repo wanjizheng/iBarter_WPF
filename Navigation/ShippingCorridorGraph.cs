@@ -4,7 +4,7 @@ using System.Collections.Frozen;
 
 /// <summary>
 /// Small, local navigation graph for sea passages where a straight line cuts over land.
-/// The returned polyline is the common source for both route cost and map rendering.
+/// The returned polyline is used for route cost only; map rendering uses direct display legs.
 /// </summary>
 public static class ShippingCorridorGraph {
     private static readonly FrozenSet<string> RightRegion = new[] {

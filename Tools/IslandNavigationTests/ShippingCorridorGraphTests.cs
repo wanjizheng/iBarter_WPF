@@ -46,6 +46,16 @@ public sealed class ShippingCorridorGraphTests {
     }
 
     [Fact]
+    public void Display_leg_stays_direct_while_distance_uses_right_corridor() {
+        var distancePath = ShippingCorridorGraph.BuildPath("Halmad", Halmad, "Hakoven", Hakoven);
+
+        var displayPath = RouteDisplayGeometry.BuildDirectLeg(Halmad, Hakoven);
+
+        Assert.True(distancePath.Count > 2);
+        Assert.Equal([Halmad, Hakoven], displayPath);
+    }
+
+    [Fact]
     public void Grandiha_midnight_trip_uses_southern_corridor_in_both_directions() {
         var grandiha = new NavigationPoint(-559_743, -476_904);
         var midnight = new NavigationPoint(-321_664, -598_912);
