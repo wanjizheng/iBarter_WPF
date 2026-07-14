@@ -270,6 +270,7 @@
     <sys:String x:Key="str.ShipCargo.AutoRoute.Pickup">Load at {0}</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.Unload">Unload at {0}</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.Barter">Barter at {0}</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.UnknownItem">Unknown item</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.LoadFormat">LT after step: {0:N0} · Peak: {1:N0}</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.PeakLT">Peak LT</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Solving">Finding automatic routes…</sys:String>

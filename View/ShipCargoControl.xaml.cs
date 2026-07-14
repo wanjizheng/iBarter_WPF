@@ -143,6 +143,7 @@ namespace iBarter.View {
         public void RefreshData() {
             App.myRouteCoordinator?.ActivateManual();
             if (App.myfmMain != null) {
+                LoadCargoPropertyData();
                 string strPath_Data = AppDomain.CurrentDomain.BaseDirectory +
                                       "\\Resources\\myShipCargoItems_Data.json";
 
@@ -162,23 +163,6 @@ namespace iBarter.View {
 
 
                         ListBox_ShipCargo.EndInit();
-                        strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "\\Resources\\myShipProperty_Data.json";
-                        if (File.Exists(strPath_Data)) {
-                            readJsonData = File.ReadAllText(strPath_Data);
-                            if (readJsonData.Length > 0) {
-                                var loaded = JsonConvert.DeserializeObject<CargoProperty>(readJsonData);
-                                if (loaded != null) {
-                                    App.myCargoProperty.ExtraLT = loaded.ExtraLT;
-                                    App.myCargoProperty.TotalLT = loaded.TotalLT;
-                                    App.myCargoProperty.CurrentLT = loaded.CurrentLT;
-                                    App.myCargoProperty.InitialLT = loaded.InitialLT;
-                                    App.myCargoProperty.PeakLT = loaded.PeakLT;
-                                }
-                            }
-                            else {
-                                App.myCargoProperty = new CargoProperty();
-                            }
-                        }
                     }
                     catch (Exception exception) {
                         App.myCFun.Log(exception.Message, Brushes.Red);
@@ -198,6 +182,25 @@ namespace iBarter.View {
 
                 ListBox_ShipCargo.ItemsSource = App.myCVM.CargoDetails;
                 PropertyGrid_Ship.SelectedObject = App.myCargoProperty;
+            }
+        }
+
+        private static void LoadCargoPropertyData() {
+            string path = AppDomain.CurrentDomain.BaseDirectory + "\\Resources\\myShipProperty_Data.json";
+            if (!File.Exists(path)) return;
+            try {
+                string json = File.ReadAllText(path);
+                if (string.IsNullOrWhiteSpace(json)) return;
+                var loaded = JsonConvert.DeserializeObject<CargoProperty>(json);
+                if (loaded is null) return;
+                App.myCargoProperty.ExtraLT = loaded.ExtraLT;
+                App.myCargoProperty.TotalLT = loaded.TotalLT;
+                App.myCargoProperty.CurrentLT = loaded.CurrentLT;
+                App.myCargoProperty.InitialLT = loaded.InitialLT;
+                App.myCargoProperty.PeakLT = loaded.PeakLT;
+            }
+            catch (Exception exception) {
+                App.myCFun?.Log(exception.Message, Brushes.Red);
             }
         }
 

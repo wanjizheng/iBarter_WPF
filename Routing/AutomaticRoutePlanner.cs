@@ -120,10 +120,8 @@ public sealed class AutomaticRoutePlanner {
         }
 
         if (state.CurrentRouteSteps.OfType<BarterStep>().Any()) {
-            foreach (var warehouse in request.Warehouses.OrderBy(x => x.WarehouseId, StringComparer.Ordinal)) {
-                var result = RouteStateTransition.TryUnload(request, state, warehouse.WarehouseId);
-                if (result.Success) yield return result.State;
-            }
+            var result = WarehouseUnloadPlanner.TryCompleteRoute(request, state);
+            if (result.Success) yield return result.State;
         }
     }
 

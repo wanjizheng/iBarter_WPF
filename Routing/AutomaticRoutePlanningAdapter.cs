@@ -72,6 +72,6 @@ public static class AutomaticRoutePlanningAdapter {
         }).ToArray();
 
         return new AutomaticRoutePlanningRequest(
-            tasks, items, warehouses, cargo.ExtraLT, cargo.TotalLT, limits, "automatic-route-v1");
+            tasks, items, warehouses, cargo.ExtraLT, cargo.TotalLT, limits, "automatic-route-v2-corridors");
     }
 }

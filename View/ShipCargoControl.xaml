@@ -39,7 +39,25 @@
             <Border Padding="7" Margin="3,2" Background="#223B5B" BorderBrush="#416C94" BorderThickness="1" CornerRadius="3">
                 <StackPanel>
                     <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="#FFD166" />
-                    <TextBlock Text="{Binding Detail}" Margin="0,3,0,0" TextWrapping="Wrap" Foreground="White" />
+                    <ItemsControl ItemsSource="{Binding Items}" Margin="0,4,0,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,10,4" ToolTip="{Binding DisplayName}">
+                                    <Image Source="{Binding Icon}" Width="24" Height="24" />
+                                    <TextBlock Margin="5,0,0,0" VerticalAlignment="Center" Foreground="White">
+                                        <Run Text="{Binding DisplayName}" />
+                                        <Run Text=" × " />
+                                        <Run Text="{Binding Quantity}" />
+                                    </TextBlock>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                     <TextBlock Text="{Binding LoadText}" Margin="0,3,0,0" FontFamily="Consolas" Foreground="#9ED8FF" />
                 </StackPanel>
             </Border>

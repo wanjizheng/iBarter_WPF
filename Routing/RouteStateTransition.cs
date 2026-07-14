@@ -1,5 +1,7 @@
 namespace iBarter.Routing;
 
+using iBarter.Navigation;
+
 public sealed record RouteTransitionResult(
     bool Success,
     RouteSimulationState State,
@@ -39,7 +41,7 @@ public static class RouteStateTransition {
         if (total > request.TotalLT)
             return Failure(state, "overweight", detail: total.ToString());
 
-        double distance = DistanceFromCurrent(request, state.CurrentIslandId, warehouse.Point);
+        double distance = DistanceFromCurrent(request, state.CurrentIslandId, warehouse.IslandId, warehouse.Point);
         int peak = Math.Max(state.CurrentRoutePeakLT, total);
         var load = new RouteLoadSnapshot(cargoLT, total, peak);
         var normalizedItems = requested.OrderBy(x => x.Key, StringComparer.Ordinal)
@@ -73,7 +75,7 @@ public static class RouteStateTransition {
         if (total > request.TotalLT)
             return Failure(state, "overweight", task.RowId, task.Item2Id, total.ToString());
 
-        double distance = DistanceFromCurrent(request, state.CurrentIslandId, task.Point);
+        double distance = DistanceFromCurrent(request, state.CurrentIslandId, task.IslandId, task.Point);
         int peak = Math.Max(state.CurrentRoutePeakLT, total);
         var load = new RouteLoadSnapshot(cargoLT, total, peak);
         var step = new BarterStep(
@@ -89,26 +91,69 @@ public static class RouteStateTransition {
     public static RouteTransitionResult TryUnload(
         AutomaticRoutePlanningRequest request,
         RouteSimulationState state,
-        string warehouseId) {
+        string warehouseId) => TryUnload(
+            request,
+            state,
+            warehouseId,
+            state.OnBoard
+                .Where(x => x.Value > 0 && request.Items.TryGetValue(x.Key, out var item) && item.UnitWeight > 0)
+                .Select(x => new RouteItemQuantity(x.Key, x.Value))
+                .ToArray(),
+            finishRoute: true);
+
+    public static RouteTransitionResult TryUnload(
+        AutomaticRoutePlanningRequest request,
+        RouteSimulationState state,
+        string warehouseId,
+        IReadOnlyList<RouteItemQuantity> items,
+        bool finishRoute) {
         var warehouse = request.Warehouses.FirstOrDefault(x => x.WarehouseId == warehouseId);
         if (warehouse is null || !state.WarehouseInventory.ContainsKey(warehouseId))
             return Failure(state, "unknown-warehouse", detail: warehouseId);
         if (!state.CurrentRouteSteps.OfType<BarterStep>().Any())
             return Failure(state, "empty-route", detail: warehouseId);
 
+        var requested = items
+            .GroupBy(x => x.ItemId, StringComparer.Ordinal)
+            .ToDictionary(x => x.Key, x => x.Sum(y => y.Quantity), StringComparer.Ordinal);
+        if (requested.Any(x => x.Value <= 0 || !request.Items.ContainsKey(x.Key)
+            || !state.OnBoard.TryGetValue(x.Key, out int available) || available < x.Value))
+            return Failure(state, "missing-unload-cargo", detail: warehouseId);
+
+        var onboard = Clone(state.OnBoard);
+        foreach (var pair in requested)
+            SetQuantity(onboard, pair.Key, onboard[pair.Key] - pair.Value);
+        if (finishRoute && onboard.Any(x => x.Value > 0
+            && request.Items.TryGetValue(x.Key, out var item) && item.UnitWeight > 0))
+            return Failure(state, "cargo-remains", detail: warehouseId);
+
         var inventory = CloneWarehouseInventory(state);
         var target = inventory[warehouseId];
-        foreach (var pair in state.OnBoard.Where(x => x.Value > 0))
+        foreach (var pair in requested)
             SetQuantity(target, pair.Key, target.GetValueOrDefault(pair.Key) + pair.Value);
 
-        double legDistance = DistanceFromCurrent(request, state.CurrentIslandId, warehouse.Point);
+        double legDistance = DistanceFromCurrent(request, state.CurrentIslandId, warehouse.IslandId, warehouse.Point);
         int totalBeforeUnload = checked(request.ExtraLT + state.CargoLT);
         int peak = Math.Max(state.CurrentRoutePeakLT, totalBeforeUnload);
-        var unloadedItems = state.OnBoard.Where(x => x.Value > 0)
+        var unloadedItems = requested
             .OrderBy(x => x.Key, StringComparer.Ordinal)
             .Select(x => new RouteItemQuantity(x.Key, x.Value)).ToArray();
-        var load = new RouteLoadSnapshot(0, request.ExtraLT, peak);
+        int remainingCargoLT = ComputeCargoLT(request, onboard);
+        var load = new RouteLoadSnapshot(
+            remainingCargoLT,
+            checked(request.ExtraLT + remainingCargoLT),
+            peak);
         var step = new WarehouseUnloadStep(warehouseId, warehouse.IslandId, unloadedItems, load);
+
+        if (!finishRoute)
+            return Success(state, step, warehouse.IslandId, state.CompletedMask,
+                state.VisitedWarehouseIds, onboard, inventory, remainingCargoLT, peak,
+                state.CurrentRouteSteps.Append(step), state.FinishedRoutes,
+                state.TotalDistance + legDistance, state.PickupStopCount);
+
+        // Non-cargo rewards (Crow Coin and similar zero-weight outputs) do not belong
+        // to a warehouse and deliberately produce no item row in the unload step.
+        onboard.Clear();
         var routeSteps = state.CurrentRouteSteps.Append(step).ToArray();
         var firstPickup = routeSteps.OfType<WarehousePickupStep>().FirstOrDefault();
         int initialLT = firstPickup?.Load.TotalWithExtraLT ?? request.ExtraLT;
@@ -186,12 +231,15 @@ public static class RouteStateTransition {
     private static double DistanceFromCurrent(
         AutomaticRoutePlanningRequest request,
         string currentIslandId,
+        string destinationIslandId,
         RoutePoint destination) {
         if (string.IsNullOrEmpty(currentIslandId)) return 0;
         RoutePoint origin = FindPoint(request, currentIslandId);
-        double dx = origin.X - destination.X;
-        double dy = origin.Y - destination.Y;
-        return Math.Sqrt(dx * dx + dy * dy);
+        return ShippingCorridorGraph.Distance(
+            currentIslandId,
+            new NavigationPoint(origin.X, origin.Y),
+            destinationIslandId,
+            new NavigationPoint(destination.X, destination.Y));
     }
 
     private static RoutePoint FindPoint(AutomaticRoutePlanningRequest request, string islandId) {

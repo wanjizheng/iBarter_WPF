@@ -95,6 +95,59 @@ namespace iBarter.View {
             LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalization();
         }
 
+        public void LoadSavedDataAndAutomaticRouteAtStartup() {
+            ButtonAdv_Load_Click(this, new RoutedEventArgs());
+            try {
+                var request = BuildCurrentAutomaticRouteRequest();
+                if (request is not null)
+                    App.myRouteCoordinator?.TryRestore(request);
+            }
+            catch (Exception exception) {
+                // A stale or partially edited Planner must never make startup fail.
+                App.myCFun?.Log(exception.Message, Brushes.OrangeRed);
+            }
+        }
+
+        public AutomaticRoutePlanningRequest? BuildCurrentAutomaticRouteRequest() {
+            if (App.myPVM?.BarterCollection is null || App.myPVM.BarterCollection.Count == 0
+                || App.myStorageVM?.StorageCollection is null
+                || App.myCargoProperty is null
+                || App.myCargoProperty.ExtraLT < 0
+                || App.myCargoProperty.TotalLT <= 0)
+                return null;
+
+            var routeRows = App.myPVM.BarterCollection.Select((b, index) => new PlannerRouteSnapshot(
+                RowId: $"{index}:{b.IsLandName}:{b.Item1.ItemID}:{b.Item2.ItemID}",
+                ExchangeDone: b.ExchangeDone,
+                ExchangeQuantity: b.ExchangeQuantity,
+                IslandId: b.IsLandName,
+                Item1Id: b.Item1.ItemID,
+                Item1DisplayName: b.Item1NameDisplay,
+                Item1Level: int.TryParse(b.Item1.ItemLV, NumberStyles.Integer, CultureInfo.InvariantCulture, out int item1Level) ? item1Level : 0,
+                Item1Number: b.Item1Number,
+                Item2Id: b.Item2.ItemID,
+                Item2DisplayName: b.Item2NameDisplay,
+                Item2Level: int.TryParse(b.Item2.ItemLV, NumberStyles.Integer, CultureInfo.InvariantCulture, out int item2Level) ? item2Level : 0,
+                Item2Number: b.Item2Number)).ToArray();
+            var storageRows = App.myStorageVM.StorageCollection.Select(item => new StorageItemSnapshot(
+                item.ItemID,
+                int.TryParse(item.ItemLV, NumberStyles.Integer, CultureInfo.InvariantCulture, out int level) ? level : 0,
+                item.StorageVeliaQuantity_Velia,
+                item.StorageVeliaQuantity_Iliya,
+                item.StorageVeliaQuantity_Epheria,
+                item.StorageVeliaQuantity_Ancado)).ToArray();
+            var islandRows = App.listIslands.Where(island => island.HasNavigationCoordinates)
+                .Select(island => new IslandRouteSnapshot(
+                    island.IslandsName,
+                    new RoutePoint(island.NavigationX!.Value, island.NavigationY!.Value)))
+                .ToArray();
+            var cargo = new CargoCapacitySnapshot(
+                Convert.ToInt32(Math.Round(App.myCargoProperty.ExtraLT, MidpointRounding.AwayFromZero)),
+                Convert.ToInt32(Math.Round(App.myCargoProperty.TotalLT, MidpointRounding.AwayFromZero)));
+            return AutomaticRoutePlanningAdapter.BuildRequest(
+                routeRows, storageRows, islandRows, cargo, new RouteSearchLimits(250_000, 2_000));
+        }
+
         private void RegisterLocalizedDropDownRenderer() {
             DataGrid_Planner.CellRenderers.Remove("MultiColumnDropDown");
             DataGrid_Planner.CellRenderers.Add("MultiColumnDropDown", new LocalizedMultiColumnDropDownRenderer());

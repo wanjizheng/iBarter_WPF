@@ -2,12 +2,15 @@ using iBarter.Model;
 using iBarter.Routing;
 using Syncfusion.Windows.Shared;
 using System.ComponentModel;
+using System.IO;
 
 namespace iBarter.ViewModel;
 
 public enum CargoMode { Manual, AutomaticRoute }
 
 public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable {
+    private static string PersistencePath => Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory, "Resources", "automatic-route-plan.json");
     private readonly object gate = new();
     private readonly AutomaticRoutePlanner planner = new();
     private readonly StorageViewModel storageViewModel;
@@ -78,7 +81,22 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             }
         }
         Publish(plan);
+        SaveCurrentPlan();
         return plan;
+    }
+
+    public bool TryRestore(AutomaticRoutePlanningRequest request) {
+        string fingerprint = RoutePlanFingerprint.Compute(request);
+        if (!RoutePlanPersistence.TryLoad(PersistencePath, fingerprint, out var persisted)
+            || persisted is null)
+            return false;
+        var verification = RoutePlanVerifier.Verify(request, persisted.Plan);
+        if (!verification.Success || verification.VerifiedPlan is null) return false;
+        Publish(
+            verification.VerifiedPlan,
+            persisted.SelectedRouteNumber,
+            persisted.ShowAll);
+        return true;
     }
 
     public void SelectRoute(int routeNumber) {
@@ -87,6 +105,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         showAllRoutes = false;
         UpdateVisibleRoute();
         NotifyDisplayChanged();
+        SaveCurrentPlan();
     }
 
     public void SelectAll() {
@@ -94,6 +113,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         showAllRoutes = true;
         RaisePropertyChanged(nameof(ShowAllRoutes));
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+        SaveCurrentPlan();
     }
 
     public void RefreshLocalization() {
@@ -145,14 +165,21 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         cancellation?.Dispose();
     }
 
-    private void Publish(RoutePlan plan) {
+    private void Publish(
+        RoutePlan plan,
+        int? preferredRouteNumber = null,
+        bool preferredShowAll = false) {
         currentPlan = plan;
         bool hasUsableRoutes = plan.Status is RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit
             && plan.Routes.Count > 0;
         mode = hasUsableRoutes ? CargoMode.AutomaticRoute : CargoMode.Manual;
-        showAllRoutes = false;
+        showAllRoutes = hasUsableRoutes && preferredShowAll;
         routeOptions = hasUsableRoutes ? BuildRouteOptions(plan) : [];
-        selectedRouteNumber = hasUsableRoutes ? plan.Routes[0].Number : null;
+        selectedRouteNumber = hasUsableRoutes
+            ? plan.Routes.Any(x => x.Number == preferredRouteNumber)
+                ? preferredRouteNumber
+                : plan.Routes[0].Number
+            : null;
         UpdateVisibleRoute();
         NotifyAll();
     }
@@ -169,7 +196,12 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
 
     private void UpdateVisibleRoute() {
         var route = currentPlan?.Routes.FirstOrDefault(x => x.Number == selectedRouteNumber);
-        visibleAutomaticSteps = route is null ? [] : route.Steps.Select(ToViewModel).ToArray();
+        visibleAutomaticSteps = route is null
+            ? []
+            : route.Steps
+                .Where(step => step is not WarehouseUnloadStep { Items.Count: 0 })
+                .Select(ToViewModel)
+                .ToArray();
         if (route is not null) {
             cargoProperty.InitialLT = route.InitialLT;
             cargoProperty.CurrentLT = route.CurrentLT;
@@ -182,9 +214,9 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
 
     private AutomaticRouteStepViewModel ToViewModel(RouteStep step) => step switch {
         WarehousePickupStep pickup => new WarehouseRouteStepViewModel(
-            pickup.WarehouseId, pickup.IslandId, false, pickup.Items, pickup.Load),
+            pickup.WarehouseId, pickup.IslandId, false, pickup.Items, BuildItemLookup(pickup.Items), pickup.Load),
         WarehouseUnloadStep unload => new WarehouseRouteStepViewModel(
-            unload.WarehouseId, unload.IslandId, true, unload.Items, unload.Load),
+            unload.WarehouseId, unload.IslandId, true, unload.Items, BuildItemLookup(unload.Items), unload.Load),
         BarterStep barter => new BarterRouteStepViewModel(barter, currentPlan is null
             ? new Dictionary<string, RouteItem>()
             : BuildItemLookup(barter)),
@@ -198,8 +230,26 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         return result;
     }
 
+    private IReadOnlyDictionary<string, RouteItem> BuildItemLookup(IEnumerable<RouteItemQuantity> quantities) =>
+        quantities.Select(x => x.ItemId).Distinct(StringComparer.Ordinal).ToDictionary(
+            id => id,
+            id => new RouteItem(id, ResolveItemDisplayName(id), 0, 0),
+            StringComparer.Ordinal);
+
     private static string ResolveItemDisplayName(string itemId) =>
-        App.listItems?.FirstOrDefault(x => x.ItemID == itemId)?.ItemNameDisplay ?? itemId;
+        App.listItems?.FirstOrDefault(x => x.ItemID == itemId)?.ItemNameDisplay
+        ?? Localization.LanguageService.Instance.Localize("str.ShipCargo.AutoRoute.UnknownItem");
+
+    private void SaveCurrentPlan() {
+        if (currentPlan is null || mode != CargoMode.AutomaticRoute) return;
+        try {
+            RoutePlanPersistence.Save(
+                PersistencePath, currentPlan, selectedRouteNumber, showAllRoutes);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            App.myCFun?.Log(ex.Message, System.Windows.Media.Brushes.OrangeRed);
+        }
+    }
 
     private void NotifyAll() {
         RaisePropertyChanged(nameof(Mode));

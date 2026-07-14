@@ -131,6 +131,10 @@ namespace iBarter {
             }
 
             myfmMain.Show();
+            // Window_Loaded has now restored the ship capacity. Load the saved
+            // Planner rows next, then restore an automatic route only after its
+            // current input fingerprint and full replay both validate.
+            myfmMain.myPlannerControl.LoadSavedDataAndAutomaticRouteAtStartup();
             //mySplashScreen.Show();
         }
 

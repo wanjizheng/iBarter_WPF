@@ -413,11 +413,30 @@ namespace iBarter.View {
             Brush stroke,
             DoubleCollection dashArray) {
             for (int i = 0; i < route.Count - 1; i++) {
-                var from = GetIslandCenter(route[i]);
-                var to = GetIslandCenter(route[i + 1]);
+                var fromIsland = route[i];
+                var toIsland = route[i + 1];
+                var navigationPath = ShippingCorridorGraph.BuildPath(
+                    fromIsland.IslandsName,
+                    new NavigationPoint(fromIsland.NavigationPoint.X, fromIsland.NavigationPoint.Y),
+                    toIsland.IslandsName,
+                    new NavigationPoint(toIsland.NavigationPoint.X, toIsland.NavigationPoint.Y));
+                var displayPath = navigationPath.Select((point, index) =>
+                    GetNavigationDisplayPoint(fromIsland, toIsland, point, index, navigationPath.Count)).ToArray();
+                for (int segment = 0; segment < displayPath.Length - 1; segment++)
+                    DrawRouteSegment(displayPath[segment], displayPath[segment + 1], stroke, dashArray,
+                        addArrow: segment == displayPath.Length - 2);
+            }
+        }
+
+        private void DrawRouteSegment(
+            Point from,
+            Point to,
+            Brush stroke,
+            DoubleCollection dashArray,
+            bool addArrow) {
                 double dx = to.X - from.X;
                 double dy = to.Y - from.Y;
-                if (dx == 0 && dy == 0) continue;
+                if (dx == 0 && dy == 0) return;
 
                 Grid_MapMain.Children.Add(new Line {
                     X1 = from.X,
@@ -431,6 +450,7 @@ namespace iBarter.View {
                     IsHitTestVisible = false,
                 });
 
+                if (!addArrow) return;
                 double angleDeg = Math.Atan2(dy, dx) * 180.0 / Math.PI;
                 var arrow = new Polygon {
                     Fill = stroke,
@@ -449,7 +469,53 @@ namespace iBarter.View {
                 transforms.Children.Add(new TranslateTransform(to.X, to.Y));
                 arrow.RenderTransform = transforms;
                 Grid_MapMain.Children.Add(arrow);
+        }
+
+        private Point GetNavigationDisplayPoint(
+            Islands fromIsland,
+            Islands toIsland,
+            NavigationPoint navigationPoint,
+            int index,
+            int count) {
+            if (index == 0) return GetIslandCenter(fromIsland);
+            if (index == count - 1) return GetIslandCenter(toIsland);
+
+            bool fromRight = IslandNavigationGeometry.GetDisplayGroup(fromIsland.IslandsName)
+                == SpecialDisplayGroup.RightInset;
+            bool toRight = IslandNavigationGeometry.GetDisplayGroup(toIsland.IslandsName)
+                == SpecialDisplayGroup.RightInset;
+            if (fromRight || toRight) {
+                var references = App.listIslands
+                    .Where(x => IslandNavigationGeometry.RightInsetNames.Contains(x.IslandsName)
+                        && x.HasNavigationCoordinates)
+                    .Select(x => x.NavigationPoint)
+                    .ToArray();
+                var projected = IslandNavigationGeometry.ProjectPointToInset(
+                    references, RIGHT_INSET_BOUNDS, INSET_PADDING, navigationPoint);
+                return new Point(projected.X * Grid_MapMain.ActualWidth, projected.Y * Grid_MapMain.ActualHeight);
             }
+
+            bool southern = IslandNavigationGeometry.GetDisplayGroup(fromIsland.IslandsName)
+                    == SpecialDisplayGroup.BottomEdge
+                && IslandNavigationGeometry.GetDisplayGroup(toIsland.IslandsName)
+                    == SpecialDisplayGroup.BottomEdge;
+            if (southern) {
+                var start = GetIslandCenter(fromIsland);
+                var end = GetIslandCenter(toIsland);
+                double tx = Math.Abs(toIsland.NavigationPoint.X - fromIsland.NavigationPoint.X) < 1
+                    ? 0
+                    : (navigationPoint.X - fromIsland.NavigationPoint.X)
+                      / (toIsland.NavigationPoint.X - fromIsland.NavigationPoint.X);
+                double ty = Math.Abs(toIsland.NavigationPoint.Y - fromIsland.NavigationPoint.Y) < 1
+                    ? 0
+                    : (navigationPoint.Y - fromIsland.NavigationPoint.Y)
+                      / (toIsland.NavigationPoint.Y - fromIsland.NavigationPoint.Y);
+                return new Point(
+                    start.X + (end.X - start.X) * tx,
+                    start.Y + (end.Y - start.Y) * ty);
+            }
+
+            return index < count / 2 ? GetIslandCenter(fromIsland) : GetIslandCenter(toIsland);
         }
 
         private static readonly NormalizedBounds LEFT_INSET_BOUNDS = new(0, 0, 0.3775, 0.3267);

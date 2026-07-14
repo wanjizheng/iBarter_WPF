@@ -86,4 +86,67 @@ public sealed class AutomaticRouteHeuristicTests {
         Assert.True(improved.Plan.Objective!.Value.TotalDistance < greedy.Plan.Objective!.Value.TotalDistance);
         Assert.True(RoutePlanVerifier.Verify(improvedRequest, improved.Plan).Success);
     }
+
+    [Fact]
+    public void Heuristic_finishes_a_route_with_item_aware_multi_warehouse_unloads() {
+        var items = new Dictionary<string, RouteItem> {
+            ["A"] = new("A", "A", 1, 100), ["B"] = new("B", "B", 1, 100),
+            ["X"] = new("X", "X", 2, 100), ["Y"] = new("Y", "Y", 2, 100),
+        };
+        var request = new AutomaticRoutePlanningRequest(
+            [
+                new("x", "T1", new RoutePoint(20, 0), "A", 1, "X", 1),
+                new("y", "T2", new RoutePoint(30, 0), "B", 1, "Y", 1),
+            ], items,
+            [
+                new RouteWarehouse("W1", "W1", new RoutePoint(0, 0),
+                    new Dictionary<string, int> { ["A"] = 1, ["B"] = 1, ["X"] = 2 }),
+                new RouteWarehouse("W2", "W2", new RoutePoint(40, 0),
+                    new Dictionary<string, int> { ["Y"] = 2 }),
+            ],
+            0, 10_000, new RouteSearchLimits(10_000, 10), "split-unload");
+
+        var result = AutomaticRouteHeuristic.TryBuildIncumbent(
+            request, AutomaticRoutePreflight.Validate(request), CancellationToken.None);
+
+        Assert.NotNull(result);
+        var unloads = Assert.Single(result.Plan.Routes).Steps.OfType<WarehouseUnloadStep>().ToArray();
+        Assert.Equal(2, unloads.Length);
+        Assert.Equal([new RouteItemQuantity("X", 1)], unloads.Single(x => x.WarehouseId == "W1").Items);
+        Assert.Equal([new RouteItemQuantity("Y", 1)], unloads.Single(x => x.WarehouseId == "W2").Items);
+        Assert.True(RoutePlanVerifier.Verify(request, result.Plan).Success);
+    }
+
+    [Fact]
+    public void Confirmed_right_region_five_task_load_can_run_as_one_route_when_crow_tasks_free_weight() {
+        var items = new Dictionary<string, RouteItem> {
+            ["C1"] = new("C1", "C1", 4, 1_000), ["C2"] = new("C2", "C2", 4, 1_000),
+            ["C3"] = new("C3", "C3", 4, 1_000), ["U1"] = new("U1", "U1", 5, 1_000),
+            ["U2"] = new("U2", "U2", 5, 1_000), ["O1"] = new("O1", "O1", 5, 1_000),
+            ["O2"] = new("O2", "O2", 5, 1_000), ["10"] = new("10", "Crow Coin", -1, 0),
+        };
+        var request = new AutomaticRoutePlanningRequest(
+            [
+                new("crow-halmad", "Halmad", new RoutePoint(558_999, 333_684), "C1", 3, "10", 100),
+                new("crow-kashuma", "Kashuma", new RoutePoint(589_314, 372_650), "C2", 3, "10", 100),
+                new("crow-derko", "Derko", new RoutePoint(843_205, 415_735), "C3", 3, "10", 100),
+                new("upgrade-hakoven", "Hakoven", new RoutePoint(1_252_450, 547_567), "U1", 2, "O1", 10),
+                new("upgrade-arehaza", "Arehaza", new RoutePoint(1_267_170, 177_948), "U2", 2, "O2", 10),
+            ],
+            items,
+            [new RouteWarehouse("Iliya", "Iliya", new RoutePoint(360_000, 520_000),
+                new Dictionary<string, int> {
+                    ["C1"] = 3, ["C2"] = 3, ["C3"] = 3, ["U1"] = 2, ["U2"] = 2,
+                })],
+            2_411, 24_110, new RouteSearchLimits(100_000, 500), "right-five");
+
+        var result = AutomaticRouteHeuristic.TryBuildIncumbent(
+            request, AutomaticRoutePreflight.Validate(request), CancellationToken.None);
+
+        Assert.NotNull(result);
+        var route = Assert.Single(result.Plan.Routes);
+        Assert.Equal(5, route.Steps.OfType<BarterStep>().Count());
+        Assert.All(route.Steps, step => Assert.True(step.Load.TotalWithExtraLT <= request.TotalLT));
+        Assert.True(RoutePlanVerifier.Verify(request, result.Plan).Success);
+    }
 }

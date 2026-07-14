@@ -17,13 +17,15 @@ public static class RoutePlanVerifier {
             foreach (var route in plan.Routes) {
                 if (route.Number != expectedRouteNumber++) return Mismatch("route-number");
                 int finishedBefore = state.FinishedRoutes.Count;
-                foreach (var expectedStep in route.Steps) {
+                for (int stepIndex = 0; stepIndex < route.Steps.Count; stepIndex++) {
+                    var expectedStep = route.Steps[stepIndex];
                     RouteTransitionResult actual = expectedStep switch {
                         WarehousePickupStep pickup => RouteStateTransition.TryPickup(
                             request, state, pickup.WarehouseId, pickup.Items),
                         BarterStep barter => ReplayBarter(request, state, barter.RowId),
                         WarehouseUnloadStep unload => RouteStateTransition.TryUnload(
-                            request, state, unload.WarehouseId),
+                            request, state, unload.WarehouseId, unload.Items,
+                            finishRoute: !route.Steps.Skip(stepIndex + 1).OfType<WarehouseUnloadStep>().Any()),
                         _ => new RouteTransitionResult(false, state, null,
                             new RouteDiagnostic("verification-mismatch", Detail: "step-type")),
                     };

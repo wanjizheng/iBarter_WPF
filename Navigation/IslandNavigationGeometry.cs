@@ -41,10 +41,24 @@ public static class IslandNavigationGeometry {
             return new Dictionary<string, NormalizedPoint>();
         }
 
-        double minX = points.Values.Min(p => p.X);
-        double maxX = points.Values.Max(p => p.X);
-        double minY = points.Values.Min(p => p.Y);
-        double maxY = points.Values.Max(p => p.Y);
+        return points.ToDictionary(
+            pair => pair.Key,
+            pair => ProjectPointToInset(points.Values, bounds, padding, pair.Value));
+    }
+
+    public static NormalizedPoint ProjectPointToInset(
+        IEnumerable<NavigationPoint> referencePoints,
+        NormalizedBounds bounds,
+        double padding,
+        NavigationPoint point) {
+        var points = referencePoints as NavigationPoint[] ?? referencePoints.ToArray();
+        if (points.Length == 0)
+            throw new ArgumentException("At least one reference point is required.", nameof(referencePoints));
+
+        double minX = points.Min(p => p.X);
+        double maxX = points.Max(p => p.X);
+        double minY = points.Min(p => p.Y);
+        double maxY = points.Max(p => p.Y);
         double usableWidth = bounds.Right - bounds.Left - 2 * padding;
         double usableHeight = bounds.Bottom - bounds.Top - 2 * padding;
         double spanX = Math.Max(maxX - minX, 1);
@@ -55,10 +69,8 @@ public static class IslandNavigationGeometry {
         double originX = bounds.Left + (bounds.Right - bounds.Left - usedWidth) / 2;
         double originY = bounds.Top + (bounds.Bottom - bounds.Top - usedHeight) / 2;
 
-        return points.ToDictionary(
-            pair => pair.Key,
-            pair => new NormalizedPoint(
-                originX + (pair.Value.X - minX) * scale,
-                originY + (maxY - pair.Value.Y) * scale));
+        return new NormalizedPoint(
+            originX + (point.X - minX) * scale,
+            originY + (maxY - point.Y) * scale);
     }
 }

@@ -11,5 +11,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\..\Navigation\IslandNavigationGeometry.cs" Link="Navigation\IslandNavigationGeometry.cs" />
+    <Compile Include="..\..\Navigation\ShippingCorridorGraph.cs" Link="Navigation\ShippingCorridorGraph.cs" />
   </ItemGroup>
 </Project>

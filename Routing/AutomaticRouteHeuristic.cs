@@ -48,6 +48,7 @@ public static class AutomaticRouteHeuristic {
         }
 
         state = ImproveLocally(request, state, cancellationToken);
+        state = RoutePairRebuilder.Improve(request, state, cancellationToken);
         var plan = RoutePlanFactory.FromState(
             request, state, RoutePlanStatus.BestKnownWithinLimit, []);
         return new RouteIncumbent(plan, state);
@@ -134,11 +135,10 @@ public static class AutomaticRouteHeuristic {
 
     private static List<LocalRoute> ExtractLayout(RouteSimulationState state) =>
         state.FinishedRoutes.Select(route => new LocalRoute(
-            route.Steps.Where(step => step is not WarehouseUnloadStep).ToList(),
-            route.EndWarehouseId)).ToList();
+            route.Steps.Where(step => step is not WarehouseUnloadStep).ToList())).ToList();
 
     private static List<LocalRoute> CloneLayout(IEnumerable<LocalRoute> source) =>
-        source.Select(route => new LocalRoute(route.Actions.ToList(), route.EndWarehouseId)).ToList();
+        source.Select(route => new LocalRoute(route.Actions.ToList())).ToList();
 
     private static RouteSimulationState? ReplayLayout(
         AutomaticRoutePlanningRequest request,
@@ -157,7 +157,7 @@ public static class AutomaticRouteHeuristic {
                 if (!result.Success) return null;
                 state = result.State;
             }
-            var unload = RouteStateTransition.TryUnload(request, state, route.EndWarehouseId);
+            var unload = WarehouseUnloadPlanner.TryCompleteRoute(request, state);
             if (!unload.Success) return null;
             state = unload.State;
         }
@@ -214,14 +214,10 @@ public static class AutomaticRouteHeuristic {
 
     private static RouteTransitionResult? NearestUnload(
         AutomaticRoutePlanningRequest request,
-        RouteSimulationState state) =>
-        request.Warehouses
-            .Select(x => (Warehouse: x, Result: RouteStateTransition.TryUnload(request, state, x.WarehouseId)))
-            .Where(x => x.Result.Success)
-            .OrderBy(x => x.Result.State.TotalDistance - state.TotalDistance)
-            .ThenBy(x => x.Warehouse.WarehouseId, StringComparer.Ordinal)
-            .Select(x => x.Result)
-            .FirstOrDefault();
+        RouteSimulationState state) {
+        var result = WarehouseUnloadPlanner.TryCompleteRoute(request, state);
+        return result.Success ? result : null;
+    }
 
     private sealed record PickupCandidate(
         double Distance,
@@ -231,5 +227,5 @@ public static class AutomaticRouteHeuristic {
         string StableKey,
         RouteTransitionResult Result);
 
-    private sealed record LocalRoute(List<RouteStep> Actions, string EndWarehouseId);
+    private sealed record LocalRoute(List<RouteStep> Actions);
 }

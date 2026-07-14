@@ -26,24 +26,48 @@ public abstract class AutomaticRouteStepViewModel {
 public sealed class WarehouseRouteStepViewModel : AutomaticRouteStepViewModel {
     public string WarehouseId { get; }
     public bool IsUnload { get; }
+    public IReadOnlyList<WarehouseRouteItemViewModel> Items { get; }
 
     public WarehouseRouteStepViewModel(
         string warehouseId,
         string islandId,
         bool isUnload,
         IReadOnlyList<RouteItemQuantity> items,
+        IReadOnlyDictionary<string, RouteItem> itemLookup,
         RouteLoadSnapshot load)
         : base(
             LanguageService.Instance.Localize(isUnload
                 ? "str.ShipCargo.AutoRoute.Unload"
-                : "str.ShipCargo.AutoRoute.Pickup", warehouseId),
-            string.Join(", ", items.Select(x => $"{x.ItemId} × {x.Quantity}")),
+                : "str.ShipCargo.AutoRoute.Pickup", WarehouseDisplayName(warehouseId)),
+            string.Empty,
             FormatLoad(load),
             islandId) {
         WarehouseId = warehouseId;
         IsUnload = isUnload;
+        Items = items.Select(x => new WarehouseRouteItemViewModel(
+            x.ItemId,
+            itemLookup.TryGetValue(x.ItemId, out var item)
+                ? item.DisplayName
+                : LanguageService.Instance.Localize("str.ShipCargo.AutoRoute.UnknownItem"),
+            x.Quantity,
+            Icon(x.ItemId))).ToArray();
     }
+
+    private static string WarehouseDisplayName(string warehouseId) {
+        string key = "str.Grid.Storage.Col." + warehouseId;
+        string localized = LanguageService.Instance.Localize(key);
+        return localized == key ? warehouseId : localized;
+    }
+
+    private static string Icon(string itemId) =>
+        AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + itemId + ".bmp";
 }
+
+public sealed record WarehouseRouteItemViewModel(
+    string ItemId,
+    string DisplayName,
+    int Quantity,
+    string Icon);
 
 public sealed class BarterRouteStepViewModel : AutomaticRouteStepViewModel {
     public string RowId { get; }
