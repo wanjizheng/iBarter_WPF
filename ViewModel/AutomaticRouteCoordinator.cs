@@ -9,7 +9,7 @@ namespace iBarter.ViewModel;
 public enum CargoMode { Manual, AutomaticRoute }
 
 public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable {
-    private static string PersistencePath => AutomaticRoutePlanStorage.UserDataPath;
+    private static string PersistencePath => AutomaticRoutePlanStorage.RuntimeResourcesPath;
     private readonly object gate = new();
     private readonly AutomaticRoutePlanner planner = new();
     private readonly StorageViewModel storageViewModel;
@@ -37,7 +37,6 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         storageViewModel.StorageChanged += StorageChanged;
         cargoProperty.PropertyChanged += CargoPropertyChanged;
         cargoViewModel.AttachRouteCoordinator(this);
-        AutomaticRoutePlanStorage.MigrateLegacyOutputIfNeeded();
     }
 
     public CargoMode Mode => mode;

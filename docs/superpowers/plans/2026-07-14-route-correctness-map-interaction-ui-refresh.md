@@ -136,9 +136,9 @@ Run: `dotnet run --project Tools/PlannerAutoPlannerTests/PlannerAutoPlannerTests
 
 把 `ButtonAdv_AutoPlan_Click` 中“写 liveRows、SaveData、GenerateAsync”的顺序改为：构造候选快照 → 求路线 → 成功后应用 liveRows → 更新库存/贡献度/地图 → 发布并保存。失败只记录日志。
 
-- [ ] **Step 5: 迁移持久化目录和版本**
+- [ ] **Step 5: 统一持久化目录并加入版本**
 
-新路径为 `Environment.SpecialFolder.LocalApplicationData/iBarter/automatic-route-plan.json`。新路径不存在而旧路径存在时尝试读取旧文件；下一次成功保存写新路径。指纹加入常量 `RoutingAlgorithmVersion`。
+自动路线保存到程序运行目录的 `Resources/automatic-route-plan.json`，与 Planner、StorageManager 的数据放在同一目录。指纹加入常量 `RoutingAlgorithmVersion`。
 
 - [ ] **Step 6: 增加恢复诊断**
 
@@ -331,4 +331,3 @@ Run: `git diff --check -- <本轮文件列表>`
 Commit message: `feat: refine route planning and modernize UI`
 
 Push: `git push origin codex/automatic-multi-route-planning`
-
