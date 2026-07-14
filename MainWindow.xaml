@@ -103,19 +103,22 @@
                             <MenuItem x:Name="MenuItem_BarterScanner" Header="{loc:Localize str.Menu.BarterScanner}"
                                   Tag="BarterScanner" Click="OnActivateWindow" Height="30" Width="180">
                                 <MenuItem.Icon>
-                                    <Image Source="Images\barter.png" />
+                                    <Viewbox Width="18" Height="18"><Path Data="{StaticResource FluentIcon.Scan}"
+                                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}" /></Viewbox>
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem x:Name="MenuItem_StorageManagement" Header="{loc:Localize str.Menu.StorageManager}"
                                   Tag="StorageManagement" Click="MenuItem_StorageManagement_Click" Height="30" Width="180">
                                 <MenuItem.Icon>
-                                    <Image Source="Images\storage.png" />
+                                    <Viewbox Width="18" Height="18"><Path Data="{StaticResource FluentIcon.BuildingBank}"
+                                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}" /></Viewbox>
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem x:Name="MenuItem_SyncImages" Header="{loc:Localize str.Menu.SyncImages}"
                                   Tag="SyncImages" Click="MenuItem_SyncImages_Click" Height="30" Width="180">
                                 <MenuItem.Icon>
-                                    <Image Source="Images\refresh.png" />
+                                    <Viewbox Width="18" Height="18"><Path Data="{StaticResource FluentIcon.ArrowSync}"
+                                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}" /></Viewbox>
                                 </MenuItem.Icon>
                             </MenuItem>
                         </MenuItem>
@@ -130,7 +133,7 @@
                                  here (we'd still need a one-shot sync on startup). -->
                             <MenuItem x:Name="MenuItem_LangEnglish" Header="English"
                                   IsCheckable="True" Click="MenuItem_LangEnglish_Click" Height="30" Width="180" />
-                            <MenuItem x:Name="MenuItem_LangZhTw" Header="繁体中文"
+                            <MenuItem x:Name="MenuItem_LangZhTw" Header="简体中文"
                                   IsCheckable="True" Click="MenuItem_LangZhTw_Click" Height="30" Width="180" />
                         </MenuItem>
                     </Menu>

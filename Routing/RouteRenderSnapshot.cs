@@ -16,11 +16,20 @@ public sealed class RouteRenderSnapshot {
     public bool IsManual { get; }
     public bool ShowAll { get; }
     public IReadOnlyList<RouteRenderPath> Paths { get; }
+    public IReadOnlySet<string> BarterIslandIds { get; }
+    public IReadOnlySet<string> WarehouseIslandIds { get; }
 
-    public RouteRenderSnapshot(bool isManual, bool showAll, IReadOnlyList<RouteRenderPath> paths) {
+    public RouteRenderSnapshot(
+        bool isManual,
+        bool showAll,
+        IReadOnlyList<RouteRenderPath> paths,
+        IEnumerable<string>? barterIslandIds = null,
+        IEnumerable<string>? warehouseIslandIds = null) {
         IsManual = isManual;
         ShowAll = showAll;
         Paths = ModelCopies.List(paths);
+        BarterIslandIds = new HashSet<string>(barterIslandIds ?? [], StringComparer.Ordinal);
+        WarehouseIslandIds = new HashSet<string>(warehouseIslandIds ?? [], StringComparer.Ordinal);
     }
 }
 
@@ -36,7 +45,14 @@ public static class RouteRenderSnapshotFactory {
             route.Number,
             Math.Max(0, route.Number - 1),
             CollapseAdjacent(route.Steps.Select(x => x.IslandId)))).ToArray();
-        return new RouteRenderSnapshot(false, showAll, paths);
+        return new RouteRenderSnapshot(
+            false,
+            showAll,
+            paths,
+            routes.SelectMany(route => route.Steps.OfType<BarterStep>()).Select(step => step.IslandId),
+            routes.SelectMany(route => route.Steps)
+                .Where(step => step is WarehousePickupStep or WarehouseUnloadStep)
+                .Select(step => step.IslandId));
     }
 
     public static RouteRenderSnapshot CreateManual(IReadOnlyList<string> islandIds) =>

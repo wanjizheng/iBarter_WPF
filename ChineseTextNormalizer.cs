@@ -5,6 +5,10 @@ using System.Text;
 namespace iBarter {
     internal static class ChineseTextNormalizer {
         private const uint LCMAP_TRADITIONAL_CHINESE = 0x04000000;
+        private const uint LCMAP_SIMPLIFIED_CHINESE = 0x02000000;
+
+        public static string ToSimplifiedChinese(string input) =>
+            ConvertChinese(input, LCMAP_SIMPLIFIED_CHINESE, MapTraditionalVariant);
 
         public static string NormalizeForMatching(string input) {
             if (string.IsNullOrWhiteSpace(input)) {
@@ -116,6 +120,46 @@ namespace iBarter {
             }
             return mapped.ToString();
         }
+
+        private static string ConvertChinese(
+            string input,
+            uint conversion,
+            Func<char, char> fallback) {
+            if (string.IsNullOrEmpty(input) || !ContainsCjk(input)) return input ?? string.Empty;
+            try {
+                var buffer = new StringBuilder(input.Length * 2);
+                int length = LCMapStringEx(
+                    "zh-CN", conversion, input, -1, buffer, buffer.Capacity,
+                    IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+                if (length > 0) {
+                    string converted = buffer.ToString();
+                    int terminator = converted.IndexOf('\0');
+                    if (terminator >= 0) return converted[..terminator];
+                    int count = Math.Min(length - 1, converted.Length);
+                    return count > 0 ? converted[..count] : string.Empty;
+                }
+            }
+            catch {
+                // Windows normally provides LCMapStringEx. Keep a small fallback
+                // for tests and unusual runtimes.
+            }
+            var mapped = new StringBuilder(input.Length);
+            foreach (char character in input) mapped.Append(fallback(character));
+            return mapped.ToString();
+        }
+
+        private static char MapTraditionalVariant(char character) => character switch {
+            '體' => '体', '視' => '视', '窗' => '窗', '計' => '计', '畫' => '画',
+            '儲' => '储', '讀' => '读', '載' => '载', '組' => '组', '烏' => '乌',
+            '鴉' => '鸦', '幣' => '币', '優' => '优', '賺' => '赚', '錢' => '钱',
+            '補' => '补', '貨' => '货', '規' => '规', '劃' => '划', '貢' => '贡',
+            '獻' => '献', '輸' => '输', '產' => '产', '庫' => '库', '達' => '达',
+            '預' => '预', '設' => '设', '種' => '种', '圖' => '图', '擷' => '撷',
+            '將' => '将', '選' => '选', '筆' => '笔', '貝' => '贝', '爾' => '尔',
+            '亞' => '亚', '島' => '岛', '識' => '识', '資' => '资', '訊' => '讯',
+            '鏈' => '链', '徑' => '径', '確' => '确', '刪' => '删', '檔' => '档',
+            _ => character,
+        };
 
         private static char MapSimplifiedVariant(char ch) {
             return ch switch {

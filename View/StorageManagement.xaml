@@ -17,7 +17,7 @@
                              MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
                              ResizeBorderThickness="0"
                              RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
-                             Title="StorageManagement" Height="450" Width="800">
+                             Title="{loc:Localize str.Menu.StorageManager}" Height="450" Width="800">
     <Syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -36,9 +36,8 @@
                           HorizontalContentAlignment="Center"
                           VerticalContentAlignment="Center" Click="PinWindow_Click">
                 <ToggleButton.Content>
-                    <StackPanel Orientation="Horizontal">
-                        <Image Source="/Images/pin.png" Height="15" Width="15"></Image>
-                    </StackPanel>
+                    <Viewbox Height="16" Width="16"><Path Data="{StaticResource FluentIcon.Pin}"
+                        Fill="{Binding TitleBarForeground, RelativeSource={RelativeSource AncestorType=Window}}" /></Viewbox>
                 </ToggleButton.Content>
                 <ToggleButton.Style>
                     <Style TargetType="{x:Type ToggleButton}">

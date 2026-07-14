@@ -58,7 +58,6 @@ namespace iBarter.View {
                 ? App.myCVM.AutomaticSteps
                 : App.myCVM.CargoDetails;
             ListBox_ShipCargo.AllowDrop = !automatic;
-            ButtonAdv_OptimalRoute.IsEnabled = !automatic;
             ButtonAdv_Clean.IsEnabled = !automatic;
             Panel_AutomaticRouteSelector.Visibility = Visibility.Visible;
             ComboBoxAdv_RouteSelector.IsEnabled = automatic && coordinator!.RouteOptions.Count > 0;
@@ -354,25 +353,10 @@ namespace iBarter.View {
             }
         }
 
-        // Reorder the ship cargo as an optimal sailing route starting at
-        // Cox_Pirate (遇难的酷斯海贼船), respecting the chain precedence
-        // enforced by SortByBarterChain. The reorder + persistence is
-        // handled by ShipCargoViewModel.SolveOptimalRoute (Held-Karp DP
-        // with precedence for N <= 18, greedy nearest-neighbor for larger
-        // cargoes); we refresh the ListBox here and call SaveData so the
-        // new order is written to disk.
-        private void ButtonAdv_OptimalRoute_Click(object sender, RoutedEventArgs e) {
-            if (App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute) return;
-            if (App.myCVM == null) {
-                return;
-            }
-            App.myCVM.SolveOptimalRoute();
-            CollectionViewSource.GetDefaultView(ListBox_ShipCargo.ItemsSource)?.Refresh();
-            ListBox_ShipCargo.InvalidateVisual();
-            SaveData();
-        }
-
         private void ListBoxItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
+            if (sender is ListBoxItem { Content: BarterRouteStepViewModel focusedStep }) {
+                App.myRouteCoordinator?.FocusBarterStep(focusedStep.RowId);
+            }
             if (e.ClickCount == 2) {
                 try {
                     ListBoxItem myItem = sender as ListBoxItem;

@@ -1137,7 +1137,6 @@ namespace iBarter.View {
         private async void ButtonAdv_AutoPlan_Click(object sender, RoutedEventArgs e) {
             var svc = Localization.LanguageService.Instance;
             ButtonAdv_AutoPlan.IsEnabled = false;
-            App.myRouteCoordinator?.Invalidate("auto-plan-start");
             try {
 
             // End any in-progress edit so the just-typed value makes it into the
@@ -1244,44 +1243,11 @@ namespace iBarter.View {
                 return;
             }
 
-            DataGrid_Planner.BeginInit();
-            try {
-                for (int i = 0; i < liveRows.Count; i++) {
-                    var key = i.ToString(CultureInfo.InvariantCulture);
-                    if (calculation.ApplySet.Multipliers.TryGetValue(key, out var newMul)) {
-                        liveRows[i].ExchangeQuantity = newMul;
-                    }
-                }
-            }
-            finally {
-                DataGrid_Planner.EndInit();
-            }
-
-            UpdateInvChange(-1);
-            UpdateParley();
-            SaveData();
-            UpdateMapControl();
-            if (App.myfmMain?.myShipCargo != null) {
-                App.myfmMain.myShipCargo.UpdateCurrentLV();
-            }
-
-            int selectedRoutes = calculation.ApplySet.Multipliers.Values.Count(v => v > 0);
-            // Use the planner's reported usedParley rather than summing liveRows:
-            // iterating all rows would include CK rows (which UpdateParley excludes),
-            // making the success log disagree with the toolbar label and potentially
-            // exceed 1,000,000.
-            int usedParley = calculation.UsedParley;
-            App.myCFun.Log(svc.Localize(
-                "str.Msg.Planner.AutoPlan.Success",
-                strategy.ToString(),
-                usedParley.ToString("N0", CultureInfo.InvariantCulture),
-                selectedRoutes.ToString(CultureInfo.InvariantCulture)),
-                selectedRoutes > 0 ? Brushes.DarkOliveGreen : Brushes.Orange);
-
             var routeRows = liveRows.Select((b, index) => new PlannerRouteSnapshot(
                 RowId: $"{index}:{b.IsLandName}:{b.Item1.ItemID}:{b.Item2.ItemID}",
                 ExchangeDone: b.ExchangeDone,
-                ExchangeQuantity: b.ExchangeQuantity,
+                ExchangeQuantity: calculation.ApplySet.Multipliers.GetValueOrDefault(
+                    index.ToString(CultureInfo.InvariantCulture), b.ExchangeQuantity),
                 IslandId: b.IsLandName,
                 Item1Id: b.Item1.ItemID,
                 Item1DisplayName: b.Item1NameDisplay,
@@ -1309,7 +1275,63 @@ namespace iBarter.View {
             var request = AutomaticRoutePlanningAdapter.BuildRequest(
                 routeRows, storageRows, islandRows, cargo, new RouteSearchLimits(250_000, 2_000));
             App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Solving"), Brushes.SteelBlue);
-            var routePlan = await App.myRouteCoordinator.GenerateAsync(request);
+            var routePlan = await App.myRouteCoordinator.CalculateAsync(request);
+            if (routePlan.Status is not (RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit)) {
+                switch (routePlan.Status) {
+                    case RoutePlanStatus.Infeasible:
+                        App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Infeasible",
+                            routePlan.Diagnostics.FirstOrDefault()?.Detail ?? ""), Brushes.Red);
+                        break;
+                    case RoutePlanStatus.NoFeasibleSolutionWithinLimit:
+                        App.myCFun.Log(svc.Localize("str.Log.AutoRoute.NoFeasibleWithinLimit"), Brushes.OrangeRed);
+                        break;
+                    case RoutePlanStatus.Cancelled:
+                        App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Cancelled"), Brushes.Gray);
+                        break;
+                    default:
+                        App.myCFun.Log(svc.Localize("str.Log.AutoRoute.InvalidInput",
+                            routePlan.Diagnostics.FirstOrDefault()?.Detail ?? ""), Brushes.Red);
+                        break;
+                }
+                return;
+            }
+
+            // Commit the Planner multipliers only after route calculation and replay
+            // verification succeeded. A failed new attempt therefore leaves the last
+            // saved Planner + automatic route pair intact and restorable.
+            DataGrid_Planner.BeginInit();
+            try {
+                for (int i = 0; i < liveRows.Count; i++) {
+                    string key = i.ToString(CultureInfo.InvariantCulture);
+                    if (calculation.ApplySet.Multipliers.TryGetValue(key, out int multiplier))
+                        liveRows[i].ExchangeQuantity = multiplier;
+                }
+            }
+            finally {
+                DataGrid_Planner.EndInit();
+            }
+
+            if (!App.myRouteCoordinator.PublishGeneratedPlan(request, routePlan))
+                throw new InvalidOperationException("The generated route failed commit verification.");
+
+            UpdateInvChange(-1);
+            UpdateParley();
+            SaveData();
+            UpdateMapControl();
+            App.myfmMain?.myShipCargo?.UpdateCurrentLV();
+
+            int selectedRoutes = calculation.ApplySet.Multipliers.Values.Count(value => value > 0);
+            string strategyDisplay = svc.Localize(strategy switch {
+                AutoPlanningStrategy.CrowCoinFirst => "str.Planner.AutoPlan.CrowCoinFirst",
+                AutoPlanningStrategy.RestockFirst => "str.Planner.AutoPlan.RestockFirst",
+                _ => "str.Planner.AutoPlan.ProfitFirst",
+            });
+            App.myCFun.Log(svc.Localize(
+                "str.Msg.Planner.AutoPlan.Success",
+                strategyDisplay,
+                calculation.UsedParley.ToString("N0", CultureInfo.InvariantCulture),
+                selectedRoutes.ToString(CultureInfo.InvariantCulture)),
+                selectedRoutes > 0 ? Brushes.DarkOliveGreen : Brushes.Orange);
             switch (routePlan.Status) {
                 case RoutePlanStatus.Optimal:
                     App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Optimal",
@@ -1318,20 +1340,6 @@ namespace iBarter.View {
                 case RoutePlanStatus.BestKnownWithinLimit:
                     App.myCFun.Log(svc.Localize("str.Log.AutoRoute.BestKnown",
                         routePlan.Routes.Count, routePlan.Objective?.TotalDistance ?? 0), Brushes.Orange);
-                    break;
-                case RoutePlanStatus.Infeasible:
-                    App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Infeasible",
-                        routePlan.Diagnostics.FirstOrDefault()?.Detail ?? ""), Brushes.Red);
-                    break;
-                case RoutePlanStatus.NoFeasibleSolutionWithinLimit:
-                    App.myCFun.Log(svc.Localize("str.Log.AutoRoute.NoFeasibleWithinLimit"), Brushes.OrangeRed);
-                    break;
-                case RoutePlanStatus.Cancelled:
-                    App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Cancelled"), Brushes.Gray);
-                    break;
-                case RoutePlanStatus.InvalidInput:
-                    App.myCFun.Log(svc.Localize("str.Log.AutoRoute.InvalidInput",
-                        routePlan.Diagnostics.FirstOrDefault()?.Detail ?? ""), Brushes.Red);
                     break;
             }
             }

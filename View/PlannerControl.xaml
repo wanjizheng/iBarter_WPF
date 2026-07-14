@@ -6,6 +6,7 @@
              xmlns:local="clr-namespace:iBarter"
              xmlns:loc="clr-namespace:iBarter.Localization"
              xmlns:vm="clr-namespace:iBarter.ViewModel"
+             xmlns:controls="clr-namespace:iBarter.Controls"
              xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
@@ -27,73 +28,19 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0">
-            <syncfusion:ButtonAdv
-                x:Name="ButtonAdv_New"
-                Margin="4,0,4,0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                IconWidth="26" IconHeight="26"
-                Label="{loc:Localize str.Planner.Btn.New}"
-                ToolTip="{loc:Localize str.Planner.Btn.NewTip}"
-                SizeMode="Small"
-                FontFamily="Microsoft YaHei"
-                SmallIcon="/Images/new-document.png" Click="ButtonAdv_New_Click" />
-            <syncfusion:ButtonAdv
-                x:Name="ButtonAdv_Save"
-                Margin="4,0,4,0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                IconWidth="26" IconHeight="26"
-                Label="{loc:Localize str.Planner.Btn.Save}"
-                ToolTip="{loc:Localize str.Planner.Btn.SaveTip}"
-                SizeMode="Small"
-                FontFamily="Microsoft YaHei"
-                SmallIcon="/Images/save.png" Click="ButtonAdv_Save_Click" />
-            <syncfusion:ButtonAdv
-                x:Name="ButtonAdv_Load"
-                Margin="4,0,4,0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                IconWidth="26" IconHeight="26"
-                Label="{loc:Localize str.Planner.Btn.Load}"
-                ToolTip="{loc:Localize str.Planner.Btn.LoadTip}"
-                SizeMode="Small"
-                FontFamily="Microsoft YaHei"
-                SmallIcon="/Images/load.png" Click="ButtonAdv_Load_Click" />
+            <controls:FluentIconButton x:Name="ButtonAdv_New" IconData="{StaticResource FluentIcon.DocumentAdd}"
+                Label="{loc:Localize str.Planner.Btn.New}" ToolTip="{loc:Localize str.Planner.Btn.NewTip}" Click="ButtonAdv_New_Click" />
+            <controls:FluentIconButton x:Name="ButtonAdv_Save" IconData="{StaticResource FluentIcon.Save}"
+                Label="{loc:Localize str.Planner.Btn.Save}" ToolTip="{loc:Localize str.Planner.Btn.SaveTip}" Click="ButtonAdv_Save_Click" />
+            <controls:FluentIconButton x:Name="ButtonAdv_Load" IconData="{StaticResource FluentIcon.FolderOpen}"
+                Label="{loc:Localize str.Planner.Btn.Load}" ToolTip="{loc:Localize str.Planner.Btn.LoadTip}" Click="ButtonAdv_Load_Click" />
             <Separator />
-            <syncfusion:ButtonAdv
-                x:Name="ButtonAdv_Refresh"
-                Margin="4,0,4,0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                IconWidth="26" IconHeight="26"
-                Label="{loc:Localize str.Planner.Btn.Groupping}"
-                ToolTip="{loc:Localize str.Planner.Btn.GrouppingTip}"
-                SizeMode="Small"
-                FontFamily="Microsoft YaHei"
-                SmallIcon="/Images/refresh.png" Click="ButtonAdv_Refresh_Click" />
-            <syncfusion:ButtonAdv
-                x:Name="ButtonAdv_Clean"
-                Margin="4,0,4,0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                IconWidth="26" IconHeight="26"
-                Label="{loc:Localize str.Planner.Btn.Clean}"
-                ToolTip="{loc:Localize str.Planner.Btn.CleanTip}"
-                SizeMode="Small"
-                FontFamily="Microsoft YaHei"
-                SmallIcon="/Images/clean.png" Click="ButtonAdv_Clean_Click" />
-            <syncfusion:ButtonAdv
-                x:Name="ButtonAdv_Done"
-                Margin="4,0,4,0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                IconWidth="26" IconHeight="26"
-                Label="{loc:Localize str.Planner.Btn.Done}"
-                ToolTip="{loc:Localize str.Planner.Btn.DoneTip}"
-                SizeMode="Small"
-                FontFamily="Microsoft YaHei"
-                SmallIcon="/Images/done.png" Click="ButtonAdv_Done_Click" />
+            <controls:FluentIconButton x:Name="ButtonAdv_Refresh" IconData="{StaticResource FluentIcon.ArrowSync}"
+                Label="{loc:Localize str.Planner.Btn.Groupping}" ToolTip="{loc:Localize str.Planner.Btn.GrouppingTip}" Click="ButtonAdv_Refresh_Click" />
+            <controls:FluentIconButton x:Name="ButtonAdv_Clean" IconData="{StaticResource FluentIcon.Delete}"
+                Label="{loc:Localize str.Planner.Btn.Clean}" ToolTip="{loc:Localize str.Planner.Btn.CleanTip}" Click="ButtonAdv_Clean_Click" />
+            <controls:FluentIconButton x:Name="ButtonAdv_Done" IconData="{StaticResource FluentIcon.CheckmarkCircle}"
+                Label="{loc:Localize str.Planner.Btn.Done}" ToolTip="{loc:Localize str.Planner.Btn.DoneTip}" Click="ButtonAdv_Done_Click" />
             <Separator />
             <!-- Auto Plan (added by Phase 6 / Task 6). Reuses the refresh icon
                  rather than shipping a new bitmap asset. -->
@@ -103,17 +50,8 @@
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.ProfitFirst}" Tag="ProfitFirst" />
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.RestockFirst}" Tag="RestockFirst" />
             </syncfusion:ComboBoxAdv>
-            <syncfusion:ButtonAdv
-                x:Name="ButtonAdv_AutoPlan"
-                Margin="4,0,4,0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                IconWidth="26" IconHeight="26"
-                Label="{loc:Localize str.Planner.Btn.AutoPlan}"
-                ToolTip="{loc:Localize str.Planner.Btn.AutoPlanTip}"
-                SizeMode="Small"
-                FontFamily="Microsoft YaHei"
-                SmallIcon="/Images/pilot.png" Click="ButtonAdv_AutoPlan_Click" />
+            <controls:FluentIconButton x:Name="ButtonAdv_AutoPlan" IconData="{StaticResource FluentIcon.VehicleShip}"
+                Label="{loc:Localize str.Planner.Btn.AutoPlan}" ToolTip="{loc:Localize str.Planner.Btn.AutoPlanTip}" Click="ButtonAdv_AutoPlan_Click" />
             <Separator />
             <Label x:Name="Label_TotalBarters" Content="{loc:Localize str.Planner.TotalBarters}" VerticalAlignment="Center" />
             <Separator />

@@ -6,6 +6,7 @@
     xmlns:local="clr-namespace:iBarter.View"
     xmlns:domain="clr-namespace:iBarter"
     xmlns:vm="clr-namespace:iBarter.ViewModel"
+    xmlns:controls="clr-namespace:iBarter.Controls"
     xmlns:loc="clr-namespace:iBarter.Localization"
     xmlns:Syncfusion="http://schemas.syncfusion.com/wpf" x:Class="iBarter.View.ShipCargoControl"
     xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
@@ -92,18 +93,6 @@
             <RowDefinition Height="300" />
         </Grid.RowDefinitions>
         <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0">
-            <Syncfusion:ButtonAdv
-                x:Name="ButtonAdv_OptimalRoute"
-                Margin="4,0,4,0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                IconWidth="26" IconHeight="26"
-                Label="{loc:Localize str.ShipCargo.Btn.OptimalRoute}"
-                ToolTip="{loc:Localize str.ShipCargo.Btn.OptimalRouteTip}"
-                SizeMode="Small"
-                FontFamily="Microsoft YaHei"
-                SmallIcon="/Images/pilot.png" Click="ButtonAdv_OptimalRoute_Click" />
-            <Separator />
             <StackPanel x:Name="Panel_AutomaticRouteSelector" Margin="6,0" VerticalAlignment="Center" Visibility="Visible">
                 <TextBlock Text="{loc:Localize str.ShipCargo.AutoRoute.Selector}" FontSize="10" Foreground="#5B7184" />
                 <ComboBox x:Name="ComboBoxAdv_RouteSelector" Width="126"
@@ -112,17 +101,8 @@
                           SelectionChanged="ComboBoxAdv_RouteSelector_SelectionChanged" />
             </StackPanel>
             <Separator />
-            <Syncfusion:ButtonAdv
-                x:Name="ButtonAdv_Clean"
-                Margin="4,0,4,0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                IconWidth="26" IconHeight="26"
-                Label="{loc:Localize str.ShipCargo.Btn.Clean}"
-                ToolTip="{loc:Localize str.ShipCargo.Btn.CleanTip}"
-                SizeMode="Small"
-                FontFamily="Microsoft YaHei"
-                SmallIcon="/Images/clean.png" Click="ButtonAdv_Clean_Click" />
+            <controls:FluentIconButton x:Name="ButtonAdv_Clean" IconData="{StaticResource FluentIcon.Delete}"
+                Label="{loc:Localize str.ShipCargo.Btn.Clean}" ToolTip="{loc:Localize str.ShipCargo.Btn.CleanTip}" Click="ButtonAdv_Clean_Click" />
         </Syncfusion:ToolBarAdv>
         <ListBox x:Name="ListBox_ShipCargo" Grid.Row="1" Background="#101B26" BorderThickness="0"
                  AllowDrop="True" PreviewMouseLeftButtonDown="ListBox_PreviewMouseLeftButtonDown" Drop="ListBox_Drop">

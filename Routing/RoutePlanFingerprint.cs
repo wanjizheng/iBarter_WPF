@@ -5,8 +5,11 @@ using System.Text;
 namespace iBarter.Routing;
 
 public static class RoutePlanFingerprint {
+    private const string AlgorithmVersion = "route-planner-v3-corridor-beam-intra-route";
+
     public static string Compute(AutomaticRoutePlanningRequest request) {
         var builder = new StringBuilder(2048);
+        Add(builder, AlgorithmVersion);
         Add(builder, request.ConfigurationVersion);
         Add(builder, request.ExtraLT);
         Add(builder, request.TotalLT);

@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using System.Windows.Media.Effects;
 using iBarter.Localization;
 using iBarter.ViewModel;
 using iBarter.Navigation;
@@ -40,10 +41,14 @@ namespace iBarter.View {
         private class IslandVisual {
             public Islands Islands;
             public bool IsTemp;
+            public bool IsWarehouse;
             public Grid ImageGrid;
             public Label Label;
             public Line Line;
+            public Rectangle Rectangle;
         }
+
+        private bool routeDisplaySubscribed;
 
         public MapControl() {
             InitializeComponent();
@@ -57,6 +62,10 @@ namespace iBarter.View {
             // (AdjustLabels) stop firing after the user switches tabs.
             this.Loaded += (_, _) => {
                 if (myTimer != null && !myTimer.IsEnabled) myTimer.Start();
+                if (!routeDisplaySubscribed && App.myRouteCoordinator != null) {
+                    App.myRouteCoordinator.RouteDisplayChanged += RouteCoordinator_RouteDisplayChanged;
+                    routeDisplaySubscribed = true;
+                }
             };
             this.Unloaded += (_, _) => {
                 if (myTimer != null && myTimer.IsEnabled) myTimer.Stop();
@@ -71,6 +80,10 @@ namespace iBarter.View {
                 Dispatcher.BeginInvoke(new Action(IslandsButtonRearrange),
                     DispatcherPriority.Render);
             myTimer.Start();
+        }
+
+        private void RouteCoordinator_RouteDisplayChanged(object? sender, EventArgs e) {
+            Dispatcher.BeginInvoke(new Action(IslandsButtonInitialisation), DispatcherPriority.Render);
         }
 
         private void TimerOnTick(object? sender, EventArgs e) {
@@ -172,6 +185,7 @@ namespace iBarter.View {
             listLabels = new List<Label>();
             listImages = new List<Grid>();
             listLines = new List<Line>();
+            var renderSnapshot = CurrentRenderSnapshot();
 
             for (int i = listGrid_Islands.Count - 1; i >= 0; i--) {
                 Grid grid = listGrid_Islands[i];
@@ -182,7 +196,9 @@ namespace iBarter.View {
                     b.ExchangeDone == false &&
                     b.ExchangeQuantity > 0 &&
                     b.IsLandName == visual.Islands.IslandsName);
-                if (!hasActiveBarter) {
+                bool isVisibleWarehouse = visual != null
+                    && renderSnapshot.WarehouseIslandIds.Contains(visual.Islands.IslandsName);
+                if (!hasActiveBarter && !isVisibleWarehouse) {
                     // Skip temp placeholders - they live on the map
                     // permanently as position markers and must stay in
                     // listGrid_Islands so the rearrange loop repositions
@@ -222,8 +238,11 @@ namespace iBarter.View {
                         myLabel.Height = myLabel.ActualHeight;
                     }
 
-                    Barter barter = App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myIslands.IslandsName);
-                    if (barter != null) {
+                    bool manualHighlight = App.myCVM.CargoDetails.Any(
+                        barter => barter.IsLandName == myIslands.IslandsName);
+                    bool automaticHighlight = App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute
+                        && renderSnapshot.BarterIslandIds.Contains(myIslands.IslandsName);
+                    if (manualHighlight || automaticHighlight) {
                         myLabel.FontWeight = FontWeights.Bold;
                         myLabel.FontSize = 14;
                         myLabel.Width = Double.NaN;
@@ -385,8 +404,17 @@ namespace iBarter.View {
                     : AutomaticRouteBrushes[path.ColorIndex % AutomaticRouteBrushes.Length];
                 int patternRound = snapshot.IsManual ? 0 : path.ColorIndex / AutomaticRouteBrushes.Length;
                 var dash = new DoubleCollection(AutomaticDashPatterns[patternRound % AutomaticDashPatterns.Length]);
-                DrawRoutePath(route, stroke, dash);
+                DrawRoutePath(path.RouteNumber, route, stroke, dash);
             }
+        }
+
+        private static RouteRenderSnapshot CurrentRenderSnapshot() {
+            var coordinator = App.myRouteCoordinator;
+            IReadOnlyList<Barter> manualCargo = coordinator?.Mode == CargoMode.Manual
+                ? App.myCVM.CargoDetails.ToList()
+                : Array.Empty<Barter>();
+            return coordinator?.GetRenderSnapshot(manualCargo)
+                ?? RouteRenderSnapshotFactory.CreateManual(manualCargo.Select(x => x.IsLandName).ToArray());
         }
 
         private List<Islands>? ResolveRoute(RouteRenderPath path, RouteRenderSnapshot snapshot) {
@@ -409,6 +437,7 @@ namespace iBarter.View {
         }
 
         private void DrawRoutePath(
+            int routeNumber,
             IReadOnlyList<Islands> route,
             Brush stroke,
             DoubleCollection dashArray) {
@@ -417,9 +446,11 @@ namespace iBarter.View {
                 var toIsland = route[i + 1];
                 var displayPath = RouteDisplayGeometry.BuildDirectLeg(
                     GetIslandCenter(fromIsland), GetIslandCenter(toIsland));
+                bool focused = App.myRouteCoordinator?.IsFocusedSegment(
+                    routeNumber, fromIsland.IslandsName, toIsland.IslandsName) == true;
                 for (int segment = 0; segment < displayPath.Count - 1; segment++)
                     DrawRouteSegment(displayPath[segment], displayPath[segment + 1], stroke, dashArray,
-                        addArrow: segment == displayPath.Count - 2);
+                        addArrow: segment == displayPath.Count - 2, focused);
             }
         }
 
@@ -428,22 +459,32 @@ namespace iBarter.View {
             Point to,
             Brush stroke,
             DoubleCollection dashArray,
-            bool addArrow) {
+            bool addArrow,
+            bool focused) {
                 double dx = to.X - from.X;
                 double dy = to.Y - from.Y;
                 if (dx == 0 && dy == 0) return;
 
-                Grid_MapMain.Children.Add(new Line {
+                bool pulse = focused && App.myRouteCoordinator?.IsFocusPulseActive == true;
+                var line = new Line {
                     X1 = from.X,
                     Y1 = from.Y,
                     X2 = to.X,
                     Y2 = to.Y,
                     Stroke = stroke,
-                    StrokeThickness = 2.5,
+                    StrokeThickness = focused ? 6 : 2.5,
                     StrokeDashArray = dashArray,
                     Tag = ROUTE_LINE_TAG,
                     IsHitTestVisible = false,
-                });
+                    Opacity = pulse && (DateTime.UtcNow.Millisecond / 220) % 2 == 0 ? 0.38 : 1,
+                };
+                if (focused) line.Effect = new DropShadowEffect {
+                    Color = Colors.White,
+                    BlurRadius = 12,
+                    ShadowDepth = 0,
+                    Opacity = 0.95,
+                };
+                Grid_MapMain.Children.Add(line);
 
                 if (!addArrow) return;
                 double angleDeg = Math.Atan2(dy, dx) * 180.0 / Math.PI;
@@ -885,30 +926,41 @@ namespace iBarter.View {
                 (!int.TryParse(b.Item1?.ItemLV, out int lv) || lv <= MAX_MAP_LV))) {
                 ButtonInitialisation(myBarter, GetBursh(myBarter));
             }
+            EnsureAutomaticWarehouseNodes();
         }
 
-        private void ButtonInitialisation(Barter _barter, Brush _brush) {
+        private void ButtonInitialisation(
+            Barter _barter,
+            Brush _brush,
+            bool isWarehouse = false,
+            string? warehouseLabel = null) {
             // Computed once and reused everywhere below instead of
             // repeating the Item1Name/Item2Name check (and instead of
             // re-deriving "temp-ness" later from a Name string), so a
             // Temp placeholder island is unambiguously identified.
-            bool isTemp = !(_barter.Item1Name != "" && _barter.Item2Name != null);
+            bool isTemp = !isWarehouse && !(_barter.Item1Name != "" && _barter.Item2Name != null);
 
             Grid myGrid_Container = new Grid();
 
-            if (!isTemp) {
+            if (!isTemp && !isWarehouse) {
                 myGrid_Container.Name = "GridContainer_" + _barter.IsLandName;
                 myGrid_Container.MouseLeftButtonDown += Islands_MouseLeftButtonDown;
                 myGrid_Container.MouseRightButtonDown += Islands_MouseRightButtonDown;
                 myGrid_Container.MouseDown += MyGrid_Container_MouseDown;
+            }
+            else if (isWarehouse) {
+                myGrid_Container.Name = "GridContainer_" + _barter.IsLandName + "Warehouse";
             }
             else {
                 myGrid_Container.Name = "GridContainer_" + _barter.IsLandName + "Temp";
             }
 
             Grid myGrid_Image = new Grid();
-            if (!isTemp) {
+            if (!isTemp && !isWarehouse) {
                 myGrid_Image.Name = "GridImage_" + _barter.IsLandName;
+            }
+            else if (isWarehouse) {
+                myGrid_Image.Name = "GridImage_" + _barter.IsLandName + "Warehouse";
             }
             else {
                 myGrid_Image.Name = "GridImage_" + _barter.IsLandName + "Temp";
@@ -926,10 +978,17 @@ namespace iBarter.View {
 
             Rectangle myRectangle = new Rectangle();
             myRectangle.Fill = _brush;
+            if (isWarehouse) {
+                myRectangle.Stroke = Brushes.Gold;
+                myRectangle.StrokeThickness = 2;
+            }
 
             Label myLabel = new Label();
-            if (!isTemp) {
+            if (!isTemp && !isWarehouse) {
                 myLabel.Name = "Label_" + _barter.IsLand.IslandsName;
+            }
+            else if (isWarehouse) {
+                myLabel.Name = "Label_" + _barter.IsLand.IslandsName + "Warehouse";
             }
             else {
                 myLabel.Name = "Label_" + _barter.IsLand.IslandsName + "Temp";
@@ -971,7 +1030,12 @@ namespace iBarter.View {
 
             myLabel.HorizontalAlignment = HorizontalAlignment.Left;
             myLabel.VerticalAlignment = VerticalAlignment.Top;
-            if (_barter.Item1Name != "" && _barter.Item2Name != "") {
+            if (isWarehouse) {
+                myLabel.Content = warehouseLabel ?? _barter.IsLand.IslandsNameDisplay;
+                myLabel.Foreground = Brushes.Gold;
+                myLabel.Background = new SolidColorBrush(Color.FromArgb(120, 5, 22, 30));
+            }
+            else if (_barter.Item1Name != "" && _barter.Item2Name != "") {
                 // Phase 6 (i18n): label format lives in the resource dictionary
                 // (str.Map.LabelFormat) so it can flip to a different layout
                 // in another language.  For now both en-US and zh-TW share
@@ -1020,7 +1084,7 @@ namespace iBarter.View {
             // but IslandsName is just the enum name (never has a "Temp" suffix), so
             // that condition was always true and a connector line got added even to
             // Temp placeholders (which have no visible label to connect to).
-            if (!isTemp) {
+            if (!isTemp && !isWarehouse) {
                 myLine = new Line();
                 myLine.Name = "Line_" + _barter.IsLand.IslandsName;
                 // Use the same light-tint derived from the group brush
@@ -1051,9 +1115,11 @@ namespace iBarter.View {
             myGrid_Container.Tag = new IslandVisual {
                 Islands = _barter.IsLand,
                 IsTemp = isTemp,
+                IsWarehouse = isWarehouse,
                 ImageGrid = myGrid_Image,
                 Label = myLabel,
-                Line = myLine
+                Line = myLine,
+                Rectangle = myRectangle,
             };
 
             Grid_MapMain.Children.Add(myGrid_Container);
@@ -1063,6 +1129,46 @@ namespace iBarter.View {
             }
 
             //IslandsButtonRearrange();
+        }
+
+        private void EnsureAutomaticWarehouseNodes() {
+            var snapshot = CurrentRenderSnapshot();
+            if (App.myRouteCoordinator?.Mode != CargoMode.AutomaticRoute) return;
+            foreach (string islandId in snapshot.WarehouseIslandIds.OrderBy(x => x, StringComparer.Ordinal)) {
+                var island = App.listIslands?.FirstOrDefault(candidate => candidate.IslandsName == islandId);
+                if (island is null) continue;
+                var roles = App.myRouteCoordinator.CurrentPlan?.Routes
+                    .Where(route => App.myRouteCoordinator.ShowAllRoutes
+                        || route.Number == App.myRouteCoordinator.SelectedRouteNumber)
+                    .SelectMany(route => route.Steps)
+                    .Where(step => step.IslandId == islandId)
+                    .ToArray() ?? [];
+                bool pickup = roles.Any(step => step is WarehousePickupStep);
+                bool unload = roles.Any(step => step is WarehouseUnloadStep);
+                string role = pickup && unload ? "装货/卸货" : pickup ? "装货" : "卸货";
+                string label = $"{island.IslandsNameDisplay} · {role}";
+
+                var existingGrid = listGrid_Islands.FirstOrDefault(grid =>
+                    grid.Tag is IslandVisual visual && visual.Islands.IslandsName == islandId);
+                if (existingGrid?.Tag is IslandVisual existing) {
+                    existing.IsWarehouse = true;
+                    existing.IsTemp = false;
+                    existing.Rectangle.Stroke = Brushes.Gold;
+                    existing.Rectangle.StrokeThickness = 2;
+                    if (string.IsNullOrWhiteSpace(existing.Label.Content?.ToString())) {
+                        existing.Label.Content = label;
+                        existing.Label.Foreground = Brushes.Gold;
+                        existing.Label.Visibility = Visibility.Visible;
+                        if (!existingGrid.Children.Contains(existing.Label)) existingGrid.Children.Add(existing.Label);
+                    }
+                    continue;
+                }
+
+                var marker = new Barter(
+                    island, new Items("", "000", "0"), new Items("", "000", "0"),
+                    0, false, 0, 0, 0);
+                ButtonInitialisation(marker, Brushes.DarkGoldenrod, true, label);
+            }
         }
 
         private void MyGrid_Container_MouseDown(object sender, MouseButtonEventArgs e) {

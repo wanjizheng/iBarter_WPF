@@ -85,7 +85,7 @@ namespace iBarter {
                 try {
                     if (LanguageService.Instance?.Current == AppLanguage.TraditionalChinese
                         && !string.IsNullOrWhiteSpace(strNameZhTw)) {
-                        return strNameZhTw;
+                        return ChineseTextNormalizer.ToSimplifiedChinese(strNameZhTw);
                     }
                 }
                 catch {

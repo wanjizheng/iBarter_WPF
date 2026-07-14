@@ -149,4 +149,82 @@ public sealed class AutomaticRouteHeuristicTests {
         Assert.All(route.Steps, step => Assert.True(step.Load.TotalWithExtraLT <= request.TotalLT));
         Assert.True(RoutePlanVerifier.Verify(request, result.Plan).Success);
     }
+
+    [Fact]
+    public void Dependency_aware_route_reordering_inserts_arehaza_between_hakoven_and_lema() {
+        var items = new Dictionary<string, RouteItem> {
+            ["HakovenInput"] = new("HakovenInput", "HakovenInput", 5, 1_000),
+            ["ArehazaInput"] = new("ArehazaInput", "ArehazaInput", 5, 1_000),
+            ["HakovenOutput"] = new("HakovenOutput", "HakovenOutput", 5, 1_000),
+            ["LemaOutput"] = new("LemaOutput", "LemaOutput", 5, 1_000),
+            ["ArehazaOutput"] = new("ArehazaOutput", "ArehazaOutput", 5, 1_000),
+            ["IliyaOutput"] = new("IliyaOutput", "IliyaOutput", 5, 1_000),
+        };
+        var request = new AutomaticRoutePlanningRequest(
+            [
+                new("hakoven", "Hakoven", new RoutePoint(1_252_450, 547_567),
+                    "HakovenInput", 5, "HakovenOutput", 5),
+                new("lema", "Lema", new RoutePoint(417_920, 735_338),
+                    "HakovenOutput", 5, "LemaOutput", 5),
+                new("arehaza", "Arehaza", new RoutePoint(1_267_170, 177_948),
+                    "ArehazaInput", 5, "ArehazaOutput", 5),
+                new("iliya", "Iliya", new RoutePoint(360_000, 520_000),
+                    "ArehazaOutput", 5, "IliyaOutput", 5),
+            ],
+            items,
+            [new RouteWarehouse("Iliya", "Iliya", new RoutePoint(360_000, 520_000),
+                new Dictionary<string, int> {
+                    ["HakovenInput"] = 5,
+                    ["ArehazaInput"] = 5,
+                })],
+            2_411, 24_110, new RouteSearchLimits(100_000, 500), "right-region-order");
+        var state = RouteSimulationState.CreateInitial(request);
+
+        state = RouteStateTransition.TryPickup(request, state, "Iliya", [
+            new RouteItemQuantity("HakovenInput", 5),
+            new RouteItemQuantity("ArehazaInput", 5),
+        ]).State;
+        foreach (string rowId in new[] { "hakoven", "lema", "arehaza", "iliya" }) {
+            int index = request.Tasks.ToList().FindIndex(task => task.RowId == rowId);
+            var transition = RouteStateTransition.TryBarter(request, state, index);
+            Assert.True(transition.Success, transition.Diagnostic?.Code);
+            state = transition.State;
+        }
+        state = WarehouseUnloadPlanner.TryCompleteRoute(request, state).State;
+
+        var improved = IntraRouteOrderOptimizer.Improve(request, state, CancellationToken.None);
+
+        var rowIds = Assert.Single(improved.FinishedRoutes).Steps
+            .OfType<BarterStep>().Select(step => step.RowId).ToArray();
+        Assert.Equal(["hakoven", "arehaza", "lema", "iliya"], rowIds);
+        Assert.True(improved.TotalDistance < state.TotalDistance * 0.7);
+        var plan = RoutePlanFactory.FromState(
+            request, improved, RoutePlanStatus.BestKnownWithinLimit, []);
+        Assert.True(RoutePlanVerifier.Verify(request, plan).Success);
+    }
+
+    [Fact]
+    public void Bounded_beam_search_finds_and_verifies_a_plan_above_the_exact_search_limit() {
+        const int taskCount = 13;
+        var items = Enumerable.Range(0, taskCount).ToDictionary(
+            i => $"I{i}", i => new RouteItem($"I{i}", $"I{i}", 4, 100), StringComparer.Ordinal);
+        items["Reward"] = new RouteItem("Reward", "Reward", 5, 0);
+        var tasks = Enumerable.Range(0, taskCount).Select(i =>
+            new RouteBarterTask($"r{i:D2}", $"P{i:D2}", new RoutePoint(i * 10 + 10, i % 3),
+                $"I{i}", 1, "Reward", 1)).ToArray();
+        var stock = Enumerable.Range(0, taskCount).ToDictionary(
+            i => $"I{i}", _ => 1, StringComparer.Ordinal);
+        var request = new AutomaticRoutePlanningRequest(
+            tasks, items,
+            [new RouteWarehouse("W", "W", new RoutePoint(0, 0), stock)],
+            0, 500, new RouteSearchLimits(20_000, 100), "beam-large");
+
+        var incumbent = AutomaticRouteBeamSearch.TryBuildIncumbent(
+            request, AutomaticRoutePreflight.Validate(request), CancellationToken.None);
+
+        Assert.NotNull(incumbent);
+        Assert.Equal(taskCount, incumbent.Plan.Routes
+            .SelectMany(route => route.Steps).OfType<BarterStep>().Count());
+        Assert.True(RoutePlanVerifier.Verify(request, incumbent.Plan).Success);
+    }
 }

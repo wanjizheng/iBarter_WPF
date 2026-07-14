@@ -83,7 +83,11 @@ namespace iBarter {
                 try {
                     if (LanguageService.Instance?.Current == AppLanguage.TraditionalChinese
                         && !string.IsNullOrWhiteSpace(strNameZhTw)) {
-                        return strNameZhTw;
+                        // Keep the Taiwan game terminology while presenting simplified
+                        // glyphs. The old sidecar shipped several Velia spellings;
+                        // normalize that one known game term consistently.
+                        if (IslandsName == nameof(EnumLists.Island.Velia)) return "贝尔利亚村庄";
+                        return ChineseTextNormalizer.ToSimplifiedChinese(strNameZhTw);
                     }
                 }
                 catch {

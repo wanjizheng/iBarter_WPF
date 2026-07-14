@@ -31,6 +31,7 @@ public sealed class WarehouseRouteStepViewModel : AutomaticRouteStepViewModel {
     public WarehouseRouteStepViewModel(
         string warehouseId,
         string islandId,
+        string islandDisplayName,
         bool isUnload,
         IReadOnlyList<RouteItemQuantity> items,
         IReadOnlyDictionary<string, RouteItem> itemLookup,
@@ -38,7 +39,7 @@ public sealed class WarehouseRouteStepViewModel : AutomaticRouteStepViewModel {
         : base(
             LanguageService.Instance.Localize(isUnload
                 ? "str.ShipCargo.AutoRoute.Unload"
-                : "str.ShipCargo.AutoRoute.Pickup", WarehouseDisplayName(warehouseId)),
+                : "str.ShipCargo.AutoRoute.Pickup", islandDisplayName),
             string.Empty,
             FormatLoad(load),
             islandId) {
@@ -51,12 +52,6 @@ public sealed class WarehouseRouteStepViewModel : AutomaticRouteStepViewModel {
                 : LanguageService.Instance.Localize("str.ShipCargo.AutoRoute.UnknownItem"),
             x.Quantity,
             Icon(x.ItemId))).ToArray();
-    }
-
-    private static string WarehouseDisplayName(string warehouseId) {
-        string key = "str.Grid.Storage.Col." + warehouseId;
-        string localized = LanguageService.Instance.Localize(key);
-        return localized == key ? warehouseId : localized;
     }
 
     private static string Icon(string itemId) =>
@@ -76,9 +71,10 @@ public sealed class BarterRouteStepViewModel : AutomaticRouteStepViewModel {
 
     public BarterRouteStepViewModel(
         BarterStep step,
+        string islandDisplayName,
         IReadOnlyDictionary<string, RouteItem> items)
         : base(
-            LanguageService.Instance.Localize("str.ShipCargo.AutoRoute.Barter", step.IslandId),
+            LanguageService.Instance.Localize("str.ShipCargo.AutoRoute.Barter", islandDisplayName),
             $"{Display(items, step.Consumed.ItemId)} × {step.Consumed.Quantity} → " +
             $"{Display(items, step.Produced.ItemId)} × {step.Produced.Quantity}",
             FormatLoad(step.Load),

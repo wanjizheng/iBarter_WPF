@@ -42,6 +42,27 @@ public sealed class RoutePlanPersistenceTests {
         finally { File.Delete(path); }
     }
 
+    [Fact]
+    public void Legacy_output_plan_is_migrated_once_to_the_user_data_location() {
+        string root = Path.Combine(Path.GetTempPath(), "iBarter-route-migration-" + Guid.NewGuid().ToString("N"));
+        string legacy = Path.Combine(root, "app", "Resources", "automatic-route-plan.json");
+        string current = Path.Combine(root, "user", "automatic-route-plan.json");
+        try {
+            Directory.CreateDirectory(Path.GetDirectoryName(legacy)!);
+            File.WriteAllText(legacy, "legacy-plan");
+
+            Assert.True(AutomaticRoutePlanStorage.TryMigrate(legacy, current));
+            Assert.Equal("legacy-plan", File.ReadAllText(current));
+
+            File.WriteAllText(legacy, "newer-legacy-plan");
+            Assert.False(AutomaticRoutePlanStorage.TryMigrate(legacy, current));
+            Assert.Equal("legacy-plan", File.ReadAllText(current));
+        }
+        finally {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string TempPath() => Path.Combine(
         Path.GetTempPath(), "iBarter-route-" + Guid.NewGuid().ToString("N") + ".json");
 }

@@ -24,6 +24,9 @@ public sealed class AutomaticRoutePlanner {
 
             RoutePlan? incumbent = AutomaticRouteHeuristic.TryBuildIncumbent(
                 request, preflight, cancellationToken)?.Plan;
+            if (incumbent is null && request.Tasks.Count > AutomaticRouteSearchPolicy.ExactTaskLimit)
+                incumbent = AutomaticRouteBeamSearch.TryBuildIncumbent(
+                    request, preflight, cancellationToken)?.Plan;
             if (incumbent is not null) {
                 var checkedIncumbent = RoutePlanVerifier.Verify(request, incumbent);
                 incumbent = checkedIncumbent.Success ? checkedIncumbent.VerifiedPlan : null;

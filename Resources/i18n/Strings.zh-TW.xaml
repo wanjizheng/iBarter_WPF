@@ -104,7 +104,7 @@
     <sys:String x:Key="str.Grid.Storage.Col.Inventory">库存</sys:String>
     <sys:String x:Key="str.Grid.Storage.Col.Icon">图示</sys:String>
     <sys:String x:Key="str.Grid.Storage.Col.Tier">等级</sys:String>
-    <sys:String x:Key="str.Grid.Storage.Col.Velia">贝利亚</sys:String>
+    <sys:String x:Key="str.Grid.Storage.Col.Velia">贝尔利亚</sys:String>
     <sys:String x:Key="str.Grid.Storage.Col.Iliya">伊利亚</sys:String>
     <sys:String x:Key="str.Grid.Storage.Col.Epheria">伊菲利亚</sys:String>
     <sys:String x:Key="str.Grid.Storage.Col.Ancado">安卡多</sys:String>

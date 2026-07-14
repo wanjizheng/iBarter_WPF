@@ -44,6 +44,9 @@ public sealed class RouteRenderSnapshotTests {
         var selected = Assert.Single(one.Paths);
         Assert.Equal(2, selected.RouteNumber);
         Assert.Equal(["Iliya", "C", "Velia"], selected.IslandIds);
+        Assert.Equal(["C"], one.BarterIslandIds);
+        Assert.Equal(["Iliya", "Velia"], one.WarehouseIslandIds.OrderBy(x => x).ToArray());
+        Assert.Equal(["A", "C"], all.BarterIslandIds.OrderBy(x => x).ToArray());
         Assert.Equal(2, all.Paths.Count);
         Assert.NotEqual(all.Paths[0].ColorIndex, all.Paths[1].ColorIndex);
     }

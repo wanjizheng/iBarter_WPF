@@ -151,6 +151,8 @@ namespace iBarter.Localization {
                         string key = keyAttr.Value;
                         if (string.IsNullOrEmpty(key)) continue;
                         string text = (el.Value ?? string.Empty).Trim();
+                        if (value == AppLanguage.TraditionalChinese)
+                            text = ChineseTextNormalizer.ToSimplifiedChinese(text);
                         fresh[key] = text;
                     }
                 }

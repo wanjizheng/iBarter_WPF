@@ -9,8 +9,7 @@ namespace iBarter.ViewModel;
 public enum CargoMode { Manual, AutomaticRoute }
 
 public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable {
-    private static string PersistencePath => Path.Combine(
-        AppDomain.CurrentDomain.BaseDirectory, "Resources", "automatic-route-plan.json");
+    private static string PersistencePath => AutomaticRoutePlanStorage.UserDataPath;
     private readonly object gate = new();
     private readonly AutomaticRoutePlanner planner = new();
     private readonly StorageViewModel storageViewModel;
@@ -22,6 +21,10 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private RoutePlan? currentPlan;
     private int? selectedRouteNumber;
     private bool showAllRoutes;
+    private int? focusedRouteNumber;
+    private string? focusedFromIslandId;
+    private string? focusedToIslandId;
+    private DateTime focusPulseUntilUtc;
     private IReadOnlyList<AutomaticRouteStepViewModel> visibleAutomaticSteps = [];
     private IReadOnlyList<RouteSelectionOption> routeOptions = [];
 
@@ -34,6 +37,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         storageViewModel.StorageChanged += StorageChanged;
         cargoProperty.PropertyChanged += CargoPropertyChanged;
         cargoViewModel.AttachRouteCoordinator(this);
+        AutomaticRoutePlanStorage.MigrateLegacyOutputIfNeeded();
     }
 
     public CargoMode Mode => mode;
@@ -44,7 +48,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     public IReadOnlyList<RouteSelectionOption> RouteOptions => routeOptions;
     public event EventHandler? RouteDisplayChanged;
 
-    public async Task<RoutePlan> GenerateAsync(AutomaticRoutePlanningRequest request) {
+    public async Task<RoutePlan> CalculateAsync(AutomaticRoutePlanningRequest request) {
         CancellationTokenSource ownCancellation;
         long ownRequestId;
         string fingerprint = RoutePlanFingerprint.Compute(request);
@@ -80,9 +84,25 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 plan = verification.VerifiedPlan!;
             }
         }
-        Publish(plan);
-        SaveCurrentPlan();
         return plan;
+    }
+
+    public async Task<RoutePlan> GenerateAsync(AutomaticRoutePlanningRequest request) {
+        var plan = await CalculateAsync(request);
+        PublishGeneratedPlan(request, plan);
+        return plan;
+    }
+
+    public bool PublishGeneratedPlan(AutomaticRoutePlanningRequest request, RoutePlan plan) {
+        if (plan.Status is not (RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit))
+            return false;
+        if (!StringComparer.Ordinal.Equals(plan.InputFingerprint, RoutePlanFingerprint.Compute(request)))
+            return false;
+        var verification = RoutePlanVerifier.Verify(request, plan);
+        if (!verification.Success || verification.VerifiedPlan is null) return false;
+        Publish(verification.VerifiedPlan);
+        SaveCurrentPlan();
+        return true;
     }
 
     public bool TryRestore(AutomaticRoutePlanningRequest request) {
@@ -103,6 +123,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         if (currentPlan?.Routes.All(x => x.Number != routeNumber) != false) return;
         selectedRouteNumber = routeNumber;
         showAllRoutes = false;
+        ClearFocus();
         UpdateVisibleRoute();
         NotifyDisplayChanged();
         SaveCurrentPlan();
@@ -111,6 +132,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     public void SelectAll() {
         if (currentPlan?.Routes.Count > 0 != true) return;
         showAllRoutes = true;
+        ClearFocus();
         RaisePropertyChanged(nameof(ShowAllRoutes));
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
         SaveCurrentPlan();
@@ -127,6 +149,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     public void ActivateManual() {
         mode = CargoMode.Manual;
         showAllRoutes = false;
+        ClearFocus();
         RaisePropertyChanged(nameof(Mode));
         RaisePropertyChanged(nameof(ShowAllRoutes));
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
@@ -144,8 +167,35 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         visibleAutomaticSteps = [];
         routeOptions = [];
         mode = CargoMode.Manual;
+        ClearFocus();
         NotifyAll();
     }
+
+    public void FocusBarterStep(string rowId) {
+        if (currentPlan is null || selectedRouteNumber is not int routeNumber) return;
+        var route = currentPlan.Routes.FirstOrDefault(candidate => candidate.Number == routeNumber);
+        if (route is null) return;
+        int index = route.Steps.ToList().FindIndex(
+            step => step is BarterStep barter && StringComparer.Ordinal.Equals(barter.RowId, rowId));
+        if (index < 0) return;
+        string destination = route.Steps[index].IslandId;
+        int previous = index - 1;
+        while (previous >= 0 && StringComparer.Ordinal.Equals(route.Steps[previous].IslandId, destination))
+            previous--;
+        if (previous < 0) return;
+        focusedRouteNumber = routeNumber;
+        focusedFromIslandId = route.Steps[previous].IslandId;
+        focusedToIslandId = destination;
+        focusPulseUntilUtc = DateTime.UtcNow.AddSeconds(1.8);
+        RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public bool IsFocusedSegment(int routeNumber, string fromIslandId, string toIslandId) =>
+        focusedRouteNumber == routeNumber
+        && StringComparer.Ordinal.Equals(focusedFromIslandId, fromIslandId)
+        && StringComparer.Ordinal.Equals(focusedToIslandId, toIslandId);
+
+    public bool IsFocusPulseActive => DateTime.UtcNow < focusPulseUntilUtc;
 
     public RouteRenderSnapshot GetRenderSnapshot(IReadOnlyList<Barter> manualCargo) {
         if (mode == CargoMode.Manual || currentPlan is null) {
@@ -170,6 +220,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         int? preferredRouteNumber = null,
         bool preferredShowAll = false) {
         currentPlan = plan;
+        ClearFocus();
         bool hasUsableRoutes = plan.Status is RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit
             && plan.Routes.Count > 0;
         mode = hasUsableRoutes ? CargoMode.AutomaticRoute : CargoMode.Manual;
@@ -214,10 +265,13 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
 
     private AutomaticRouteStepViewModel ToViewModel(RouteStep step) => step switch {
         WarehousePickupStep pickup => new WarehouseRouteStepViewModel(
-            pickup.WarehouseId, pickup.IslandId, false, pickup.Items, BuildItemLookup(pickup.Items), pickup.Load),
+            pickup.WarehouseId, pickup.IslandId, ResolveIslandDisplayName(pickup.IslandId), false,
+            pickup.Items, BuildItemLookup(pickup.Items), pickup.Load),
         WarehouseUnloadStep unload => new WarehouseRouteStepViewModel(
-            unload.WarehouseId, unload.IslandId, true, unload.Items, BuildItemLookup(unload.Items), unload.Load),
-        BarterStep barter => new BarterRouteStepViewModel(barter, currentPlan is null
+            unload.WarehouseId, unload.IslandId, ResolveIslandDisplayName(unload.IslandId), true,
+            unload.Items, BuildItemLookup(unload.Items), unload.Load),
+        BarterStep barter => new BarterRouteStepViewModel(
+            barter, ResolveIslandDisplayName(barter.IslandId), currentPlan is null
             ? new Dictionary<string, RouteItem>()
             : BuildItemLookup(barter)),
         _ => throw new InvalidOperationException($"Unknown route step {step.GetType().Name}"),
@@ -239,6 +293,10 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private static string ResolveItemDisplayName(string itemId) =>
         App.listItems?.FirstOrDefault(x => x.ItemID == itemId)?.ItemNameDisplay
         ?? Localization.LanguageService.Instance.Localize("str.ShipCargo.AutoRoute.UnknownItem");
+
+    private static string ResolveIslandDisplayName(string islandId) =>
+        App.listIslands?.FirstOrDefault(x => x.IslandsName == islandId)?.IslandsNameDisplay
+        ?? islandId;
 
     private void SaveCurrentPlan() {
         if (currentPlan is null || mode != CargoMode.AutomaticRoute) return;
@@ -264,6 +322,13 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private void NotifyDisplayChanged() {
         RaisePropertyChanged(nameof(Mode));
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ClearFocus() {
+        focusedRouteNumber = null;
+        focusedFromIslandId = null;
+        focusedToIslandId = null;
+        focusPulseUntilUtc = DateTime.MinValue;
     }
 
     private void StorageChanged(object? sender, EventArgs e) => Invalidate("storage");
