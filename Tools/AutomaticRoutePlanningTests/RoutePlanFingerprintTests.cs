@@ -16,6 +16,7 @@ public sealed class RoutePlanFingerprintTests {
     [InlineData("warehouse")]
     [InlineData("total-lt")]
     [InlineData("coordinate")]
+    [InlineData("configuration")]
     public void Fingerprint_changes_when_route_relevant_input_changes(string mutation) {
         var original = RouteTestData.TwoItemRequest(reverseDictionaryOrder: false);
         var changed = RouteTestData.Mutate(original, mutation);

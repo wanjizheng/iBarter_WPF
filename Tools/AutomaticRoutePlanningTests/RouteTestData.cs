@@ -86,6 +86,7 @@ internal static class RouteTestData {
         var tasks = source.Tasks.ToList();
         var warehouses = source.Warehouses.ToList();
         int totalLT = source.TotalLT;
+        string configurationVersion = source.ConfigurationVersion;
 
         switch (mutation) {
             case "quantity":
@@ -106,6 +107,9 @@ internal static class RouteTestData {
             case "coordinate":
                 tasks[0] = tasks[0] with { Point = new RoutePoint(tasks[0].Point.X + 1, tasks[0].Point.Y) };
                 break;
+            case "configuration":
+                configurationVersion += "-next";
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null);
         }
@@ -117,6 +121,6 @@ internal static class RouteTestData {
             source.ExtraLT,
             totalLT,
             source.Limits,
-            source.ConfigurationVersion);
+            configurationVersion);
     }
 }
