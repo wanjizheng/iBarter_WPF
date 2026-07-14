@@ -28,6 +28,17 @@ if (onStartupIndex < 0 || mainWindowConstructionIndex < onStartupIndex) {
     return 1;
 }
 
+string fluentControlsSource = File.ReadAllText(Path.Combine(
+    FindIBarterRepoRoot(), "Resources", "Styles", "FluentControls.xaml"));
+if (!fluentControlsSource.Contains(
+        "<Setter Property=\"Foreground\" Value=\"#35515E\" />", StringComparison.Ordinal)
+    || !fluentControlsSource.Contains("Value=\"Windows11Dark\"", StringComparison.Ordinal)
+    || !fluentControlsSource.Contains("Value=\"#E7EEF2\"", StringComparison.Ordinal)) {
+    Console.Error.WriteLine(
+        "Expected Fluent toolbar icons to use visible light and dark theme foreground colors.");
+    return 1;
+}
+
 var cv = new CV(
     () => IntPtr.Zero,
     () => null!,
