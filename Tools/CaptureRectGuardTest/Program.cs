@@ -17,6 +17,17 @@ if (cargoLoadIndex < 0 || gameWorkerIndex < 0 || cargoLoadIndex > gameWorkerInde
     return 1;
 }
 
+string appStartupSource = File.ReadAllText(Path.Combine(FindIBarterRepoRoot(), "App.xaml.cs"));
+int onStartupIndex = appStartupSource.IndexOf(
+    "protected override void OnStartup", StringComparison.Ordinal);
+int mainWindowConstructionIndex = appStartupSource.IndexOf(
+    "myfmMain = new MainWindow();", StringComparison.Ordinal);
+if (onStartupIndex < 0 || mainWindowConstructionIndex < onStartupIndex) {
+    Console.Error.WriteLine(
+        "Expected MainWindow construction after App.xaml resources are loaded in OnStartup.");
+    return 1;
+}
+
 var cv = new CV(
     () => IntPtr.Zero,
     () => null!,

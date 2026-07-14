@@ -92,8 +92,14 @@ namespace iBarter {
             myStorageVM = new StorageViewModel();
             myCVM = new ShipCargoViewModel();
             myMainWVM = new MainWindowViewModel();
+        }
 
-            //mySplashScreen = new SplashScreen();
+        protected override void OnStartup(StartupEventArgs e) {
+            base.OnStartup(e);
+
+            // App.xaml is initialized before OnStartup runs. MainWindow and its
+            // nested controls use Fluent icon resources merged by App.xaml, so
+            // constructing the window in App's constructor is too early.
             myfmMain = new MainWindow();
             myRouteCoordinator = new AutomaticRouteCoordinator(myStorageVM, myCargoProperty, myCVM);
 
@@ -110,10 +116,6 @@ namespace iBarter {
             // WPF auto-closes docked children; SplashScreen's background STA
             // Dispatcher is shut down explicitly in MainWindow_Closing.
             this.ShutdownMode = ShutdownMode.OnMainWindowClose;
-        }
-
-        protected override void OnStartup(StartupEventArgs e) {
-            base.OnStartup(e);
 
             // Load storage data once at startup, before any UI renders. Previously
             // this happened lazily inside Barter.InvQuantity (which `new`-ed a
