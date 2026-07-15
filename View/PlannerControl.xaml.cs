@@ -103,6 +103,7 @@ namespace iBarter.View {
 
         private void TryRestoreAutomaticRouteAfterLoad() {
             try {
+                App.myRouteCoordinator?.RefreshCompletedBarters(App.myPVM.BarterCollection);
                 var request = BuildCurrentAutomaticRouteRequest();
                 if (request is not null)
                     App.myRouteCoordinator?.TryRestore(request);

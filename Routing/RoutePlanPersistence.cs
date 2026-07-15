@@ -32,13 +32,34 @@ public static class RoutePlanPersistence {
         string path,
         string expectedFingerprint,
         out PersistedRoutePlan? snapshot) {
+        if (!TryRead(path, out snapshot) || snapshot is null
+            || !StringComparer.Ordinal.Equals(snapshot.Plan.InputFingerprint, expectedFingerprint)) {
+            snapshot = null;
+            return false;
+        }
+        return true;
+    }
+
+    public static bool TryLoadAfterProgress(
+        string path,
+        AutomaticRoutePlanningRequest currentRequest,
+        IReadOnlySet<string> completedBarterRowIds,
+        out PersistedRoutePlan? snapshot) {
+        if (!TryRead(path, out snapshot) || snapshot is null
+            || !RoutePlanRestoreCompatibility.IsCompatibleAfterProgress(
+                currentRequest, snapshot.Plan, completedBarterRowIds)) {
+            snapshot = null;
+            return false;
+        }
+        return true;
+    }
+
+    private static bool TryRead(string path, out PersistedRoutePlan? snapshot) {
         snapshot = null;
         try {
             if (!File.Exists(path)) return false;
             var dto = JsonSerializer.Deserialize<EnvelopeDto>(File.ReadAllText(path), JsonOptions);
-            if (dto is null || dto.SchemaVersion != SchemaVersion
-                || !StringComparer.Ordinal.Equals(dto.InputFingerprint, expectedFingerprint))
-                return false;
+            if (dto is null || dto.SchemaVersion != SchemaVersion) return false;
             var plan = FromDto(dto);
             int? selected = plan.Routes.Any(x => x.Number == dto.SelectedRouteNumber)
                 ? dto.SelectedRouteNumber

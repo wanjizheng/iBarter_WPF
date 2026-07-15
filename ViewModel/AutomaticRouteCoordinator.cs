@@ -107,15 +107,22 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
 
     public bool TryRestore(AutomaticRoutePlanningRequest request) {
         string fingerprint = RoutePlanFingerprint.Compute(request);
-        if (!RoutePlanPersistence.TryLoad(PersistencePath, fingerprint, out var persisted)
-            || persisted is null)
+        if (RoutePlanPersistence.TryLoad(PersistencePath, fingerprint, out var exact)
+            && exact is not null) {
+            var verification = RoutePlanVerifier.Verify(request, exact.Plan);
+            if (!verification.Success || verification.VerifiedPlan is null) return false;
+            Publish(
+                verification.VerifiedPlan,
+                exact.SelectedRouteNumber,
+                exact.ShowAll);
+            return true;
+        }
+
+        if (!RoutePlanPersistence.TryLoadAfterProgress(
+                PersistencePath, request, completedBarterRowIds, out var progressed)
+            || progressed is null)
             return false;
-        var verification = RoutePlanVerifier.Verify(request, persisted.Plan);
-        if (!verification.Success || verification.VerifiedPlan is null) return false;
-        Publish(
-            verification.VerifiedPlan,
-            persisted.SelectedRouteNumber,
-            persisted.ShowAll);
+        Publish(progressed.Plan, progressed.SelectedRouteNumber, progressed.ShowAll);
         return true;
     }
 

@@ -43,6 +43,36 @@ public sealed class RoutePlanPersistenceTests {
     }
 
     [Fact]
+    public void Saved_plan_restores_when_the_only_input_change_is_a_completed_barter() {
+        string path = TempPath();
+        try {
+            var original = RouteTestData.TwoItemRequest(reverseDictionaryOrder: false);
+            var plan = new AutomaticRoutePlanner().Plan(original, CancellationToken.None);
+            Assert.True(plan.Routes.Count > 0);
+            RoutePlanPersistence.Save(path, plan, plan.Routes[0].Number, showAll: false);
+
+            var remaining = new AutomaticRoutePlanningRequest(
+                original.Tasks.Where(task => task.RowId != "r1").ToArray(),
+                original.Items,
+                original.Warehouses,
+                original.ExtraLT,
+                original.TotalLT,
+                original.Limits,
+                original.ConfigurationVersion);
+
+            Assert.False(RoutePlanPersistence.TryLoad(
+                path, RoutePlanFingerprint.Compute(remaining), out _));
+            Assert.True(RoutePlanPersistence.TryLoadAfterProgress(
+                path,
+                remaining,
+                new HashSet<string>(["r1"], StringComparer.Ordinal),
+                out var restored));
+            Assert.Equal(plan.InputFingerprint, restored?.Plan.InputFingerprint);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void Automatic_route_plan_uses_the_runtime_resources_directory() {
         string baseDirectory = Path.Combine(Path.GetTempPath(), "iBarter-runtime");
 
