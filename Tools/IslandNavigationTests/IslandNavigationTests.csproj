@@ -1,10 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <OutputType>Exe</OutputType>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="xunit.v3.mtp-v2" Version="3.2.2" />
@@ -13,5 +14,6 @@
     <Compile Include="..\..\Navigation\IslandNavigationGeometry.cs" Link="Navigation\IslandNavigationGeometry.cs" />
     <Compile Include="..\..\Navigation\RouteDisplayGeometry.cs" Link="Navigation\RouteDisplayGeometry.cs" />
     <Compile Include="..\..\Navigation\ShippingCorridorGraph.cs" Link="Navigation\ShippingCorridorGraph.cs" />
+    <Compile Include="..\..\View\RouteStepMarkerFactory.cs" Link="View\RouteStepMarkerFactory.cs" />
   </ItemGroup>
 </Project>

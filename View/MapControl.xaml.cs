@@ -627,20 +627,11 @@ namespace iBarter.View {
                 Tag = ROUTE_LINE_TAG,
                 IsHitTestVisible = false,
             };
-            var number = new TextBlock {
-                Text = step.ToString(),
-                Foreground = Brushes.White,
-                FontWeight = FontWeights.SemiBold,
-                FontSize = 11,
-                Width = diameter,
-                Height = diameter,
-                TextAlignment = TextAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(center.X + 7, center.Y - diameter - 7, 0, 0),
-                Tag = ROUTE_LINE_TAG,
-                IsHitTestVisible = false,
-            };
+            var number = RouteStepMarkerFactory.CreateStepNumber(step, diameter);
+            number.VerticalAlignment = VerticalAlignment.Top;
+            number.Margin = new Thickness(center.X + 7, center.Y - diameter - 7, 0, 0);
+            number.Tag = ROUTE_LINE_TAG;
+            number.IsHitTestVisible = false;
             Grid.SetZIndex(marker, 50);
             Grid.SetZIndex(number, 51);
             Grid_MapMain.Children.Add(marker);
