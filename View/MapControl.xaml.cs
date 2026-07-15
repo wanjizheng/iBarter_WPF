@@ -31,6 +31,9 @@ namespace iBarter.View {
         private List<Grid> listImages = null;
         private List<Line> listLines = null;
         public DispatcherTimer myTimer = new DispatcherTimer();
+        private readonly MapViewportState viewportState = new MapViewportState();
+        private bool isPanningMap;
+        private Point lastPanPoint;
 
         // Holds direct references to an island's visual parts (image block,
         // label, connector line) plus its Islands model and whether it is a
@@ -57,6 +60,7 @@ namespace iBarter.View {
             public double BaseRectangleStrokeThickness;
             public bool? LastMeasuredHighlight;
             public string LastMeasuredContent = String.Empty;
+            public double LastMeasuredFontSize;
             public Size LabelPlacementSize;
         }
 
@@ -102,6 +106,73 @@ namespace iBarter.View {
         private void TimerOnTick(object? sender, EventArgs e) {
             IslandsButtonRearrange();
             InvalidateVisual();
+        }
+
+        private void MapViewport_MouseWheel(object sender, MouseWheelEventArgs e) {
+            if (e.Delta == 0) return;
+            viewportState.ZoomAt(e.GetPosition(MapViewport), e.Delta > 0 ? 1.15 : 1 / 1.15);
+            ApplyMapViewportState();
+            e.Handled = true;
+        }
+
+        private void MapViewport_MouseRightButtonDown(object sender, MouseButtonEventArgs e) {
+            if (!IsBlankMapArea(e.OriginalSource)) return;
+            isPanningMap = true;
+            lastPanPoint = e.GetPosition(MapViewport);
+            MapViewport.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void MapViewport_MouseMove(object sender, MouseEventArgs e) {
+            if (!isPanningMap || e.RightButton != MouseButtonState.Pressed) return;
+            Point current = e.GetPosition(MapViewport);
+            viewportState.PanBy(current - lastPanPoint);
+            lastPanPoint = current;
+            ApplyMapViewportState();
+        }
+
+        private void MapViewport_MouseRightButtonUp(object sender, MouseButtonEventArgs e) {
+            if (!isPanningMap) return;
+            isPanningMap = false;
+            MapViewport.ReleaseMouseCapture();
+            e.Handled = true;
+        }
+
+        private bool IsBlankMapArea(object? originalSource) {
+            return ReferenceEquals(originalSource, MapViewport)
+                || ReferenceEquals(originalSource, Grid_MapMain)
+                || ReferenceEquals(originalSource, Image_BackgroundMap);
+        }
+
+        private void ZoomIn_Click(object sender, RoutedEventArgs e) {
+            ZoomMapAtViewportCenter(1.15);
+        }
+
+        private void ZoomOut_Click(object sender, RoutedEventArgs e) {
+            ZoomMapAtViewportCenter(1 / 1.15);
+        }
+
+        private void ResetMapViewport(object sender, RoutedEventArgs e) {
+            viewportState.Reset();
+            ApplyMapViewportState();
+        }
+
+        private void ZoomMapAtViewportCenter(double multiplier) {
+            viewportState.ZoomAt(
+                new Point(MapViewport.ActualWidth / 2, MapViewport.ActualHeight / 2), multiplier);
+            ApplyMapViewportState();
+        }
+
+        private void ApplyMapViewportState() {
+            MapScaleTransform.ScaleX = viewportState.Scale;
+            MapScaleTransform.ScaleY = viewportState.Scale;
+            MapTranslateTransform.X = viewportState.OffsetX;
+            MapTranslateTransform.Y = viewportState.OffsetY;
+        }
+
+        private double GetLabelScreenFontSize(bool highlighted) {
+            double requested = 13 * Math.Sqrt(viewportState.Scale) + (highlighted ? 2 : 0);
+            return Math.Clamp(requested, 11, 16);
         }
 
         public void InitTempGrid() {
@@ -244,7 +315,7 @@ namespace iBarter.View {
                     if (routeHighlight) {
                         Brush highlightBrush = ResolveHighlightBrush(renderSnapshot, myIslands.IslandsName);
                         myLabel.FontWeight = FontWeights.ExtraBold;
-                        myLabel.FontSize = 16;
+                        myLabel.FontSize = GetLabelScreenFontSize(true) / viewportState.Scale;
                         myLabel.BorderBrush = highlightBrush;
                         myLabel.BorderThickness = new Thickness(2);
                         myLabel.Background = new SolidColorBrush(Color.FromArgb(155, 5, 22, 30));
@@ -253,7 +324,7 @@ namespace iBarter.View {
                     }
                     else {
                         myLabel.FontWeight = visual.BaseFontWeight;
-                        myLabel.FontSize = visual.BaseFontSize;
+                        myLabel.FontSize = GetLabelScreenFontSize(false) / viewportState.Scale;
                         myLabel.BorderBrush = visual.BaseBorderBrush;
                         myLabel.BorderThickness = visual.BaseBorderThickness;
                         myLabel.Background = visual.BaseBackground;
@@ -263,11 +334,13 @@ namespace iBarter.View {
                     string labelContent = myLabel.Content?.ToString() ?? String.Empty;
                     if (visual.LastMeasuredHighlight != routeHighlight
                         || visual.LastMeasuredContent != labelContent
+                        || Math.Abs(visual.LastMeasuredFontSize - myLabel.FontSize) > 0.01
                         || visual.LabelPlacementSize.Width <= 0
                         || visual.LabelPlacementSize.Height <= 0) {
                         visual.LabelPlacementSize = MeasureLabelForPlacement(myLabel);
                         visual.LastMeasuredHighlight = routeHighlight;
                         visual.LastMeasuredContent = labelContent;
+                        visual.LastMeasuredFontSize = myLabel.FontSize;
                     }
                     Size labelSize = visual.LabelPlacementSize;
 
@@ -430,9 +503,7 @@ namespace iBarter.View {
                 Brush stroke = snapshot.IsManual
                     ? Brushes.Gold
                     : AutomaticRouteBrushes[path.ColorIndex % AutomaticRouteBrushes.Length];
-                int patternRound = snapshot.IsManual ? 0 : path.ColorIndex / AutomaticRouteBrushes.Length;
-                var dash = new DoubleCollection(AutomaticDashPatterns[patternRound % AutomaticDashPatterns.Length]);
-                DrawRoutePath(path.RouteNumber, route, stroke, dash);
+                DrawRoutePath(path.RouteNumber, route, stroke);
             }
         }
 
@@ -467,8 +538,14 @@ namespace iBarter.View {
         private void DrawRoutePath(
             int routeNumber,
             IReadOnlyList<Islands> route,
-            Brush stroke,
-            DoubleCollection dashArray) {
+            Brush stroke) {
+            var coordinator = App.myRouteCoordinator;
+            bool routeSelected = coordinator is null
+                || coordinator.Mode != CargoMode.AutomaticRoute
+                || (!coordinator.ShowAllRoutes && coordinator.SelectedRouteNumber == routeNumber);
+            for (int step = 0; step < route.Count; step++) {
+                DrawRouteStepMarker(step + 1, GetIslandCenter(route[step]), stroke, routeSelected);
+            }
             for (int i = 0; i < route.Count - 1; i++) {
                 var fromIsland = route[i];
                 var toIsland = route[i + 1];
@@ -477,8 +554,8 @@ namespace iBarter.View {
                 bool focused = App.myRouteCoordinator?.IsFocusedSegment(
                     routeNumber, fromIsland.IslandsName, toIsland.IslandsName) == true;
                 for (int segment = 0; segment < displayPath.Count - 1; segment++)
-                    DrawRouteSegment(displayPath[segment], displayPath[segment + 1], stroke, dashArray,
-                        addArrow: segment == displayPath.Count - 2, focused);
+                    DrawRouteSegment(displayPath[segment], displayPath[segment + 1], stroke,
+                        addArrow: segment == displayPath.Count - 2, focused, routeSelected);
             }
         }
 
@@ -486,9 +563,9 @@ namespace iBarter.View {
             Point from,
             Point to,
             Brush stroke,
-            DoubleCollection dashArray,
             bool addArrow,
-            bool focused) {
+            bool focused,
+            bool routeSelected) {
                 double dx = to.X - from.X;
                 double dy = to.Y - from.Y;
                 if (dx == 0 && dy == 0) return;
@@ -500,11 +577,11 @@ namespace iBarter.View {
                     X2 = to.X,
                     Y2 = to.Y,
                     Stroke = stroke,
-                    StrokeThickness = focused ? 6 : 2.5,
-                    StrokeDashArray = dashArray,
+                    StrokeThickness = focused ? 6 : routeSelected ? 3 : 2,
                     Tag = ROUTE_LINE_TAG,
                     IsHitTestVisible = false,
-                    Opacity = pulse && (DateTime.UtcNow.Millisecond / 220) % 2 == 0 ? 0.38 : 1,
+                    Opacity = pulse && (DateTime.UtcNow.Millisecond / 220) % 2 == 0
+                        ? 0.38 : routeSelected ? 1 : 0.56,
                 };
                 if (focused) line.Effect = new DropShadowEffect {
                     Color = Colors.White,
@@ -533,6 +610,41 @@ namespace iBarter.View {
                 transforms.Children.Add(new TranslateTransform(to.X, to.Y));
                 arrow.RenderTransform = transforms;
                 Grid_MapMain.Children.Add(arrow);
+        }
+
+        private void DrawRouteStepMarker(int step, Point center, Brush stroke, bool routeSelected) {
+            const double diameter = 20;
+            var marker = new Ellipse {
+                Width = diameter,
+                Height = diameter,
+                Fill = new SolidColorBrush(Color.FromArgb(routeSelected ? (byte)230 : (byte)150, 5, 22, 30)),
+                Stroke = stroke,
+                StrokeThickness = routeSelected ? 2.5 : 1.5,
+                Opacity = routeSelected ? 1 : 0.72,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(center.X + 7, center.Y - diameter - 7, 0, 0),
+                Tag = ROUTE_LINE_TAG,
+                IsHitTestVisible = false,
+            };
+            var number = new TextBlock {
+                Text = step.ToString(),
+                Foreground = Brushes.White,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 11,
+                Width = diameter,
+                Height = diameter,
+                TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(center.X + 7, center.Y - diameter - 7, 0, 0),
+                Tag = ROUTE_LINE_TAG,
+                IsHitTestVisible = false,
+            };
+            Grid.SetZIndex(marker, 50);
+            Grid.SetZIndex(number, 51);
+            Grid_MapMain.Children.Add(marker);
+            Grid_MapMain.Children.Add(number);
         }
 
         private static readonly NormalizedBounds LEFT_INSET_BOUNDS = new(0, 0, 0.3775, 0.3267);

@@ -7,7 +7,19 @@
     xmlns:Syncfusion="http://schemas.syncfusion.com/wpf" x:Class="iBarter.View.MapControl"
     mc:Ignorable="d"
     d:DesignHeight="450" d:DesignWidth="800">
-    <Grid x:Name="Grid_MapMain" >
+    <Grid>
+        <Border x:Name="MapViewport" ClipToBounds="True"
+                MouseWheel="MapViewport_MouseWheel"
+                MouseRightButtonDown="MapViewport_MouseRightButtonDown"
+                MouseMove="MapViewport_MouseMove"
+                MouseRightButtonUp="MapViewport_MouseRightButtonUp">
+            <Grid x:Name="Grid_MapMain" RenderTransformOrigin="0,0">
+                <Grid.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="MapScaleTransform" />
+                        <TranslateTransform x:Name="MapTranslateTransform" />
+                    </TransformGroup>
+                </Grid.RenderTransform>
 
         <Image x:Name="Image_BackgroundMap" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top" Stretch="Fill"
                Source="/Images/iBarterMap.png"/>
@@ -278,5 +290,13 @@
 
         <!-- <local:ToolTipControl x:Name="myTTC1" Width="150" Height ="35" Margin="-125,272,625,108"></local:ToolTipControl> -->
 
+            </Grid>
+        </Border>
+        <StackPanel Panel.ZIndex="100" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Orientation="Horizontal" Margin="8" Background="#99051E2A">
+            <Button Content="−" Width="28" Height="28" Click="ZoomOut_Click" ToolTip="缩小" />
+            <Button Content="＋" Width="28" Height="28" Margin="4,0" Click="ZoomIn_Click" ToolTip="放大" />
+            <Button Content="↺" Width="28" Height="28" Click="ResetMapViewport" ToolTip="复位地图" />
+        </StackPanel>
     </Grid>
 </UserControl>

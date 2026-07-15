@@ -1,5 +1,7 @@
 using System.Reflection;
+using System.Windows;
 using iBarter;
+using iBarter.View;
 using PureDM;
 using PureDM.DmSoft;
 
@@ -84,6 +86,46 @@ if (!routeStepViewModelSource.Contains("SourceBarter", StringComparison.Ordinal)
 
 string mapControlSource = File.ReadAllText(Path.Combine(
     FindIBarterRepoRoot(), "View", "MapControl.xaml.cs"));
+string mapControlXaml = File.ReadAllText(Path.Combine(
+    FindIBarterRepoRoot(), "View", "MapControl.xaml"));
+if (!mapControlXaml.Contains("x:Name=\"MapViewport\"", StringComparison.Ordinal)
+    || !mapControlXaml.Contains("x:Name=\"MapScaleTransform\"", StringComparison.Ordinal)
+    || !mapControlXaml.Contains("x:Name=\"MapTranslateTransform\"", StringComparison.Ordinal)
+    || !mapControlSource.Contains("MapViewport_MouseWheel", StringComparison.Ordinal)
+    || !mapControlSource.Contains("MapViewport_MouseRightButtonDown", StringComparison.Ordinal)
+    || !mapControlSource.Contains("ResetMapViewport", StringComparison.Ordinal)) {
+    Console.Error.WriteLine("Expected a transform-based map viewport with zoom, pan, and reset controls.");
+    return 1;
+}
+if (!mapControlSource.Contains("Math.Clamp", StringComparison.Ordinal)
+    || !mapControlSource.Contains(", 11, 16)", StringComparison.Ordinal)
+    || !mapControlSource.Contains("DrawRouteStepMarker", StringComparison.Ordinal)) {
+    Console.Error.WriteLine("Expected bounded hybrid label scaling and numbered route-step markers.");
+    return 1;
+}
+if (!File.Exists(Path.Combine(FindIBarterRepoRoot(), "View", "MapViewportState.cs"))) {
+    Console.Error.WriteLine("Expected a dedicated map viewport state object for zoom and pan.");
+    return 1;
+}
+var viewportState = new MapViewportState();
+viewportState.ZoomAt(new Point(100, 50), 2);
+if (Math.Abs(viewportState.Scale - 2) > 0.0001
+    || Math.Abs(viewportState.OffsetX + 100) > 0.0001
+    || Math.Abs(viewportState.OffsetY + 50) > 0.0001) {
+    Console.Error.WriteLine("Expected map zoom to preserve the mouse anchor.");
+    return 1;
+}
+viewportState.ZoomAt(new Point(0, 0), 100);
+if (Math.Abs(viewportState.Scale - MapViewportState.MaxScale) > 0.0001) {
+    Console.Error.WriteLine("Expected map zoom to clamp at the configured maximum.");
+    return 1;
+}
+viewportState.PanBy(new Vector(12, -8));
+viewportState.Reset();
+if (viewportState.Scale != 1 || viewportState.OffsetX != 0 || viewportState.OffsetY != 0) {
+    Console.Error.WriteLine("Expected map viewport reset to restore the default view.");
+    return 1;
+}
 if (!mapControlSource.Contains("renderSnapshot.HighlightedIslandIds", StringComparison.Ordinal)
     || !mapControlSource.Contains("FontWeights.ExtraBold", StringComparison.Ordinal)) {
     Console.Error.WriteLine("Expected current route warehouse and barter islands to use strong map highlighting.");
