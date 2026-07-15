@@ -104,6 +104,23 @@ namespace iBarter.View {
 
         private Barter? _draggedItem;
 
+        private void ListBox_ShipCargo_PreviewMouseWheel(object sender, MouseWheelEventArgs e) {
+            var scrollViewer = FindDescendant<ScrollViewer>(ListBox_ShipCargo);
+            if (scrollViewer is null) return;
+
+            switch (ShipCargoScrollBehavior.GetLogicalItemDelta(e.Delta)) {
+                case > 0:
+                    scrollViewer.LineDown();
+                    break;
+                case < 0:
+                    scrollViewer.LineUp();
+                    break;
+                default:
+                    return;
+            }
+            e.Handled = true;
+        }
+
         private void ListBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
             if (App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute) return;
             // 找到被点击的 ListBoxItem
@@ -146,6 +163,16 @@ namespace iBarter.View {
                 current = VisualTreeHelper.GetParent(current);
             } while (current != null);
 
+            return null;
+        }
+
+        private static T? FindDescendant<T>(DependencyObject current) where T : DependencyObject {
+            for (int index = 0; index < VisualTreeHelper.GetChildrenCount(current); index++) {
+                var child = VisualTreeHelper.GetChild(current, index);
+                if (child is T match) return match;
+                var descendant = FindDescendant<T>(child);
+                if (descendant is not null) return descendant;
+            }
             return null;
         }
 

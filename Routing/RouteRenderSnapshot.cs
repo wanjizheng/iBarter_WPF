@@ -41,13 +41,19 @@ public static class RouteRenderSnapshotFactory {
     public static RouteRenderSnapshot CreateAutomatic(
         RoutePlan plan,
         int? selectedRouteNumber,
-        bool showAll) {
-        IEnumerable<PlannedRoute> routes = showAll
+        bool showAll,
+        IReadOnlySet<string>? completedBarterRowIds = null) {
+        var completed = completedBarterRowIds ?? new HashSet<string>(StringComparer.Ordinal);
+        var routes = (showAll
             ? plan.Routes
-            : plan.Routes.Where(x => x.Number == selectedRouteNumber);
-        var paths = routes.OrderBy(x => x.Number).Select(route => new RouteRenderPath(
-            route.Number,
-            Math.Max(0, route.Number - 1),
+            : plan.Routes.Where(x => x.Number == selectedRouteNumber))
+            .Select(route => new {
+                Route = route,
+                Steps = RouteProgressFilter.ExcludeCompletedBarters(route.Steps, completed),
+            }).ToArray();
+        var paths = routes.OrderBy(x => x.Route.Number).Select(route => new RouteRenderPath(
+            route.Route.Number,
+            Math.Max(0, route.Route.Number - 1),
             CollapseAdjacent(route.Steps.Select(x => x.IslandId)))).ToArray();
         return new RouteRenderSnapshot(
             false,

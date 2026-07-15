@@ -25,6 +25,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private string? focusedFromIslandId;
     private string? focusedToIslandId;
     private DateTime focusPulseUntilUtc;
+    private HashSet<string> completedBarterRowIds = new(StringComparer.Ordinal);
     private IReadOnlyList<AutomaticRouteStepViewModel> visibleAutomaticSteps = [];
     private IReadOnlyList<RouteSelectionOption> routeOptions = [];
 
@@ -156,6 +157,23 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    public void RefreshCompletedBarters(IReadOnlyList<Barter> plannerBarters) {
+        var refreshed = plannerBarters.Select((barter, index) => (barter, index))
+            .Where(x => x.barter.ExchangeDone)
+            .Select(x => RoutePlannerRowIdentity.Create(
+                x.index,
+                x.barter.IsLandName,
+                x.barter.Item1.ItemID,
+                x.barter.Item2.ItemID))
+            .ToHashSet(StringComparer.Ordinal);
+        if (completedBarterRowIds.SetEquals(refreshed)) return;
+
+        completedBarterRowIds = refreshed;
+        ClearFocus();
+        UpdateVisibleRoute();
+        RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public void Invalidate(string reason) {
         lock (gate) {
             cancellation?.Cancel();
@@ -206,7 +224,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             islandIds.AddRange(manualCargo.Select(x => x.IsLandName));
             return RouteRenderSnapshotFactory.CreateManual(islandIds);
         }
-        return RouteRenderSnapshotFactory.CreateAutomatic(currentPlan, selectedRouteNumber, showAllRoutes);
+        return RouteRenderSnapshotFactory.CreateAutomatic(
+            currentPlan, selectedRouteNumber, showAllRoutes, completedBarterRowIds);
     }
 
     public void Dispose() {
@@ -250,7 +269,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         var route = currentPlan?.Routes.FirstOrDefault(x => x.Number == selectedRouteNumber);
         visibleAutomaticSteps = route is null
             ? []
-            : route.Steps
+            : RouteProgressFilter.ExcludeCompletedBarters(route.Steps, completedBarterRowIds)
                 .Where(step => step is not WarehouseUnloadStep { Items.Count: 0 })
                 .Select(ToViewModel)
                 .ToArray();

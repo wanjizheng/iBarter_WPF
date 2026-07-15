@@ -542,6 +542,7 @@ namespace iBarter.View {
             var coordinator = App.myRouteCoordinator;
             bool routeSelected = coordinator is null
                 || coordinator.Mode != CargoMode.AutomaticRoute
+                || coordinator.ShowAllRoutes
                 || (!coordinator.ShowAllRoutes && coordinator.SelectedRouteNumber == routeNumber);
             for (int step = 0; step < route.Count; step++) {
                 DrawRouteStepMarker(step + 1, GetIslandCenter(route[step]), stroke, routeSelected);
@@ -577,17 +578,17 @@ namespace iBarter.View {
                     X2 = to.X,
                     Y2 = to.Y,
                     Stroke = stroke,
-                    StrokeThickness = focused ? 6 : routeSelected ? 3 : 2,
+                    StrokeThickness = focused ? 6 : routeSelected ? 4.5 : 1.5,
                     Tag = ROUTE_LINE_TAG,
                     IsHitTestVisible = false,
                     Opacity = pulse && (DateTime.UtcNow.Millisecond / 220) % 2 == 0
-                        ? 0.38 : routeSelected ? 1 : 0.56,
+                        ? 0.38 : routeSelected ? 1 : 0.22,
                 };
-                if (focused) line.Effect = new DropShadowEffect {
-                    Color = Colors.White,
-                    BlurRadius = 12,
+                if (focused || routeSelected) line.Effect = new DropShadowEffect {
+                    Color = focused ? Colors.White : Colors.Cyan,
+                    BlurRadius = focused ? 12 : 10,
                     ShadowDepth = 0,
-                    Opacity = 0.95,
+                    Opacity = focused ? 0.95 : 0.82,
                 };
                 Grid_MapMain.Children.Add(line);
 
@@ -619,8 +620,8 @@ namespace iBarter.View {
                 Height = diameter,
                 Fill = new SolidColorBrush(Color.FromArgb(routeSelected ? (byte)230 : (byte)150, 5, 22, 30)),
                 Stroke = stroke,
-                StrokeThickness = routeSelected ? 2.5 : 1.5,
-                Opacity = routeSelected ? 1 : 0.72,
+                StrokeThickness = routeSelected ? 3.5 : 1.25,
+                Opacity = routeSelected ? 1 : 0.32,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(center.X + 7, center.Y - diameter - 7, 0, 0),
@@ -1378,6 +1379,7 @@ namespace iBarter.View {
                 myBarter.ExchangeDone = true;
                 App.myfmMain.myPlannerControl.Grouping();
                 App.myfmMain.myPlannerControl.SaveData();
+                App.myRouteCoordinator?.RefreshCompletedBarters(App.myPVM.BarterCollection);
                 if (App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName) != null) {
                     App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName));
                     App.myfmMain.myShipCargo.UpdateCurrentLV();

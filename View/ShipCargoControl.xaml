@@ -105,7 +105,9 @@
                 Label="{loc:Localize str.ShipCargo.Btn.Clean}" ToolTip="{loc:Localize str.ShipCargo.Btn.CleanTip}" Click="ButtonAdv_Clean_Click" />
         </Syncfusion:ToolBarAdv>
         <ListBox x:Name="ListBox_ShipCargo" Grid.Row="1" Background="#101B26" BorderThickness="0"
-                 AllowDrop="True" PreviewMouseLeftButtonDown="ListBox_PreviewMouseLeftButtonDown" Drop="ListBox_Drop">
+                 AllowDrop="True" ScrollViewer.CanContentScroll="True"
+                 PreviewMouseWheel="ListBox_ShipCargo_PreviewMouseWheel"
+                 PreviewMouseLeftButtonDown="ListBox_PreviewMouseLeftButtonDown" Drop="ListBox_Drop">
             <ListBox.ItemContainerStyle>
                 <Style TargetType="ListBoxItem">
                     <Setter Property="AllowDrop" Value="True" />

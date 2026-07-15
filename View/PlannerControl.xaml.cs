@@ -122,7 +122,7 @@ namespace iBarter.View {
                 return null;
 
             var routeRows = App.myPVM.BarterCollection.Select((b, index) => new PlannerRouteSnapshot(
-                RowId: $"{index}:{b.IsLandName}:{b.Item1.ItemID}:{b.Item2.ItemID}",
+                RowId: RoutePlannerRowIdentity.Create(index, b.IsLandName, b.Item1.ItemID, b.Item2.ItemID),
                 ExchangeDone: b.ExchangeDone,
                 ExchangeQuantity: b.ExchangeQuantity,
                 IslandId: b.IsLandName,
@@ -1250,7 +1250,7 @@ namespace iBarter.View {
             }
 
             var routeRows = liveRows.Select((b, index) => new PlannerRouteSnapshot(
-                RowId: $"{index}:{b.IsLandName}:{b.Item1.ItemID}:{b.Item2.ItemID}",
+                RowId: RoutePlannerRowIdentity.Create(index, b.IsLandName, b.Item1.ItemID, b.Item2.ItemID),
                 ExchangeDone: b.ExchangeDone,
                 ExchangeQuantity: calculation.ApplySet.Multipliers.GetValueOrDefault(
                     index.ToString(CultureInfo.InvariantCulture), b.ExchangeQuantity),

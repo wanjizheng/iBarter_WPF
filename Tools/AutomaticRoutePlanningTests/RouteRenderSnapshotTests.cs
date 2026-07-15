@@ -1,4 +1,5 @@
 using iBarter.Routing;
+using iBarter.View;
 using Xunit;
 
 namespace AutomaticRoutePlanningTests;
@@ -57,6 +58,32 @@ public sealed class RouteRenderSnapshotTests {
         var plan = BuildPlan(route1Islands: ["Velia", "Velia", "A", "Velia", "Velia"]);
         var snapshot = RouteRenderSnapshotFactory.CreateAutomatic(plan, 1, false);
         Assert.Equal(["Velia", "A", "Velia"], snapshot.Paths.Single().IslandIds);
+    }
+
+    [Fact]
+    public void Completed_barter_is_hidden_from_route_path_and_highlight_set() {
+        var plan = BuildPlan();
+
+        var snapshot = RouteRenderSnapshotFactory.CreateAutomatic(
+            plan, selectedRouteNumber: 2, showAll: false,
+            completedBarterRowIds: new HashSet<string>(["rC"], StringComparer.Ordinal));
+
+        Assert.Equal(["Iliya", "Velia"], snapshot.Paths.Single().IslandIds);
+        Assert.Empty(snapshot.BarterIslandIds);
+        Assert.DoesNotContain("C", snapshot.HighlightedIslandIds);
+    }
+
+    [Fact]
+    public void Planner_row_identity_matches_persisted_route_step_identity() {
+        Assert.Equal("2:Iliya:800001:800002", RoutePlannerRowIdentity.Create(
+            2, "Iliya", "800001", "800002"));
+    }
+
+    [Fact]
+    public void Ship_cargo_wheel_uses_one_logical_item_per_notch() {
+        Assert.Equal(1, ShipCargoScrollBehavior.GetLogicalItemDelta(-120));
+        Assert.Equal(-1, ShipCargoScrollBehavior.GetLogicalItemDelta(120));
+        Assert.Equal(0, ShipCargoScrollBehavior.GetLogicalItemDelta(0));
     }
 
     [Fact]
