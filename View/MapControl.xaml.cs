@@ -497,13 +497,23 @@ namespace iBarter.View {
                 : Array.Empty<Barter>();
             var snapshot = coordinator?.GetRenderSnapshot(manualCargo)
                 ?? RouteRenderSnapshotFactory.CreateManual(manualCargo.Select(x => x.IsLandName).ToArray());
-            foreach (var path in snapshot.Paths) {
-                var route = ResolveRoute(path, snapshot);
-                if (route is null || route.Count < 2) continue;
+            var resolvedPaths = snapshot.Paths.Select(path => new {
+                Path = path,
+                Route = ResolveRoute(path, snapshot),
+            }).Where(x => x.Route is { Count: >= 2 }).ToArray();
+            var markerCounts = resolvedPaths
+                .SelectMany(x => x.Route!)
+                .GroupBy(island => island.IslandsName, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+            var markerOccurrences = new Dictionary<string, int>(StringComparer.Ordinal);
+
+            foreach (var resolved in resolvedPaths) {
+                var path = resolved.Path;
+                var route = resolved.Route!;
                 Brush stroke = snapshot.IsManual
                     ? Brushes.Gold
                     : AutomaticRouteBrushes[path.ColorIndex % AutomaticRouteBrushes.Length];
-                DrawRoutePath(path.RouteNumber, route, stroke);
+                DrawRoutePath(path.RouteNumber, route, stroke, markerCounts, markerOccurrences);
             }
         }
 
@@ -538,14 +548,23 @@ namespace iBarter.View {
         private void DrawRoutePath(
             int routeNumber,
             IReadOnlyList<Islands> route,
-            Brush stroke) {
+            Brush stroke,
+            IReadOnlyDictionary<string, int> markerCounts,
+            Dictionary<string, int> markerOccurrences) {
             var coordinator = App.myRouteCoordinator;
             bool routeSelected = coordinator is null
                 || coordinator.Mode != CargoMode.AutomaticRoute
                 || coordinator.ShowAllRoutes
                 || (!coordinator.ShowAllRoutes && coordinator.SelectedRouteNumber == routeNumber);
             for (int step = 0; step < route.Count; step++) {
-                DrawRouteStepMarker(step + 1, GetIslandCenter(route[step]), stroke, routeSelected);
+                var island = route[step];
+                int occurrenceIndex = markerOccurrences.GetValueOrDefault(island.IslandsName);
+                markerOccurrences[island.IslandsName] = occurrenceIndex + 1;
+                var offset = RouteStepMarkerLayout.OffsetFor(
+                    occurrenceIndex, markerCounts[island.IslandsName]);
+                var center = GetIslandCenter(island);
+                DrawRouteStepMarker(step + 1,
+                    new Point(center.X + offset.X, center.Y + offset.Y), stroke, routeSelected);
             }
             for (int i = 0; i < route.Count - 1; i++) {
                 var fromIsland = route[i];
@@ -574,12 +593,13 @@ namespace iBarter.View {
                 bool pulse = focused && App.myRouteCoordinator?.IsFocusPulseActive == true;
                 bool pulseDimmed = pulse && (DateTime.UtcNow.Millisecond / 220) % 2 == 0;
                 var visualStyle = RouteVisualStyle.For(routeSelected, focused, pulseDimmed);
+                Brush displayStroke = focused ? Brushes.Lime : stroke;
                 var line = new Line {
                     X1 = from.X,
                     Y1 = from.Y,
                     X2 = to.X,
                     Y2 = to.Y,
-                    Stroke = stroke,
+                    Stroke = displayStroke,
                     StrokeThickness = visualStyle.StrokeThickness,
                     Tag = ROUTE_LINE_TAG,
                     IsHitTestVisible = false,
@@ -612,8 +632,8 @@ namespace iBarter.View {
                 if (!addArrow) return;
                 double angleDeg = Math.Atan2(dy, dx) * 180.0 / Math.PI;
                 var arrow = new Polygon {
-                    Fill = stroke,
-                    Stroke = stroke,
+                    Fill = displayStroke,
+                    Stroke = displayStroke,
                     StrokeThickness = 1,
                     Points = new PointCollection {
                         new Point(0, 0),

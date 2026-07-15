@@ -99,6 +99,18 @@ public sealed class RouteRenderSnapshotTests {
     }
 
     [Fact]
+    public void Repeated_island_markers_are_distributed_around_the_island_center() {
+        var only = RouteStepMarkerLayout.OffsetFor(0, 1);
+        var first = RouteStepMarkerLayout.OffsetFor(0, 2);
+        var second = RouteStepMarkerLayout.OffsetFor(1, 2);
+
+        Assert.Equal(new RouteMarkerOffset(0, 0), only);
+        Assert.NotEqual(first, second);
+        Assert.True(first.DistanceFromOrigin > 0);
+        Assert.True(second.DistanceFromOrigin > 0);
+    }
+
+    [Fact]
     public void Warehouse_and_barter_order_keeps_non_adjacent_return_visits() {
         var load = new RouteLoadSnapshot(0, 0, 0);
         var route = new PlannedRoute(1, "Iliya", "Velia", [
