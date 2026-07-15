@@ -13,6 +13,7 @@
     <Compile Include="..\..\Routing\*.cs" Link="Routing\%(Filename)%(Extension)" />
     <Compile Include="..\..\Navigation\IslandNavigationGeometry.cs" Link="Navigation\IslandNavigationGeometry.cs" />
     <Compile Include="..\..\Navigation\ShippingCorridorGraph.cs" Link="Navigation\ShippingCorridorGraph.cs" />
+    <Compile Include="..\..\Navigation\RouteVisualStyle.cs" Link="Navigation\RouteVisualStyle.cs" />
     <Compile Include="..\..\View\ShipCargoScrollBehavior.cs" Link="View\ShipCargoScrollBehavior.cs" />
   </ItemGroup>
 </Project>

@@ -1,5 +1,6 @@
 using iBarter.Routing;
 using iBarter.View;
+using iBarter.Navigation;
 using Xunit;
 
 namespace AutomaticRoutePlanningTests;
@@ -84,6 +85,17 @@ public sealed class RouteRenderSnapshotTests {
         Assert.Equal(1, ShipCargoScrollBehavior.GetLogicalItemDelta(-120));
         Assert.Equal(-1, ShipCargoScrollBehavior.GetLogicalItemDelta(120));
         Assert.Equal(0, ShipCargoScrollBehavior.GetLogicalItemDelta(0));
+    }
+
+    [Fact]
+    public void Selected_route_uses_a_thin_base_line_and_a_separate_highlight_overlay() {
+        var selected = RouteVisualStyle.For(routeSelected: true, focused: false, pulse: false);
+        var unselected = RouteVisualStyle.For(routeSelected: false, focused: false, pulse: false);
+
+        Assert.Equal(2.4, selected.StrokeThickness);
+        Assert.True(selected.ShowSelectionOverlay);
+        Assert.Equal(1.25, unselected.StrokeThickness);
+        Assert.False(unselected.ShowSelectionOverlay);
     }
 
     [Fact]

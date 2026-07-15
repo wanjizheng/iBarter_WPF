@@ -572,25 +572,42 @@ namespace iBarter.View {
                 if (dx == 0 && dy == 0) return;
 
                 bool pulse = focused && App.myRouteCoordinator?.IsFocusPulseActive == true;
+                bool pulseDimmed = pulse && (DateTime.UtcNow.Millisecond / 220) % 2 == 0;
+                var visualStyle = RouteVisualStyle.For(routeSelected, focused, pulseDimmed);
                 var line = new Line {
                     X1 = from.X,
                     Y1 = from.Y,
                     X2 = to.X,
                     Y2 = to.Y,
                     Stroke = stroke,
-                    StrokeThickness = focused ? 6 : routeSelected ? 4.5 : 1.5,
+                    StrokeThickness = visualStyle.StrokeThickness,
                     Tag = ROUTE_LINE_TAG,
                     IsHitTestVisible = false,
-                    Opacity = pulse && (DateTime.UtcNow.Millisecond / 220) % 2 == 0
-                        ? 0.38 : routeSelected ? 1 : 0.22,
+                    Opacity = visualStyle.Opacity,
                 };
-                if (focused || routeSelected) line.Effect = new DropShadowEffect {
-                    Color = focused ? Colors.White : Colors.Cyan,
-                    BlurRadius = focused ? 12 : 10,
+                if (focused) line.Effect = new DropShadowEffect {
+                    Color = Colors.White,
+                    BlurRadius = 10,
                     ShadowDepth = 0,
-                    Opacity = focused ? 0.95 : 0.82,
+                    Opacity = 0.90,
                 };
                 Grid_MapMain.Children.Add(line);
+
+                if (visualStyle.ShowSelectionOverlay) {
+                    var highlight = new Line {
+                        X1 = from.X,
+                        Y1 = from.Y,
+                        X2 = to.X,
+                        Y2 = to.Y,
+                        Stroke = Brushes.White,
+                        StrokeThickness = 1.1,
+                        StrokeDashArray = new DoubleCollection([2, 2]),
+                        Opacity = 0.92,
+                        Tag = ROUTE_LINE_TAG,
+                        IsHitTestVisible = false,
+                    };
+                    Grid_MapMain.Children.Add(highlight);
+                }
 
                 if (!addArrow) return;
                 double angleDeg = Math.Atan2(dy, dx) * 180.0 / Math.PI;
@@ -619,8 +636,8 @@ namespace iBarter.View {
                 Width = diameter,
                 Height = diameter,
                 Fill = new SolidColorBrush(Color.FromArgb(routeSelected ? (byte)230 : (byte)150, 5, 22, 30)),
-                Stroke = stroke,
-                StrokeThickness = routeSelected ? 3.5 : 1.25,
+                Stroke = routeSelected ? Brushes.White : stroke,
+                StrokeThickness = routeSelected ? 2.25 : 1.1,
                 Opacity = routeSelected ? 1 : 0.32,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top,
