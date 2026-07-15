@@ -75,6 +75,24 @@ public sealed class RouteRenderSnapshotTests {
     }
 
     [Fact]
+    public void Focus_segment_skips_a_completed_barter_before_the_new_first_visible_barter() {
+        var load = new RouteLoadSnapshot(0, 0, 0);
+        RouteStep[] steps = [
+            new WarehousePickupStep("Iliya", "Iliya", [], load),
+            new BarterStep("done", "A", new("X", 1), new("Y", 1), load),
+            new BarterStep("next", "B", new("X", 1), new("Y", 1), load),
+            new WarehouseUnloadStep("Iliya", "Iliya", [], load),
+        ];
+
+        var segment = RouteProgressFilter.FindVisibleBarterSegment(
+            steps,
+            new HashSet<string>(["done"], StringComparer.Ordinal),
+            "next");
+
+        Assert.Equal(new RouteFocusSegment("Iliya", "B"), segment);
+    }
+
+    [Fact]
     public void Planner_row_identity_matches_persisted_route_step_identity() {
         Assert.Equal("2:Iliya:800001:800002", RoutePlannerRowIdentity.Create(
             2, "Iliya", "800001", "800002"));

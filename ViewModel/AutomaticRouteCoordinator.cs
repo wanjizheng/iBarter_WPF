@@ -194,17 +194,12 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         if (currentPlan is null || selectedRouteNumber is not int routeNumber) return;
         var route = currentPlan.Routes.FirstOrDefault(candidate => candidate.Number == routeNumber);
         if (route is null) return;
-        int index = route.Steps.ToList().FindIndex(
-            step => step is BarterStep barter && StringComparer.Ordinal.Equals(barter.RowId, rowId));
-        if (index < 0) return;
-        string destination = route.Steps[index].IslandId;
-        int previous = index - 1;
-        while (previous >= 0 && StringComparer.Ordinal.Equals(route.Steps[previous].IslandId, destination))
-            previous--;
-        if (previous < 0) return;
+        var segment = RouteProgressFilter.FindVisibleBarterSegment(
+            route.Steps, completedBarterRowIds, rowId);
+        if (segment is null) return;
         focusedRouteNumber = routeNumber;
-        focusedFromIslandId = route.Steps[previous].IslandId;
-        focusedToIslandId = destination;
+        focusedFromIslandId = segment.FromIslandId;
+        focusedToIslandId = segment.ToIslandId;
         focusPulseUntilUtc = DateTime.UtcNow.AddSeconds(1.8);
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
     }
