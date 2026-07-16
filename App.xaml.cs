@@ -133,9 +133,9 @@ namespace iBarter {
             }
 
             myfmMain.Show();
-            // Window_Loaded has now restored the ship capacity. Load the saved
-            // Planner rows next, then restore an automatic route only after its
-            // current input fingerprint and full replay both validate.
+            // Request startup restore now; PlannerControl defers the actual work
+            // until its Loaded event and the Dispatcher idle queue. Show() does
+            // not guarantee that Syncfusion's document/grid visual tree is ready.
             myfmMain.myPlannerControl.LoadSavedDataAndAutomaticRouteAtStartup();
             //mySplashScreen.Show();
         }

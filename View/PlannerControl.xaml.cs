@@ -15,6 +15,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Brush = System.Windows.Media.Brush;
 
 namespace iBarter.View {
@@ -25,6 +26,8 @@ namespace iBarter.View {
         // Highest barter item LV in the game; chain recursion stops one step before reaching this.
         private const int MAX_BARTER_LV = 7;
         private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
+        private bool startupLoadScheduled;
+        private bool startupLoadCompleted;
 
         // Phase 2 (i18n): column-header MappingName -> resource key for every
         // direct GridTextColumn on DataGrid_Planner. HeaderText is a plain CLR
@@ -98,7 +101,29 @@ namespace iBarter.View {
         }
 
         public void LoadSavedDataAndAutomaticRouteAtStartup() {
-            ButtonAdv_Load_Click(this, new RoutedEventArgs());
+            if (IsDesignMode || startupLoadCompleted || startupLoadScheduled) return;
+            startupLoadScheduled = true;
+
+            void QueueLoad() {
+                Dispatcher.BeginInvoke(new Action(() => {
+                    if (startupLoadCompleted) return;
+                    startupLoadCompleted = true;
+                    startupLoadScheduled = false;
+                    ButtonAdv_Load_Click(this, new RoutedEventArgs());
+                }), DispatcherPriority.ContextIdle);
+            }
+
+            if (IsLoaded) {
+                QueueLoad();
+                return;
+            }
+
+            RoutedEventHandler? loadedHandler = null;
+            loadedHandler = (_, _) => {
+                Loaded -= loadedHandler;
+                QueueLoad();
+            };
+            Loaded += loadedHandler;
         }
 
         private void TryRestoreAutomaticRouteAfterLoad() {
@@ -242,22 +267,28 @@ namespace iBarter.View {
                 Application.Current.Dispatcher.Invoke(new Action(() => RefreshDataGrid()));
             }
             else {
+                bool gridInitialising = false;
                 try {
                     DataGrid_Planner.BeginInit();
+                    gridInitialising = true;
+                }
+                catch (Exception exception) {
+                    App.myCFun?.Log(
+                        "[DIAG-planner-load] grid BeginInit skipped: " + exception.Message,
+                        Brushes.OrangeRed);
+                }
 
-                    if (App.myPVM.BarterCollection != null) {
-                        App.myPVM.BarterCollection.Clear();
-                    }
+                try {
+                    App.myPVM.BarterCollection.Clear();
 
                     foreach (Barter barter in App.listBarterPlanner) {
                         Barter myBarter = new Barter(barter.IsLand, barter.Item1, barter.Item2, barter.ExchangeQuantity,
                             barter.ExchangeDone, barter.BarterGroup, barter.InvQuantity, barter.InvQuantityChange, barter.UsingALT, barter.CalculatedAlready, barter.TotalItem1ExchangeQuantity);
                         App.myPVM.BarterCollection.Add(myBarter);
                     }
-
-                    DataGrid_Planner.EndInit();
                 }
-                catch (Exception e) {
+                finally {
+                    if (gridInitialising) DataGrid_Planner.EndInit();
                 }
             }
         }
@@ -530,6 +561,10 @@ namespace iBarter.View {
         }
 
         private void ButtonAdv_Load_Click(object sender, RoutedEventArgs e) {
+            // A manual load supersedes any startup load still waiting in the
+            // Dispatcher queue, preventing a second reload moments later.
+            startupLoadCompleted = true;
+            startupLoadScheduled = false;
             App.myRouteCoordinator?.Invalidate("planner-load");
             string strPath_Setting = AppDomain.CurrentDomain.BaseDirectory +
                                      "\\Resources\\myPlan_Setting.xml";
