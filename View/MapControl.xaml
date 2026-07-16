@@ -296,32 +296,6 @@
             </Grid>
             </Grid>
         </Border>
-        <Border x:Name="RightInsetPanel"
-                Panel.ZIndex="90"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Top"
-                Width="540"
-                MaxWidth="560"
-                MinWidth="500"
-                Height="300"
-                Margin="12"
-                Padding="5"
-                Background="#D9152532"
-                BorderBrush="#AA8CA8B8"
-                BorderThickness="1"
-                CornerRadius="4"
-                Visibility="Collapsed">
-            <Grid ClipToBounds="True">
-                <view:LocalXyzTileLayer x:Name="RightInsetTileLayer" />
-                <Grid x:Name="Grid_RightInsetOverlay" Background="Transparent" />
-                <Border HorizontalAlignment="Left" VerticalAlignment="Top"
-                        Margin="6" Padding="6,2"
-                        Background="#CC071722" CornerRadius="3">
-                    <TextBlock Text="右上区域" Foreground="White"
-                               FontWeight="SemiBold" FontSize="12" />
-                </Border>
-            </Grid>
-        </Border>
         <StackPanel Panel.ZIndex="100" HorizontalAlignment="Left" VerticalAlignment="Top"
                     Orientation="Horizontal" Margin="8" Background="#99051E2A">
             <Button Content="−" Width="28" Height="28" Click="ZoomOut_Click" ToolTip="缩小" />

@@ -13,7 +13,6 @@ public partial class MapControl {
     private IReadOnlyDictionary<string, GeoCoordinate> hdIslandCoordinates =
         new Dictionary<string, GeoCoordinate>(StringComparer.Ordinal);
     private XyzViewportCamera? mainHdCamera;
-    private XyzViewportCamera? rightInsetCamera;
     private readonly LocalTileBitmapCache hdTileBitmapCache = new(512);
 
     private void TryInitializeHdMap() {
@@ -32,31 +31,21 @@ public partial class MapControl {
         }
 
         var inputs = App.listIslands.Select(island => {
-            MapDisplayRegion region = IslandNavigationGeometry.GetDisplayGroup(
-                island.IslandsName) switch {
-                    SpecialDisplayGroup.LeftInset => MapDisplayRegion.Hidden,
-                    SpecialDisplayGroup.RightInset => MapDisplayRegion.RightInset,
-                    _ => MapDisplayRegion.Main,
-                };
             return new MapIslandCoordinateInput(
                 island.IslandsName,
                 island.NavigationX ?? Double.NaN,
                 island.NavigationY ?? Double.NaN,
                 island.NavigationSource ?? String.Empty,
-                region);
+                MapDisplayRegion.Main,
+                PreferNavigationCalibration:
+                    IslandNavigationGeometry.LeftInsetNames.Contains(island.IslandsName));
         }).ToArray();
         var coordinates = BdfIslandCoordinateCatalog.Build(
             inputs, metadata.Anchors, metadata.Aliases);
-        if (configuration.RightInsetRegion.ContainingIslands.Any(
-            islandId => !coordinates.ContainsKey(islandId))) {
-            UseStaticMapFallback();
-            return;
-        }
 
         hdMapConfiguration = configuration;
         hdIslandCoordinates = coordinates;
         mainHdCamera = CreateCamera(configuration.MainRegion);
-        rightInsetCamera = CreateCamera(configuration.RightInsetRegion);
         var catalog = new LocalTileCatalog(root, configuration.TileExtension);
 
         MapScaleTransform.ScaleX = 1;
@@ -66,11 +55,7 @@ public partial class MapControl {
         Image_BackgroundMap.Visibility = Visibility.Collapsed;
         MainTileLayer.Configure(
             catalog, mainHdCamera, configuration.TileSize, hdTileBitmapCache);
-        RightInsetTileLayer.Configure(
-            catalog, rightInsetCamera, configuration.TileSize, hdTileBitmapCache);
-        RightInsetPanel.Visibility = Visibility.Visible;
         hdMapEnabled = true;
-        UpdateRightInsetSize();
         Dispatcher.BeginInvoke(new Action(IslandsButtonInitialisation));
     }
 
@@ -87,10 +72,7 @@ public partial class MapControl {
         hdIslandCoordinates =
             new Dictionary<string, GeoCoordinate>(StringComparer.Ordinal);
         mainHdCamera = null;
-        rightInsetCamera = null;
         MainTileLayer.Disable();
-        RightInsetTileLayer.Disable();
-        RightInsetPanel.Visibility = Visibility.Collapsed;
         Image_BackgroundMap.Visibility = Visibility.Visible;
         ApplyMapViewportState();
     }
@@ -117,31 +99,10 @@ public partial class MapControl {
     private void RefreshHdMap() {
         if (!hdMapEnabled) return;
         MainTileLayer.RefreshTiles();
-        RightInsetTileLayer.RefreshTiles();
         IslandsButtonRearrange();
     }
 
-    private void UpdateRightInsetSize() {
-        if (!hdMapEnabled || MapViewport.ActualWidth <= 0 || MapViewport.ActualHeight <= 0)
-            return;
-        RightInsetPanel.Width = Math.Clamp(MapViewport.ActualWidth * 0.30, 500, 560);
-        RightInsetPanel.Height = Math.Clamp(MapViewport.ActualHeight * 0.34, 220, 380);
-    }
-
-    private MapDisplayRegion GetDisplayRegion(Islands island) {
-        if (!hdMapEnabled) return MapDisplayRegion.Main;
-        return IslandNavigationGeometry.GetDisplayGroup(island.IslandsName) switch {
-            SpecialDisplayGroup.LeftInset => MapDisplayRegion.Hidden,
-            SpecialDisplayGroup.RightInset => MapDisplayRegion.RightInset,
-            _ => MapDisplayRegion.Main,
-        };
-    }
-
-    private Grid? GetOverlayHost(Islands island) => GetDisplayRegion(island) switch {
-        MapDisplayRegion.Main => Grid_MapMain,
-        MapDisplayRegion.RightInset => Grid_RightInsetOverlay,
-        _ => null,
-    };
+    private Grid GetOverlayHost(Islands _) => Grid_MapMain;
 
     private bool TryGetIslandCenter(
         Islands island,
@@ -162,9 +123,7 @@ public partial class MapControl {
         if (hdMapConfiguration is null
             || !hdIslandCoordinates.TryGetValue(island.IslandsName, out var coordinate))
             return false;
-        XyzViewportCamera? camera = GetDisplayRegion(island) == MapDisplayRegion.RightInset
-            ? rightInsetCamera
-            : mainHdCamera;
+        XyzViewportCamera? camera = mainHdCamera;
         if (camera is null || host.ActualWidth <= 0 || host.ActualHeight <= 0)
             return false;
         var projected = MapViewportProjection.Project(

@@ -98,11 +98,7 @@ namespace iBarter.View {
             Grid_MapMain.SizeChanged += (_, _) =>
                 Dispatcher.BeginInvoke(new Action(IslandsButtonRearrange),
                     DispatcherPriority.Render);
-            Grid_RightInsetOverlay.SizeChanged += (_, _) =>
-                Dispatcher.BeginInvoke(new Action(IslandsButtonRearrange),
-                    DispatcherPriority.Render);
             MapViewport.SizeChanged += (_, _) => {
-                UpdateRightInsetSize();
                 if (hdMapEnabled) RefreshHdMap();
             };
             myTimer.Start();
@@ -555,12 +551,10 @@ namespace iBarter.View {
             // lines (which live inside GridContainer_* and never carry
             // our tag). Matches Line AND Polygon so the next pass
             // starts from a known-empty state.
-            foreach (Grid host in new[] { Grid_MapMain, Grid_RightInsetOverlay }) {
-                for (int i = host.Children.Count - 1; i >= 0; i--) {
-                    if (host.Children[i] is FrameworkElement elem
-                        && ReferenceEquals(elem.Tag, ROUTE_LINE_TAG)) {
-                        host.Children.RemoveAt(i);
-                    }
+            for (int i = Grid_MapMain.Children.Count - 1; i >= 0; i--) {
+                if (Grid_MapMain.Children[i] is FrameworkElement elem
+                    && ReferenceEquals(elem.Tag, ROUTE_LINE_TAG)) {
+                    Grid_MapMain.Children.RemoveAt(i);
                 }
             }
 
@@ -1180,7 +1174,6 @@ namespace iBarter.View {
 
         public void IslandsButtonInitialisation() {
             Grid_MapMain.Children.Clear();
-            Grid_RightInsetOverlay.Children.Clear();
 
             listGrid_Islands = new List<Grid>();
 

@@ -14,7 +14,8 @@ public sealed record MapIslandCoordinateInput(
     double NavigationX,
     double NavigationY,
     string NavigationSource,
-    MapDisplayRegion DisplayRegion);
+    MapDisplayRegion DisplayRegion,
+    bool PreferNavigationCalibration = false);
 
 public sealed record BdfMapAnchor(
     string SourceName,
@@ -30,6 +31,7 @@ public static class BdfIslandCoordinateCatalog {
         IReadOnlyDictionary<string, string> aliases) {
         var direct = new Dictionary<string, GeoCoordinate>(StringComparer.Ordinal);
         foreach (var island in islands.Where(x => x.DisplayRegion != MapDisplayRegion.Hidden)) {
+            if (island.PreferNavigationCalibration) continue;
             var anchor = FindAnchor(island.IslandId, anchors, aliases);
             if (anchor is not null
                 && double.IsFinite(anchor.Latitude)

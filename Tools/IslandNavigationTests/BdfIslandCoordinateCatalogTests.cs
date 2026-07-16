@@ -5,10 +5,10 @@ namespace IslandNavigationTests;
 
 public sealed class BdfIslandCoordinateCatalogTests {
     [Fact]
-    public void Explicit_bdf_anchor_wins_for_right_inset_island() {
+    public void Explicit_bdf_anchor_wins_for_former_right_inset_island_on_main_map() {
         var inputs = new[] {
             new MapIslandCoordinateInput(
-                "Hakoven", 100, 200, "bdo-world-direct", MapDisplayRegion.RightInset),
+                "Hakoven", 100, 200, "bdo-world-direct", MapDisplayRegion.Main),
         };
         var anchors = new[] {
             new BdfMapAnchor("Hakoven Island", "Hakoven", 38, 150, "connect.js"),
@@ -50,23 +50,28 @@ public sealed class BdfIslandCoordinateCatalogTests {
     }
 
     [Fact]
-    public void Hidden_left_inset_island_is_not_added_by_affine_fallback() {
+    public void Former_left_inset_island_is_added_to_main_map_by_affine_fallback() {
         var inputs = new[] {
             Input("A", 0, 0),
             Input("B", 100, 0),
             Input("C", 0, 100),
             new MapIslandCoordinateInput(
-                "Hidden", 50, 50, "bdocodex-calibrated", MapDisplayRegion.Hidden),
+                "Cox_Pirate", 50, 50, "bdocodex-calibrated",
+                MapDisplayRegion.Main, PreferNavigationCalibration: true),
         };
         var anchors = inputs.Take(3).Select(input =>
             new BdfMapAnchor(
                 input.IslandId, input.IslandId,
-                input.NavigationY / 10, input.NavigationX / 10, "connect.js")).ToArray();
+                input.NavigationY / 10, input.NavigationX / 10, "connect.js"))
+            .Append(new BdfMapAnchor(
+                "Ancient unrelated node", "Cox_Pirate", 80, 170, "connect.js"))
+            .ToArray();
 
         var catalog = BdfIslandCoordinateCatalog.Build(
             inputs, anchors, new Dictionary<string, string>());
 
-        Assert.False(catalog.ContainsKey("Hidden"));
+        Assert.True(catalog.ContainsKey("Cox_Pirate"));
+        Assert.NotEqual(new GeoCoordinate(80, 170), catalog["Cox_Pirate"]);
     }
 
     private static MapIslandCoordinateInput Input(string id, double x, double y) =>
