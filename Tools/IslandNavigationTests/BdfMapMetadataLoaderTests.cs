@@ -35,6 +35,7 @@ public sealed class BdfMapMetadataLoaderTests {
             Assert.NotNull(metadata);
             Assert.Single(metadata.Anchors);
             Assert.Equal("Iliyia Island", metadata.Aliases["Iliya"]);
+            Assert.Equal("Olvia Coast", metadata.Aliases["Olvia"]);
             Assert.Equal("Custom Island", metadata.Aliases["Custom"]);
         }
         finally {

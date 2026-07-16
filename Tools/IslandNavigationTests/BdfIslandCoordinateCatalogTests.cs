@@ -21,6 +21,31 @@ public sealed class BdfIslandCoordinateCatalogTests {
     }
 
     [Fact]
+    public void Olvia_alias_selects_the_coast_exchange_point_instead_of_the_village() {
+        var inputs = new[] {
+            new MapIslandCoordinateInput(
+                "Olvia", -142326, 126708, "bdo-world-direct", MapDisplayRegion.Main),
+        };
+        var anchors = new[] {
+            new BdfMapAnchor("Olvia", null, -5.747174, -5.515137, "village.js"),
+            new BdfMapAnchor(
+                "Olvia Coast", null,
+                -4.565473550710278, -0.0439453125, "connect.js"),
+        };
+
+        var catalog = BdfIslandCoordinateCatalog.Build(
+            inputs,
+            anchors,
+            new Dictionary<string, string> {
+                ["Olvia"] = "Olvia Coast",
+            });
+
+        Assert.Equal(
+            new GeoCoordinate(-4.565473550710278, -0.0439453125),
+            catalog["Olvia"]);
+    }
+
+    [Fact]
     public void Affine_calibration_fills_main_map_island_without_direct_anchor() {
         static NormalizedMercatorPoint Transform(double x, double y) =>
             new(0.2 + x * 0.001 + y * 0.0002, 0.3 - x * 0.0001 + y * 0.0008);

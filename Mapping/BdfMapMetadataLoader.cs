@@ -14,6 +14,10 @@ public static class BdfMapMetadataLoader {
             ["Kuit"] = "Kuit Islands",
             ["Sausan"] = "Sausan Garrison Wharf",
             ["Midnight"] = "Starry Midnight Port",
+            // The barter catalog enum is historically named "Olvia", but its
+            // localized display name and exchange point are Olvia Coast. Without
+            // this explicit alias, normalized matching selects Olvia village.
+            ["Olvia"] = "Olvia Coast",
         };
 
     public static bool TryLoad(string root, out BdfMapMetadata? metadata) {
