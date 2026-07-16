@@ -39,6 +39,26 @@ public sealed class LocalMapResourceLocatorTests {
         }
     }
 
+    [Fact]
+    public void Development_candidates_find_sibling_bdomap_from_release_output_tree() {
+        string root = TempDirectory();
+        try {
+            string applicationBase = Path.Combine(
+                root, "iBarter", "bin", "x86", "Release", "win-x86");
+            Directory.CreateDirectory(applicationBase);
+            string expected = Path.Combine(root, "BDOMap", "Resource", "MapTiles");
+
+            string[] candidates = LocalMapResourceLocator
+                .EnumerateDevelopmentCandidates(applicationBase)
+                .ToArray();
+
+            Assert.Contains(expected, candidates, StringComparer.OrdinalIgnoreCase);
+        }
+        finally {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string CreateMapRoot(string path) {
         Directory.CreateDirectory(Path.Combine(path, "base"));
         File.WriteAllText(Path.Combine(path, "manifest.json"), "{}");

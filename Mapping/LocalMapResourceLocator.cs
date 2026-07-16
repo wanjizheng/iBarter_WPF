@@ -31,6 +31,25 @@ public static class LocalMapResourceLocator {
         return null;
     }
 
+    /// <summary>
+    /// Finds a sibling BDOMap cache only while running from a source/build tree.
+    /// This deliberately derives candidates from the executable's location rather
+    /// than baking a developer-specific drive or user profile into release code.
+    /// A normally installed application has no such sibling directory, so it
+    /// still relies exclusively on Resource\MapTiles next to the executable.
+    /// </summary>
+    public static IEnumerable<string> EnumerateDevelopmentCandidates(
+        string applicationBaseDirectory) {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        DirectoryInfo? directory = new(Path.GetFullPath(applicationBaseDirectory));
+        while (directory is not null) {
+            string sibling = Path.Combine(
+                directory.FullName, "BDOMap", "Resource", "MapTiles");
+            if (seen.Add(sibling)) yield return sibling;
+            directory = directory.Parent;
+        }
+    }
+
     public static bool IsUsable(string root) =>
         Directory.Exists(Path.Combine(root, "base"))
         && File.Exists(Path.Combine(root, "manifest.json"))

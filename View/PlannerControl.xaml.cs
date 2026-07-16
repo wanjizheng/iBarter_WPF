@@ -620,12 +620,9 @@ namespace iBarter.View {
                         + exception.Message, Brushes.Red);
                 }
             }
-            else if (!loadedSetting) {
-                // Neither file present - give the user a clear hint
-                // instead of the old silent no-op.
-                App.myCFun.Log("[DIAG-planner-load] no saved plan found at "
-                    + strPath_Data, Brushes.OrangeRed);
-            }
+            // No JSON plan is a normal first-run state. Do not produce a
+            // diagnostic/error entry merely because the user has not saved a
+            // planner configuration yet.
 
             UpdateParley();
 

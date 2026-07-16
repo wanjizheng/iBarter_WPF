@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using iBarter.Mapping;
@@ -21,7 +20,9 @@ public partial class MapControl {
         if (App.listIslands is null || App.listIslands.Count == 0) return;
         hdMapInitializationAttempted = true;
         string? root = LocalMapResourceLocator.Find(
-            AppContext.BaseDirectory, EnumerateDevelopmentMapRoots());
+            AppContext.BaseDirectory,
+            LocalMapResourceLocator.EnumerateDevelopmentCandidates(
+                AppContext.BaseDirectory));
         if (root is null
             || !LocalMapConfiguration.TryLoad(root, out var configuration)
             || configuration is null
@@ -76,25 +77,6 @@ public partial class MapControl {
         MainTileLayer.Disable();
         Image_BackgroundMap.Visibility = Visibility.Visible;
         ApplyMapViewportState();
-    }
-
-    private static IEnumerable<string> EnumerateDevelopmentMapRoots() {
-#if DEBUG
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        DirectoryInfo? directory = new(AppContext.BaseDirectory);
-        while (directory is not null) {
-            string sibling = Path.Combine(
-                directory.FullName, "BDOMap", "Resource", "MapTiles");
-            if (seen.Add(sibling)) yield return sibling;
-            directory = directory.Parent;
-        }
-
-        string configured = Path.Combine(
-            "E:", "wanjizheng", "MyProject", "BDOMap", "Resource", "MapTiles");
-        if (seen.Add(configured)) yield return configured;
-#else
-        yield break;
-#endif
     }
 
     private void RefreshHdMap() {
