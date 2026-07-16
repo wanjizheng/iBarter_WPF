@@ -51,6 +51,57 @@ public sealed class XyzViewportCamera {
         Zoom = nextZoom;
     }
 
+    /// <summary>
+    /// Keeps the visible camera rectangle inside the supplied map coverage.
+    /// The effective minimum zoom increases with the viewport size, so users
+    /// cannot zoom out far enough to expose the tile layer's empty exterior.
+    /// Call this after pan, zoom, focus, or a viewport resize.
+    /// </summary>
+    public void ConstrainTo(
+        MapGeoBounds bounds,
+        double viewportWidth,
+        double viewportHeight,
+        int tileSize) {
+        if (!double.IsFinite(viewportWidth)
+            || !double.IsFinite(viewportHeight)
+            || viewportWidth <= 0
+            || viewportHeight <= 0
+            || tileSize <= 0)
+            return;
+
+        NormalizedMercatorPoint northWest = WebMercatorProjection.ToNormalized(
+            new GeoCoordinate(bounds.North, bounds.West));
+        NormalizedMercatorPoint southEast = WebMercatorProjection.ToNormalized(
+            new GeoCoordinate(bounds.South, bounds.East));
+        double left = Math.Min(northWest.X, southEast.X);
+        double right = Math.Max(northWest.X, southEast.X);
+        double top = Math.Min(northWest.Y, southEast.Y);
+        double bottom = Math.Max(northWest.Y, southEast.Y);
+        double normalizedWidth = right - left;
+        double normalizedHeight = bottom - top;
+        if (normalizedWidth <= 0 || normalizedHeight <= 0) return;
+
+        double requiredWorldSize = Math.Max(
+            viewportWidth / normalizedWidth,
+            viewportHeight / normalizedHeight);
+        double requiredZoom = Math.Log2(requiredWorldSize / tileSize);
+        double effectiveMinZoom = Math.Clamp(
+            Math.Max(MinZoom, requiredZoom), MinZoom, MaxZoom);
+        Zoom = Math.Clamp(Math.Max(Zoom, effectiveMinZoom), MinZoom, MaxZoom);
+
+        double worldSize = WebMercatorProjection.WorldSize(Zoom, tileSize);
+        double halfWidth = viewportWidth / (2 * worldSize);
+        double halfHeight = viewportHeight / (2 * worldSize);
+        Center = new NormalizedMercatorPoint(
+            ClampAxis(Center.X, left + halfWidth, right - halfWidth),
+            ClampAxis(Center.Y, top + halfHeight, bottom - halfHeight));
+    }
+
+    private static double ClampAxis(double value, double minimum, double maximum) =>
+        minimum > maximum
+            ? (minimum + maximum) / 2
+            : Math.Clamp(value, minimum, maximum);
+
     private static NormalizedMercatorPoint Clamp(NormalizedMercatorPoint point) =>
         new(Math.Clamp(point.X, 0, 1), Math.Clamp(point.Y, 0, 1));
 }

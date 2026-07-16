@@ -48,6 +48,7 @@ public partial class MapControl {
         hdMapConfiguration = configuration;
         hdIslandCoordinates = coordinates;
         mainHdCamera = CreateCamera(configuration.MainRegion);
+        ConstrainHdMapCamera();
         var catalog = new LocalTileCatalog(root, configuration.TileExtension);
 
         MapScaleTransform.ScaleX = 1;
@@ -81,8 +82,22 @@ public partial class MapControl {
 
     private void RefreshHdMap() {
         if (!hdMapEnabled) return;
+        ConstrainHdMapCamera();
         MainTileLayer.RefreshTiles();
         IslandsButtonRearrange();
+    }
+
+    private void ConstrainHdMapCamera() {
+        if (hdMapConfiguration is null
+            || mainHdCamera is null
+            || MapViewport.ActualWidth <= 0
+            || MapViewport.ActualHeight <= 0)
+            return;
+        mainHdCamera.ConstrainTo(
+            hdMapConfiguration.MainRegion.Bounds,
+            MapViewport.ActualWidth,
+            MapViewport.ActualHeight,
+            hdMapConfiguration.TileSize);
     }
 
     private Grid GetOverlayHost(Islands _) => Grid_MapMain;
