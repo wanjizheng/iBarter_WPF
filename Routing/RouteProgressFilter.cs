@@ -10,11 +10,27 @@ public static class RouteProgressFilter {
             || !completedBarterRowIds.Contains(barter.RowId))
         .ToArray();
 
+    public static IReadOnlyList<RouteStep> RemainingMapSteps(
+        IEnumerable<RouteStep> steps,
+        IReadOnlySet<string> completedBarterRowIds) {
+        var route = steps.ToArray();
+        int completedPrefixEnd = -1;
+        for (int index = 0; index < route.Length; index++) {
+            if (route[index] is not BarterStep barter) continue;
+            if (!completedBarterRowIds.Contains(barter.RowId)) break;
+            completedPrefixEnd = index;
+        }
+
+        return ExcludeCompletedBarters(
+            completedPrefixEnd < 0 ? route : route.Skip(completedPrefixEnd + 1),
+            completedBarterRowIds);
+    }
+
     public static RouteFocusSegment? FindVisibleBarterSegment(
         IEnumerable<RouteStep> steps,
         IReadOnlySet<string> completedBarterRowIds,
         string rowId) {
-        var visible = ExcludeCompletedBarters(steps, completedBarterRowIds);
+        var visible = RemainingMapSteps(steps, completedBarterRowIds);
         int index = visible.ToList().FindIndex(
             step => step is BarterStep barter
                 && StringComparer.Ordinal.Equals(barter.RowId, rowId));
@@ -25,8 +41,15 @@ public static class RouteProgressFilter {
         while (previous >= 0
             && StringComparer.Ordinal.Equals(visible[previous].IslandId, destination))
             previous--;
-        return previous < 0
+        if (previous >= 0)
+            return new RouteFocusSegment(visible[previous].IslandId, destination);
+
+        int next = index + 1;
+        while (next < visible.Count
+            && StringComparer.Ordinal.Equals(visible[next].IslandId, destination))
+            next++;
+        return next >= visible.Count
             ? null
-            : new RouteFocusSegment(visible[previous].IslandId, destination);
+            : new RouteFocusSegment(destination, visible[next].IslandId);
     }
 }

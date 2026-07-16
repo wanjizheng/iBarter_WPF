@@ -49,7 +49,7 @@ public static class RouteRenderSnapshotFactory {
             : plan.Routes.Where(x => x.Number == selectedRouteNumber))
             .Select(route => new {
                 Route = route,
-                Steps = RouteProgressFilter.ExcludeCompletedBarters(route.Steps, completed),
+                Steps = RouteProgressFilter.RemainingMapSteps(route.Steps, completed),
             }).ToArray();
         var paths = routes.OrderBy(x => x.Route.Number).Select(route => new RouteRenderPath(
             route.Route.Number,

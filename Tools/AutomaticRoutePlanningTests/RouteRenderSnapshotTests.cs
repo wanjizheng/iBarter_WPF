@@ -69,18 +69,38 @@ public sealed class RouteRenderSnapshotTests {
             plan, selectedRouteNumber: 2, showAll: false,
             completedBarterRowIds: new HashSet<string>(["rC"], StringComparer.Ordinal));
 
-        Assert.Equal(["Iliya", "Velia"], snapshot.Paths.Single().IslandIds);
+        Assert.Equal(["Velia"], snapshot.Paths.Single().IslandIds);
         Assert.Empty(snapshot.BarterIslandIds);
         Assert.DoesNotContain("C", snapshot.HighlightedIslandIds);
+        Assert.DoesNotContain("Iliya", snapshot.HighlightedIslandIds);
     }
 
     [Fact]
-    public void Focus_segment_skips_a_completed_barter_before_the_new_first_visible_barter() {
+    public void Remaining_map_path_starts_after_the_completed_route_prefix() {
+        var load = new RouteLoadSnapshot(0, 0, 0);
+        var route = new PlannedRoute(1, "Iliya", "Iliya", [
+            new WarehousePickupStep("Iliya", "Iliya", [], load),
+            new BarterStep("done", "A", new("X", 1), new("Y", 1), load),
+            new BarterStep("next", "B", new("X", 1), new("Y", 1), load),
+            new WarehouseUnloadStep("Iliya", "Iliya", [], load),
+        ], 1, 0, 0, 0);
+        var plan = new RoutePlan(RoutePlanStatus.Optimal, [route],
+            new RoutePlanObjective(1, 1, 1, 0, ""), [], "f");
+
+        var snapshot = RouteRenderSnapshotFactory.CreateAutomatic(
+            plan, 1, false, new HashSet<string>(["done"], StringComparer.Ordinal));
+
+        Assert.Equal(["B", "Iliya"], snapshot.Paths.Single().IslandIds);
+    }
+
+    [Fact]
+    public void New_first_visible_barter_focuses_its_outgoing_segment() {
         var load = new RouteLoadSnapshot(0, 0, 0);
         RouteStep[] steps = [
             new WarehousePickupStep("Iliya", "Iliya", [], load),
             new BarterStep("done", "A", new("X", 1), new("Y", 1), load),
             new BarterStep("next", "B", new("X", 1), new("Y", 1), load),
+            new BarterStep("after", "C", new("X", 1), new("Y", 1), load),
             new WarehouseUnloadStep("Iliya", "Iliya", [], load),
         ];
 
@@ -89,7 +109,7 @@ public sealed class RouteRenderSnapshotTests {
             new HashSet<string>(["done"], StringComparer.Ordinal),
             "next");
 
-        Assert.Equal(new RouteFocusSegment("Iliya", "B"), segment);
+        Assert.Equal(new RouteFocusSegment("B", "C"), segment);
     }
 
     [Fact]
