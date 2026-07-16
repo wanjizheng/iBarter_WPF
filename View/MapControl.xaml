@@ -4,16 +4,17 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="clr-namespace:iBarter"
+    xmlns:view="clr-namespace:iBarter.View"
     xmlns:Syncfusion="http://schemas.syncfusion.com/wpf" x:Class="iBarter.View.MapControl"
     mc:Ignorable="d"
     d:DesignHeight="450" d:DesignWidth="800">
     <Grid>
         <Border x:Name="MapViewport" ClipToBounds="True"
                 MouseWheel="MapViewport_MouseWheel"
-                MouseRightButtonDown="MapViewport_MouseRightButtonDown"
+                MouseLeftButtonDown="MapViewport_MouseLeftButtonDown"
                 MouseMove="MapViewport_MouseMove"
-                MouseRightButtonUp="MapViewport_MouseRightButtonUp">
-            <Grid x:Name="Grid_MapMain" RenderTransformOrigin="0,0">
+                MouseLeftButtonUp="MapViewport_MouseLeftButtonUp">
+            <Grid x:Name="MainViewportContent" RenderTransformOrigin="0,0">
                 <Grid.RenderTransform>
                     <TransformGroup>
                         <ScaleTransform x:Name="MapScaleTransform" />
@@ -23,6 +24,8 @@
 
         <Image x:Name="Image_BackgroundMap" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top" Stretch="Fill"
                Source="/Images/iBarterMap.png"/>
+        <view:LocalXyzTileLayer x:Name="MainTileLayer" Visibility="Collapsed" />
+        <Grid x:Name="Grid_MapMain" Background="Transparent">
          <!--<Grid x:Name="Grid_Ancient" Margin="464,411,326,29" Width="10" Height="10">
              <Rectangle Fill="DarkSlateGray" />
          </Grid>-->
@@ -291,8 +294,35 @@
         <!-- <local:ToolTipControl x:Name="myTTC1" Width="150" Height ="35" Margin="-125,272,625,108"></local:ToolTipControl> -->
 
             </Grid>
+            </Grid>
         </Border>
-        <StackPanel Panel.ZIndex="100" HorizontalAlignment="Right" VerticalAlignment="Top"
+        <Border x:Name="RightInsetPanel"
+                Panel.ZIndex="90"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Width="540"
+                MaxWidth="560"
+                MinWidth="500"
+                Height="300"
+                Margin="12"
+                Padding="5"
+                Background="#D9152532"
+                BorderBrush="#AA8CA8B8"
+                BorderThickness="1"
+                CornerRadius="4"
+                Visibility="Collapsed">
+            <Grid ClipToBounds="True">
+                <view:LocalXyzTileLayer x:Name="RightInsetTileLayer" />
+                <Grid x:Name="Grid_RightInsetOverlay" Background="Transparent" />
+                <Border HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Margin="6" Padding="6,2"
+                        Background="#CC071722" CornerRadius="3">
+                    <TextBlock Text="右上区域" Foreground="White"
+                               FontWeight="SemiBold" FontSize="12" />
+                </Border>
+            </Grid>
+        </Border>
+        <StackPanel Panel.ZIndex="100" HorizontalAlignment="Left" VerticalAlignment="Top"
                     Orientation="Horizontal" Margin="8" Background="#99051E2A">
             <Button Content="−" Width="28" Height="28" Click="ZoomOut_Click" ToolTip="缩小" />
             <Button Content="＋" Width="28" Height="28" Margin="4,0" Click="ZoomIn_Click" ToolTip="放大" />

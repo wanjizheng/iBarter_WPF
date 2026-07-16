@@ -47,6 +47,7 @@ namespace iBarter.View {
             public Islands Islands;
             public bool IsTemp;
             public bool IsWarehouse;
+            public Grid Host;
             public Grid ImageGrid;
             public Label Label;
             public Line Line;
@@ -79,6 +80,7 @@ namespace iBarter.View {
             // (AdjustLabels) stop firing after the user switches tabs.
             this.Loaded += (_, _) => {
                 if (myTimer != null && !myTimer.IsEnabled) myTimer.Start();
+                TryInitializeHdMap();
                 if (!routeDisplaySubscribed && App.myRouteCoordinator != null) {
                     App.myRouteCoordinator.RouteDisplayChanged += RouteCoordinator_RouteDisplayChanged;
                     routeDisplaySubscribed = true;
@@ -96,6 +98,13 @@ namespace iBarter.View {
             Grid_MapMain.SizeChanged += (_, _) =>
                 Dispatcher.BeginInvoke(new Action(IslandsButtonRearrange),
                     DispatcherPriority.Render);
+            Grid_RightInsetOverlay.SizeChanged += (_, _) =>
+                Dispatcher.BeginInvoke(new Action(IslandsButtonRearrange),
+                    DispatcherPriority.Render);
+            MapViewport.SizeChanged += (_, _) => {
+                UpdateRightInsetSize();
+                if (hdMapEnabled) RefreshHdMap();
+            };
             myTimer.Start();
         }
 
@@ -104,18 +113,32 @@ namespace iBarter.View {
         }
 
         private void TimerOnTick(object? sender, EventArgs e) {
+            if (!hdMapEnabled && !hdMapInitializationAttempted)
+                TryInitializeHdMap();
             IslandsButtonRearrange();
             InvalidateVisual();
         }
 
         private void MapViewport_MouseWheel(object sender, MouseWheelEventArgs e) {
             if (e.Delta == 0) return;
-            viewportState.ZoomAt(e.GetPosition(MapViewport), e.Delta > 0 ? 1.15 : 1 / 1.15);
+            Point position = e.GetPosition(MapViewport);
+            if (hdMapEnabled && mainHdCamera is not null && hdMapConfiguration is not null) {
+                mainHdCamera.ZoomAt(
+                    position.X,
+                    position.Y,
+                    MapViewport.ActualWidth,
+                    MapViewport.ActualHeight,
+                    mainHdCamera.Zoom + (e.Delta > 0 ? 0.25 : -0.25),
+                    hdMapConfiguration.TileSize);
+            }
+            else {
+                viewportState.ZoomAt(position, e.Delta > 0 ? 1.15 : 1 / 1.15);
+            }
             ApplyMapViewportState();
             e.Handled = true;
         }
 
-        private void MapViewport_MouseRightButtonDown(object sender, MouseButtonEventArgs e) {
+        private void MapViewport_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
             if (!IsBlankMapArea(e.OriginalSource)) return;
             isPanningMap = true;
             lastPanPoint = e.GetPosition(MapViewport);
@@ -124,14 +147,18 @@ namespace iBarter.View {
         }
 
         private void MapViewport_MouseMove(object sender, MouseEventArgs e) {
-            if (!isPanningMap || e.RightButton != MouseButtonState.Pressed) return;
+            if (!isPanningMap || e.LeftButton != MouseButtonState.Pressed) return;
             Point current = e.GetPosition(MapViewport);
-            viewportState.PanBy(current - lastPanPoint);
+            Vector delta = current - lastPanPoint;
+            if (hdMapEnabled && mainHdCamera is not null && hdMapConfiguration is not null)
+                mainHdCamera.PanByScreen(delta.X, delta.Y, hdMapConfiguration.TileSize);
+            else
+                viewportState.PanBy(delta);
             lastPanPoint = current;
             ApplyMapViewportState();
         }
 
-        private void MapViewport_MouseRightButtonUp(object sender, MouseButtonEventArgs e) {
+        private void MapViewport_MouseLeftButtonUp(object sender, MouseButtonEventArgs e) {
             if (!isPanningMap) return;
             isPanningMap = false;
             MapViewport.ReleaseMouseCapture();
@@ -140,7 +167,9 @@ namespace iBarter.View {
 
         private bool IsBlankMapArea(object? originalSource) {
             return ReferenceEquals(originalSource, MapViewport)
+                || ReferenceEquals(originalSource, MainViewportContent)
                 || ReferenceEquals(originalSource, Grid_MapMain)
+                || ReferenceEquals(originalSource, MainTileLayer)
                 || ReferenceEquals(originalSource, Image_BackgroundMap);
         }
 
@@ -153,17 +182,44 @@ namespace iBarter.View {
         }
 
         private void ResetMapViewport(object sender, RoutedEventArgs e) {
-            viewportState.Reset();
+            if (hdMapEnabled && mainHdCamera is not null && hdMapConfiguration is not null) {
+                var region = hdMapConfiguration.MainRegion;
+                mainHdCamera.Reset(
+                    iBarter.Mapping.WebMercatorProjection.ToNormalized(region.DefaultCenter),
+                    region.DefaultZoom);
+            }
+            else {
+                viewportState.Reset();
+            }
             ApplyMapViewportState();
         }
 
         private void ZoomMapAtViewportCenter(double multiplier) {
-            viewportState.ZoomAt(
-                new Point(MapViewport.ActualWidth / 2, MapViewport.ActualHeight / 2), multiplier);
+            if (hdMapEnabled && mainHdCamera is not null && hdMapConfiguration is not null) {
+                mainHdCamera.ZoomAt(
+                    MapViewport.ActualWidth / 2,
+                    MapViewport.ActualHeight / 2,
+                    MapViewport.ActualWidth,
+                    MapViewport.ActualHeight,
+                    mainHdCamera.Zoom + (multiplier > 1 ? 0.25 : -0.25),
+                    hdMapConfiguration.TileSize);
+            }
+            else {
+                viewportState.ZoomAt(
+                    new Point(MapViewport.ActualWidth / 2, MapViewport.ActualHeight / 2), multiplier);
+            }
             ApplyMapViewportState();
         }
 
         private void ApplyMapViewportState() {
+            if (hdMapEnabled) {
+                MapScaleTransform.ScaleX = 1;
+                MapScaleTransform.ScaleY = 1;
+                MapTranslateTransform.X = 0;
+                MapTranslateTransform.Y = 0;
+                RefreshHdMap();
+                return;
+            }
             MapScaleTransform.ScaleX = viewportState.Scale;
             MapScaleTransform.ScaleY = viewportState.Scale;
             MapTranslateTransform.X = viewportState.OffsetX;
@@ -171,6 +227,7 @@ namespace iBarter.View {
         }
 
         private double GetLabelScreenFontSize(bool highlighted) {
+            if (hdMapEnabled) return 13 + (highlighted ? 2 : 0);
             double requested = 13 * Math.Sqrt(viewportState.Scale) + (highlighted ? 2 : 0);
             return Math.Clamp(requested, 11, 16);
         }
@@ -315,7 +372,8 @@ namespace iBarter.View {
                     if (routeHighlight) {
                         Brush highlightBrush = ResolveHighlightBrush(renderSnapshot, myIslands.IslandsName);
                         myLabel.FontWeight = FontWeights.ExtraBold;
-                        myLabel.FontSize = GetLabelScreenFontSize(true) / viewportState.Scale;
+                        myLabel.FontSize = GetLabelScreenFontSize(true)
+                            / (hdMapEnabled ? 1 : viewportState.Scale);
                         myLabel.BorderBrush = highlightBrush;
                         myLabel.BorderThickness = new Thickness(2);
                         myLabel.Background = new SolidColorBrush(Color.FromArgb(155, 5, 22, 30));
@@ -324,7 +382,8 @@ namespace iBarter.View {
                     }
                     else {
                         myLabel.FontWeight = visual.BaseFontWeight;
-                        myLabel.FontSize = GetLabelScreenFontSize(false) / viewportState.Scale;
+                        myLabel.FontSize = GetLabelScreenFontSize(false)
+                            / (hdMapEnabled ? 1 : viewportState.Scale);
                         myLabel.BorderBrush = visual.BaseBorderBrush;
                         myLabel.BorderThickness = visual.BaseBorderThickness;
                         myLabel.Background = visual.BaseBackground;
@@ -348,12 +407,18 @@ namespace iBarter.View {
                     // Resetting this from raw IslandsThickness on every timer
                     // tick made inset pins jump back to their old positions
                     // while dashed route endpoints stayed projected.
-                    var displayCenter = GetDisplayCenterNormalized(myIslands);
+                    if (!TryGetIslandCenter(myIslands, out Grid? host, out Point center)
+                        || host is null) {
+                        grid.Visibility = Visibility.Collapsed;
+                        continue;
+                    }
+                    grid.Visibility = Visibility.Visible;
+                    visual.Host = host;
                     Grid_Image.Margin = new Thickness(
-                        displayCenter.X * Grid_MapMain.ActualWidth - 5,
-                        displayCenter.Y * Grid_MapMain.ActualHeight - 5,
-                        (1 - displayCenter.X) * Grid_MapMain.ActualWidth - 5,
-                        (1 - displayCenter.Y) * Grid_MapMain.ActualHeight - 5);
+                        center.X - 5,
+                        center.Y - 5,
+                        host.ActualWidth - center.X - 5,
+                        host.ActualHeight - center.Y - 5);
 
                     // Place the label BELOW the island block by default,
                     // but flip it ABOVE when the island sits too close
@@ -362,7 +427,7 @@ namespace iBarter.View {
                     // the gap from the island bottom to the map bottom;
                     // a small value means the label would overflow).
                     double labelTop;
-                    if (1 - displayCenter.Y < 0.08) {
+                    if (host.ActualHeight - center.Y < Math.Max(40, host.ActualHeight * 0.08)) {
                         // flip: position label above the island block
                         // (label baseline = top - label height)
                         labelTop = Grid_Image.Margin.Top - labelSize.Height;
@@ -378,7 +443,7 @@ namespace iBarter.View {
                         Grid_Image.Margin.Bottom - labelSize.Height);
 
 
-                    NewMargin(myLabel);
+                    NewMargin(myLabel, host);
                     if (myLabel.Content != "") {
                         listLabels.Add(myLabel);
                         //AdjustLabels(listLabels);
@@ -394,16 +459,22 @@ namespace iBarter.View {
                 }
             }
 
-            AdjustLabels(listLabels);
+            foreach (var hostGroup in listGrid_Islands
+                .Select(grid => grid.Tag as IslandVisual)
+                .Where(visual => visual is not null
+                    && visual.Label.Visibility == Visibility.Visible)
+                .GroupBy(visual => visual!.Host))
+                AdjustLabels(hostGroup.Select(visual => visual!.Label).ToList());
             InvalidateVisual();
-            foreach (Line myLine in listLines) {
-                var relativePoint_Image = GetPosition(listImages.FirstOrDefault(i => i.Name.Contains(myLine.Name.Substring(5, myLine.Name.Length - 5))));
-                var relativePoint_Label = GetPosition(listLabels.FirstOrDefault(i => i.Name.Contains(myLine.Name.Substring(5, myLine.Name.Length - 5))));
-
-                myLine.X1 = relativePoint_Image.X + 5;
-                myLine.X2 = myLine.X1;
-                myLine.Y1 = relativePoint_Image.Y + 5;
-                myLine.Y2 = relativePoint_Label.Y;
+            foreach (IslandVisual visual in listGrid_Islands
+                .Select(grid => grid.Tag as IslandVisual)
+                .Where(visual => visual?.Line is not null)!) {
+                var relativePointImage = GetPosition(visual.ImageGrid, visual.Host);
+                var relativePointLabel = GetPosition(visual.Label, visual.Host);
+                visual.Line.X1 = relativePointImage.X + 5;
+                visual.Line.X2 = visual.Line.X1;
+                visual.Line.Y1 = relativePointImage.Y + 5;
+                visual.Line.Y2 = relativePointLabel.Y;
             }
 
             InvalidateVisual();
@@ -484,10 +555,12 @@ namespace iBarter.View {
             // lines (which live inside GridContainer_* and never carry
             // our tag). Matches Line AND Polygon so the next pass
             // starts from a known-empty state.
-            for (int i = Grid_MapMain.Children.Count - 1; i >= 0; i--) {
-                if (Grid_MapMain.Children[i] is FrameworkElement elem
-                    && ReferenceEquals(elem.Tag, ROUTE_LINE_TAG)) {
-                    Grid_MapMain.Children.RemoveAt(i);
+            foreach (Grid host in new[] { Grid_MapMain, Grid_RightInsetOverlay }) {
+                for (int i = host.Children.Count - 1; i >= 0; i--) {
+                    if (host.Children[i] is FrameworkElement elem
+                        && ReferenceEquals(elem.Tag, ROUTE_LINE_TAG)) {
+                        host.Children.RemoveAt(i);
+                    }
                 }
             }
 
@@ -558,28 +631,36 @@ namespace iBarter.View {
                 || (!coordinator.ShowAllRoutes && coordinator.SelectedRouteNumber == routeNumber);
             for (int step = 0; step < route.Count; step++) {
                 var island = route[step];
+                if (!TryGetIslandCenter(island, out Grid? host, out Point center)
+                    || host is null)
+                    continue;
                 int occurrenceIndex = markerOccurrences.GetValueOrDefault(island.IslandsName);
                 markerOccurrences[island.IslandsName] = occurrenceIndex + 1;
                 var offset = RouteStepMarkerLayout.OffsetFor(
                     occurrenceIndex, markerCounts[island.IslandsName]);
-                var center = GetIslandCenter(island);
-                DrawRouteStepMarker(step + 1,
+                DrawRouteStepMarker(host, step + 1,
                     new Point(center.X + offset.X, center.Y + offset.Y), stroke, routeSelected);
             }
             for (int i = 0; i < route.Count - 1; i++) {
                 var fromIsland = route[i];
                 var toIsland = route[i + 1];
+                if (!TryGetIslandCenter(fromIsland, out Grid? fromHost, out Point from)
+                    || !TryGetIslandCenter(toIsland, out Grid? toHost, out Point to)
+                    || fromHost is null
+                    || !ReferenceEquals(fromHost, toHost))
+                    continue;
                 var displayPath = RouteDisplayGeometry.BuildDirectLeg(
-                    GetIslandCenter(fromIsland), GetIslandCenter(toIsland));
+                    from, to);
                 bool focused = App.myRouteCoordinator?.IsFocusedSegment(
                     routeNumber, fromIsland.IslandsName, toIsland.IslandsName) == true;
                 for (int segment = 0; segment < displayPath.Count - 1; segment++)
-                    DrawRouteSegment(displayPath[segment], displayPath[segment + 1], stroke,
+                    DrawRouteSegment(fromHost, displayPath[segment], displayPath[segment + 1], stroke,
                         addArrow: segment == displayPath.Count - 2, focused, routeSelected);
             }
         }
 
         private void DrawRouteSegment(
+            Grid host,
             Point from,
             Point to,
             Brush stroke,
@@ -590,10 +671,8 @@ namespace iBarter.View {
                 double dy = to.Y - from.Y;
                 if (dx == 0 && dy == 0) return;
 
-                bool pulse = focused && App.myRouteCoordinator?.IsFocusPulseActive == true;
-                bool pulseDimmed = pulse && (DateTime.UtcNow.Millisecond / 220) % 2 == 0;
-                var visualStyle = RouteVisualStyle.For(routeSelected, focused, pulseDimmed);
-                Brush displayStroke = focused ? Brushes.Lime : stroke;
+                var visualStyle = RouteVisualStyle.For(routeSelected, focused, pulse: false);
+                Brush displayStroke = focused ? Brushes.Magenta : stroke;
                 var line = new Line {
                     X1 = from.X,
                     Y1 = from.Y,
@@ -601,6 +680,8 @@ namespace iBarter.View {
                     Y2 = to.Y,
                     Stroke = displayStroke,
                     StrokeThickness = visualStyle.StrokeThickness,
+                    StrokeDashArray = new DoubleCollection([4, 2]),
+                    StrokeDashCap = PenLineCap.Round,
                     Tag = ROUTE_LINE_TAG,
                     IsHitTestVisible = false,
                     Opacity = visualStyle.Opacity,
@@ -611,7 +692,7 @@ namespace iBarter.View {
                     ShadowDepth = 0,
                     Opacity = 0.90,
                 };
-                Grid_MapMain.Children.Add(line);
+                host.Children.Add(line);
 
                 if (visualStyle.ShowSelectionOverlay) {
                     var highlight = new Line {
@@ -626,7 +707,7 @@ namespace iBarter.View {
                         Tag = ROUTE_LINE_TAG,
                         IsHitTestVisible = false,
                     };
-                    Grid_MapMain.Children.Add(highlight);
+                    host.Children.Add(highlight);
                 }
 
                 if (!addArrow) return;
@@ -647,33 +728,26 @@ namespace iBarter.View {
                 transforms.Children.Add(new RotateTransform(angleDeg));
                 transforms.Children.Add(new TranslateTransform(to.X, to.Y));
                 arrow.RenderTransform = transforms;
-                Grid_MapMain.Children.Add(arrow);
+                host.Children.Add(arrow);
         }
 
-        private void DrawRouteStepMarker(int step, Point center, Brush stroke, bool routeSelected) {
+        private void DrawRouteStepMarker(
+            Grid host,
+            int step,
+            Point center,
+            Brush stroke,
+            bool routeSelected) {
             const double diameter = 20;
-            var marker = new Ellipse {
-                Width = diameter,
-                Height = diameter,
-                Fill = new SolidColorBrush(Color.FromArgb(routeSelected ? (byte)230 : (byte)150, 5, 22, 30)),
-                Stroke = routeSelected ? Brushes.White : stroke,
-                StrokeThickness = routeSelected ? 2.25 : 1.1,
-                Opacity = routeSelected ? 1 : 0.32,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(center.X + 7, center.Y - diameter - 7, 0, 0),
-                Tag = ROUTE_LINE_TAG,
-                IsHitTestVisible = false,
-            };
-            var number = RouteStepMarkerFactory.CreateStepNumber(step, diameter);
-            number.VerticalAlignment = VerticalAlignment.Top;
-            number.Margin = new Thickness(center.X + 7, center.Y - diameter - 7, 0, 0);
-            number.Tag = ROUTE_LINE_TAG;
-            number.IsHitTestVisible = false;
+            var marker = RouteStepMarkerFactory.CreateMarker(
+                step, diameter, stroke, routeSelected);
+            marker.Opacity = routeSelected ? 1 : 0.32;
+            marker.HorizontalAlignment = HorizontalAlignment.Left;
+            marker.VerticalAlignment = VerticalAlignment.Top;
+            marker.Margin = new Thickness(center.X + 7, center.Y - diameter - 7, 0, 0);
+            marker.Tag = ROUTE_LINE_TAG;
+            marker.IsHitTestVisible = false;
             Grid.SetZIndex(marker, 50);
-            Grid.SetZIndex(number, 51);
-            Grid_MapMain.Children.Add(marker);
-            Grid_MapMain.Children.Add(number);
+            host.Children.Add(marker);
         }
 
         private static readonly NormalizedBounds LEFT_INSET_BOUNDS = new(0, 0, 0.3775, 0.3267);
@@ -708,16 +782,11 @@ namespace iBarter.View {
         // Pixel position of the displayed pin. Inset members use their
         // undistorted inset projection; main-map and bottom-edge members
         // retain the authored display centroid.
-        private Point GetIslandCenter(Islands isl) {
-            var p = GetDisplayCenterNormalized(isl);
-            return new Point(p.X * Grid_MapMain.ActualWidth, p.Y * Grid_MapMain.ActualHeight);
-        }
-
-        private Point GetPosition(UIElement element) {
+        private Point GetPosition(UIElement element, Grid host) {
             Point rootPoint = new Point(0, 0);
             try {
-                if (Grid_MapMain.IsLoaded) {
-                    GeneralTransform transform = element.TransformToAncestor(Grid_MapMain);
+                if (host.IsLoaded) {
+                    GeneralTransform transform = element.TransformToAncestor(host);
                     rootPoint = transform.Transform(new Point(0, 0));
                 }
             }
@@ -924,7 +993,7 @@ namespace iBarter.View {
             return measured;
         }
 
-        private void NewMargin(Label _label) {
+        private void NewMargin(Label _label, FrameworkElement? host = null) {
             double labelWidth = LabelPlacementWidth(_label);
             double labelHeight = LabelPlacementHeight(_label);
             double rightEdge = _label.Margin.Left + labelWidth;
@@ -934,8 +1003,10 @@ namespace iBarter.View {
             double newTopMargin = _label.Margin.Top;
 
             // 检查并调整右边界
-            if (rightEdge > this.ActualWidth) {
-                newLeftMargin = this.ActualWidth - labelWidth;
+            double availableWidth = host?.ActualWidth > 0 ? host.ActualWidth : this.ActualWidth;
+            double availableHeight = host?.ActualHeight > 0 ? host.ActualHeight : this.ActualHeight;
+            if (rightEdge > availableWidth) {
+                newLeftMargin = availableWidth - labelWidth;
                 newLeftMargin = Math.Max(0, newLeftMargin); // 避免负边距
             }
 
@@ -945,8 +1016,8 @@ namespace iBarter.View {
             }
 
             // 检查并调整底边界
-            if (bottomEdge > this.ActualHeight) {
-                newTopMargin = this.ActualHeight - labelHeight;
+            if (bottomEdge > availableHeight) {
+                newTopMargin = availableHeight - labelHeight;
                 newTopMargin = Math.Max(0, newTopMargin); // 避免负边距
             }
 
@@ -1108,16 +1179,8 @@ namespace iBarter.View {
         }
 
         public void IslandsButtonInitialisation() {
-            //Grid_MapMain.Children.Clear();
-
-            for (int i = Grid_MapMain.Children.Count - 1; i > 0; i--) {
-                var child = Grid_MapMain.Children[i];
-                if (child.GetName() == "Image_BackgroundMap") {
-                    continue;
-                }
-
-                Grid_MapMain.Children.Remove(child);
-            }
+            Grid_MapMain.Children.Clear();
+            Grid_RightInsetOverlay.Children.Clear();
 
             listGrid_Islands = new List<Grid>();
 
@@ -1143,6 +1206,8 @@ namespace iBarter.View {
             // re-deriving "temp-ness" later from a Name string), so a
             // Temp placeholder island is unambiguously identified.
             bool isTemp = !isWarehouse && !(_barter.Item1Name != "" && _barter.Item2Name != null);
+            Grid? overlayHost = GetOverlayHost(_barter.IsLand);
+            if (overlayHost is null) return;
 
             Grid myGrid_Container = new Grid();
 
@@ -1171,12 +1236,12 @@ namespace iBarter.View {
             }
 
 
-            var displayCenter = GetDisplayCenterNormalized(_barter.IsLand);
+            TryGetIslandCenter(_barter.IsLand, out _, out Point islandCenter);
             myGrid_Image.Margin = new Thickness(
-                displayCenter.X * Grid_MapMain.ActualWidth - 5,
-                displayCenter.Y * Grid_MapMain.ActualHeight - 5,
-                (1 - displayCenter.X) * Grid_MapMain.ActualWidth - 5,
-                (1 - displayCenter.Y) * Grid_MapMain.ActualHeight - 5);
+                islandCenter.X - 5,
+                islandCenter.Y - 5,
+                overlayHost.ActualWidth - islandCenter.X - 5,
+                overlayHost.ActualHeight - islandCenter.Y - 5);
             myGrid_Image.Width = 10;
             myGrid_Image.Height = 10;
 
@@ -1274,7 +1339,7 @@ namespace iBarter.View {
 
             myLabel.Margin = new Thickness(myGrid_Image.Margin.Left - myLabel.Width / 2, myGrid_Image.Margin.Top + myGrid_Image.ActualHeight, myGrid_Image.Margin.Right - myLabel.Width, myGrid_Image.Margin.Bottom - myLabel.Height);
 
-            NewMargin(myLabel);
+            NewMargin(myLabel, overlayHost);
 
             myGrid_Container.Children.Add(myGrid_Image);
             myGrid_Image.Children.Add(myRectangle);
@@ -1320,6 +1385,7 @@ namespace iBarter.View {
                 Islands = _barter.IsLand,
                 IsTemp = isTemp,
                 IsWarehouse = isWarehouse,
+                Host = overlayHost,
                 ImageGrid = myGrid_Image,
                 Label = myLabel,
                 Line = myLine,
@@ -1333,7 +1399,7 @@ namespace iBarter.View {
                 BaseRectangleStrokeThickness = myRectangle.StrokeThickness,
             };
 
-            Grid_MapMain.Children.Add(myGrid_Container);
+            overlayHost.Children.Add(myGrid_Container);
 
             if (listGrid_Islands.FirstOrDefault(b => b.Name == "GridContainer_" + _barter.IsLand.IslandsName) == null) {
                 listGrid_Islands.Add(myGrid_Container);

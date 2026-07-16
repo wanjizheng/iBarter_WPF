@@ -11,6 +11,7 @@
     <PackageReference Include="xunit.v3.mtp-v2" Version="3.2.2" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\..\Mapping\*.cs" Link="Mapping\%(Filename)%(Extension)" />
     <Compile Include="..\..\Navigation\IslandNavigationGeometry.cs" Link="Navigation\IslandNavigationGeometry.cs" />
     <Compile Include="..\..\Navigation\RouteDisplayGeometry.cs" Link="Navigation\RouteDisplayGeometry.cs" />
     <Compile Include="..\..\Navigation\ShippingCorridorGraph.cs" Link="Navigation\ShippingCorridorGraph.cs" />

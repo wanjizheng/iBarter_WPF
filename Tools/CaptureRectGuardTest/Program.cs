@@ -92,7 +92,7 @@ if (!mapControlXaml.Contains("x:Name=\"MapViewport\"", StringComparison.Ordinal)
     || !mapControlXaml.Contains("x:Name=\"MapScaleTransform\"", StringComparison.Ordinal)
     || !mapControlXaml.Contains("x:Name=\"MapTranslateTransform\"", StringComparison.Ordinal)
     || !mapControlSource.Contains("MapViewport_MouseWheel", StringComparison.Ordinal)
-    || !mapControlSource.Contains("MapViewport_MouseRightButtonDown", StringComparison.Ordinal)
+    || !mapControlSource.Contains("MapViewport_MouseLeftButtonDown", StringComparison.Ordinal)
     || !mapControlSource.Contains("ResetMapViewport", StringComparison.Ordinal)) {
     Console.Error.WriteLine("Expected a transform-based map viewport with zoom, pan, and reset controls.");
     return 1;
