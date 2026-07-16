@@ -47,6 +47,9 @@ public sealed class PlannerAutoPlanningAdapter {
         int lv6Target,
         int budget) {
 
+        if (strategy == AutoPlanningStrategy.ManualSelection)
+            return PreserveManualSelection(rows);
+
         var unfinished = rows.Where(r => !r.ExchangeDone).ToList();
         var unfinishedRoutes = unfinished.Select(r => r.Route).ToList();
 
@@ -81,4 +84,27 @@ public sealed class PlannerAutoPlanningAdapter {
 
         return new PlannerCalculation(new PlannerApplySet(multipliers), result.Diagnostics, result.UsedParley);
     }
+
+    private static PlannerCalculation PreserveManualSelection(
+        IReadOnlyList<PlannerRowSnapshot> rows) {
+        var multipliers = new Dictionary<string, int>(StringComparer.Ordinal);
+        long usedParley = 0;
+        foreach (var row in rows) {
+            if (!multipliers.TryAdd(row.RowId, row.ExistingMultiplier))
+                return ManualFailure("duplicate-row-id", row.RowId);
+            if (row.ExistingMultiplier < 0)
+                return ManualFailure("manual-negative-multiplier", row.RowId);
+            if (!row.ExchangeDone && row.ExistingMultiplier > 0)
+                usedParley += (long)row.ExistingMultiplier * row.Route.Parley;
+        }
+        if (usedParley > Int32.MaxValue)
+            return ManualFailure("manual-parley-overflow");
+        return new PlannerCalculation(
+            new PlannerApplySet(multipliers),
+            [],
+            (int)usedParley);
+    }
+
+    private static PlannerCalculation ManualFailure(string code, string rowId = "") =>
+        new(null, [new AutoPlanningDiagnostic(code, rowId)], 0);
 }

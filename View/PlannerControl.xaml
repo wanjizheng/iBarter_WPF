@@ -49,6 +49,7 @@
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.CrowCoinFirst}" Tag="CrowCoinFirst" />
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.ProfitFirst}" Tag="ProfitFirst" />
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.RestockFirst}" Tag="RestockFirst" />
+                <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.ManualSelection}" Tag="ManualSelection" />
             </syncfusion:ComboBoxAdv>
             <controls:FluentIconButton x:Name="ButtonAdv_AutoPlan" IconData="{StaticResource FluentIcon.VehicleShip}"
                 Label="{loc:Localize str.Planner.Btn.AutoPlan}" ToolTip="{loc:Localize str.Planner.Btn.AutoPlanTip}" Click="ButtonAdv_AutoPlan_Click" />

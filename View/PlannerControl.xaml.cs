@@ -1249,6 +1249,14 @@ namespace iBarter.View {
                 App.myCFun.Log(svc.Localize(key, arg), Brushes.Red);
                 return;
             }
+            bool manualSelection = strategy == AutoPlanningStrategy.ManualSelection;
+            if (manualSelection && !liveRows.Any(row =>
+                !row.ExchangeDone && row.ExchangeQuantity > 0)) {
+                App.myCFun.Log(
+                    svc.Localize("str.Msg.Planner.AutoPlan.ManualNoSelection"),
+                    Brushes.Orange);
+                return;
+            }
 
             var routeRows = liveRows.Select((b, index) => new PlannerRouteSnapshot(
                 RowId: RoutePlannerRowIdentity.Create(index, b.IsLandName, b.Item1.ItemID, b.Item2.ItemID),
@@ -1306,16 +1314,18 @@ namespace iBarter.View {
             // Commit the Planner multipliers only after route calculation and replay
             // verification succeeded. A failed new attempt therefore leaves the last
             // saved Planner + automatic route pair intact and restorable.
-            DataGrid_Planner.BeginInit();
-            try {
-                for (int i = 0; i < liveRows.Count; i++) {
-                    string key = i.ToString(CultureInfo.InvariantCulture);
-                    if (calculation.ApplySet.Multipliers.TryGetValue(key, out int multiplier))
-                        liveRows[i].ExchangeQuantity = multiplier;
+            if (!manualSelection) {
+                DataGrid_Planner.BeginInit();
+                try {
+                    for (int i = 0; i < liveRows.Count; i++) {
+                        string key = i.ToString(CultureInfo.InvariantCulture);
+                        if (calculation.ApplySet.Multipliers.TryGetValue(key, out int multiplier))
+                            liveRows[i].ExchangeQuantity = multiplier;
+                    }
                 }
-            }
-            finally {
-                DataGrid_Planner.EndInit();
+                finally {
+                    DataGrid_Planner.EndInit();
+                }
             }
 
             if (!App.myRouteCoordinator.PublishGeneratedPlan(request, routePlan))
@@ -1327,10 +1337,16 @@ namespace iBarter.View {
             UpdateMapControl();
             App.myfmMain?.myShipCargo?.UpdateCurrentLV();
 
-            int selectedRoutes = calculation.ApplySet.Multipliers.Values.Count(value => value > 0);
+            int selectedRoutes = liveRows.Select((row, index) => new {
+                    Row = row,
+                    Multiplier = calculation.ApplySet.Multipliers.GetValueOrDefault(
+                        index.ToString(CultureInfo.InvariantCulture)),
+                })
+                .Count(item => !item.Row.ExchangeDone && item.Multiplier > 0);
             string strategyDisplay = svc.Localize(strategy switch {
                 AutoPlanningStrategy.CrowCoinFirst => "str.Planner.AutoPlan.CrowCoinFirst",
                 AutoPlanningStrategy.RestockFirst => "str.Planner.AutoPlan.RestockFirst",
+                AutoPlanningStrategy.ManualSelection => "str.Planner.AutoPlan.ManualSelection",
                 _ => "str.Planner.AutoPlan.ProfitFirst",
             });
             App.myCFun.Log(svc.Localize(

@@ -73,10 +73,12 @@
     <sys:String x:Key="str.Planner.AutoPlan.CrowCoinFirst">Crow Coin First</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.ProfitFirst">Profit First</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.RestockFirst">Restock First</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.ManualSelection">Manual Selection</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlan">Auto Plan</sys:String>
-    <sys:String x:Key="str.Planner.Btn.AutoPlanTip">Fill unfinished multipliers under the 1,000,000 parley budget using the selected strategy</sys:String>
+    <sys:String x:Key="str.Planner.Btn.AutoPlanTip">Automatic strategies fill exchange counts; Manual Selection only optimizes the route for the current counts</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.Success">Auto Plan ({0}): {1} parley used across {2} route(s).</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.NoRows">Auto Plan: no rows to plan.</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ManualNoSelection">Enter an exchange count greater than zero in Planner first; the existing automatic route was not changed.</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.Invalid">Auto Plan failed: invalid input ({0}).</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.NoFeasible">Auto Plan: no feasible route under the parley budget.</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveNoProducer">Auto Plan: no producer in the same BarterGroup for {0}.</sys:String>

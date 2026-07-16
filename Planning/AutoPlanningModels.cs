@@ -1,6 +1,11 @@
 namespace iBarter.Planning;
 
-public enum AutoPlanningStrategy { CrowCoinFirst, ProfitFirst, RestockFirst }
+public enum AutoPlanningStrategy {
+    CrowCoinFirst,
+    ProfitFirst,
+    RestockFirst,
+    ManualSelection,
+}
 
 public sealed record AutoPlanningRoute(
     string RowId, int Group,

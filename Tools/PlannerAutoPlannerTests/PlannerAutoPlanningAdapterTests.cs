@@ -5,6 +5,58 @@ namespace PlannerAutoPlannerTests;
 
 public sealed class PlannerAutoPlanningAdapterTests {
     [Fact]
+    public void Manual_selection_preserves_every_existing_multiplier() {
+        var adapter = new PlannerAutoPlanningAdapter();
+        var selected = Snapshot("selected", exchangeDone: false, existingMultiplier: 3,
+            new AutoPlanningRoute(
+                "selected", 1, "A", 4, 2, "B", 5, 1,
+                false, 12_000, 5));
+        var unselected = Snapshot("unselected", exchangeDone: false, existingMultiplier: 0,
+            new AutoPlanningRoute(
+                "unselected", 1, "C", 4, 1, "D", 5, 1,
+                false, 8_000, 5));
+        var finished = Snapshot("finished", exchangeDone: true, existingMultiplier: 2,
+            new AutoPlanningRoute(
+                "finished", 1, "E", 4, 1, "F", 5, 1,
+                false, 5_000, 5));
+
+        var calculation = adapter.Calculate(
+            [selected, unselected, finished],
+            new Dictionary<string, int>(),
+            AutoPlanningStrategy.ManualSelection,
+            10,
+            10,
+            1_000_000);
+
+        Assert.NotNull(calculation.ApplySet);
+        Assert.Equal(3, calculation.ApplySet!.Multipliers["selected"]);
+        Assert.Equal(0, calculation.ApplySet.Multipliers["unselected"]);
+        Assert.Equal(2, calculation.ApplySet.Multipliers["finished"]);
+        Assert.Equal(36_000, calculation.UsedParley);
+    }
+
+    [Fact]
+    public void Manual_selection_rejects_a_negative_multiplier_without_applying_changes() {
+        var adapter = new PlannerAutoPlanningAdapter();
+        var invalid = Snapshot("invalid", exchangeDone: false, existingMultiplier: -1,
+            new AutoPlanningRoute(
+                "invalid", 1, "A", 4, 1, "B", 5, 1,
+                false, 10_000, 5));
+
+        var calculation = adapter.Calculate(
+            [invalid],
+            new Dictionary<string, int>(),
+            AutoPlanningStrategy.ManualSelection,
+            10,
+            10,
+            1_000_000);
+
+        Assert.Null(calculation.ApplySet);
+        Assert.Contains(calculation.Diagnostics,
+            diagnostic => diagnostic.Code == "manual-negative-multiplier");
+    }
+
+    [Fact]
     public void Calculate_preserves_ck_multiplier_and_replaces_unfinished_from_zero() {
         var adapter = new PlannerAutoPlanningAdapter();
         var ckRoute = Snapshot("ck", exchangeDone: true, existingMultiplier: 3,

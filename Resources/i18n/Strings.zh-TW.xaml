@@ -61,10 +61,12 @@
     <sys:String x:Key="str.Planner.AutoPlan.CrowCoinFirst">烏鴉硬幣優先</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.ProfitFirst">賺錢優先</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.RestockFirst">補充貨源優先</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.ManualSelection">手动选择</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlan">自動規劃</sys:String>
-    <sys:String x:Key="str.Planner.Btn.AutoPlanTip">依選取的策略,在 1,000,000 貢獻度上限內填入未完成的交換次數</sys:String>
+    <sys:String x:Key="str.Planner.Btn.AutoPlanTip">自动策略会填写交换次数；手动选择策略只使用当前交换次数计算最优路线</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.Success">自動規劃 ({0}):共 {1} 貢獻度,涵蓋 {2} 條路線。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.NoRows">自動規劃:沒有可規劃的列。</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ManualNoSelection">请先在 Planner 中填写至少一条大于 0 的交换次数；现有自动路线没有改变。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.Invalid">自動規劃失敗:輸入無效 ({0})。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.NoFeasible">自動規劃:在貢獻度預算內沒有可行路線。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveNoProducer">自動規劃:同一商團內沒有 {0} 的上游生產路線。</sys:String>
