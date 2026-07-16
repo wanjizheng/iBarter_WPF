@@ -12,7 +12,9 @@ public sealed class RoutePlanPersistenceTests {
             var plan = new AutomaticRoutePlanner().Plan(request, CancellationToken.None);
             Assert.True(plan.Routes.Count > 0);
 
-            RoutePlanPersistence.Save(path, plan, plan.Routes[0].Number, showAll: true);
+            RoutePlanPersistence.Save(
+                path, plan, plan.Routes[0].Number,
+                showAll: true, selectedBarterRowId: "r1");
             bool loaded = RoutePlanPersistence.TryLoad(path, plan.InputFingerprint, out var snapshot);
 
             Assert.True(loaded);
@@ -22,6 +24,7 @@ public sealed class RoutePlanPersistenceTests {
             Assert.True(RoutePlanVerifier.Verify(request, snapshot.Plan).Success);
             Assert.Equal(plan.Routes[0].Number, snapshot.SelectedRouteNumber);
             Assert.True(snapshot.ShowAll);
+            Assert.Equal("r1", snapshot.SelectedBarterRowId);
         }
         finally { File.Delete(path); }
     }

@@ -10,16 +10,19 @@ internal static class RouteStepMarkerFactory {
         int step,
         double diameter,
         Brush stroke,
-        bool routeSelected) {
+        bool routeSelected,
+        bool focused = false) {
         var marker = new Grid {
             Width = diameter,
             Height = diameter,
         };
         marker.Children.Add(new Ellipse {
-            Fill = new SolidColorBrush(Color.FromArgb(
-                routeSelected ? (byte)230 : (byte)150, 5, 22, 30)),
-            Stroke = routeSelected ? Brushes.White : stroke,
-            StrokeThickness = routeSelected ? 2.25 : 1.1,
+            Fill = focused
+                ? Brushes.DeepPink
+                : new SolidColorBrush(Color.FromArgb(
+                    routeSelected ? (byte)230 : (byte)150, 5, 22, 30)),
+            Stroke = focused || routeSelected ? Brushes.White : stroke,
+            StrokeThickness = focused ? 3 : routeSelected ? 2.25 : 1.1,
         });
         marker.Children.Add(new TextBlock {
             Text = step.ToString(),

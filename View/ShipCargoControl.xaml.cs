@@ -80,6 +80,7 @@ namespace iBarter.View {
             }
             PropertyGrid_Ship.SelectedObject = App.myCargoProperty;
             CollectionViewSource.GetDefaultView(ListBox_ShipCargo.ItemsSource)?.Refresh();
+            Dispatcher.BeginInvoke(FocusSelectedAutomaticStep, System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         private void ComboBoxAdv_RouteSelector_SelectionChanged(object sender, SelectionChangedEventArgs e) {
@@ -397,6 +398,24 @@ namespace iBarter.View {
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);
             }
+        }
+
+        public void FocusSelectedAutomaticStep() {
+            if (IsDesignMode
+                || App.myRouteCoordinator?.Mode != CargoMode.AutomaticRoute
+                || string.IsNullOrWhiteSpace(App.myRouteCoordinator.SelectedBarterRowId))
+                return;
+            var selected = App.myCVM.AutomaticSteps
+                .OfType<BarterRouteStepViewModel>()
+                .FirstOrDefault(step => StringComparer.Ordinal.Equals(
+                    step.RowId, App.myRouteCoordinator.SelectedBarterRowId));
+            if (selected is null) return;
+            ListBox_ShipCargo.SelectedItem = selected;
+            ListBox_ShipCargo.ScrollIntoView(selected);
+            ListBox_ShipCargo.UpdateLayout();
+            if (ListBox_ShipCargo.ItemContainerGenerator.ContainerFromItem(selected)
+                is ListBoxItem container)
+                container.BringIntoView();
         }
 
         private static Barter? ResolveAutomaticBarter(string rowId) {

@@ -85,6 +85,9 @@ namespace iBarter.View {
                     App.myRouteCoordinator.RouteDisplayChanged += RouteCoordinator_RouteDisplayChanged;
                     routeDisplaySubscribed = true;
                 }
+                Dispatcher.BeginInvoke(
+                    new Action(CenterFocusedSegmentIfNeeded),
+                    DispatcherPriority.Render);
             };
             this.Unloaded += (_, _) => {
                 if (myTimer != null && myTimer.IsEnabled) myTimer.Stop();
@@ -100,12 +103,16 @@ namespace iBarter.View {
                     DispatcherPriority.Render);
             MapViewport.SizeChanged += (_, _) => {
                 if (hdMapEnabled) RefreshHdMap();
+                CenterFocusedSegmentIfNeeded();
             };
             myTimer.Start();
         }
 
         private void RouteCoordinator_RouteDisplayChanged(object? sender, EventArgs e) {
-            Dispatcher.BeginInvoke(new Action(IslandsButtonInitialisation), DispatcherPriority.Render);
+            Dispatcher.BeginInvoke(new Action(() => {
+                IslandsButtonInitialisation();
+                CenterFocusedSegmentIfNeeded();
+            }), DispatcherPriority.Render);
         }
 
         private void TimerOnTick(object? sender, EventArgs e) {
@@ -497,7 +504,11 @@ namespace iBarter.View {
         // GridContainer_* and have a Line_<island> name; ours are added
         // directly to Grid_MapMain). Tag-based discrimination avoids
         // having to subclass Line or maintain a parallel list of routes.
-        private static readonly object ROUTE_LINE_TAG = new object();
+        private sealed record RouteOverlayTag(
+            int? RouteNumber,
+            string? FromIslandId,
+            string? ToIslandId);
+        private static readonly RouteOverlayTag ROUTE_OVERLAY_ONLY = new(null, null, null);
         private readonly HashSet<string> routeResolutionDiagnostics = new(StringComparer.Ordinal);
         private static readonly Brush[] AutomaticRouteBrushes = [
             Brushes.DeepSkyBlue,
@@ -553,7 +564,7 @@ namespace iBarter.View {
             // starts from a known-empty state.
             for (int i = Grid_MapMain.Children.Count - 1; i >= 0; i--) {
                 if (Grid_MapMain.Children[i] is FrameworkElement elem
-                    && ReferenceEquals(elem.Tag, ROUTE_LINE_TAG)) {
+                    && elem.Tag is RouteOverlayTag) {
                     Grid_MapMain.Children.RemoveAt(i);
                 }
             }
@@ -632,8 +643,11 @@ namespace iBarter.View {
                 markerOccurrences[island.IslandsName] = occurrenceIndex + 1;
                 var offset = RouteStepMarkerLayout.OffsetFor(
                     occurrenceIndex, markerCounts[island.IslandsName]);
+                bool markerFocused = App.myRouteCoordinator?.IsFocusedMarker(
+                    routeNumber, island.IslandsName) == true;
                 DrawRouteStepMarker(host, step + 1,
-                    new Point(center.X + offset.X, center.Y + offset.Y), stroke, routeSelected);
+                    new Point(center.X + offset.X, center.Y + offset.Y),
+                    stroke, routeSelected, markerFocused);
             }
             for (int i = 0; i < route.Count - 1; i++) {
                 var fromIsland = route[i];
@@ -649,7 +663,12 @@ namespace iBarter.View {
                     routeNumber, fromIsland.IslandsName, toIsland.IslandsName) == true;
                 for (int segment = 0; segment < displayPath.Count - 1; segment++)
                     DrawRouteSegment(fromHost, displayPath[segment], displayPath[segment + 1], stroke,
-                        addArrow: segment == displayPath.Count - 2, focused, routeSelected);
+                        addArrow: segment == displayPath.Count - 2,
+                        focused,
+                        routeSelected,
+                        routeNumber,
+                        fromIsland.IslandsName,
+                        toIsland.IslandsName);
             }
         }
 
@@ -660,13 +679,16 @@ namespace iBarter.View {
             Brush stroke,
             bool addArrow,
             bool focused,
-            bool routeSelected) {
+            bool routeSelected,
+            int routeNumber,
+            string fromIslandId,
+            string toIslandId) {
                 double dx = to.X - from.X;
                 double dy = to.Y - from.Y;
                 if (dx == 0 && dy == 0) return;
 
                 var visualStyle = RouteVisualStyle.For(routeSelected, focused, pulse: false);
-                Brush displayStroke = focused ? Brushes.Magenta : stroke;
+                Brush displayStroke = focused ? Brushes.DeepPink : stroke;
                 var line = new Line {
                     X1 = from.X,
                     Y1 = from.Y,
@@ -676,7 +698,7 @@ namespace iBarter.View {
                     StrokeThickness = visualStyle.StrokeThickness,
                     StrokeDashArray = new DoubleCollection([4, 2]),
                     StrokeDashCap = PenLineCap.Round,
-                    Tag = ROUTE_LINE_TAG,
+                    Tag = new RouteOverlayTag(routeNumber, fromIslandId, toIslandId),
                     IsHitTestVisible = false,
                     Opacity = visualStyle.Opacity,
                 };
@@ -698,10 +720,30 @@ namespace iBarter.View {
                         StrokeThickness = 1.1,
                         StrokeDashArray = new DoubleCollection([2, 2]),
                         Opacity = 0.92,
-                        Tag = ROUTE_LINE_TAG,
+                        Tag = new RouteOverlayTag(routeNumber, fromIslandId, toIslandId),
                         IsHitTestVisible = false,
                     };
                     host.Children.Add(highlight);
+                }
+
+                if (App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute) {
+                    double length = Math.Sqrt(dx * dx + dy * dy);
+                    double endpointInset = Math.Min(14, Math.Max(0, length / 2 - 2));
+                    double unitX = length > 0 ? dx / length : 0;
+                    double unitY = length > 0 ? dy / length : 0;
+                    var hitTarget = new Line {
+                        X1 = from.X + unitX * endpointInset,
+                        Y1 = from.Y + unitY * endpointInset,
+                        X2 = to.X - unitX * endpointInset,
+                        Y2 = to.Y - unitY * endpointInset,
+                        Stroke = Brushes.Transparent,
+                        StrokeThickness = 16,
+                        Tag = new RouteOverlayTag(routeNumber, fromIslandId, toIslandId),
+                        Cursor = Cursors.Hand,
+                        IsHitTestVisible = true,
+                    };
+                    hitTarget.MouseLeftButtonDown += RouteSegment_MouseLeftButtonDown;
+                    host.Children.Add(hitTarget);
                 }
 
                 if (!addArrow) return;
@@ -715,7 +757,7 @@ namespace iBarter.View {
                         new Point(-11, -5),
                         new Point(-11, 5),
                     },
-                    Tag = ROUTE_LINE_TAG,
+                    Tag = new RouteOverlayTag(routeNumber, fromIslandId, toIslandId),
                     IsHitTestVisible = false,
                 };
                 var transforms = new TransformGroup();
@@ -730,18 +772,36 @@ namespace iBarter.View {
             int step,
             Point center,
             Brush stroke,
-            bool routeSelected) {
+            bool routeSelected,
+            bool focused) {
             const double diameter = 20;
             var marker = RouteStepMarkerFactory.CreateMarker(
-                step, diameter, stroke, routeSelected);
+                step, diameter, stroke, routeSelected, focused);
             marker.Opacity = routeSelected ? 1 : 0.32;
             marker.HorizontalAlignment = HorizontalAlignment.Left;
             marker.VerticalAlignment = VerticalAlignment.Top;
             marker.Margin = new Thickness(center.X + 7, center.Y - diameter - 7, 0, 0);
-            marker.Tag = ROUTE_LINE_TAG;
+            marker.Tag = ROUTE_OVERLAY_ONLY;
             marker.IsHitTestVisible = false;
             Grid.SetZIndex(marker, 50);
             host.Children.Add(marker);
+        }
+
+        private void RouteSegment_MouseLeftButtonDown(
+            object sender,
+            MouseButtonEventArgs e) {
+            if (sender is not FrameworkElement {
+                    Tag: RouteOverlayTag {
+                        RouteNumber: int routeNumber,
+                        FromIslandId: string fromIslandId,
+                        ToIslandId: string toIslandId,
+                    }
+                })
+                return;
+            if (App.myRouteCoordinator?.FocusRouteSegment(
+                    routeNumber, fromIslandId, toIslandId) == true)
+                App.myfmMain?.ActivateShipCargoSelection();
+            e.Handled = true;
         }
 
         private static readonly NormalizedBounds LEFT_INSET_BOUNDS = new(0, 0, 0.3775, 0.3267);

@@ -30,6 +30,29 @@ namespace iBarter.View {
             OffsetY += delta.Y;
         }
 
+        public void FocusSegment(
+            Point from,
+            Point to,
+            double viewportWidth,
+            double viewportHeight,
+            double occupiedFraction = 0.70) {
+            if (viewportWidth <= 0 || viewportHeight <= 0) return;
+            double spanX = Math.Abs(to.X - from.X);
+            double spanY = Math.Abs(to.Y - from.Y);
+            double fitX = spanX > 0.001
+                ? viewportWidth * occupiedFraction / spanX
+                : Double.PositiveInfinity;
+            double fitY = spanY > 0.001
+                ? viewportHeight * occupiedFraction / spanY
+                : Double.PositiveInfinity;
+            double fit = Math.Min(fitX, fitY);
+            Scale = Math.Clamp(double.IsFinite(fit) ? fit : MaxScale, MinScale, MaxScale);
+            double centerX = (from.X + to.X) / 2;
+            double centerY = (from.Y + to.Y) / 2;
+            OffsetX = viewportWidth / 2 - centerX * Scale;
+            OffsetY = viewportHeight / 2 - centerY * Scale;
+        }
+
         public void Reset() {
             Scale = 1;
             OffsetX = 0;

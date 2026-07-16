@@ -14,6 +14,7 @@ public partial class MapControl {
         new Dictionary<string, GeoCoordinate>(StringComparer.Ordinal);
     private XyzViewportCamera? mainHdCamera;
     private readonly LocalTileBitmapCache hdTileBitmapCache = new(512);
+    private long lastCenteredFocusRevision = -1;
 
     private void TryInitializeHdMap() {
         if (IsDesignMode || hdMapEnabled || hdMapInitializationAttempted) return;
@@ -134,5 +135,52 @@ public partial class MapControl {
             hdMapConfiguration.TileSize);
         center = new Point(projected.X, projected.Y);
         return true;
+    }
+
+    private void CenterFocusedSegmentIfNeeded() {
+        var coordinator = App.myRouteCoordinator;
+        if (coordinator is null
+            || coordinator.FocusRevision == lastCenteredFocusRevision
+            || coordinator.FocusedFromIslandId is not string fromIslandId
+            || coordinator.FocusedToIslandId is not string toIslandId
+            || MapViewport.ActualWidth <= 0
+            || MapViewport.ActualHeight <= 0)
+            return;
+
+        var fromIsland = App.listIslands?.FirstOrDefault(
+            island => island.IslandsName == fromIslandId);
+        var toIsland = App.listIslands?.FirstOrDefault(
+            island => island.IslandsName == toIslandId);
+        if (fromIsland is null || toIsland is null) return;
+
+        if (hdMapEnabled
+            && hdMapConfiguration is not null
+            && mainHdCamera is not null
+            && hdIslandCoordinates.TryGetValue(fromIslandId, out var fromCoordinate)
+            && hdIslandCoordinates.TryGetValue(toIslandId, out var toCoordinate)) {
+            var focus = MapFocusCameraCalculator.Calculate(
+                fromCoordinate,
+                toCoordinate,
+                MapViewport.ActualWidth,
+                MapViewport.ActualHeight,
+                hdMapConfiguration.TileSize,
+                mainHdCamera.MinZoom,
+                mainHdCamera.MaxZoom);
+            mainHdCamera.Reset(focus.Center, focus.Zoom);
+            lastCenteredFocusRevision = coordinator.FocusRevision;
+            ApplyMapViewportState();
+            return;
+        }
+
+        if (TryGetIslandCenter(fromIsland, out _, out Point from)
+            && TryGetIslandCenter(toIsland, out _, out Point to)) {
+            viewportState.FocusSegment(
+                from,
+                to,
+                MapViewport.ActualWidth,
+                MapViewport.ActualHeight);
+            lastCenteredFocusRevision = coordinator.FocusRevision;
+            ApplyMapViewportState();
+        }
     }
 }

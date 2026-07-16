@@ -36,6 +36,32 @@ public sealed class RouteStepMarkerFactoryTests {
     }
 
     [Fact]
+    public void Focused_step_marker_uses_the_same_pink_as_the_selected_route_segment() {
+        Exception? exception = null;
+        bool isPink = false;
+        var thread = new Thread(() => {
+            try {
+                var marker = RouteStepMarkerFactory.CreateMarker(
+                    3, 20, System.Windows.Media.Brushes.Orange,
+                    routeSelected: true, focused: true);
+                var ellipse = Assert.IsType<System.Windows.Shapes.Ellipse>(
+                    marker.Children[0]);
+                isPink = ReferenceEquals(
+                    ellipse.Fill, System.Windows.Media.Brushes.DeepPink);
+            }
+            catch (Exception ex) {
+                exception = ex;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Assert.Null(exception);
+        Assert.True(isPink);
+    }
+
+    [Fact]
     public void Step_number_label_centers_its_content_without_theme_padding() {
         Exception? exception = null;
         bool isCentered = false;

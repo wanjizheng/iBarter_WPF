@@ -113,6 +113,25 @@ public sealed class RouteRenderSnapshotTests {
     }
 
     [Fact]
+    public void Visible_route_segment_resolves_back_to_its_barter_row() {
+        var load = new RouteLoadSnapshot(0, 0, 0);
+        RouteStep[] steps = [
+            new WarehousePickupStep("Iliya", "Iliya", [], load),
+            new BarterStep("row-a", "A", new("X", 1), new("Y", 1), load),
+            new BarterStep("row-b", "B", new("X", 1), new("Y", 1), load),
+            new WarehouseUnloadStep("Iliya", "Iliya", [], load),
+        ];
+
+        string? rowId = RouteProgressFilter.FindVisibleBarterRowForSegment(
+            steps,
+            new HashSet<string>(StringComparer.Ordinal),
+            "A",
+            "B");
+
+        Assert.Equal("row-b", rowId);
+    }
+
+    [Fact]
     public void Planner_row_identity_matches_persisted_route_step_identity() {
         Assert.Equal("2:Iliya:800001:800002", RoutePlannerRowIdentity.Create(
             2, "Iliya", "800001", "800002"));

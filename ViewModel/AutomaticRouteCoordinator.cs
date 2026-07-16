@@ -22,9 +22,11 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private int? selectedRouteNumber;
     private bool showAllRoutes;
     private int? focusedRouteNumber;
+    private string? selectedBarterRowId;
     private string? focusedFromIslandId;
     private string? focusedToIslandId;
     private DateTime focusPulseUntilUtc;
+    private long focusRevision;
     private HashSet<string> completedBarterRowIds = new(StringComparer.Ordinal);
     private IReadOnlyList<AutomaticRouteStepViewModel> visibleAutomaticSteps = [];
     private IReadOnlyList<RouteSelectionOption> routeOptions = [];
@@ -44,6 +46,11 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     public RoutePlan? CurrentPlan => currentPlan;
     public int? SelectedRouteNumber => selectedRouteNumber;
     public bool ShowAllRoutes => showAllRoutes;
+    public string? SelectedBarterRowId => selectedBarterRowId;
+    public int? FocusedRouteNumber => focusedRouteNumber;
+    public string? FocusedFromIslandId => focusedFromIslandId;
+    public string? FocusedToIslandId => focusedToIslandId;
+    public long FocusRevision => focusRevision;
     public IReadOnlyList<AutomaticRouteStepViewModel> VisibleAutomaticSteps => visibleAutomaticSteps;
     public IReadOnlyList<RouteSelectionOption> RouteOptions => routeOptions;
     public event EventHandler? RouteDisplayChanged;
@@ -114,7 +121,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             Publish(
                 verification.VerifiedPlan,
                 exact.SelectedRouteNumber,
-                exact.ShowAll);
+                exact.ShowAll,
+                exact.SelectedBarterRowId);
             return true;
         }
 
@@ -122,7 +130,11 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 PersistencePath, request, completedBarterRowIds, out var progressed)
             || progressed is null)
             return false;
-        Publish(progressed.Plan, progressed.SelectedRouteNumber, progressed.ShowAll);
+        Publish(
+            progressed.Plan,
+            progressed.SelectedRouteNumber,
+            progressed.ShowAll,
+            progressed.SelectedBarterRowId);
         return true;
     }
 
@@ -131,8 +143,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         mode = CargoMode.AutomaticRoute;
         selectedRouteNumber = routeNumber;
         showAllRoutes = false;
-        ClearFocus();
         UpdateVisibleRoute();
+        SelectPreferredOrFirstBarter(routeNumber, null);
         NotifyDisplayChanged();
         SaveCurrentPlan();
     }
@@ -141,7 +153,6 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         if (currentPlan?.Routes.Count > 0 != true) return;
         mode = CargoMode.AutomaticRoute;
         showAllRoutes = true;
-        ClearFocus();
         RaisePropertyChanged(nameof(ShowAllRoutes));
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
         SaveCurrentPlan();
@@ -176,8 +187,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         if (completedBarterRowIds.SetEquals(refreshed)) return;
 
         completedBarterRowIds = refreshed;
-        ClearFocus();
         UpdateVisibleRoute();
+        SelectPreferredOrFirstBarter(selectedRouteNumber, selectedBarterRowId);
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -203,18 +214,47 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         if (route is null) return;
         var segment = RouteProgressFilter.FindVisibleBarterSegment(
             route.Steps, completedBarterRowIds, rowId);
-        if (segment is null) return;
-        focusedRouteNumber = routeNumber;
-        focusedFromIslandId = segment.FromIslandId;
-        focusedToIslandId = segment.ToIslandId;
-        focusPulseUntilUtc = DateTime.UtcNow.AddSeconds(1.8);
+        SetFocusedBarter(routeNumber, rowId, segment);
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+        SaveCurrentPlan();
+    }
+
+    public bool FocusRouteSegment(
+        int routeNumber,
+        string fromIslandId,
+        string toIslandId) {
+        var route = currentPlan?.Routes.FirstOrDefault(
+            candidate => candidate.Number == routeNumber);
+        if (route is null) return false;
+        string? rowId = RouteProgressFilter.FindVisibleBarterRowForSegment(
+            route.Steps,
+            completedBarterRowIds,
+            fromIslandId,
+            toIslandId);
+        if (rowId is null) return false;
+
+        mode = CargoMode.AutomaticRoute;
+        selectedRouteNumber = routeNumber;
+        showAllRoutes = false;
+        UpdateVisibleRoute();
+        SetFocusedBarter(
+            routeNumber,
+            rowId,
+            new RouteFocusSegment(fromIslandId, toIslandId));
+        NotifyAll();
+        SaveCurrentPlan();
+        return true;
     }
 
     public bool IsFocusedSegment(int routeNumber, string fromIslandId, string toIslandId) =>
         focusedRouteNumber == routeNumber
         && StringComparer.Ordinal.Equals(focusedFromIslandId, fromIslandId)
         && StringComparer.Ordinal.Equals(focusedToIslandId, toIslandId);
+
+    public bool IsFocusedMarker(int routeNumber, string islandId) =>
+        focusedRouteNumber == routeNumber
+        && (StringComparer.Ordinal.Equals(focusedFromIslandId, islandId)
+            || StringComparer.Ordinal.Equals(focusedToIslandId, islandId));
 
     public bool IsFocusPulseActive => DateTime.UtcNow < focusPulseUntilUtc;
 
@@ -240,7 +280,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private void Publish(
         RoutePlan plan,
         int? preferredRouteNumber = null,
-        bool preferredShowAll = false) {
+        bool preferredShowAll = false,
+        string? preferredBarterRowId = null) {
         currentPlan = plan;
         ClearFocus();
         bool hasUsableRoutes = plan.Status is RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit
@@ -254,6 +295,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 : plan.Routes[0].Number
             : null;
         UpdateVisibleRoute();
+        SelectPreferredOrFirstBarter(selectedRouteNumber, preferredBarterRowId);
         NotifyAll();
     }
 
@@ -324,7 +366,11 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         if (currentPlan is null || mode != CargoMode.AutomaticRoute) return;
         try {
             RoutePlanPersistence.Save(
-                PersistencePath, currentPlan, selectedRouteNumber, showAllRoutes);
+                PersistencePath,
+                currentPlan,
+                selectedRouteNumber,
+                showAllRoutes,
+                selectedBarterRowId);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             App.myCFun?.Log(ex.Message, System.Windows.Media.Brushes.OrangeRed);
@@ -348,9 +394,51 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
 
     private void ClearFocus() {
         focusedRouteNumber = null;
+        selectedBarterRowId = null;
         focusedFromIslandId = null;
         focusedToIslandId = null;
         focusPulseUntilUtc = DateTime.MinValue;
+        focusRevision++;
+    }
+
+    private void SelectPreferredOrFirstBarter(
+        int? routeNumber,
+        string? preferredRowId) {
+        var route = currentPlan?.Routes.FirstOrDefault(
+            candidate => candidate.Number == routeNumber);
+        if (route is null) {
+            ClearFocus();
+            return;
+        }
+        var visibleBarters = RouteProgressFilter.RemainingMapSteps(
+                route.Steps, completedBarterRowIds)
+            .OfType<BarterStep>()
+            .ToArray();
+        var selected = visibleBarters.FirstOrDefault(
+                step => StringComparer.Ordinal.Equals(step.RowId, preferredRowId))
+            ?? visibleBarters.FirstOrDefault();
+        if (selected is null) {
+            ClearFocus();
+            return;
+        }
+        SetFocusedBarter(
+            route.Number,
+            selected.RowId,
+            RouteProgressFilter.FindVisibleBarterSegment(
+                route.Steps, completedBarterRowIds, selected.RowId));
+    }
+
+    private void SetFocusedBarter(
+        int routeNumber,
+        string rowId,
+        RouteFocusSegment? segment) {
+        focusedRouteNumber = routeNumber;
+        selectedBarterRowId = rowId;
+        focusedFromIslandId = segment?.FromIslandId;
+        focusedToIslandId = segment?.ToIslandId;
+        focusPulseUntilUtc = DateTime.UtcNow.AddSeconds(1.8);
+        focusRevision++;
+        RaisePropertyChanged(nameof(SelectedBarterRowId));
     }
 
     private void StorageChanged(object? sender, EventArgs e) => Invalidate("storage");

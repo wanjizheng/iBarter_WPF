@@ -6,7 +6,8 @@ using System.IO;
 public sealed record PersistedRoutePlan(
     RoutePlan Plan,
     int? SelectedRouteNumber,
-    bool ShowAll);
+    bool ShowAll,
+    string? SelectedBarterRowId);
 
 public static class RoutePlanPersistence {
     private const int SchemaVersion = 1;
@@ -19,11 +20,12 @@ public static class RoutePlanPersistence {
         string path,
         RoutePlan plan,
         int? selectedRouteNumber,
-        bool showAll) {
+        bool showAll,
+        string? selectedBarterRowId = null) {
         string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
         string temp = path + ".tmp";
-        var dto = ToDto(plan, selectedRouteNumber, showAll);
+        var dto = ToDto(plan, selectedRouteNumber, showAll, selectedBarterRowId);
         File.WriteAllText(temp, JsonSerializer.Serialize(dto, JsonOptions));
         File.Move(temp, path, overwrite: true);
     }
@@ -64,7 +66,11 @@ public static class RoutePlanPersistence {
             int? selected = plan.Routes.Any(x => x.Number == dto.SelectedRouteNumber)
                 ? dto.SelectedRouteNumber
                 : plan.Routes.FirstOrDefault()?.Number;
-            snapshot = new PersistedRoutePlan(plan, selected, dto.ShowAll && plan.Routes.Count > 0);
+            snapshot = new PersistedRoutePlan(
+                plan,
+                selected,
+                dto.ShowAll && plan.Routes.Count > 0,
+                dto.SelectedBarterRowId);
             return true;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException) {
@@ -72,7 +78,11 @@ public static class RoutePlanPersistence {
         }
     }
 
-    private static EnvelopeDto ToDto(RoutePlan plan, int? selectedRouteNumber, bool showAll) => new(
+    private static EnvelopeDto ToDto(
+        RoutePlan plan,
+        int? selectedRouteNumber,
+        bool showAll,
+        string? selectedBarterRowId) => new(
         SchemaVersion,
         plan.InputFingerprint,
         plan.Status,
@@ -88,7 +98,8 @@ public static class RoutePlanPersistence {
             route.CurrentLT,
             route.PeakLT)).ToArray(),
         selectedRouteNumber,
-        showAll);
+        showAll,
+        selectedBarterRowId);
 
     private static StepDto ToDto(RouteStep step) => step switch {
         WarehousePickupStep pickup => new(
@@ -139,7 +150,8 @@ public static class RoutePlanPersistence {
         RouteDiagnostic[]? Diagnostics,
         RouteDto[] Routes,
         int? SelectedRouteNumber,
-        bool ShowAll);
+        bool ShowAll,
+        string? SelectedBarterRowId = null);
 
     private sealed record RouteDto(
         int Number,

@@ -52,4 +52,22 @@ public static class RouteProgressFilter {
             ? null
             : new RouteFocusSegment(destination, visible[next].IslandId);
     }
+
+    public static string? FindVisibleBarterRowForSegment(
+        IEnumerable<RouteStep> steps,
+        IReadOnlySet<string> completedBarterRowIds,
+        string fromIslandId,
+        string toIslandId) {
+        var route = steps.ToArray();
+        foreach (var barter in RemainingMapSteps(route, completedBarterRowIds)
+            .OfType<BarterStep>()) {
+            var segment = FindVisibleBarterSegment(
+                route, completedBarterRowIds, barter.RowId);
+            if (segment is not null
+                && StringComparer.Ordinal.Equals(segment.FromIslandId, fromIslandId)
+                && StringComparer.Ordinal.Equals(segment.ToIslandId, toIslandId))
+                return barter.RowId;
+        }
+        return null;
+    }
 }

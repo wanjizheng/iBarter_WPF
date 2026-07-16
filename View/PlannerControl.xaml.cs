@@ -105,8 +105,9 @@ namespace iBarter.View {
             try {
                 App.myRouteCoordinator?.RefreshCompletedBarters(App.myPVM.BarterCollection);
                 var request = BuildCurrentAutomaticRouteRequest();
-                if (request is not null)
-                    App.myRouteCoordinator?.TryRestore(request);
+                if (request is not null
+                    && App.myRouteCoordinator?.TryRestore(request) == true)
+                    App.myfmMain?.ActivateShipCargoSelection();
             }
             catch (Exception exception) {
                 // A stale or partially edited Planner must never make startup fail.

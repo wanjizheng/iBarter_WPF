@@ -105,6 +105,18 @@ namespace iBarter {
             App.myBarterScanner.Show();
         }
 
+        public void ActivateShipCargoSelection() {
+            try {
+                Syncfusion.Windows.Tools.Controls.DockingManager.SelectTab(dockRight_ShipCargo);
+                dockingManager_Main.ActivateWindow(nameof(dockRight_ShipCargo));
+            }
+            catch { }
+            dockRight_ShipCargo.BringIntoView();
+            Dispatcher.BeginInvoke(
+                new Action(myShipCargo.FocusSelectedAutomaticStep),
+                DispatcherPriority.Loaded);
+        }
+
         private void Test_Click(object sender, RoutedEventArgs e) {
             // int intX, intY;
             // App.dmSoft.FindPic(0, 0, 1920, 1080, "\\Images\\Items\\800025.png", "", 0.5, 0, out intX, out intY);
