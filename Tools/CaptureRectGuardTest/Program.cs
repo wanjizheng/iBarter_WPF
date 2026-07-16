@@ -570,9 +570,9 @@ string FindIBarterRepoRoot() {
 
 string iBarterRepoRoot = FindIBarterRepoRoot();
 string iBarterProjectText = File.ReadAllText(Path.Combine(iBarterRepoRoot, "iBarter.csproj"));
-if (iBarterProjectText.Contains("SetLargeAddressAware", StringComparison.OrdinalIgnoreCase)
-    || iBarterProjectText.Contains("<LargeAddressAware", StringComparison.OrdinalIgnoreCase)) {
-    Console.Error.WriteLine("iBarter.csproj must not enable or patch LargeAddressAware.");
+if (!iBarterProjectText.Contains("SetLargeAddressAwareOnBuild", StringComparison.Ordinal)
+    || !File.Exists(Path.Combine(iBarterRepoRoot, "Tools", "SetLargeAddressAware.ps1"))) {
+    Console.Error.WriteLine("iBarter.csproj must safely enable LargeAddressAware for the x86 apphost.");
     return 1;
 }
 
@@ -590,13 +590,13 @@ int peOffset = BitConverter.ToInt32(appHostBytes, 0x3c);
 ushort coffCharacteristics = BitConverter.ToUInt16(appHostBytes, peOffset + 4 + 18);
 int optionalHeaderOffset = peOffset + 24;
 uint numberOfRvaAndSizes = BitConverter.ToUInt32(appHostBytes, optionalHeaderOffset + 92);
-if ((coffCharacteristics & 0x0020) != 0 || numberOfRvaAndSizes != 16) {
+if ((coffCharacteristics & 0x0020) == 0 || numberOfRvaAndSizes != 16) {
     Console.Error.WriteLine(
-        $"Expected non-LAA uncorrupted PE apphost; COFF=0x{coffCharacteristics:X4}, NumberOfRvaAndSizes={numberOfRvaAndSizes}, file={builtAppHost}");
+        $"Expected LAA uncorrupted PE apphost; COFF=0x{coffCharacteristics:X4}, NumberOfRvaAndSizes={numberOfRvaAndSizes}, file={builtAppHost}");
     return 1;
 }
 
-Console.WriteLine("Non-LAA PE apphost contract passed.");
+Console.WriteLine("LAA PE apphost contract passed.");
 
 // A scan capture session must preserve the scanner's absolute client-coordinate
 // contract while serving every recognition operation from one immutable frame.

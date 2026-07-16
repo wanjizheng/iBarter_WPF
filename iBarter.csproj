@@ -36,6 +36,25 @@
     </None>
   </ItemGroup>
 
+  <!--
+    iBarter must remain x86 because its native automation/OCR dependencies are
+    x86. On 64-bit Windows, IMAGE_FILE_LARGE_ADDRESS_AWARE raises the process
+    user-mode address-space ceiling from about 2 GB to about 4 GB. The helper
+    edits only the COFF Characteristics field and verifies that the PE32 data
+    directory count remains intact.
+  -->
+  <Target Name="SetLargeAddressAwareOnBuild"
+          AfterTargets="Build"
+          Condition="'$(RuntimeIdentifier)' == 'win-x86' and Exists('$(TargetDir)$(TargetName).exe')">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\Tools\SetLargeAddressAware.ps1&quot; -Path &quot;$(TargetDir)$(TargetName).exe&quot;" />
+  </Target>
+
+  <Target Name="SetLargeAddressAwareOnPublish"
+          AfterTargets="Publish"
+          Condition="'$(RuntimeIdentifier)' == 'win-x86' and Exists('$(PublishDir)$(TargetName).exe')">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\Tools\SetLargeAddressAware.ps1&quot; -Path &quot;$(PublishDir)$(TargetName).exe&quot;" />
+  </Target>
+
 <PropertyGroup Condition="'$(Configuration)'=='Debug'">
   <DebugType>full</DebugType>
 </PropertyGroup>

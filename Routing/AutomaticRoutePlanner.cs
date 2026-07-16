@@ -8,6 +8,7 @@ public sealed class AutomaticRoutePlanner {
         AutomaticRoutePlanningRequest request,
         CancellationToken cancellationToken = default) {
         string fingerprint = RoutePlanFingerprint.Compute(request);
+        RoutePlan? incumbent = null;
         try {
             cancellationToken.ThrowIfCancellationRequested();
             var preflight = AutomaticRoutePreflight.Validate(request);
@@ -22,10 +23,10 @@ public sealed class AutomaticRoutePlanner {
                 return new RoutePlan(RoutePlanStatus.Optimal, [],
                     new RoutePlanObjective(0, 0, 0, request.ExtraLT, ""), [], fingerprint);
 
-            RoutePlan? incumbent = AutomaticRouteHeuristic.TryBuildIncumbent(
+            var heuristicIncumbent = AutomaticRouteHeuristic.TryBuildIncumbent(
                 request, preflight, cancellationToken)?.Plan;
-            if (incumbent is not null) {
-                var checkedIncumbent = RoutePlanVerifier.Verify(request, incumbent);
+            if (heuristicIncumbent is not null) {
+                var checkedIncumbent = RoutePlanVerifier.Verify(request, heuristicIncumbent);
                 incumbent = checkedIncumbent.Success ? checkedIncumbent.VerifiedPlan : null;
             }
 
@@ -106,6 +107,24 @@ public sealed class AutomaticRoutePlanner {
         }
         catch (OperationCanceledException) {
             return new RoutePlan(RoutePlanStatus.Cancelled, [], null, [], fingerprint);
+        }
+        catch (OutOfMemoryException) {
+            var diagnostic = new RouteDiagnostic(
+                "memory-limit",
+                Detail: "The bounded route search reached the process memory limit.");
+            return incumbent is null
+                ? new RoutePlan(
+                    RoutePlanStatus.NoFeasibleSolutionWithinLimit,
+                    [],
+                    null,
+                    [diagnostic],
+                    fingerprint)
+                : new RoutePlan(
+                    RoutePlanStatus.BestKnownWithinLimit,
+                    incumbent.Routes,
+                    incumbent.Objective,
+                    [diagnostic],
+                    fingerprint);
         }
     }
 

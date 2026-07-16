@@ -2006,9 +2006,9 @@ namespace iBarter {
         //  Init cost (~50-100 ms after first time) is paid once per worker
         //  thread the first time it calls into our OCR pipeline. With
         //  MaxDegreeOfParallelism = 4 we end up with up to 4 Tesseract
-        //  instances resident (~120-200 MB total). iBarter intentionally stays
-        //  non-LargeAddressAware x86, so native-memory use must remain within
-        //  the normal 2 GB user-mode address-space ceiling.
+        //  instances resident (~120-200 MB total). iBarter remains x86 for its
+        //  native dependencies, but the build marks the apphost Large Address
+        //  Aware so 64-bit Windows can provide close to 4 GB of address space.
         private static readonly ThreadLocal<Tesseract> _tessPerThread =
             new ThreadLocal<Tesseract>(CreateTesseractForThisThread, trackAllValues: false);
 

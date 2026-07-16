@@ -10,6 +10,8 @@ namespace iBarter.Routing;
 /// </summary>
 public static class AutomaticRouteBeamSearch {
     private const int BeamWidth = 512;
+    private const int CandidateRetainLimit = BeamWidth * 4;
+    private const int CandidateTrimThreshold = CandidateRetainLimit * 2;
 
     public static RouteIncumbent? TryBuildIncumbent(
         AutomaticRoutePlanningRequest request,
@@ -46,21 +48,34 @@ public static class AutomaticRouteBeamSearch {
                     string key = SearchKey(successor);
                     if (!candidates.TryGetValue(key, out var existing) || IsBetter(successor, existing))
                         candidates[key] = successor;
+                    if (candidates.Count >= CandidateTrimThreshold)
+                        candidates = TrimCandidates(candidates, CandidateRetainLimit);
                 }
             }
 
-            frontier = candidates.Values
-                .OrderByDescending(state => BitOperations.PopCount(state.CompletedMask))
-                .ThenBy(state => state.FinishedRoutes.Count)
-                .ThenByDescending(state => state.CurrentRouteSteps.OfType<BarterStep>().Count())
-                .ThenBy(state => state.TotalDistance)
-                .ThenBy(state => state.PickupStopCount)
-                .ThenBy(state => StableKey(state), StringComparer.Ordinal)
+            frontier = RankCandidates(candidates.Values)
                 .Take(BeamWidth)
                 .ToArray();
         }
         return bestComplete;
     }
+
+    private static IOrderedEnumerable<RouteSimulationState> RankCandidates(
+        IEnumerable<RouteSimulationState> candidates) =>
+        candidates
+            .OrderByDescending(state => BitOperations.PopCount(state.CompletedMask))
+            .ThenBy(state => state.FinishedRoutes.Count)
+            .ThenByDescending(state => state.CurrentRouteSteps.OfType<BarterStep>().Count())
+            .ThenBy(state => state.TotalDistance)
+            .ThenBy(state => state.PickupStopCount)
+            .ThenBy(state => StableKey(state), StringComparer.Ordinal);
+
+    private static Dictionary<string, RouteSimulationState> TrimCandidates(
+        Dictionary<string, RouteSimulationState> candidates,
+        int retainCount) =>
+        RankCandidates(candidates.Values)
+            .Take(retainCount)
+            .ToDictionary(SearchKey, state => state, StringComparer.Ordinal);
 
     private static RouteIncumbent? VerifyAndImprove(
         AutomaticRoutePlanningRequest request,
