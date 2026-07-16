@@ -231,11 +231,10 @@
     <ProjectReference Include="..\PureDM\PureDM.csproj" />
   </ItemGroup>
 
-  <!-- Optional local HD map payload. Development can read the sibling BDOMap
-       cache directly; release builds copy a canonical Resource\MapTiles tree
-       when it has been placed beside the iBarter project. -->
-  <ItemGroup Condition="Exists('Resource\MapTiles')">
-    <Content Include="Resource\MapTiles\**\*">
+  <!-- Optional local HD map payload. The canonical runtime cache lives in
+       iBarter's Resources\MapTiles tree and is copied beside the executable. -->
+  <ItemGroup Condition="Exists('Resources\MapTiles')">
+    <Content Include="Resources\MapTiles\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

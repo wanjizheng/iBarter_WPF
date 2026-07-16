@@ -20,9 +20,14 @@ public static class LocalMapResourceLocator {
         IEnumerable<string>? developmentCandidates = null) {
         if (IsDisabled()) return null;
 
-        string runtime = Path.Combine(
-            Path.GetFullPath(applicationBaseDirectory), "Resource", "MapTiles");
-        if (IsUsable(runtime)) return runtime;
+        string applicationRoot = Path.GetFullPath(applicationBaseDirectory);
+        // Resources is iBarter's established project resource folder. Keep the
+        // old singular spelling as a compatibility fallback for any earlier
+        // manual deployment, but always prefer the in-project Resources cache.
+        foreach (string resourceFolder in new[] { "Resources", "Resource" }) {
+            string runtime = Path.Combine(applicationRoot, resourceFolder, "MapTiles");
+            if (IsUsable(runtime)) return runtime;
+        }
 
         foreach (string candidate in developmentCandidates ?? []) {
             string fullPath = Path.GetFullPath(candidate);

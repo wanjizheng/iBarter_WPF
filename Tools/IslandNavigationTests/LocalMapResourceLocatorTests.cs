@@ -23,6 +23,24 @@ public sealed class LocalMapResourceLocatorTests {
     }
 
     [Fact]
+    public void Resources_map_tiles_is_the_preferred_runtime_location() {
+        string root = TempDirectory();
+        try {
+            string runtimeBase = Path.Combine(root, "app");
+            string expected = CreateMapRoot(Path.Combine(
+                runtimeBase, "Resources", "MapTiles"));
+            CreateMapRoot(Path.Combine(runtimeBase, "Resource", "MapTiles"));
+
+            string? resolved = LocalMapResourceLocator.Find(runtimeBase);
+
+            Assert.Equal(expected, resolved);
+        }
+        finally {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Missing_runtime_tiles_fall_back_to_development_cache() {
         string root = TempDirectory();
         try {
