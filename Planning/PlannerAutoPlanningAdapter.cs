@@ -52,9 +52,17 @@ public sealed class PlannerAutoPlanningAdapter {
 
         var unfinished = rows.Where(r => !r.ExchangeDone).ToList();
         var unfinishedRoutes = unfinished.Select(r => r.Route).ToList();
+        var availableInventory = BuildAvailableInventoryAfterCompletedExchanges(
+            rows, inventory, out var carryOverInventory);
 
         var request = new AutoPlanningRequest(
-            unfinishedRoutes, inventory, strategy, lv5Target, lv6Target, budget);
+            unfinishedRoutes,
+            availableInventory,
+            strategy,
+            lv5Target,
+            lv6Target,
+            budget,
+            carryOverInventory);
 
         var result = _planner.Plan(request);
 
@@ -84,6 +92,55 @@ public sealed class PlannerAutoPlanningAdapter {
 
         return new PlannerCalculation(new PlannerApplySet(multipliers), result.Diagnostics, result.UsedParley);
     }
+
+    /// <summary>
+    /// Completed rows are excluded from future route selection, but their net
+    /// result is physically present in the ship's cargo. Preserve that result
+    /// in the planning inventory so the next unfinished exchange can consume
+    /// it. Positive completed balance is also returned separately as carry-over
+    /// cargo: it is spendable before LV5/LV6 warehouse reserve is considered.
+    /// </summary>
+    private static IReadOnlyDictionary<string, int> BuildAvailableInventoryAfterCompletedExchanges(
+        IReadOnlyList<PlannerRowSnapshot> rows,
+        IReadOnlyDictionary<string, int> inventory,
+        out IReadOnlyDictionary<string, int> carryOverInventory) {
+        var available = new Dictionary<string, int>(inventory, StringComparer.Ordinal);
+        var completedBalance = new Dictionary<string, long>(StringComparer.Ordinal);
+
+        foreach (var row in rows.Where(row => row.ExchangeDone && row.ExistingMultiplier > 0)) {
+            AddBalance(
+                completedBalance,
+                row.Route.Item1Id,
+                -(long)row.ExistingMultiplier * row.Route.Item1Number);
+            AddBalance(
+                completedBalance,
+                row.Route.Item2Id,
+                (long)row.ExistingMultiplier * row.Route.Item2Number);
+        }
+
+        var carried = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var (itemId, change) in completedBalance) {
+            long existing = available.TryGetValue(itemId, out int value) ? value : 0;
+            available[itemId] = ClampToInventoryRange(existing + change);
+            if (change > 0) carried[itemId] = ClampToInventoryRange(change);
+        }
+
+        carryOverInventory = carried;
+        return available;
+    }
+
+    private static void AddBalance(
+        Dictionary<string, long> balance,
+        string itemId,
+        long amount) {
+        if (string.IsNullOrWhiteSpace(itemId) || amount == 0) return;
+        balance[itemId] = balance.TryGetValue(itemId, out long current)
+            ? checked(current + amount)
+            : amount;
+    }
+
+    private static int ClampToInventoryRange(long value) =>
+        value <= 0 ? 0 : value >= Int32.MaxValue ? Int32.MaxValue : (int)value;
 
     private static PlannerCalculation PreserveManualSelection(
         IReadOnlyList<PlannerRowSnapshot> rows) {

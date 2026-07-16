@@ -25,7 +25,8 @@ public sealed record AutoPlanningRequest(
     IReadOnlyDictionary<string, int> CurrentInventory,
     AutoPlanningStrategy Strategy,
     int Lv5Target, int Lv6Target,
-    int ParleyBudget = 1_000_000);
+    int ParleyBudget = 1_000_000,
+    IReadOnlyDictionary<string, int>? CarryOverInventory = null);
 
 public sealed record AutoPlanningDiagnostic(string Code, string RowId = "");
 

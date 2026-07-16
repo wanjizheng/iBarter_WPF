@@ -502,6 +502,10 @@ public sealed class PlannerAutoPlanner {
 
         bundle = new Bundle();
         var stack = new HashSet<(int, string)>();
+        var carryOverInventory = request.CarryOverInventory is null
+            ? new Dictionary<string, int>(StringComparer.Ordinal)
+            : new Dictionary<string, int>(
+                request.CarryOverInventory, StringComparer.Ordinal);
         // Plan-relevant reserve: a flag that tracks whether any producer pull-in
         // inside this bundle was triggered by an LV5/LV6 reserve deficit. When
         // set, TryBuildBundle's budget-exceeded classification upgrades to
@@ -511,7 +515,7 @@ public sealed class PlannerAutoPlanner {
 
         bool ok = TryAddRoute(
             targetRowId, absoluteTarget, routesById, stack,
-            workingInventory, committedMultipliers, bundle.Multipliers,
+            workingInventory, carryOverInventory, committedMultipliers, bundle.Multipliers,
             diagnostics, request, ref reserveContext);
 
         if (!ok) {
@@ -559,6 +563,7 @@ public sealed class PlannerAutoPlanner {
         IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
         HashSet<(int, string)> stack,
         Dictionary<string, int> workingInventory,
+        Dictionary<string, int> carryOverInventory,
         IReadOnlyDictionary<string, int> committedMultipliers,
         Dictionary<string, int> bundleMultipliers,
         List<AutoPlanningDiagnostic> diagnostics,
@@ -600,7 +605,16 @@ public sealed class PlannerAutoPlanner {
             int reserve = GetReserveTarget(route.Item1Id, route.Item1Level, request);
             bool isReserveContext = reserve > 0
                 && (route.Item1Level == 5 || route.Item1Level == 6);
-            int effectiveAvailable = Math.Max(0, available - reserve);
+            // Completed exchanges leave physical cargo on the ship. Unlike
+            // warehouse stock, that carry-over cargo is intentionally
+            // spendable even when it equals the LV5/LV6 reserve target.
+            // Planned producer output remains ordinary inventory, so it still
+            // replenishes the configured reserve in the usual way.
+            int carried = carryOverInventory.TryGetValue(route.Item1Id, out var carriedValue)
+                ? Math.Clamp(carriedValue, 0, available)
+                : 0;
+            int reservedWarehouse = Math.Max(0, available - carried - reserve);
+            int effectiveAvailable = checked(carried + reservedWarehouse);
             int deficit = Math.Max(0, demand - effectiveAvailable);
 
             if (deficit > 0) {
@@ -632,12 +646,15 @@ public sealed class PlannerAutoPlanner {
                         int producerAbsoluteTarget = producerCommitted + producerInBundle + producerAdd;
 
                         var attemptInventory = new Dictionary<string, int>(workingInventory, StringComparer.Ordinal);
+                        var attemptCarryOverInventory = new Dictionary<string, int>(
+                            carryOverInventory, StringComparer.Ordinal);
                         var attemptBundleMultipliers = new Dictionary<string, int>(bundleMultipliers, StringComparer.Ordinal);
                         var attemptStack = new HashSet<(int, string)>(stack);
 
                         if (TryAddRoute(
                                 producer.RowId, producerAbsoluteTarget, routesById,
-                                attemptStack, attemptInventory, committedMultipliers,
+                                attemptStack, attemptInventory, attemptCarryOverInventory,
+                                committedMultipliers,
                                 attemptBundleMultipliers, diagnostics, request,
                                 ref reserveContext)) {
                             // Validate the attempt's inventory before committing it.
@@ -651,6 +668,9 @@ public sealed class PlannerAutoPlanner {
                             foreach (var kv in attemptBundleMultipliers) bundleMultipliers[kv.Key] = kv.Value;
                             workingInventory.Clear();
                             foreach (var kv in attemptInventory) workingInventory[kv.Key] = kv.Value;
+                            carryOverInventory.Clear();
+                            foreach (var kv in attemptCarryOverInventory)
+                                carryOverInventory[kv.Key] = kv.Value;
                             deficit = checked(deficit - producerAdd * producer.Item2Number);
                             anyProgress = true;
                             break;
@@ -670,6 +690,9 @@ public sealed class PlannerAutoPlanner {
 
             int newItem1 = (workingInventory.TryGetValue(route.Item1Id, out var i1) ? i1 : 0) - demand;
             workingInventory[route.Item1Id] = newItem1;
+            if (carried > 0) {
+                carryOverInventory[route.Item1Id] = Math.Max(0, carried - demand);
+            }
             int produced = checked(additionalIncrement * route.Item2Number);
             int newItem2 = (workingInventory.TryGetValue(route.Item2Id, out var i2) ? i2 : 0) + produced;
             workingInventory[route.Item2Id] = newItem2;

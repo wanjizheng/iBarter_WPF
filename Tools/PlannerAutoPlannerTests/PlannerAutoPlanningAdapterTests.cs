@@ -76,6 +76,36 @@ public sealed class PlannerAutoPlanningAdapterTests {
     }
 
     [Fact]
+    public void Calculate_uses_completed_exchange_output_for_the_next_unfinished_exchange() {
+        // Regression: after the player marks an upstream exchange as done, its
+        // produced cargo is physically available on the ship. The completed row
+        // must not be replanned, but its net output must supply the next row.
+        // The completed output also remains spendable even when it equals the
+        // configured LV5 reserve target.
+        var adapter = new PlannerAutoPlanningAdapter();
+        var finishedProducer = Snapshot("finished", exchangeDone: true, existingMultiplier: 6,
+            new AutoPlanningRoute(
+                "finished", 7, "Helmet", 4, 1, "StatueTear", 5, 1,
+                false, 10_000, 6));
+        var nextExchange = Snapshot("next", exchangeDone: false, existingMultiplier: 0,
+            new AutoPlanningRoute(
+                "next", 7, "StatueTear", 5, 1, "BerryCrate", 6, 1,
+                false, 10_000, 5));
+
+        var calculation = adapter.Calculate(
+            [finishedProducer, nextExchange],
+            new Dictionary<string, int>(),
+            AutoPlanningStrategy.ProfitFirst,
+            lv5Target: 6,
+            lv6Target: 0,
+            budget: 1_000_000);
+
+        Assert.NotNull(calculation.ApplySet);
+        Assert.Equal(6, calculation.ApplySet!.Multipliers["finished"]);
+        Assert.Equal(5, calculation.ApplySet.Multipliers["next"]);
+    }
+
+    [Fact]
     public void Calculate_returns_no_apply_set_when_service_fails() {
         var adapter = new PlannerAutoPlanningAdapter();
         var rA = Snapshot("rA", exchangeDone: false, existingMultiplier: 0,
