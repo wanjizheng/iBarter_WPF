@@ -48,6 +48,8 @@ public sealed class RouteSearchProfiler {
     public int FinalRoutes;
     public double FinalDistance;
     public bool FinalVerified;
+    public int EffectiveBeamWidth;
+    public bool LocalEvaluationBudgetExhausted;
 
     // Hot-method call counts.
     public long SearchKeyCalls;

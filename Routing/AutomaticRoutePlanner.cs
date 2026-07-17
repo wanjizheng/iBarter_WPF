@@ -16,7 +16,7 @@ public sealed class AutomaticRoutePlanner {
         RouteOptimizationProfile profile,
         CancellationToken cancellationToken = default) {
         string fingerprint = RoutePlanFingerprint.Compute(request);
-        var budget = new RouteSearchBudget(profile);
+        var budget = new RouteSearchBudget(profile, taskCount: request.Tasks.Count);
         long planStart = budget.PlanStartTimestamp;
         if (RouteSearchProfiler.Current is { } sp) {
             sp.OptimizationMode = profile.Mode.ToString();
@@ -69,6 +69,8 @@ public sealed class AutomaticRoutePlanner {
                     bp.CompleteCandidatesFound = budget.CompleteCandidatesFound;
                     bp.LocalEvaluations = budget.LocalEvaluations;
                     bp.StopReason = beamResult.StopReason.ToString();
+                    bp.EffectiveBeamWidth = beamResult.EffectiveBeamWidth;
+                    bp.LocalEvaluationBudgetExhausted = beamResult.LocalEvaluationBudgetExhausted;
                 }
                 if (beamResult.Incumbent is not null) {
                     // Re-verify on the planner side too — this is the only verified
@@ -108,10 +110,14 @@ public sealed class AutomaticRoutePlanner {
 
                 if (finalPlan is null)
                     return new RoutePlan(RoutePlanStatus.NoFeasibleSolutionWithinLimit,
-                        [], null, [AnytimeDiagnostic(profile.Mode, beamResult.StopReason, request.Tasks.Count)], fingerprint);
+                        [], null, [AnytimeDiagnostic(profile.Mode, beamResult.StopReason,
+                            request.Tasks.Count, beamResult.EffectiveBeamWidth,
+                            beamResult.LocalEvaluationBudgetExhausted)], fingerprint);
                 return new RoutePlan(RoutePlanStatus.BestKnownWithinLimit,
                     finalPlan.Routes, finalPlan.Objective,
-                    [AnytimeDiagnostic(profile.Mode, beamResult.StopReason, request.Tasks.Count)], fingerprint);
+                    [AnytimeDiagnostic(profile.Mode, beamResult.StopReason,
+                        request.Tasks.Count, beamResult.EffectiveBeamWidth,
+                        beamResult.LocalEvaluationBudgetExhausted)], fingerprint);
             }
 
             // Exact search path for small plans (≤ ExactTaskLimit). This path
@@ -200,12 +206,17 @@ public sealed class AutomaticRoutePlanner {
     }
 
     private static RouteDiagnostic AnytimeDiagnostic(
-        RouteOptimizationMode mode, BeamStopReason reason, int taskCount) {
+        RouteOptimizationMode mode, BeamStopReason reason, int taskCount,
+        int effectiveBeamWidth, bool localEvalExhausted) {
         // For large-task plans the historical "exact-search-skipped" code is
         // preserved as the diagnostic code so existing UI log messages keep
-        // working; the structured mode + reason is recorded in the detail.
+        // working; the structured mode + reason + effective width + finalization
+        // signal are recorded in the detail.
         string code = "exact-search-skipped";
-        return new RouteDiagnostic(code, Detail: $"mode={mode} reason={reason} tasks={taskCount}");
+        return new RouteDiagnostic(code,
+            Detail: $"mode={mode} reason={reason} tasks={taskCount} " +
+                    $"effectiveBeamWidth={effectiveBeamWidth} " +
+                    $"localEvalExhausted={localEvalExhausted}");
     }
 
     private static IEnumerable<RouteSimulationState> Expand(

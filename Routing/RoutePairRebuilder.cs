@@ -59,16 +59,18 @@ public static class RoutePairRebuilder {
         if (budget.MaxLocalEvaluations <= 0 || initial.FinishedRoutes.Count < 2) return initial;
 
         var current = initial;
-        while (budget.TryConsumeLocalEvaluation()) {
+        while (true) {
             var routes = current.FinishedRoutes.ToArray();
             var currentPlan = RoutePlanFactory.FromState(
                 request, current, RoutePlanStatus.BestKnownWithinLimit, []);
             RouteSimulationState? best = null;
             RoutePlanObjective bestObjective = currentPlan.Objective!.Value;
+            bool budgetExhausted = false;
 
-            for (int left = 0; left < routes.Length - 1; left++) {
+            for (int left = 0; left < routes.Length - 1 && !budgetExhausted; left++) {
                 for (int right = left + 1; right < routes.Length; right++) {
-                    if (!budget.TryConsumeLocalEvaluation()) { best = null; break; }
+                    if (budget.TargetTimeExpired) { budgetExhausted = true; break; }
+                    if (!budget.TryConsumeLocalEvaluation()) { budgetExhausted = true; break; }
                     cancellationToken.ThrowIfCancellationRequested();
                     var candidate = TryRebuild(request, routes, left, right);
                     if (candidate is null) continue;
@@ -79,9 +81,13 @@ public static class RoutePairRebuilder {
                     best = candidate;
                     bestObjective = plan.Objective.Value;
                 }
-                if (best is null) break;
             }
 
+            if (budgetExhausted) {
+                // Exhausted mid-pair-walk: keep the round's best (if any) and stop.
+                if (best is not null) current = best;
+                break;
+            }
             if (best is null) break;
             current = best;
         }

@@ -260,15 +260,22 @@ public static class IntraRouteOrderOptimizer {
         var best = initialBest;
         var bestObjective = initialObjective;
 
-        while (budget.TryConsumeLocalEvaluation()) {
+        while (true) {
             RouteSimulationState? roundBest = null;
             RoutePlanObjective? roundObjective = null;
             List<RouteStep>? roundActions = null;
+            bool budgetExhausted = false;
+            // Reason we stopped the inner sweeps:
+            //   'exhausted' = budget / time ran out mid-round, roundBest (if any)
+            //                 is the best we found up to that point and must be
+            //                 preserved
+            //   'completed' = we walked every (from, to) pair, no early exit
 
-            for (int from = 0; from < actions.Count; from++) {
+            for (int from = 0; from < actions.Count && !budgetExhausted; from++) {
                 for (int to = 0; to < actions.Count; to++) {
                     if (from == to) continue;
-                    if (!budget.TryConsumeLocalEvaluation()) { roundBest = null; break; }
+                    if (budget.TargetTimeExpired) { budgetExhausted = true; break; }
+                    if (!budget.TryConsumeLocalEvaluation()) { budgetExhausted = true; break; }
                     cancellationToken.ThrowIfCancellationRequested();
                     var candidateActions = actions.ToList();
                     var moved = candidateActions[from];
@@ -285,7 +292,19 @@ public static class IntraRouteOrderOptimizer {
                     roundObjective = objective;
                     roundActions = candidateActions;
                 }
-                if (roundBest is null) break;
+            }
+
+            // If we ran out of budget / time mid-round, keep the round's best
+            // (if any) — it is strictly better than `best` by construction.
+            // If we walked the entire grid, we either found an improvement
+            // (commit it and start a new round) or none (done).
+            if (budgetExhausted) {
+                if (roundBest is not null && roundObjective is not null && roundActions is not null) {
+                    best = roundBest;
+                    bestObjective = roundObjective.Value;
+                    actions = roundActions;
+                }
+                break;
             }
 
             if (roundBest is null || roundObjective is null || roundActions is null) break;

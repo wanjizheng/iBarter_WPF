@@ -33,9 +33,10 @@ public static class AutomaticRouteBeamSearch {
                 MaxBeamParents: maxExpandedStates ?? request.Limits.MaxExpandedStates,
                 MaxSuccessors: long.MaxValue,
                 MaxLocalEvaluations: request.Limits.MaxLocalMoves,
-                BeamWidth: 512),
+                BeamWidth: 384),
             clock: deadlineTimestamp == 0 ? null : () => Stopwatch.GetTimestamp(),
-            planStartTimestamp: deadlineTimestamp == 0 ? null : Stopwatch.GetTimestamp());
+            planStartTimestamp: deadlineTimestamp == 0 ? null : Stopwatch.GetTimestamp(),
+            taskCount: request.Tasks.Count);
         // The legacy overload never times out (deadline=0 means "disabled").
         if (deadlineTimestamp == 0)
             budget = new RouteSearchBudget(
@@ -43,7 +44,8 @@ public static class AutomaticRouteBeamSearch {
                     RouteOptimizationMode.Balanced,
                     TimeSpan.FromHours(1), TimeSpan.Zero,
                     maxExpandedStates ?? request.Limits.MaxExpandedStates,
-                    long.MaxValue, request.Limits.MaxLocalMoves, 512));
+                    long.MaxValue, request.Limits.MaxLocalMoves, 384),
+                taskCount: request.Tasks.Count);
         return TryBuildIncumbent(request, preflight, budget, cancellationToken).Incumbent;
     }
 
@@ -53,7 +55,8 @@ public static class AutomaticRouteBeamSearch {
         RouteSearchBudget budget,
         CancellationToken cancellationToken) {
         if (!preflight.IsValid || request.Tasks.Count == 0)
-            return new BeamSearchResult(null, BeamStopReason.Completed, 0, 0, 0);
+            return new BeamSearchResult(null, BeamStopReason.Completed,
+                0, 0, 0, budget.EffectiveBeamWidth, budget.LocalEvaluationBudgetExhausted);
 
         ulong fullMask = request.Tasks.Count == 64 ? ulong.MaxValue : (1UL << request.Tasks.Count) - 1;
         var frontier = new[] { RouteSimulationState.CreateInitial(request) };
@@ -115,7 +118,7 @@ public static class AutomaticRouteBeamSearch {
             if (stop) break;
 
             var rankStart = Stopwatch.GetTimestamp();
-            int beamWidth = budget.BeamWidthFor(request.Tasks.Count);
+            int beamWidth = budget.EffectiveBeamWidth;
             var ranked = RankCandidates(candidates.Values, beamWidth).ToArray();
             if (ranked.Length > beamWidth) {
                 var trimmed = new RouteSimulationState[beamWidth];
@@ -137,19 +140,23 @@ public static class AutomaticRouteBeamSearch {
                 budget.MarkStop(BeamStopReason.FrontierExhausted);
             return new BeamSearchResult(
                 null, budget.StopReason,
-                budget.ParentsExpanded, budget.SuccessorsEvaluated, budget.CompleteCandidatesFound);
+                budget.ParentsExpanded, budget.SuccessorsEvaluated, budget.CompleteCandidatesFound,
+                budget.EffectiveBeamWidth, budget.LocalEvaluationBudgetExhausted);
         }
 
-        // The search produced at least one complete plan; only then do we
-        // describe the search as "Completed" from the user's perspective.
-        if (budget.StopReason is BeamStopReason.DepthLimit) budget.MarkStop(BeamStopReason.Completed);
-
+        // A complete plan was produced. We KEEP the actual recorded stop
+        // reason (e.g. DepthLimit, TimeBudget) — it is the honest answer
+        // about why the search stopped, and matters more to the user than
+        // a synthetic "Completed" that would also claim global optimality
+        // by implication. A beam-mode search is never globally optimal
+        // (the planner has a separate `Optimal` status for that path).
         var optimizeStart = Stopwatch.GetTimestamp();
         var final = VerifyAndImprove(request, bestRaw, budget, cancellationToken);
         if (RouteSearchProfiler.Current is { } fo) fo.FinalOptimizeTicks += Stopwatch.GetTimestamp() - optimizeStart;
         return new BeamSearchResult(
             final, budget.StopReason,
-            budget.ParentsExpanded, budget.SuccessorsEvaluated, budget.CompleteCandidatesFound);
+            budget.ParentsExpanded, budget.SuccessorsEvaluated, budget.CompleteCandidatesFound,
+            budget.EffectiveBeamWidth, budget.LocalEvaluationBudgetExhausted);
     }
 
     private static IEnumerable<RouteSimulationState> RankCandidates(
@@ -264,11 +271,4 @@ public static class AutomaticRouteBeamSearch {
         AutomaticRoutePlanningRequest request,
         RouteSimulationState state) => RoutePlanFactory.FromState(
             request, state, RoutePlanStatus.BestKnownWithinLimit, []).Objective!.Value;
-}
-
-internal static class RouteSearchBudgetExtensions {
-    public static int BeamWidthFor(this RouteSearchBudget budget, int taskCount) =>
-        taskCount >= 20 ? 128
-        : taskCount >= 17 ? 256
-        : 384;
 }
