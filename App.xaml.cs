@@ -21,6 +21,8 @@ namespace iBarter {
     ///     Interaction logic for App.xaml
     /// </summary>
     public partial class App : Application {
+        public const string DisplayVersion = "Beta6.0";
+
         public static global::PureDM.DmAutomation myPureDM = null!;
         public static CFunctions myCFun = null!;
         public static MainWindow myfmMain = null!;
@@ -105,10 +107,10 @@ namespace iBarter {
 
             // Phase 6 (i18n): the "Version: " prefix is now a resource key
             // so the status-bar label flips with the active language; the
-            // version number itself ("Beta_4.4") stays as a build-time
+            // version number itself stays as a build-time
             // constant so the localized prefix and the version string can
             // concatenate in any culture.
-            myfmMain.statusBarItem_Version.Text = iBarter.Localization.LanguageService.Instance.Localize("str.StatusBar.VersionLabel") + "Beta_4.4";
+            myfmMain.statusBarItem_Version.Text = iBarter.Localization.LanguageService.Instance.Localize("str.StatusBar.VersionLabel") + DisplayVersion;
 
             // OnMainWindowClose: closing the main window exits the entire process
             // immediately, regardless of whether child windows (BarterScanner,

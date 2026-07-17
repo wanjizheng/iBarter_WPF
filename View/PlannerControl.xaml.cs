@@ -1,7 +1,9 @@
 ﻿using iBarter.Localization;
+using iBarter.Persistence;
 using iBarter.Planning;
 using iBarter.Routing;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Syncfusion.Pdf.Grid;
 using Syncfusion.UI.Xaml.Grid;
 using System.Collections.Generic;
@@ -16,6 +18,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Xml.Linq;
 using Brush = System.Windows.Media.Brush;
 
 namespace iBarter.View {
@@ -592,9 +595,15 @@ namespace iBarter.View {
                 }
             }
 
-            if (File.Exists(strPath_Data)) {
+            if (File.Exists(strPath_Data) || File.Exists(strPath_Data + ".bak")) {
                 try {
-                    string readJsonData = File.ReadAllText(strPath_Data);
+                    if (!AtomicFileStore.TryReadValidated(strPath_Data, IsValidPlannerJson,
+                            out string readJsonData, out bool recoveredFromBackup)) {
+                        App.myCFun.Log(Localization.LanguageService.Instance.Current == AppLanguage.TraditionalChinese
+                            ? "规划数据无效；原文件已保留，没有被覆盖。"
+                            : "Planner data is invalid. The existing file was preserved and was not overwritten.", Brushes.Red);
+                        return;
+                    }
                     List<Barter> dataSource = JsonConvert.DeserializeObject<List<Barter>>(readJsonData);
                     if (dataSource != null && dataSource.Count > 0) {
                         App.listBarterPlanner.Clear();
@@ -607,12 +616,17 @@ namespace iBarter.View {
                         //Grouping();
                         App.myCFun.Log(Localization.LanguageService.Instance.Localize(
                             "str.Log.Planner.Loaded")
-                            + (loadedSetting ? "" : " (UI state XML missing, skipped)"),
+                            + (loadedSetting ? "" : " (UI state XML missing, skipped)")
+                            + (recoveredFromBackup
+                                ? (Localization.LanguageService.Instance.Current == AppLanguage.TraditionalChinese
+                                    ? "（已从备份恢复）"
+                                    : " (recovered from backup)")
+                                : ""),
                             Brushes.Blue);
                     }
                     else {
-                        App.myCFun.Log("[DIAG-planner-load] myPlan_Data.json parsed to empty list;"
-                            + " no barters restored", Brushes.OrangeRed);
+                        App.listBarterPlanner.Clear();
+                        App.myPVM.BarterCollection.Clear();
                     }
                 }
                 catch (Exception exception) {
@@ -637,37 +651,54 @@ namespace iBarter.View {
 
         public void SaveData() {
             try {
-                if (App.myPVM.BarterCollection.Count > 0) {
-                    string strPath_Setting = AppDomain.CurrentDomain.BaseDirectory + "\\Resources\\myPlan_Setting.xml";
-                    string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "\\Resources\\myPlan_Data.json";
+                string resourceDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources");
+                string settingPath = Path.Combine(resourceDirectory, "myPlan_Setting.xml");
+                string dataPath = Path.Combine(resourceDirectory, "myPlan_Data.json");
+                var snapshot = App.myPVM.BarterCollection.ToList();
 
-                    using (FileStream streamSetting =
-                           new FileStream(strPath_Setting, FileMode.OpenOrCreate, FileAccess.Write)) {
-                        streamSetting.SetLength(0);
-                        DataGrid_Planner.Serialize(streamSetting);
-                    }
-
-                    using (FileStream streamData = new FileStream(strPath_Data, FileMode.OpenOrCreate, FileAccess.Write)) {
-                        streamData.SetLength(0);
-                        App.listBarterPlanner.Clear();
-                        for (int i = 0; i < App.myPVM.BarterCollection.Count; i++) {
-                            Barter myBarter = App.myPVM.BarterCollection[i];
-                            if (!App.listBarterPlanner.Contains(myBarter)) {
-                                App.listBarterPlanner.Add(myBarter);
-                            }
-                        }
-
-                        string jsonData = JsonConvert.SerializeObject(App.listBarterPlanner);
-                        //File.WriteAllText(strPath_Data, jsonData);
-                        byte[] byteArray = System.Text.Encoding.UTF8.GetBytes(jsonData);
-                        streamData.Write(byteArray, 0, byteArray.Length);
-                    }
-
-                    //App.myCFun.Log("Saved data.", Brushes.DarkOliveGreen);
+                if (snapshot.Count > 0) {
+                    using var settingStream = new MemoryStream();
+                    DataGrid_Planner.Serialize(settingStream);
+                    string settingXml = System.Text.Encoding.UTF8.GetString(settingStream.ToArray());
+                    AtomicFileStore.WriteValidated(settingPath, settingXml, IsValidXml);
                 }
+
+                string jsonData = JsonConvert.SerializeObject(snapshot);
+                AtomicFileStore.WriteValidated(dataPath, jsonData, IsValidPlannerJson, HasPlannerRows);
+                App.listBarterPlanner.Clear();
+                App.listBarterPlanner.AddRange(snapshot);
             }
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);
+            }
+        }
+
+        private static bool IsValidPlannerJson(string json) {
+            try {
+                _ = JArray.Parse(json);
+                return true;
+            }
+            catch {
+                return false;
+            }
+        }
+
+        private static bool HasPlannerRows(string json) {
+            try {
+                return JArray.Parse(json).Count > 0;
+            }
+            catch {
+                return false;
+            }
+        }
+
+        private static bool IsValidXml(string xml) {
+            try {
+                _ = XDocument.Parse(xml);
+                return true;
+            }
+            catch {
+                return false;
             }
         }
 
@@ -809,55 +840,36 @@ namespace iBarter.View {
 
 
         private void UpdateInvChange(int _groupNumber) {
-            // _groupNumber is kept for backward compatibility with the per-cell
-            // CurrentCellEndEdit caller, but no longer scopes the computation.
-            // The unified formula below correctly handles in-group and cross-group
-            // chains, items consumed by multiple barters, and chain intermediates.
+            if (App.myStorageVM?.StorageCollection is null || App.myPVM?.BarterCollection is null) {
+                return;
+            }
 
-            foreach (string item1Name in App.myPVM.BarterCollection
-                .Select(b => b.Item1Name)
-                .Distinct()
-                .Where(n => !string.IsNullOrEmpty(n))) {
+            var totals = App.myStorageVM.StorageCollection
+                .Where(item => !string.IsNullOrWhiteSpace(item.ItemID))
+                .GroupBy(item => item.ItemID, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Sum(item =>
+                    (long)item.StorageVeliaQuantity_Velia + item.StorageVeliaQuantity_Iliya
+                    + item.StorageVeliaQuantity_Epheria + item.StorageVeliaQuantity_Ancado), StringComparer.Ordinal);
 
-                var consumers = App.myPVM.BarterCollection.Where(b => b.Item1Name == item1Name).ToList();
-                if (consumers.Count == 0) {
-                    continue;
+            foreach (Barter barter in App.myPVM.BarterCollection.Where(barter => barter.ExchangeQuantity > 0)) {
+                string item1Id = barter.Item1?.ItemID ?? string.Empty;
+                string item2Id = barter.Item2?.ItemID ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(item1Id)) {
+                    totals.TryGetValue(item1Id, out long current);
+                    totals[item1Id] = current - (long)barter.ExchangeQuantity * barter.Item1Number;
                 }
-
-                var producers = App.myPVM.BarterCollection.Where(b => b.Item2Name == item1Name).ToList();
-
-                // consumers.First().InvQuantity reads the live 4-city sum via the
-                // Barter.InvQuantity getter (which goes through StorageCollection).
-                int currentTotal = consumers.First().InvQuantity;
-                int totalProduced = producers.Sum(p => p.ExchangeQuantity * p.Item2Number);
-                int totalConsumed = consumers.Sum(c => c.ExchangeQuantity * c.Item1Number);
-                int newValue = Math.Max(0, currentTotal + totalProduced - totalConsumed);
-
-                // LV cap: only apply when the user explicitly selected a max value
-                // (SelectedIndex >= 0). The ComboBoxes default to -1 with no XAML
-                // override, so the previous unconditional cap was clamping every
-                // positive LV5/6/7 InvQuantityChange to -1, which then became 0 via
-                // Math.Max(0, -1) in the Done handler and zeroed the entire plan.
-                int lvMaxIndex = -1;
-                var firstConsumer = consumers.First();
-                if (firstConsumer.Item1 != null) {
-                    if (firstConsumer.Item1.ItemLV == "5") {
-                        lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex;
-                    }
-                    else if (firstConsumer.Item1.ItemLV == "6") {
-                        lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex;
-                    }
-                    else if (firstConsumer.Item1.ItemLV == "7") {
-                        lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex;
-                    }
+                if (!string.IsNullOrWhiteSpace(item2Id) && item2Id != "10") {
+                    totals.TryGetValue(item2Id, out long current);
+                    totals[item2Id] = current + (long)barter.ExchangeQuantity * barter.Item2Number;
                 }
-                if (lvMaxIndex >= 0 && newValue > lvMaxIndex) {
-                    newValue = lvMaxIndex;
-                }
+            }
 
-                // All barters that consume this item share the same post-plan quantity.
-                foreach (var consumer in consumers) {
-                    consumer.InvQuantityChange = newValue;
+            foreach (Barter consumer in App.myPVM.BarterCollection) {
+                string itemId = consumer.Item1?.ItemID ?? string.Empty;
+                if (totals.TryGetValue(itemId, out long total)) {
+                    consumer.InvQuantityChange = total > int.MaxValue
+                        ? int.MaxValue
+                        : total < int.MinValue ? int.MinValue : (int)total;
                 }
             }
         }
@@ -963,106 +975,83 @@ namespace iBarter.View {
                 return;
             }
 
-            // X4: lazy-init the storage window so a Done click before the user has ever
-            // opened StorageManagement doesn't NRE on ComboBoxAdv_DefaultStorage.
-            if (App.myStorageManagement == null) {
-                App.myStorageManagement = new StorageManagement();
+            int defaultWarehouse = App.myStorageManagement?.ComboBoxAdv_DefaultStorage.SelectedIndex ?? 1;
+            var currentInventory = App.myStorageVM.StorageCollection.Select(item =>
+                new PlannerWarehouseInventory(
+                    item.ItemID,
+                    item.StorageVeliaQuantity_Velia,
+                    item.StorageVeliaQuantity_Iliya,
+                    item.StorageVeliaQuantity_Epheria,
+                    item.StorageVeliaQuantity_Ancado)).ToArray();
+            var exchanges = App.myPVM.BarterCollection
+                .Where(barter => barter.ExchangeQuantity > 0)
+                .Select((barter, index) => new PlannerInventoryExchange(
+                    index.ToString(CultureInfo.InvariantCulture),
+                    barter.Item1?.ItemID ?? string.Empty,
+                    barter.Item1Number,
+                    barter.Item2?.ItemID ?? string.Empty,
+                    barter.Item2Number,
+                    barter.ExchangeQuantity)).ToArray();
+
+            var reconciliation = new PlannerInventoryReconciler().Reconcile(
+                currentInventory,
+                exchanges,
+                defaultWarehouse,
+                new HashSet<string>(StringComparer.Ordinal) { "10" });
+
+            if (!reconciliation.Success) {
+                PlannerInventoryError firstError = reconciliation.Errors.First();
+                string itemName = App.myStorageVM.StorageCollection
+                    .FirstOrDefault(item => item.ItemID == firstError.ItemId)?.ItemNameDisplay
+                    ?? firstError.ItemId;
+                string reason = firstError.Code switch {
+                    "INSUFFICIENT_STOCK" => "仓库库存不足",
+                    "MISSING_STORAGE_ITEM" => "仓库物品列表缺少该物品",
+                    "DUPLICATE_ITEM" => "仓库物品重复",
+                    _ => "库存数据无效"
+                };
+                App.myCFun.Log($"无法完成库存结算：{itemName}（{reason}）。库存和计划均未修改。", Brushes.Red);
+                return;
             }
 
-            // X3: refresh InvQuantityChange for every barter before reading it, so the
-            // values written below reflect the user's current ExchangeQuantity edits
-            // rather than whatever was left by the last CurrentCellEndEdit.
-            //
-            // The unified formula in UpdateInvChange correctly handles in-group and
-            // cross-group chains, multi-consumer items, and the LV Max ComboBox bug
-            // (default SelectedIndex = -1 used to clamp every LV5/6/7 item to -1).
-            UpdateInvChange(-1);
-
-            // For each storage item, find barters that consume it (Item1 == name) and
-            // write the post-plan quantity from matching[0].InvQuantityChange, which
-            // UpdateInvChange has already computed via the unified formula. All
-            // consumers of the same item share the same value.
-            foreach (Items item in App.myStorageVM.StorageCollection) {
-                var matching = App.myPVM.BarterCollection.Where(b => b.Item1Name == item.ItemName).ToList();
-                if (matching.Count == 0) {
-                    continue;
-                }
-
-                int newTarget = Math.Max(0, matching[0].InvQuantityChange);
-
-                // Mirror the LV cap guard from UpdateInvChange so this path is consistent
-                // when matching.Count > 1 (the cap was already applied to InvQuantityChange
-                // in UpdateInvChange; this is defense-in-depth in case the formula ever
-                // changes to bypass UpdateInvChange).
-                int lvMaxIndex = -1;
-                if (item.ItemLV == "5") {
-                    lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV5Max.SelectedIndex;
-                }
-                else if (item.ItemLV == "6") {
-                    lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV6Max.SelectedIndex;
-                }
-                else if (item.ItemLV == "7") {
-                    lvMaxIndex = App.myfmMain.myPlannerControl.ComboBox_LV7Max.SelectedIndex;
-                }
-                if (lvMaxIndex >= 0 && newTarget > lvMaxIndex) {
-                    newTarget = lvMaxIndex;
-                }
-
-                // Decide which city to update for this item. Pick the city where the item
-                // currently has the largest non-zero stock (Velia → Iliya → Epheria → Ancado on ties),
-                // so we write to the city where the item already 'lives' rather than
-                // scattering it across cities. If the item has no stock anywhere (a brand
-                // new item the user hasn't seeded yet), fall back to ComboBoxAdv_DefaultStorage
-                // as the seed city. A cleared combo (-1) falls back to Velia with a warning.
-                int targetCity = -1;
-                int maxQty = 0;
-                if (item.StorageVeliaQuantity_Velia > maxQty) {
-                    maxQty = item.StorageVeliaQuantity_Velia;
-                    targetCity = 0;
-                }
-                if (item.StorageVeliaQuantity_Iliya > maxQty) {
-                    maxQty = item.StorageVeliaQuantity_Iliya;
-                    targetCity = 1;
-                }
-                if (item.StorageVeliaQuantity_Epheria > maxQty) {
-                    maxQty = item.StorageVeliaQuantity_Epheria;
-                    targetCity = 2;
-                }
-                if (item.StorageVeliaQuantity_Ancado > maxQty) {
-                    maxQty = item.StorageVeliaQuantity_Ancado;
-                    targetCity = 3;
-                }
-
-                if (targetCity == -1) {
-                    int fallback = App.myStorageManagement.ComboBoxAdv_DefaultStorage.SelectedIndex;
-                    if (fallback < 0 || fallback > 3) {
-                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Planner.DefaultStorageOutOfRange"), System.Windows.Media.Brushes.Orange);
-                        fallback = 0;
+            using (App.myStorageVM.SuppressAutoSave(saveOnDispose: false)) {
+                foreach (Items item in App.myStorageVM.StorageCollection) {
+                    if (!reconciliation.Inventory.TryGetValue(item.ItemID, out PlannerWarehouseInventory? updated)) {
+                        continue;
                     }
-                    targetCity = fallback;
-                }
-
-                switch (targetCity) {
-                    case 0:
-                        item.StorageVeliaQuantity_Velia = newTarget;
-                        break;
-                    case 1:
-                        item.StorageVeliaQuantity_Iliya = newTarget;
-                        break;
-                    case 2:
-                        item.StorageVeliaQuantity_Epheria = newTarget;
-                        break;
-                    case 3:
-                        item.StorageVeliaQuantity_Ancado = newTarget;
-                        break;
+                    item.StorageVeliaQuantity_Velia = updated.Velia;
+                    item.StorageVeliaQuantity_Iliya = updated.Iliya;
+                    item.StorageVeliaQuantity_Epheria = updated.Epheria;
+                    item.StorageVeliaQuantity_Ancado = updated.Ancado;
                 }
             }
 
+            if (!App.myStorageVM.TrySaveData()) {
+                using (App.myStorageVM.SuppressAutoSave(saveOnDispose: false)) {
+                    foreach (Items item in App.myStorageVM.StorageCollection) {
+                        PlannerWarehouseInventory original = currentInventory.First(snapshot => snapshot.ItemId == item.ItemID);
+                        item.StorageVeliaQuantity_Velia = original.Velia;
+                        item.StorageVeliaQuantity_Iliya = original.Iliya;
+                        item.StorageVeliaQuantity_Epheria = original.Epheria;
+                        item.StorageVeliaQuantity_Ancado = original.Ancado;
+                    }
+                }
+                App.myCFun.Log("仓库数据保存失败，库存和计划均未修改。", Brushes.Red);
+                return;
+            }
+
+            foreach (Barter barter in App.myPVM.BarterCollection) {
+                if (reconciliation.Inventory.TryGetValue(barter.Item1?.ItemID ?? string.Empty, out PlannerWarehouseInventory? updated)) {
+                    barter.InvQuantityChange = updated.Total;
+                }
+            }
+
+            App.myRouteCoordinator?.Invalidate("planner-done");
             App.listBarterPlanner.Clear();
             DataGrid_Planner.BeginInit();
             App.myPVM.BarterCollection.Clear();
             DataGrid_Planner.EndInit();
-            App.myStorageVM.SaveData();
+            SaveData();
         }
 
 

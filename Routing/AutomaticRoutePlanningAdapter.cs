@@ -52,11 +52,39 @@ public static class AutomaticRoutePlanningAdapter {
             AddBalance(carriedBalance, row.Item1Id, -(long)row.ExchangeQuantity * row.Item1Number);
             AddBalance(carriedBalance, row.Item2Id, (long)row.ExchangeQuantity * row.Item2Number);
         }
+        var activeDemand = activeRows
+            .GroupBy(row => row.Item1Id, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(row => (long)row.ExchangeQuantity * row.Item1Number),
+                StringComparer.Ordinal);
+        var storedTotals = storageItems
+            .Where(item => !string.IsNullOrWhiteSpace(item.ItemId))
+            .GroupBy(item => item.ItemId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(item => (long)item.Velia + item.Iliya + item.Epheria + item.Ancado),
+                StringComparer.Ordinal);
+
+        // A DONE row proves that its exchange happened, but it does not prove that
+        // the output is still on the ship: older completed routes have normally
+        // already unloaded. Only carry the part that an active downstream barter
+        // still needs and cannot obtain from the recorded warehouse stock. This
+        // preserves the direct completed-step -> next-step handoff while preventing
+        // old outputs from bypassing a real warehouse pickup or appearing again at
+        // the next unload stop.
         var initialOnBoard = carriedBalance
-            .Where(pair => pair.Value > 0)
+            .Select(pair => new {
+                pair.Key,
+                Quantity = Math.Min(
+                    Math.Max(0L, pair.Value),
+                    Math.Max(0L, activeDemand.GetValueOrDefault(pair.Key)
+                        - storedTotals.GetValueOrDefault(pair.Key))),
+            })
+            .Where(pair => pair.Quantity > 0)
             .ToDictionary(
                 pair => pair.Key,
-                pair => checked((int)pair.Value),
+                pair => checked((int)pair.Quantity),
                 StringComparer.Ordinal);
 
         var tasks = activeRows.Select(row => new RouteBarterTask(

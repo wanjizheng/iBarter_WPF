@@ -103,22 +103,25 @@
                             <MenuItem x:Name="MenuItem_BarterScanner" Header="{loc:Localize str.Menu.BarterScanner}"
                                   Tag="BarterScanner" Click="OnActivateWindow" Height="30" Width="180">
                                 <MenuItem.Icon>
+                                    <!-- MenuItem.Icon is hosted by a Popup, so it cannot reliably inherit
+                                         Foreground through the normal MenuItem visual tree. Use a
+                                         contrast-safe menu icon color instead of an ancestor binding. -->
                                     <Viewbox Width="18" Height="18"><Path Data="{StaticResource FluentIcon.Scan}"
-                                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}" /></Viewbox>
+                                        Fill="#176F7F" /></Viewbox>
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem x:Name="MenuItem_StorageManagement" Header="{loc:Localize str.Menu.StorageManager}"
                                   Tag="StorageManagement" Click="MenuItem_StorageManagement_Click" Height="30" Width="180">
                                 <MenuItem.Icon>
                                     <Viewbox Width="18" Height="18"><Path Data="{StaticResource FluentIcon.BuildingBank}"
-                                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}" /></Viewbox>
+                                        Fill="#176F7F" /></Viewbox>
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem x:Name="MenuItem_SyncImages" Header="{loc:Localize str.Menu.SyncImages}"
                                   Tag="SyncImages" Click="MenuItem_SyncImages_Click" Height="30" Width="180">
                                 <MenuItem.Icon>
                                     <Viewbox Width="18" Height="18"><Path Data="{StaticResource FluentIcon.ArrowSync}"
-                                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}" /></Viewbox>
+                                        Fill="#176F7F" /></Viewbox>
                                 </MenuItem.Icon>
                             </MenuItem>
                         </MenuItem>

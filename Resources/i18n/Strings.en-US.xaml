@@ -180,7 +180,7 @@
     <sys:String x:Key="str.Map.LabelFormat">[{0}] {1} =&gt; {2} [{3}]</sys:String>
 
     <!-- Phase 6 (i18n): status-bar text appended to the version string
-         (e.g. "Version: Beta_4.4").  Localized separately from the version
+         (e.g. "Version: Beta6.0").  Localized separately from the version
          number itself, which is build-time constant. -->
     <sys:String x:Key="str.StatusBar.VersionLabel">Version: </sys:String>
 

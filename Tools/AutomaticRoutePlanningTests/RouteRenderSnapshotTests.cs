@@ -68,6 +68,47 @@ public sealed class RouteRenderSnapshotTests {
     }
 
     [Fact]
+    public void Warehouse_stock_wins_over_phantom_outputs_from_old_completed_rows() {
+        var rows = new[] {
+            new PlannerRouteSnapshot("cactus-done", true, 5, "OldA", "SEED-A", "Seed A", 4, 1,
+                "CACTUS", "Golden Cactus", 5, 1),
+            new PlannerRouteSnapshot("wine-done", true, 4, "OldB", "SEED-B", "Seed B", 4, 1,
+                "WINE", "Wine", 5, 1),
+            new PlannerRouteSnapshot("tear-done", true, 6, "OldC", "SEED-C", "Seed C", 4, 1,
+                "TEAR", "Tear", 5, 1),
+            new PlannerRouteSnapshot("necklace", false, 5, "Iliya", "CACTUS", "Golden Cactus", 5, 1,
+                "NECKLACE", "Seashell Necklace", 7, 1),
+        };
+        var storage = new[] {
+            new StorageItemSnapshot("CACTUS", 5, 5, 0, 0, 0),
+            new StorageItemSnapshot("WINE", 5, 0, 7, 0, 0),
+            new StorageItemSnapshot("TEAR", 5, 0, 7, 0, 0),
+            new StorageItemSnapshot("NECKLACE", 7, 0, 0, 0, 0),
+        };
+        var islands = new[] {
+            new IslandRouteSnapshot("OldA", new RoutePoint(4, 4)),
+            new IslandRouteSnapshot("OldB", new RoutePoint(5, 5)),
+            new IslandRouteSnapshot("OldC", new RoutePoint(6, 6)),
+            new IslandRouteSnapshot("Velia", new RoutePoint(0, 0)),
+            new IslandRouteSnapshot("Iliya", new RoutePoint(10, 0)),
+            new IslandRouteSnapshot("Epheria", new RoutePoint(0, 10)),
+            new IslandRouteSnapshot("Sausan", new RoutePoint(10, 10)),
+        };
+
+        var request = AutomaticRoutePlanningAdapter.BuildRequest(
+            rows, storage, islands, new CargoCapacitySnapshot(0, 30_000), new RouteSearchLimits(10_000, 100));
+
+        Assert.Empty(request.InitialOnBoard);
+        var plan = new AutomaticRoutePlanner().Plan(request, TestContext.Current.CancellationToken);
+        var route = Assert.Single(plan.Routes);
+        var pickup = Assert.Single(route.Steps.OfType<WarehousePickupStep>());
+        Assert.Equal("Velia", pickup.WarehouseId);
+        Assert.Equal([new RouteItemQuantity("CACTUS", 5)], pickup.Items);
+        var unload = Assert.Single(route.Steps.OfType<WarehouseUnloadStep>());
+        Assert.Equal([new RouteItemQuantity("NECKLACE", 5)], unload.Items);
+    }
+
+    [Fact]
     public void Automatic_snapshot_selects_one_or_all_routes_with_stable_colors() {
         var plan = BuildPlan();
 

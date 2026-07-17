@@ -32,6 +32,10 @@ public static class RoutePlanRestoreCompatibility {
             || !savedBarters.Any(step => completedBarterRowIds.Contains(step.RowId)))
             return false;
 
+        if (!CanReachFirstRemainingBarter(
+                currentRequest, persistedPlan, currentByRow, completedBarterRowIds))
+            return false;
+
         foreach (var task in currentTasks) {
             var saved = savedByRow[task.RowId];
             if (!StringComparer.Ordinal.Equals(saved.IslandId, task.IslandId)
@@ -60,6 +64,48 @@ public static class RoutePlanRestoreCompatibility {
                         || !StringComparer.Ordinal.Equals(unloadWarehouse.IslandId, unload.IslandId)))
                     return false;
             }
+        }
+        return true;
+    }
+
+    private static bool CanReachFirstRemainingBarter(
+        AutomaticRoutePlanningRequest request,
+        RoutePlan persistedPlan,
+        IReadOnlyDictionary<string, RouteBarterTask> currentByRow,
+        IReadOnlySet<string> completedBarterRowIds) {
+        foreach (var route in persistedPlan.Routes) {
+            if (!route.Steps.OfType<BarterStep>().Any(step => currentByRow.ContainsKey(step.RowId)))
+                continue;
+
+            var onboard = request.InitialOnBoard.ToDictionary(
+                pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            foreach (var step in route.Steps) {
+                switch (step) {
+                    case WarehousePickupStep pickup:
+                        foreach (var item in pickup.Items)
+                            onboard[item.ItemId] = checked(onboard.GetValueOrDefault(item.ItemId) + item.Quantity);
+                        break;
+                    case WarehouseUnloadStep unload:
+                        foreach (var item in unload.Items) {
+                            int remaining = onboard.GetValueOrDefault(item.ItemId) - item.Quantity;
+                            if (remaining > 0) onboard[item.ItemId] = remaining;
+                            else onboard.Remove(item.ItemId);
+                        }
+                        break;
+                    case BarterStep barter when currentByRow.ContainsKey(barter.RowId):
+                        return onboard.GetValueOrDefault(barter.Consumed.ItemId) >= barter.Consumed.Quantity;
+                    case BarterStep barter when completedBarterRowIds.Contains(barter.RowId):
+                        int available = onboard.GetValueOrDefault(barter.Consumed.ItemId);
+                        if (available < barter.Consumed.Quantity) return false;
+                        int afterConsume = available - barter.Consumed.Quantity;
+                        if (afterConsume == 0) onboard.Remove(barter.Consumed.ItemId);
+                        else onboard[barter.Consumed.ItemId] = afterConsume;
+                        onboard[barter.Produced.ItemId] = checked(
+                            onboard.GetValueOrDefault(barter.Produced.ItemId) + barter.Produced.Quantity);
+                        break;
+                }
+            }
+            return false;
         }
         return true;
     }

@@ -244,16 +244,19 @@ internal static class AutomaticRouteSearchPolicy {
     // truthfully as BestKnownWithinLimit instead of freezing before UI publish.
     public const int ExactTaskLimit = 12;
 
-    // The planner must return a usable route promptly for a normal 28-route
-    // barter reset.  Small large-plans still receive their requested beam
-    // budget; only the much wider real-world plans are capped.
+    // Beam expansion cost rises sharply once exact subset search is skipped.
+    // Medium plans retain enough states for inventory-first ordering, while
+    // full 20+ task resets use a tighter cap so UI publication stays prompt.
+    private const int MediumTaskBeamStateLimit = 5_000;
     private const int LargeTaskBeamThreshold = 20;
     private const int LargeTaskBeamStateLimit = 2_000;
 
     public static int BeamStateBudget(int taskCount, int requestedBudget) =>
         taskCount >= LargeTaskBeamThreshold
             ? Math.Min(requestedBudget, LargeTaskBeamStateLimit)
-            : requestedBudget;
+            : taskCount > ExactTaskLimit
+                ? Math.Min(requestedBudget, MediumTaskBeamStateLimit)
+                : requestedBudget;
 
     public static bool HasExecutableBarter(
         AutomaticRoutePlanningRequest request,

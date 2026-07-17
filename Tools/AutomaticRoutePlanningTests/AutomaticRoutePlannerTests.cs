@@ -31,6 +31,21 @@ public sealed class AutomaticRoutePlannerTests {
     }
 
     [Fact]
+    public void Fifteen_task_plans_use_the_bounded_beam_budget() {
+        Assert.Equal(5_000, AutomaticRouteSearchPolicy.BeamStateBudget(15, 250_000));
+
+        var request = RouteTestData.IndependentTasks(
+            15, new RouteSearchLimits(250_000, 100));
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var plan = new AutomaticRoutePlanner().Plan(request, TestContext.Current.CancellationToken);
+
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3),
+            $"15-task plan elapsed {stopwatch.Elapsed}");
+        Assert.Equal(RoutePlanStatus.BestKnownWithinLimit, plan.Status);
+        Assert.True(RoutePlanVerifier.Verify(request, plan).Success);
+    }
+
+    [Fact]
     public void Complete_search_returns_verified_optimal_plan() {
         var request = RouteTestData.SingleTask();
         var plan = new AutomaticRoutePlanner().Plan(request, TestContext.Current.CancellationToken);

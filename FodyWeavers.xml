@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Weavers xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="FodyWeavers.xsd">
-  <Costura>
-    <!-- Embed native DLLs (without .dll extension) into the main assembly. -->
-    <Unmanaged32Assemblies>
+  <!-- Embed every Copy Local managed dependency. Assemblies are extracted to
+       Costura's temporary directory when loaded so libraries that require a
+       physical Assembly.Location (for example WPF themes) remain compatible. -->
+  <Costura CreateTemporaryAssemblies="true">
+    <!-- This application is x86-only. Embed all x86 native dependencies that
+         can be loaded normally; the PureDM COM registration files under libs
+         remain external because Windows must register/load them by file path. -->
+    <UnmanagedWinX86Assemblies>
       Magick.Native-Q16-x86
       cvextern
       libusb-1.0
@@ -14,94 +19,7 @@
       msvcp140_atomic_wait
       msvcp140_codecvt_ids
       vcruntime140
-    </Unmanaged32Assemblies>
-
-    <!-- 2026-07-10: IL-merge blacklist.
-         Default Costura.Fody behaviour is to pack every referenced
-         assembly into the main EXE as an embedded resource. For
-         iBarter, that's been the root cause of multiple classes of
-         intermittent failures on the user's dx.graphic.3d.10plus
-         build. The whitelist-then-blacklist approach below keeps
-         the packed EXE small AND keeps the load order / native
-         side-by-side resolution for libraries that depend on it.
-
-         Reasons for each entry:
-
-         PureDM              - COM-based wrapper. COM activation needs
-                                the assembly at its normal filesystem
-                                path so it can find dm.dll /
-                                DmReg.dll side-by-side. Embedding
-                                breaks COM registration and corrupts
-                                the DX hook.
-
-         Emgu.CV /
-         Emgu.CV.Bitmap      - OpenCV wrapper. Its unmanaged cvextern /
-                                opencv_videoio_ffmpeg4130 are listed
-                                in <Unmanaged32Assemblies>, but the
-                                managed Emgu.CV*.dll files must also
-                                stay side-by-side so they load BEFORE
-                                the native DLLs at the right phase.
-                                IL-merging triggers
-                                "type init for Emgu.CV.CvInvoke threw".
-
-         Magick.NET-Q16-AnyCPU /
-         Magick.NET.Core      - ImageMagick .NET wrapper. Same
-                                native-side-by-side issue as Emgu.
-
-         All Syncfusion.*     - WPF controls + native themes +
-                                licensing. Syncfusion.Licensing does
-                                signed DLL verification that breaks if
-                                the assembly path doesn't match what's
-                                embedded. Themes load native MS theme
-                                resources that need the assembly at a
-                                real path.
-
-         MaterialDesignThemes /
-         MaterialDesignColors - WPF theme + color palette. Theme
-                                dictionaries are loaded by name and
-                                fail to resolve when IL-merged.
-
-         The remaining two packages (FuzzySharp, Newtonsoft.Json)
-         ARE pure-managed and ARE safe to IL-merge - they don't touch
-         COM, OpenCV, ImageMagick, or native theme code. -->
-    <ExcludeAssemblies>
-      PureDM
-      Emgu.CV
-      Emgu.CV.Bitmap
-      Magick.NET-Q16-AnyCPU
-      Magick.NET.Core
-      Syncfusion.Licensing
-      Syncfusion.SfGrid.WPF
-      Syncfusion.SfSkinManager.WPF
-      Syncfusion.Shared.WPF
-      Syncfusion.Themes.FluentDark.WPF
-      Syncfusion.Themes.FluentLight.WPF
-      Syncfusion.Themes.MaterialDark.WPF
-      Syncfusion.Themes.MaterialDarkBlue.WPF
-      Syncfusion.Themes.MaterialLight.WPF
-      Syncfusion.Themes.MaterialLightBlue.WPF
-      Syncfusion.Themes.Metro.WPF
-      Syncfusion.Themes.Office2019Black.WPF
-      Syncfusion.Themes.Office2019Colorful.WPF
-      Syncfusion.Themes.Office2019DarkGray.WPF
-      Syncfusion.Themes.Office2019HighContrast.WPF
-      Syncfusion.Themes.Office2019HighContrastWhite.WPF
-      Syncfusion.Themes.Office2019White.WPF
-      Syncfusion.Themes.SystemTheme.WPF
-      Syncfusion.Themes.Windows11Dark.WPF
-      Syncfusion.Themes.Windows11Light.WPF
-      Syncfusion.Tools.WPF
-      Syncfusion.UI.WPF.NET
-      Syncfusion.Calculate.Base
-      Syncfusion.Compression.Base
-      Syncfusion.DocIO.Base
-      Syncfusion.Edit.WPF
-      Syncfusion.DocToPDFConverter.Base
-      Syncfusion.ExcelChartToImageConverter.WPF
-      Syncfusion.Data.WPF
-      MaterialDesignThemes
-      MaterialDesignColors
-    </ExcludeAssemblies>
+    </UnmanagedWinX86Assemblies>
   </Costura>
 </Weavers>
 

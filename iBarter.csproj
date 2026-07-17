@@ -11,8 +11,13 @@
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 	<RuntimeIdentifier>win-x86</RuntimeIdentifier>
 	<PackageIcon>iBarterIcon.ico</PackageIcon>
-	<ApplicationIcon>Images\iBarterIcon.ico</ApplicationIcon>
+    <ApplicationIcon>Images\iBarterIcon.ico</ApplicationIcon>
 	<ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>6.0.0-beta</Version>
+    <AssemblyVersion>6.0.0.0</AssemblyVersion>
+    <FileVersion>6.0.0.0</FileVersion>
+    <InformationalVersion>Beta6.0</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,12 +33,6 @@
     <Compile Remove="Tools\AutomaticRoutePlanningTests\**\*.cs" />
     <None Remove="Tools\AutomaticRoutePlanningTests\**\*" />
     <Content Remove="Tools\AutomaticRoutePlanningTests\**\*" />
-    <!-- Magick.NET-Q16-AnyCPU only copies native on .NET Framework; this project
-         targets .NET 10, so copy the x86 native manually and let Costura embed it. -->
-    <None Include="$(NuGetPackageRoot)magick.net-q16-anycpu\14.14.0\runtimes\win-x86\native\Magick.Native-Q16-x86.dll">
-      <Link>Magick.Native-Q16-x86.dll</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
 
   <!--
@@ -43,15 +42,11 @@
     edits only the COFF Characteristics field and verifies that the PE32 data
     directory count remains intact.
   -->
-  <Target Name="SetLargeAddressAwareOnBuild"
-          AfterTargets="Build"
-          Condition="'$(RuntimeIdentifier)' == 'win-x86' and Exists('$(TargetDir)$(TargetName).exe')">
+  <Target Name="SetLargeAddressAwareOnBuild" AfterTargets="Build" Condition="'$(RuntimeIdentifier)' == 'win-x86' and Exists('$(TargetDir)$(TargetName).exe')">
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\Tools\SetLargeAddressAware.ps1&quot; -Path &quot;$(TargetDir)$(TargetName).exe&quot;" />
   </Target>
 
-  <Target Name="SetLargeAddressAwareOnPublish"
-          AfterTargets="Publish"
-          Condition="'$(RuntimeIdentifier)' == 'win-x86' and Exists('$(PublishDir)$(TargetName).exe')">
+  <Target Name="SetLargeAddressAwareOnPublish" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'win-x86' and Exists('$(PublishDir)$(TargetName).exe')">
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\Tools\SetLargeAddressAware.ps1&quot; -Path &quot;$(PublishDir)$(TargetName).exe&quot;" />
   </Target>
 
@@ -196,31 +191,31 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="FuzzySharp" Version="2.0.2" />
-    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.14.0" />
+    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.15.0" />
     <PackageReference Include="MaterialDesignThemes" Version="5.3.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="Syncfusion.Licensing" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Shared.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.FluentDark.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.MaterialDark.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.MaterialDarkBlue.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.MaterialLight.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.MaterialLightBlue.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.Metro.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.Office2019Black.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.Office2019Colorful.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.Office2019DarkGray.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.Office2019HighContrast.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.Office2019HighContrastWhite.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.Office2019White.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.SystemTheme.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.Windows11Dark.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Themes.Windows11Light.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.Tools.WPF" Version="34.1.30" />
-    <PackageReference Include="Syncfusion.UI.WPF.NET" Version="34.1.30" />
+    <PackageReference Include="Syncfusion.Licensing" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Shared.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.FluentDark.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.MaterialDark.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.MaterialDarkBlue.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.MaterialLight.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.MaterialLightBlue.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.Metro.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.Office2019Black.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.Office2019Colorful.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.Office2019DarkGray.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.Office2019HighContrast.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.Office2019HighContrastWhite.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.Office2019White.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.SystemTheme.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.Windows11Dark.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Themes.Windows11Light.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.Tools.WPF" Version="34.1.31" />
+    <PackageReference Include="Syncfusion.UI.WPF.NET" Version="34.1.31" />
   </ItemGroup>
 
   <ItemGroup>

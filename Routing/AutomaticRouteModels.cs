@@ -47,8 +47,8 @@ public sealed class AutomaticRoutePlanningRequest {
     public int TotalLT { get; }
     public RouteSearchLimits Limits { get; }
     public string ConfigurationVersion { get; }
-    // Outputs of exchanges already marked complete in Planner are physically on
-    // the ship until a later route unloads them.  They are not warehouse stock.
+    // The inferred portion of completed exchange output still needed by active
+    // downstream tasks after recorded warehouse stock is accounted for.
     public IReadOnlyDictionary<string, int> InitialOnBoard { get; }
 
     public AutomaticRoutePlanningRequest(

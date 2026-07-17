@@ -304,14 +304,8 @@ namespace iBarter {
 
         private void MenuItem_StorageManagement_Click(object sender, RoutedEventArgs e) {
             if (App.myStorageManagement != null && App.myStorageManagement.IsLoaded) {
-                if (App.myStorageVM != null) {
-                    App.myStorageVM.StorageCollection.Clear();
-                }
                 App.myStorageManagement.Activate();
                 return;
-            }
-            if (App.myStorageVM != null) {
-                App.myStorageVM.StorageCollection.Clear();
             }
             App.myStorageManagement = new StorageManagement();
             App.myStorageManagement.Closed += (_, _) => App.myStorageManagement = null;
@@ -376,7 +370,7 @@ namespace iBarter {
             SyncLangCheckmarks();
             if (statusBarItem_Version != null) {
                 statusBarItem_Version.Text =
-                    Localization.LanguageService.Instance.Localize("str.StatusBar.VersionLabel") + "Beta_4.4";
+                    Localization.LanguageService.Instance.Localize("str.StatusBar.VersionLabel") + App.DisplayVersion;
             }
         }
 

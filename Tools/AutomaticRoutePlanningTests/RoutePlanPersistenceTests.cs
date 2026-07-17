@@ -76,6 +76,40 @@ public sealed class RoutePlanPersistenceTests {
     }
 
     [Fact]
+    public void Progress_restore_rejects_a_stale_route_that_skips_the_required_warehouse_pickup() {
+        var load = new RouteLoadSnapshot(0, 0, 0);
+        var stale = new RoutePlan(
+            RoutePlanStatus.BestKnownWithinLimit,
+            [
+                new PlannedRoute(1, "Iliya", "Iliya", [
+                    new BarterStep("old", "OldIsland", new("OLD-IN", 1), new("OLD-OUT", 1), load),
+                    new WarehouseUnloadStep("Iliya", "Iliya", [new("OLD-OUT", 1)], load),
+                ], 1, 0, 0, 0),
+                new PlannedRoute(2, "Iliya", "Iliya", [
+                    new BarterStep("necklace", "Iliya", new("CACTUS", 5), new("NECKLACE", 5), load),
+                    new WarehouseUnloadStep("Iliya", "Iliya", [new("NECKLACE", 5)], load),
+                ], 0, 0, 0, 0),
+            ],
+            new RoutePlanObjective(2, 1, 0, 0, ""), [], "old-fingerprint");
+        var request = new AutomaticRoutePlanningRequest(
+            [new("necklace", "Iliya", new RoutePoint(10, 0), "CACTUS", 5, "NECKLACE", 5)],
+            new Dictionary<string, RouteItem> {
+                ["CACTUS"] = new("CACTUS", "Golden Cactus", 5, 1_000),
+                ["NECKLACE"] = new("NECKLACE", "Seashell Necklace", 7, 1_000),
+            },
+            [
+                new RouteWarehouse("Velia", "Velia", new RoutePoint(0, 0),
+                    new Dictionary<string, int> { ["CACTUS"] = 5 }),
+                new RouteWarehouse("Iliya", "Iliya", new RoutePoint(10, 0),
+                    new Dictionary<string, int>()),
+            ],
+            0, 30_000, new RouteSearchLimits(5_000, 100), "current");
+
+        Assert.False(RoutePlanRestoreCompatibility.IsCompatibleAfterProgress(
+            request, stale, new HashSet<string>(["old"], StringComparer.Ordinal)));
+    }
+
+    [Fact]
     public void Automatic_route_plan_uses_the_runtime_resources_directory() {
         string baseDirectory = Path.Combine(Path.GetTempPath(), "iBarter-runtime");
 

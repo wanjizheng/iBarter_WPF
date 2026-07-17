@@ -18,6 +18,7 @@ using System.Linq;
 using System.ComponentModel;
 using System.Collections.Specialized;
 using System.Windows.Media;
+using iBarter.Persistence;
 
 namespace iBarter.ViewModel {
     public class StorageViewModel : NotificationObject {
@@ -44,7 +45,7 @@ namespace iBarter.ViewModel {
         // getter, which `new StorageManagement()`-ed the window on first access -
         // meaning clicking the scanner's "Add to Planner" button would silently trigger
         // 80+ storage saves on its first run. See Barter.InvQuantity for the UI fix.
-        private bool _suppressSave;
+        private int _suppressSaveDepth;
         private bool _storageChangedPending;
         private readonly HashSet<Items> _subscribedStorageItems = new();
 
@@ -73,7 +74,7 @@ namespace iBarter.ViewModel {
             }
             // Skip auto-save during bulk loads; the using-block in LoadData restores
             // the flag and runs a single trailing SaveData() to persist the result.
-            if (_suppressSave) {
+            if (_suppressSaveDepth > 0) {
                 _storageChangedPending = true;
                 return;
             }
@@ -86,10 +87,11 @@ namespace iBarter.ViewModel {
                 or nameof(Items.StorageVeliaQuantity_Iliya)
                 or nameof(Items.StorageVeliaQuantity_Epheria)
                 or nameof(Items.StorageVeliaQuantity_Ancado))) return;
-            if (_suppressSave) {
+            if (_suppressSaveDepth > 0) {
                 _storageChangedPending = true;
                 return;
             }
+            SaveData();
             StorageChanged?.Invoke(this, EventArgs.Empty);
         }
 
@@ -104,31 +106,28 @@ namespace iBarter.ViewModel {
         }
 
         public void SaveData() {
+            _ = TrySaveData();
+        }
+
+        public bool TrySaveData() {
             try {
-                if (App.myStorageVM.StorageCollection.Count > 0) {
-                    string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "Resources\\myStorage_Data.json";
-
-                    using (FileStream streamData = new FileStream(strPath_Data, FileMode.OpenOrCreate, FileAccess.Write)) {
-                        streamData.SetLength(0);
-                        App.listStorage.Clear();
-                        for (int i = 0; i < App.myStorageVM.StorageCollection.Count; i++) {
-                            Items myItem = App.myStorageVM.StorageCollection[i];
-                            if (!App.listStorage.Contains(myItem)) {
-                                App.listStorage.Add(myItem);
-                            }
-                        }
-
-                        string jsonData = JsonConvert.SerializeObject(App.listStorage);
-                        //File.WriteAllText(strPath_Data, jsonData);
-                        byte[] byteArray = System.Text.Encoding.UTF8.GetBytes(jsonData);
-                        streamData.Write(byteArray, 0, byteArray.Length);
-                    }
-
-                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Storage.Saved"), Brushes.DarkOliveGreen);
+                if (StorageCollection.Count == 0) {
+                    return false;
                 }
+
+                string path = GetStorageDataPath();
+                var snapshot = StorageCollection.ToList();
+                string jsonData = JsonConvert.SerializeObject(snapshot);
+                AtomicFileStore.WriteValidated(path, jsonData, IsValidStorageJson, HasMeaningfulStorageData);
+
+                App.listStorage.Clear();
+                App.listStorage.AddRange(snapshot);
+                App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Storage.Saved"), Brushes.DarkOliveGreen);
+                return true;
             }
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);
+                return false;
             }
         }
 
@@ -141,28 +140,40 @@ namespace iBarter.ViewModel {
         // Must be called on the UI thread (StorageCollection is an ObservableCollection
         // bound to the Storage window's DataGrid).
         public void LoadData() {
+            string path = GetStorageDataPath();
+            bool hasPersistedData = File.Exists(path) || File.Exists(path + ".bak");
+            List<Items> loadedItems = new();
+
+            if (hasPersistedData) {
+                if (!AtomicFileStore.TryReadValidated(path, IsValidStorageJson, out string jsonData, out bool recoveredFromBackup)) {
+                    App.myCFun.Log(Localization.LanguageService.Instance.Current == Localization.AppLanguage.TraditionalChinese
+                        ? "仓库数据无效；原文件已保留，没有被覆盖。"
+                        : "Storage data is invalid. The existing file was preserved and was not overwritten.", Brushes.Red);
+                    return;
+                }
+
+                try {
+                    loadedItems = JsonConvert.DeserializeObject<List<Items>>(jsonData) ?? new List<Items>();
+                    loadedItems = loadedItems.Select(HydrateStorageItem).ToList();
+                    if (recoveredFromBackup) {
+                        App.myCFun.Log(Localization.LanguageService.Instance.Current == Localization.AppLanguage.TraditionalChinese
+                            ? "已从备份文件恢复仓库数据。"
+                            : "Storage data was recovered from the backup file.", Brushes.Orange);
+                    }
+                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Storage.Loaded"), Brushes.Blue);
+                }
+                catch (Exception exception) {
+                    App.myCFun.Log(exception.Message, Brushes.Red);
+                    return;
+                }
+            }
+
             using (SuppressAutoSave()) {
-                string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "Resources\\myStorage_Data.json";
-                FileInfo fileInfo = new FileInfo(strPath_Data);
-
-                if (File.Exists(strPath_Data) && fileInfo.Length > 0) {
-                    try {
-                        string readJsonData = File.ReadAllText(strPath_Data);
-                        List<Items>? dataSource = JsonConvert.DeserializeObject<List<Items>>(readJsonData);
-
-                        if (dataSource != null) {
-                            for (int i = 0; i < dataSource.Count; i++) {
-                                Items myItem = HydrateStorageItem(dataSource[i]);
-                                if (StorageCollection.FirstOrDefault(x => x.ItemName.Equals(myItem.ItemName)) == null) {
-                                    StorageCollection.Add(myItem);
-                                }
-                            }
-                        }
-                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Storage.Loaded"), Brushes.Blue);
-                    }
-                    catch (Exception exception) {
-                        App.myCFun.Log(exception.Message, Brushes.Red);
-                    }
+                StorageCollection.Clear();
+                foreach (Items item in loadedItems
+                    .GroupBy(item => item.ItemID, StringComparer.Ordinal)
+                    .Select(group => group.First())) {
+                    StorageCollection.Add(item);
                 }
 
                 // Always seed the hardcoded fallback list. The JSON load above
@@ -172,8 +183,6 @@ namespace iBarter.ViewModel {
                 // users without forcing them to delete myStorage_Data.json.
                 SeedHardcodedFallback();
             }
-            // Single trailing save to persist any newly-seeded hardcoded items.
-            SaveData();
         }
 
         // Bulk-suppress auto-save during batch operations. The returned IDisposable
@@ -183,16 +192,46 @@ namespace iBarter.ViewModel {
         //       foreach (var item in bigList) StorageCollection.Add(item);
         //   }
         // // <-- one SaveData() fires here, with all changes persisted.
-        public IDisposable SuppressAutoSave() {
-            _suppressSave = true;
+        public IDisposable SuppressAutoSave(bool saveOnDispose = true) {
+            _suppressSaveDepth++;
             return new RestoreOnDispose(() => {
-                _suppressSave = false;
-                SaveData();
-                if (_storageChangedPending) {
+                _suppressSaveDepth = Math.Max(0, _suppressSaveDepth - 1);
+                if (_suppressSaveDepth == 0 && _storageChangedPending) {
                     _storageChangedPending = false;
+                    if (saveOnDispose) {
+                        SaveData();
+                    }
                     StorageChanged?.Invoke(this, EventArgs.Empty);
                 }
             });
+        }
+
+        private static string GetStorageDataPath() =>
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "myStorage_Data.json");
+
+        private static bool IsValidStorageJson(string json) {
+            try {
+                var items = JsonConvert.DeserializeObject<List<Items>>(json);
+                return items is { Count: > 0 }
+                    && items.All(item => !string.IsNullOrWhiteSpace(item.ItemID))
+                    && items.Select(item => item.ItemID).Distinct(StringComparer.Ordinal).Count() == items.Count;
+            }
+            catch {
+                return false;
+            }
+        }
+
+        private static bool HasMeaningfulStorageData(string json) {
+            try {
+                var items = JsonConvert.DeserializeObject<List<Items>>(json);
+                return items?.Any(item => item.StorageVeliaQuantity_Velia != 0
+                    || item.StorageVeliaQuantity_Iliya != 0
+                    || item.StorageVeliaQuantity_Epheria != 0
+                    || item.StorageVeliaQuantity_Ancado != 0) == true;
+            }
+            catch {
+                return false;
+            }
         }
 
         private sealed class RestoreOnDispose : IDisposable {
@@ -415,12 +454,15 @@ namespace iBarter.ViewModel {
             listItems.Add("Traditional Arehazan Tea");
             listItems.Add("Valencia Sand Shield");
             listItems.Add("Valencian Desert Fine Sword");
+            listItems.Add("Golden Flour Sack");
+            listItems.Add("Omar Lava Powder");
+            listItems.Add("Artisan Seashell Necklace");
 
             for (int i = 0; i < listItems.Count; i++) {
                 string strName = listItems[i].Replace("'", "").Replace("(", "").Replace(")", "");
                 Items myItem = App.listItems.FirstOrDefault(i => i.ItemName.Equals(strName));
                 if (myItem != null) {
-                    if (StorageCollection.FirstOrDefault(s => s.ItemName.Equals(myItem.ItemName)) == null) {
+                    if (StorageCollection.FirstOrDefault(s => string.Equals(s.ItemID, myItem.ItemID, StringComparison.Ordinal)) == null) {
                         StorageCollection.Add(myItem);
                     }
                 }

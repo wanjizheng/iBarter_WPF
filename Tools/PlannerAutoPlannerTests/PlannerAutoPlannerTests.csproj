@@ -13,5 +13,7 @@
     <Compile Include="..\..\Planning\AutoPlanningModels.cs" Link="Planning\AutoPlanningModels.cs" />
     <Compile Include="..\..\Planning\PlannerAutoPlanner.cs" Link="Planning\PlannerAutoPlanner.cs" Condition="Exists('..\..\Planning\PlannerAutoPlanner.cs')" />
     <Compile Include="..\..\Planning\PlannerAutoPlanningAdapter.cs" Link="Planning\PlannerAutoPlanningAdapter.cs" Condition="Exists('..\..\Planning\PlannerAutoPlanningAdapter.cs')" />
+    <Compile Include="..\..\Planning\PlannerInventoryReconciler.cs" Link="Planning\PlannerInventoryReconciler.cs" />
+    <Compile Include="..\..\Persistence\AtomicFileStore.cs" Link="Persistence\AtomicFileStore.cs" />
   </ItemGroup>
 </Project>
