@@ -14,6 +14,18 @@ public static class RoutePlanFingerprint {
         Add(builder, request.ExtraLT);
         Add(builder, request.TotalLT);
 
+        // Keep legacy persisted routes valid when there is no carried cargo.
+        // Once carried cargo exists it must participate in the fingerprint,
+        // because it materially changes what the first route may execute.
+        if (request.InitialOnBoard.Count > 0) {
+            Add(builder, "initial-onboard");
+            foreach (var pair in request.InitialOnBoard.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+                Add(builder, pair.Key);
+                Add(builder, pair.Value);
+            }
+            Add(builder, "initial-onboard-end");
+        }
+
         foreach (var task in request.Tasks.OrderBy(x => x.RowId, StringComparer.Ordinal)) {
             Add(builder, task.RowId);
             Add(builder, task.IslandId);

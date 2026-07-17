@@ -156,7 +156,8 @@ public static class RouteStateTransition {
         onboard.Clear();
         var routeSteps = state.CurrentRouteSteps.Append(step).ToArray();
         var firstPickup = routeSteps.OfType<WarehousePickupStep>().FirstOrDefault();
-        int initialLT = firstPickup?.Load.TotalWithExtraLT ?? request.ExtraLT;
+        int initialLT = firstPickup?.Load.TotalWithExtraLT ??
+            checked(request.ExtraLT + ComputeCargoLT(request, request.InitialOnBoard));
         double finishedDistance = state.FinishedRoutes.Sum(x => x.Distance);
         double routeDistance = state.TotalDistance + legDistance - finishedDistance;
         var route = new PlannedRoute(

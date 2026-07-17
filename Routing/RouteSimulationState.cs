@@ -48,8 +48,16 @@ public sealed class RouteSimulationState {
             new KeyValuePair<string, IReadOnlyDictionary<string, int>>(
                 warehouse.WarehouseId,
                 ModelCopies.Dictionary(warehouse.Inventory)));
+        long initialCargoLT = 0;
+        foreach (var pair in request.InitialOnBoard) {
+            if (!request.Items.TryGetValue(pair.Key, out var item))
+                throw new InvalidOperationException($"Unknown route item '{pair.Key}'.");
+            initialCargoLT += (long)item.UnitWeight * pair.Value;
+        }
+        int cargoLT = checked((int)initialCargoLT);
         return new RouteSimulationState(
-            "", 1, 0, [], [], inventory, 0, request.ExtraLT,
+            "", 1, 0, [], request.InitialOnBoard, inventory, cargoLT,
+            checked(request.ExtraLT + cargoLT),
             [], [], 0, 0);
     }
 

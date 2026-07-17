@@ -15,6 +15,23 @@ public static class AutomaticRoutePreflight {
         if (request.Limits.MaxExpandedStates <= 0 || request.Limits.MaxLocalMoves < 0)
             diagnostics.Add(new RouteDiagnostic("invalid-search-limits"));
 
+        long initialCargoLT = 0;
+        foreach (var pair in request.InitialOnBoard) {
+            if (!request.Items.TryGetValue(pair.Key, out var item)) {
+                diagnostics.Add(new RouteDiagnostic("missing-item", ItemId: pair.Key, Detail: "initial-onboard"));
+                continue;
+            }
+            if (pair.Value < 0)
+                diagnostics.Add(new RouteDiagnostic("negative-initial-cargo", ItemId: pair.Key));
+            if (item.UnitWeight < 0)
+                diagnostics.Add(new RouteDiagnostic("invalid-item", ItemId: pair.Key, Detail: "initial-onboard"));
+            if (pair.Value > 0)
+                initialCargoLT += (long)item.UnitWeight * pair.Value;
+        }
+        if (request.ExtraLT + initialCargoLT > request.TotalLT)
+            diagnostics.Add(new RouteDiagnostic("initial-cargo-overweight", Detail:
+                (request.ExtraLT + initialCargoLT).ToString()));
+
         foreach (var duplicate in request.Tasks.GroupBy(x => x.RowId, StringComparer.Ordinal).Where(x => x.Count() > 1))
             diagnostics.Add(new RouteDiagnostic("duplicate-row-id", duplicate.Key));
         foreach (var duplicate in request.Warehouses.GroupBy(x => x.WarehouseId, StringComparer.Ordinal).Where(x => x.Count() > 1))
@@ -102,6 +119,8 @@ public static class AutomaticRoutePreflight {
         foreach (var warehouse in request.Warehouses)
             foreach (var pair in warehouse.Inventory.Where(x => x.Value > 0))
                 available[pair.Key] = available.GetValueOrDefault(pair.Key) + pair.Value;
+        foreach (var pair in request.InitialOnBoard.Where(x => x.Value > 0))
+            available[pair.Key] = available.GetValueOrDefault(pair.Key) + pair.Value;
 
         var reachable = new bool[request.Tasks.Count];
         bool changed;

@@ -37,6 +37,37 @@ public sealed class RouteRenderSnapshotTests {
     }
 
     [Fact]
+    public void Completed_exchange_output_is_carried_onto_the_next_automatic_route() {
+        var rows = new[] {
+            new PlannerRouteSnapshot("producer", true, 6, "DoneIsland", "SEED", "Seed", 4, 1, "CARRY", "Carry", 5, 1),
+            new PlannerRouteSnapshot("consumer", false, 6, "NextIsland", "CARRY", "Carry", 5, 1, "OUT", "Output", 6, 1),
+        };
+        var storage = new[] {
+            new StorageItemSnapshot("SEED", 4, 0, 0, 0, 0),
+            new StorageItemSnapshot("CARRY", 5, 0, 0, 0, 0),
+            new StorageItemSnapshot("OUT", 6, 0, 0, 0, 0),
+        };
+        var islands = new[] {
+            new IslandRouteSnapshot("DoneIsland", new RoutePoint(1, 1)),
+            new IslandRouteSnapshot("NextIsland", new RoutePoint(2, 1)),
+            new IslandRouteSnapshot("Velia", new RoutePoint(0, 0)),
+            new IslandRouteSnapshot("Iliya", new RoutePoint(0, 1)),
+            new IslandRouteSnapshot("Epheria", new RoutePoint(0, 2)),
+            new IslandRouteSnapshot("Sausan", new RoutePoint(0, 3)),
+        };
+
+        var request = AutomaticRoutePlanningAdapter.BuildRequest(
+            rows, storage, islands, new CargoCapacitySnapshot(0, 30_000), new RouteSearchLimits(100, 10));
+
+        Assert.Equal(6, request.InitialOnBoard["CARRY"]);
+        var plan = new AutomaticRoutePlanner().Plan(request, TestContext.Current.CancellationToken);
+        var route = Assert.Single(plan.Routes);
+        Assert.Equal(RoutePlanStatus.Optimal, plan.Status);
+        Assert.IsType<BarterStep>(route.Steps[0]);
+        Assert.DoesNotContain(route.Steps, step => step is WarehousePickupStep);
+    }
+
+    [Fact]
     public void Automatic_snapshot_selects_one_or_all_routes_with_stable_colors() {
         var plan = BuildPlan();
 

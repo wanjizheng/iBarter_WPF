@@ -36,7 +36,9 @@ public static class AutomaticRoutePlanningAdapter {
         foreach (var storage in storageItems.Where(x => !string.IsNullOrWhiteSpace(x.ItemId)))
             items[storage.ItemId] = new RouteItem(
                 storage.ItemId, storage.ItemId, storage.Level, CargoWeightTable.GetWeightForLevel(storage.Level));
-        foreach (var row in activeRows) {
+        // Completed rows can leave their net positive output on board.  Keep
+        // their item metadata too, even when storage has no record of it.
+        foreach (var row in plannerRows) {
             items[row.Item1Id] = new RouteItem(
                 row.Item1Id, row.Item1DisplayName, row.Item1Level,
                 CargoWeightTable.GetWeightForLevel(row.Item1Level));
@@ -44,6 +46,18 @@ public static class AutomaticRoutePlanningAdapter {
                 row.Item2Id, row.Item2DisplayName, row.Item2Level,
                 CargoWeightTable.GetWeightForLevel(row.Item2Level));
         }
+
+        var carriedBalance = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var row in plannerRows.Where(row => row.ExchangeDone && row.ExchangeQuantity > 0)) {
+            AddBalance(carriedBalance, row.Item1Id, -(long)row.ExchangeQuantity * row.Item1Number);
+            AddBalance(carriedBalance, row.Item2Id, (long)row.ExchangeQuantity * row.Item2Number);
+        }
+        var initialOnBoard = carriedBalance
+            .Where(pair => pair.Value > 0)
+            .ToDictionary(
+                pair => pair.Key,
+                pair => checked((int)pair.Value),
+                StringComparer.Ordinal);
 
         var tasks = activeRows.Select(row => new RouteBarterTask(
             row.RowId,
@@ -72,6 +86,12 @@ public static class AutomaticRoutePlanningAdapter {
         }).ToArray();
 
         return new AutomaticRoutePlanningRequest(
-            tasks, items, warehouses, cargo.ExtraLT, cargo.TotalLT, limits, "automatic-route-v3-inventory-aware");
+            tasks, items, warehouses, cargo.ExtraLT, cargo.TotalLT, limits,
+            "automatic-route-v3-inventory-aware", initialOnBoard);
+    }
+
+    private static void AddBalance(Dictionary<string, long> balance, string itemId, long delta) {
+        if (string.IsNullOrWhiteSpace(itemId) || delta == 0) return;
+        balance[itemId] = checked(balance.GetValueOrDefault(itemId) + delta);
     }
 }

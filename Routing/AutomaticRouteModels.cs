@@ -47,6 +47,9 @@ public sealed class AutomaticRoutePlanningRequest {
     public int TotalLT { get; }
     public RouteSearchLimits Limits { get; }
     public string ConfigurationVersion { get; }
+    // Outputs of exchanges already marked complete in Planner are physically on
+    // the ship until a later route unloads them.  They are not warehouse stock.
+    public IReadOnlyDictionary<string, int> InitialOnBoard { get; }
 
     public AutomaticRoutePlanningRequest(
         IReadOnlyList<RouteBarterTask> tasks,
@@ -55,7 +58,8 @@ public sealed class AutomaticRoutePlanningRequest {
         int extraLT,
         int totalLT,
         RouteSearchLimits limits,
-        string configurationVersion) {
+        string configurationVersion,
+        IReadOnlyDictionary<string, int>? initialOnBoard = null) {
         Tasks = ModelCopies.List(tasks);
         Items = ModelCopies.Dictionary(items);
         Warehouses = ModelCopies.List(warehouses.Select(warehouse => new RouteWarehouse(
@@ -67,6 +71,8 @@ public sealed class AutomaticRoutePlanningRequest {
         TotalLT = totalLT;
         Limits = limits;
         ConfigurationVersion = configurationVersion;
+        InitialOnBoard = ModelCopies.Dictionary(initialOnBoard ??
+            new Dictionary<string, int>(StringComparer.Ordinal));
     }
 }
 
