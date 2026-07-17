@@ -295,9 +295,9 @@ namespace iBarter.View {
 
         private void UpdateParley() {
             if (Label_SelectedParley != null) {
-                int intParley = 0;
-                foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.ExchangeDone == false && b.ExchangeQuantity > 0)) {
-                    intParley += GetEffectiveParley(barter) * barter.ExchangeQuantity;
+                long intParley = 0;
+                foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.ExchangeQuantity > 0)) {
+                    intParley += (long)GetEffectiveParley(barter) * barter.ExchangeQuantity;
                 }
 
                 Label_SelectedParley.Content = intParley;

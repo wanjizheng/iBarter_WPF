@@ -23,6 +23,8 @@ public sealed record PlannerApplySet(IReadOnlyDictionary<string, int> Multiplier
 public sealed record PlannerCalculation(
     PlannerApplySet? ApplySet,
     IReadOnlyList<AutoPlanningDiagnostic> Diagnostics,
+    // Total parley represented by the resulting Planner: preserved completed
+    // exchanges plus newly selected unfinished exchanges.
     int UsedParley);
 
 /// <summary>
@@ -50,6 +52,26 @@ public sealed class PlannerAutoPlanningAdapter {
         if (strategy == AutoPlanningStrategy.ManualSelection)
             return PreserveManualSelection(rows);
 
+        long completedParley = 0;
+        foreach (var row in rows.Where(row => row.ExchangeDone && row.ExistingMultiplier > 0)) {
+            if (row.Route.Parley < 0)
+                return ManualFailure("invalid-completed-parley", row.RowId);
+            completedParley = checked(completedParley +
+                (long)row.ExistingMultiplier * row.Route.Parley);
+        }
+        if (completedParley > Int32.MaxValue)
+            return ManualFailure("completed-parley-overflow");
+
+        // The daily parley budget covers the whole plan, including exchanges
+        // which the player has already completed.  Those rows remain immutable;
+        // only the unspent remainder is available for fresh selection.
+        int remainingBudget = budget;
+        if (budget >= 0 && budget <= 1_000_000) {
+            remainingBudget = completedParley >= budget
+                ? 0
+                : budget - (int)completedParley;
+        }
+
         var unfinished = rows.Where(r => !r.ExchangeDone).ToList();
         var unfinishedRoutes = unfinished.Select(r => r.Route).ToList();
         var availableInventory = BuildAvailableInventoryAfterCompletedExchanges(
@@ -61,7 +83,7 @@ public sealed class PlannerAutoPlanningAdapter {
             strategy,
             lv5Target,
             lv6Target,
-            budget,
+            remainingBudget,
             carryOverInventory);
 
         var result = _planner.Plan(request);
@@ -90,7 +112,11 @@ public sealed class PlannerAutoPlanningAdapter {
             }
         }
 
-        return new PlannerCalculation(new PlannerApplySet(multipliers), result.Diagnostics, result.UsedParley);
+        int totalUsedParley = checked((int)completedParley + result.UsedParley);
+        return new PlannerCalculation(
+            new PlannerApplySet(multipliers),
+            result.Diagnostics,
+            totalUsedParley);
     }
 
     /// <summary>

@@ -76,6 +76,58 @@ public sealed class PlannerAutoPlanningAdapterTests {
     }
 
     [Fact]
+    public void Calculate_subtracts_completed_parley_from_the_new_plan_budget() {
+        var adapter = new PlannerAutoPlanningAdapter();
+        var completed = Snapshot("done", exchangeDone: true, existingMultiplier: 2,
+            new AutoPlanningRoute(
+                "done", 1, "A", 4, 1, "B", 5, 1,
+                false, 100_000, 5));
+        var unfinished = Snapshot("new", exchangeDone: false, existingMultiplier: 4,
+            new AutoPlanningRoute(
+                "new", 1, "C", 4, 1, "D", 5, 1,
+                false, 300_000, 5));
+
+        var calculation = adapter.Calculate(
+            [completed, unfinished],
+            new Dictionary<string, int> { ["C"] = 10 },
+            AutoPlanningStrategy.ProfitFirst,
+            lv5Target: 0,
+            lv6Target: 0,
+            budget: 1_000_000);
+
+        Assert.NotNull(calculation.ApplySet);
+        Assert.Equal(2, calculation.ApplySet!.Multipliers["done"]);
+        Assert.Equal(2, calculation.ApplySet.Multipliers["new"]);
+        Assert.Equal(800_000, calculation.UsedParley);
+    }
+
+    [Fact]
+    public void Calculate_keeps_completed_rows_when_they_already_use_the_whole_budget() {
+        var adapter = new PlannerAutoPlanningAdapter();
+        var completed = Snapshot("done", exchangeDone: true, existingMultiplier: 10,
+            new AutoPlanningRoute(
+                "done", 1, "A", 4, 1, "B", 5, 1,
+                false, 100_000, 10));
+        var unfinished = Snapshot("new", exchangeDone: false, existingMultiplier: 3,
+            new AutoPlanningRoute(
+                "new", 1, "C", 4, 1, "D", 5, 1,
+                false, 10_000, 5));
+
+        var calculation = adapter.Calculate(
+            [completed, unfinished],
+            new Dictionary<string, int> { ["C"] = 10 },
+            AutoPlanningStrategy.ProfitFirst,
+            lv5Target: 0,
+            lv6Target: 0,
+            budget: 1_000_000);
+
+        Assert.NotNull(calculation.ApplySet);
+        Assert.Equal(10, calculation.ApplySet!.Multipliers["done"]);
+        Assert.Equal(0, calculation.ApplySet.Multipliers["new"]);
+        Assert.Equal(1_000_000, calculation.UsedParley);
+    }
+
+    [Fact]
     public void Calculate_uses_completed_exchange_output_for_the_next_unfinished_exchange() {
         // Regression: after the player marks an upstream exchange as done, its
         // produced cargo is physically available on the ship. The completed row
