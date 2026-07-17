@@ -281,7 +281,8 @@ public sealed class PlannerAutoPlanner {
             // A repair can introduce a new consumed item (e.g. a producer
             // pulled in to repair X itself consumes Y), so we re-scan
             // every iteration.
-            var deficits = CollectReserveDeficits(request, routesById, committed);
+            var deficits = CollectReserveDeficits(request, routesById, committed,
+                diagnostics);
             if (deficits.Count == 0) {
                 allResolved = true;
                 break;
@@ -290,7 +291,7 @@ public sealed class PlannerAutoPlanner {
             bool anyProgress = false;
             // Process deficits in deterministic order (item id).
             foreach (var deficit in deficits.OrderBy(d => d.ItemId, StringComparer.Ordinal)) {
-                if (deficit.Shortfall <= 0) continue;
+                if (deficit.MissingQuantity <= 0) continue;
                 if (TryRepairDeficit(request, routesById, committed, ref committedParley,
                         deficit, diagnostics)) {
                     anyProgress = true;
@@ -312,7 +313,7 @@ public sealed class PlannerAutoPlanner {
                 diagnostics.RemoveAt(diagnostics.Count - 1);
             var remaining = CollectReserveDeficits(request, routesById, committed);
             foreach (var deficit in remaining.OrderBy(d => d.ItemId, StringComparer.Ordinal)) {
-                if (deficit.Shortfall > 0 && !HasReserveDiagnostic(diagnostics, deficit.ItemId)) {
+                if (deficit.MissingQuantity > 0 && !HasReserveDiagnostic(diagnostics, deficit.ItemId)) {
                     diagnostics.Add(new AutoPlanningDiagnostic(
                         deficit.FailureCode, deficit.ItemId));
                 }
@@ -320,35 +321,77 @@ public sealed class PlannerAutoPlanner {
         }
     }
 
+    // A single LV5/LV6 reserve deficit is a GLOBAL final-inventory
+    // constraint on the item, so a deficit carries the set of ALL consumer
+    // groups whose committed routes spend the item. The repair phase may
+    // satisfy the deficit using producers from any of these groups (never
+    // from an unrelated group that does not consume the item).
+    //
+    // Level: the item's Item1Level across all consumers (must agree; if
+    // routes declare the same ItemId at different levels, that is an input
+    // validation error and surfaces as a diagnostic).
     private readonly record struct ReserveDeficit(
-        string ItemId, int ConsumerGroup, int Shortfall, string FailureCode);
+        string ItemId,
+        int ItemLevel,
+        IReadOnlyList<int> ConsumerGroups,
+        int Target,
+        int ProjectedFinal,
+        int MissingQuantity,
+        string FailureCode);
 
     // Collect every LV5/LV6 item whose projected final inventory is
     // below the LV5/LV6 target AND that the plan actually consumes.
     // "Actually consumes" = at least one committed route has the item
-    // as its Item1Id. The consumer group is taken from the first such
-    // route (deterministic: lowest row id among the consumers).
+    // as its Item1Id. Each item produces exactly ONE deficit, carrying
+    // the complete set of consumer groups. Inconsistent Item1Level
+    // declarations across consumers for the same ItemId surface as an
+    // explicit diagnostic and produce no deficit (so the strategy's own
+    // failure path takes over).
     private static List<ReserveDeficit> CollectReserveDeficits(
         AutoPlanningRequest request,
         IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
-        IReadOnlyDictionary<string, int> committed) {
+        IReadOnlyDictionary<string, int> committed,
+        List<AutoPlanningDiagnostic>? diagnostics = null) {
         var deficits = new List<ReserveDeficit>();
         if (request.Lv5Target <= 0 && request.Lv6Target <= 0) return deficits;
-        // First pass: collect consumed items with their consumer group and level.
-        var consumerInfo = new Dictionary<string, (int Group, int Level)>(StringComparer.Ordinal);
+        // First pass: aggregate by item id — every consumer group that
+        // commits the item, and the (single) Item1Level for the item.
+        var consumerInfo = new Dictionary<string, (SortedSet<int> Groups, int Level, bool Inconsistent)>(
+            StringComparer.Ordinal);
         foreach (var r in request.Routes.OrderBy(x => x.RowId, StringComparer.Ordinal)) {
             if (r.Item1Level != 5 && r.Item1Level != 6) continue;
             if (!committed.TryGetValue(r.RowId, out var m) || m <= 0) continue;
-            if (!consumerInfo.ContainsKey(r.Item1Id)) {
-                consumerInfo[r.Item1Id] = (r.Group, r.Item1Level);
+            if (consumerInfo.TryGetValue(r.Item1Id, out var existing)) {
+                existing.Groups.Add(r.Group);
+                if (existing.Level != r.Item1Level) {
+                    existing.Inconsistent = true;
+                }
+                consumerInfo[r.Item1Id] = existing;
+            }
+            else {
+                consumerInfo[r.Item1Id] = (
+                    new SortedSet<int>(new[] { r.Group }),
+                    r.Item1Level,
+                    false);
             }
         }
         foreach (var (itemId, info) in consumerInfo) {
             int target = info.Level == 6 ? request.Lv6Target : request.Lv5Target;
             if (target <= 0) continue;
             int projected = ProjectedItemInventory(itemId, request, committed);
+            if (info.Inconsistent) {
+                diagnostics?.Add(new AutoPlanningDiagnostic(
+                    "reserve-level-inconsistent", itemId));
+                continue;
+            }
             if (projected < target) {
-                deficits.Add(new ReserveDeficit(itemId, info.Group, target - projected,
+                deficits.Add(new ReserveDeficit(
+                    itemId,
+                    info.Level,
+                    info.Groups.ToArray(),
+                    target,
+                    projected,
+                    target - projected,
                     "reserve-no-producer"));
             }
         }
@@ -359,12 +402,19 @@ public sealed class PlannerAutoPlanner {
         List<AutoPlanningDiagnostic> diagnostics, string itemId) =>
         diagnostics.Any(d => d.Code.StartsWith("reserve-") && d.RowId == itemId);
 
-    // Try to repair a single deficit by adding a same-group producer
-    // through the existing atomic TryBuildBundle. The candidate producer
-    // is ordered deterministically (lowest parley, highest Item2Number,
-    // lowest row id). A snapshot of committed + committedParley is taken
-    // before each attempt; failed attempts roll back atomically. A
-    // success atomically merges the bundle's multiplier increments.
+    // Try to repair a single deficit by adding a producer from any of the
+    // consumer groups (never from an unrelated group). Every candidate
+    // bundle is built first via the existing atomic TryBuildBundle, then
+    // ranked by:
+    //   1. Bundle that fully eliminates the deficit wins over partial.
+    //   2. Lower Bundle.AdditionalParley wins.
+    //   3. Greater deficit reduction wins.
+    //   4. Fewer new routes introduced wins.
+    //   5. Lower producer.Group wins.
+    //   6. Lower producer.RowId wins.
+    // Each candidate attempt uses a per-build working-inventory clone
+    // from the shared base attemptInventory (line below), so a failed
+    // bundle build cannot leak into the next attempt or into committed.
     private static bool TryRepairDeficit(
         AutoPlanningRequest request,
         IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
@@ -372,54 +422,108 @@ public sealed class PlannerAutoPlanner {
         ref int committedParley,
         ReserveDeficit deficit,
         List<AutoPlanningDiagnostic> diagnostics) {
-        // Same-group producers of the deficit item, ordered deterministically.
+        // Candidate producers: any route that produces the deficit item
+        // AND lives in a consumer group, AND has Remaining capacity.
+        var consumerGroupSet = new HashSet<int>(deficit.ConsumerGroups);
         var candidates = routesById.Values
-            .Where(r => r.Group == deficit.ConsumerGroup
+            .Where(r => consumerGroupSet.Contains(r.Group)
                 && r.Item2Id == deficit.ItemId
-                && r.Item2Number > 0)
-            .OrderBy(r => r.Parley)
+                && r.Item2Number > 0
+                && r.Remaining > (committed.TryGetValue(r.RowId, out var ca) ? ca : 0))
+            .OrderBy(r => r.Group)
+            .ThenBy(r => r.Parley)
             .ThenByDescending(r => r.Item2Number)
             .ThenBy(r => r.RowId, StringComparer.Ordinal)
             .ToList();
         if (candidates.Count == 0) {
-            // No same-group producer: this is a genuine reserve-no-producer
-            // condition, not a budget issue. The caller will emit the
-            // diagnostic; we just signal no-progress here.
+            // No candidate in any consumer group: genuine reserve-no-producer.
             return false;
         }
+
+        // Shared base inventory: every candidate bundle sees the same
+        // starting state, so the comparison is apples-to-apples.
+        var attemptInventory = ApplyMultipliers(
+            request.CurrentInventory, routesById, committed);
+        int remainingBudget = request.ParleyBudget - committedParley;
+        int deficitBeforeRepair = deficit.MissingQuantity;
+
+        var built = new List<(AutoPlanningRoute Producer, Bundle Bundle)>();
         foreach (var p in candidates) {
             int already = committed.TryGetValue(p.RowId, out var a) ? a : 0;
-            if (already >= p.Remaining) continue; // remaining exhausted
-            int deficitQuantity = deficit.Shortfall;
-            int addQuantity = Math.Max(1, Math.Min(
-                CeilingDivide(deficitQuantity, p.Item2Number),
-                p.Remaining - already));
-            int absoluteTarget = already + addQuantity;
+            int maxAdd = p.Remaining - already;
+            if (maxAdd <= 0) continue;
+            int desiredAdd = Math.Min(
+                CeilingDivide(deficitBeforeRepair, p.Item2Number),
+                maxAdd);
+            int absoluteTarget = already + desiredAdd;
 
-            // Snapshot before building the bundle.
-            var snapshot = SnapshotCommitted(committed);
-            int snapshotParley = committedParley;
-
-            // Build the full atomic bundle (this recursively pulls in
-            // any upstream producer the chosen one needs).
-            var attemptInventory = ApplyMultipliers(
-                request.CurrentInventory, routesById, committed);
-            int remainingBudget = request.ParleyBudget - committedParley;
             var localDiagnostics = new List<AutoPlanningDiagnostic>();
-            if (!TryBuildBundle(p.RowId, absoluteTarget, routesById,
+            if (TryBuildBundle(p.RowId, absoluteTarget, routesById,
                     attemptInventory, committed, remainingBudget,
                     out var bundle, localDiagnostics, request)) {
-                continue;
+                built.Add((p, bundle));
             }
-            // Bundle succeeded. Atomically merge into committed + parley.
-            committedParley = checked(committedParley + bundle.AdditionalParley);
-            foreach (var kv in bundle.Multipliers) {
-                int existing = committed.TryGetValue(kv.Key, out var cv) ? cv : 0;
-                committed[kv.Key] = existing + kv.Value;
-            }
-            return true;
         }
-        return false;
+
+        if (built.Count == 0) {
+            return false;
+        }
+
+        // Rank by full-bundle cost, not by surface producer parley.
+        built.Sort((x, y) => CompareRepairCandidates(
+            x.Producer, x.Bundle, y.Producer, y.Bundle,
+            deficitBeforeRepair, p => p.Item2Number));
+
+        // Commit the winner atomically. TryBuildBundle already mutates
+        // only its own working-inventory clone; committed is untouched
+        // until we merge here.
+        var winner = built[0];
+        committedParley = checked(committedParley + winner.Bundle.AdditionalParley);
+        foreach (var kv in winner.Bundle.Multipliers) {
+            int existing = committed.TryGetValue(kv.Key, out var cv) ? cv : 0;
+            committed[kv.Key] = existing + kv.Value;
+        }
+        return true;
+    }
+
+    private static int CompareRepairCandidates(
+        AutoPlanningRoute a, Bundle ba,
+        AutoPlanningRoute b, Bundle bb,
+        int deficitBeforeRepair,
+        Func<AutoPlanningRoute, int> yieldOf) {
+        // 1. Full-fix wins over partial.
+        int reductionA = BundleYield(a, ba, yieldOf);
+        int reductionB = BundleYield(b, bb, yieldOf);
+        bool fullA = reductionA >= deficitBeforeRepair;
+        bool fullB = reductionB >= deficitBeforeRepair;
+        if (fullA != fullB) return fullA ? -1 : 1;
+
+        // 2. Lower full-bundle parley wins.
+        int cmp = ba.AdditionalParley.CompareTo(bb.AdditionalParley);
+        if (cmp != 0) return cmp;
+
+        // 3. Greater deficit reduction wins.
+        cmp = reductionB.CompareTo(reductionA);
+        if (cmp != 0) return cmp;
+
+        // 4. Fewer new routes introduced wins.
+        cmp = ba.Multipliers.Count.CompareTo(bb.Multipliers.Count);
+        if (cmp != 0) return cmp;
+
+        // 5. Lower producer group wins.
+        cmp = a.Group.CompareTo(b.Group);
+        if (cmp != 0) return cmp;
+
+        // 6. Lower producer row id wins.
+        return StringComparer.Ordinal.Compare(a.RowId, b.RowId);
+    }
+
+    private static int BundleYield(
+        AutoPlanningRoute producer, Bundle bundle,
+        Func<AutoPlanningRoute, int> yieldOf) {
+        int multiplier = bundle.Multipliers.GetValueOrDefault(producer.RowId, 0);
+        int perExchange = yieldOf(producer);
+        return Math.Max(0, multiplier * perExchange);
     }
 
     // Classify a failed bundle build into a precise reserve diagnostic.
