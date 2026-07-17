@@ -91,6 +91,16 @@ public sealed class PlannerAutoPlanner {
             }
         }
 
+        // Final-projected-inventory reserve check. Under the final-reserve
+        // semantics, initial warehouse stock is freely spendable inside a
+        // plan even when the item is reserved, as long as some producer
+        // increment (direct or support) eventually replenishes it to the
+        // LV5/LV6 target. If the strategy phase left a reserved item below
+        // target and no legal producer is available, we record a
+        // reserve-no-producer diagnostic so the plan fails atomically.
+        CheckFinalProjectedReserves(request, routesById, committed,
+            ref committedParley, diagnostics);
+
         // All-or-nothing: any reserve-* diagnostic means the reserve constraint
         // could not be satisfied. Mark the result failed so the adapter returns
         // ApplySet=null and no live Eq. multiplier is touched.
@@ -221,6 +231,94 @@ public sealed class PlannerAutoPlanner {
             if (route.Item1Id == itemId) baseQty -= mul * route.Item1Number;
         }
         return baseQty;
+    }
+
+    // Final-projected-inventory reserve repair. For each LV5/LV6 item whose
+    // projected final inventory (initial + planned production - planned
+    // consumption) is below its LV5/LV6 target, try to add the minimum legal
+    // producer increment that brings it back to target. If no producer is
+    // available, record a reserve-no-producer diagnostic. The strategy
+    // phase's chain-pull-in already handles the common case; this pass is the
+    // final guard for items that the strategy consumed without a chain
+    // pull-in (e.g. a direct target whose bundle found enough initial stock
+    // to skip the producer fallback). The pass is deterministic, bounded by
+    // the number of protected items, and does not turn the planner into an
+    // exponential search.
+    private static void CheckFinalProjectedReserves(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        Dictionary<string, int> committed,
+        ref int committedParley,
+        List<AutoPlanningDiagnostic> diagnostics) {
+        if (request.Lv5Target <= 0 && request.Lv6Target <= 0) return;
+        // Plan-relevant reserve: only items that the plan actually CONSUMES
+        // (appear as Item1 in some committed route) are subject to the
+        // final projected-inventory check. Items that are only produced
+        // but never consumed are not plan-relevant, even if they happen
+        // to be LV5/LV6 level.
+        var consumed = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var (rowId, mul) in committed) {
+            if (mul <= 0) continue;
+            if (!routesById.TryGetValue(rowId, out var r)) continue;
+            consumed[r.Item1Id] = consumed.GetValueOrDefault(r.Item1Id) + mul * r.Item1Number;
+        }
+        var lv5 = new SortedSet<string>(StringComparer.Ordinal);
+        var lv6 = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var r in request.Routes) {
+            if (r.Item1Level == 5 && consumed.ContainsKey(r.Item1Id)) lv5.Add(r.Item1Id);
+            if (r.Item1Level == 6 && consumed.ContainsKey(r.Item1Id)) lv6.Add(r.Item1Id);
+        }
+        foreach (var itemId in lv5) {
+            while (ProjectedItemInventory(itemId, request, committed) < request.Lv5Target) {
+                if (!TryAddReserveRepair(request, routesById, committed, ref committedParley,
+                        itemId, request.Lv5Target, diagnostics)) return;
+            }
+        }
+        foreach (var itemId in lv6) {
+            while (ProjectedItemInventory(itemId, request, committed) < request.Lv6Target) {
+                if (!TryAddReserveRepair(request, routesById, committed, ref committedParley,
+                        itemId, request.Lv6Target, diagnostics)) return;
+            }
+        }
+    }
+
+    private static bool TryAddReserveRepair(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        Dictionary<string, int> committed,
+        ref int committedParley,
+        string itemId,
+        int target,
+        List<AutoPlanningDiagnostic> diagnostics) {
+        var producers = routesById.Values
+            .Where(r => r.Item2Id == itemId && r.Item2Number > 0)
+            .OrderBy(r => r.Parley)
+            .ThenByDescending(r => r.Item2Number)
+            .ThenBy(r => r.RowId, StringComparer.Ordinal)
+            .ToList();
+        if (producers.Count == 0) {
+            diagnostics.Add(new AutoPlanningDiagnostic("reserve-no-producer", itemId));
+            return false;
+        }
+        foreach (var p in producers) {
+            int current = committed.TryGetValue(p.RowId, out var c) ? c : 0;
+            int headroom = p.Remaining - current;
+            if (headroom <= 0) continue;
+            int deficit = target - ProjectedItemInventory(itemId, request, committed);
+            int add = Math.Max(1, Math.Min(
+                CeilingDivide(deficit, p.Item2Number),
+                headroom));
+            committed[p.RowId] = current + add;
+            committedParley = checked(committedParley + add * p.Parley);
+            if (committedParley > request.ParleyBudget) {
+                committed[p.RowId] = current;
+                committedParley = checked(committedParley - add * p.Parley);
+                continue;
+            }
+            return true;
+        }
+        diagnostics.Add(new AutoPlanningDiagnostic("reserve-no-producer", itemId));
+        return false;
     }
 
     // ------------------------------------------------------------------
@@ -613,8 +711,14 @@ public sealed class PlannerAutoPlanner {
             int carried = carryOverInventory.TryGetValue(route.Item1Id, out var carriedValue)
                 ? Math.Clamp(carriedValue, 0, available)
                 : 0;
-            int reservedWarehouse = Math.Max(0, available - carried - reserve);
-            int effectiveAvailable = checked(carried + reservedWarehouse);
+            // Final-projected-inventory reserve semantics: initial warehouse
+            // stock is freely spendable inside a plan, even when the item is
+            // reserved, as long as the post-strategy repair pass can bring
+            // the projected final inventory back to the LV5/LV6 target.
+            // Previously the formula subtracted `reserve` from the initial
+            // stock, which forced the chain to produce-before-consume and
+            // made the route order depend on whether the producer ran first.
+            int effectiveAvailable = available;
             int deficit = Math.Max(0, demand - effectiveAvailable);
 
             if (deficit > 0) {
