@@ -32,7 +32,11 @@ public sealed class AutomaticRoutePlannerTests {
 
     [Fact]
     public void Fifteen_task_plans_use_the_bounded_beam_budget() {
-        Assert.Equal(5_000, AutomaticRouteSearchPolicy.BeamStateBudget(15, 250_000));
+        // The fixed 5,000-state cap has been replaced by the per-mode profile
+        // (Quick = 5,000 parents; Balanced = 25,000; Deep = 100,000).
+        Assert.Equal(5_000, RouteOptimizationProfile.For(RouteOptimizationMode.Quick).MaxBeamParents);
+        Assert.Equal(25_000, RouteOptimizationProfile.For(RouteOptimizationMode.Balanced).MaxBeamParents);
+        Assert.Equal(100_000, RouteOptimizationProfile.For(RouteOptimizationMode.Deep).MaxBeamParents);
 
         var request = RouteTestData.IndependentTasks(
             15, new RouteSearchLimits(250_000, 100));

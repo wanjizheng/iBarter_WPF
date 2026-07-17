@@ -188,6 +188,27 @@ namespace iBarter.View {
             DataGrid_Planner.CellRenderers.Add("MultiColumnDropDown", new LocalizedMultiColumnDropDownRenderer());
         }
 
+        private RouteOptimizationProfile ResolveSelectedOptimizationProfile() {
+            var mode = RouteOptimizationMode.Balanced;
+            if (ComboBoxAdv_OptimMode?.SelectedItem is System.Windows.Controls.ContentControl { Tag: string tag }) {
+                if (Enum.TryParse(tag, out RouteOptimizationMode parsed)) mode = parsed;
+            }
+            return RouteOptimizationProfile.For(mode);
+        }
+
+        private void ComboBoxAdv_OptimMode_SelectionChanged(object sender,
+            System.Windows.Controls.SelectionChangedEventArgs e) {
+            var profile = ResolveSelectedOptimizationProfile();
+            App.myRouteCoordinator?.SetOptimizationMode(profile.Mode);
+        }
+
+        private static string OptimModeLocalizationKey(RouteOptimizationMode mode) => mode switch {
+            RouteOptimizationMode.Quick => "str.Planner.AutoPlan.OptimQuick",
+            RouteOptimizationMode.Balanced => "str.Planner.AutoPlan.OptimBalanced",
+            RouteOptimizationMode.Deep => "str.Planner.AutoPlan.OptimDeep",
+            _ => "str.Planner.AutoPlan.OptimBalanced",
+        };
+
         private void ApplyLocalization() {
             ApplyLocalizedHeaders();
             RefreshLocalizedDisplay();
@@ -1309,10 +1330,13 @@ namespace iBarter.View {
             var cargo = new CargoCapacitySnapshot(
                 Convert.ToInt32(Math.Round(App.myCargoProperty.ExtraLT, MidpointRounding.AwayFromZero)),
                 Convert.ToInt32(Math.Round(App.myCargoProperty.TotalLT, MidpointRounding.AwayFromZero)));
+            var profile = ResolveSelectedOptimizationProfile();
             var request = AutomaticRoutePlanningAdapter.BuildRequest(
-                routeRows, storageRows, islandRows, cargo, new RouteSearchLimits(250_000, 2_000));
-            App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Solving"), Brushes.SteelBlue);
-            var routePlan = await App.myRouteCoordinator.CalculateAsync(request);
+                routeRows, storageRows, islandRows, cargo,
+                new RouteSearchLimits(250_000, profile.MaxLocalEvaluations), profile);
+            App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Solving",
+                svc.Localize(OptimModeLocalizationKey(profile.Mode))), Brushes.SteelBlue);
+            var routePlan = await App.myRouteCoordinator.CalculateAsync(request, profile);
             if (routePlan.Status is not (RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit)) {
                 switch (routePlan.Status) {
                     case RoutePlanStatus.Infeasible:
@@ -1383,8 +1407,19 @@ namespace iBarter.View {
                         routePlan.Routes.Count, routePlan.Objective?.TotalDistance ?? 0), Brushes.DarkOliveGreen);
                     break;
                 case RoutePlanStatus.BestKnownWithinLimit:
+                    // The new anytime mode publishes the selected profile, the
+                    // actual stop reason from the beam, and a "not proven
+                    // globally optimal" disclaimer in the same message so the
+                    // user understands the difference between BestKnown and
+                    // Optimal without needing to read the source.
+                    var modeName = svc.Localize(OptimModeLocalizationKey(profile.Mode));
+                    var stopReason = routePlan.Diagnostics.FirstOrDefault()?.Detail ?? "";
                     App.myCFun.Log(svc.Localize("str.Log.AutoRoute.BestKnown",
-                        routePlan.Routes.Count, routePlan.Objective?.TotalDistance ?? 0), Brushes.Orange);
+                        modeName,
+                        routePlan.Routes.Count,
+                        routePlan.Objective?.TotalDistance ?? 0,
+                        stopReason,
+                        svc.Localize("str.Log.AutoRoute.NotOptimal")), Brushes.Orange);
                     break;
             }
             }

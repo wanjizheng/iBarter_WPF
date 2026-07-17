@@ -51,6 +51,13 @@
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.RestockFirst}" Tag="RestockFirst" />
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.ManualSelection}" Tag="ManualSelection" />
             </syncfusion:ComboBoxAdv>
+            <Label Content="{loc:Localize str.Planner.AutoPlan.OptimMode}" VerticalAlignment="Center" />
+            <syncfusion:ComboBoxAdv x:Name="ComboBoxAdv_OptimMode" SelectedIndex="1" Width="120"
+                                    SelectionChanged="ComboBoxAdv_OptimMode_SelectionChanged">
+                <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.OptimQuick}" Tag="Quick" />
+                <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.OptimBalanced}" Tag="Balanced" />
+                <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.OptimDeep}" Tag="Deep" />
+            </syncfusion:ComboBoxAdv>
             <controls:FluentIconButton x:Name="ButtonAdv_AutoPlan" IconData="{StaticResource FluentIcon.VehicleShip}"
                 Label="{loc:Localize str.Planner.Btn.AutoPlan}" ToolTip="{loc:Localize str.Planner.Btn.AutoPlanTip}" Click="ButtonAdv_AutoPlan_Click" />
             <Separator />

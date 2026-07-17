@@ -23,8 +23,11 @@ public sealed class RouteSearchProfiler {
     // Search shape.
     public long BeamParentsExpanded;
     public long SuccessorsGenerated;
+    public long SuccessorsEvaluated;
     public long CandidatesDeduped;
     public long TrimCandidatesCalls;
+    public long CompleteCandidatesFound;
+    public int LocalEvaluations;
 
     // Beam region timings (raw Stopwatch ticks).
     public long BeamCompleteTicks;
@@ -32,6 +35,19 @@ public sealed class RouteSearchProfiler {
     public long BeamRankTicks;
     public long DistanceTicks;
     public long BundleGenTicks;
+
+    // Anytime-mode fields (set by the planner / beam / verifier).
+    public string OptimizationMode = "";
+    public string StopReason = "";
+    public long PlanTicks;
+    public double TotalTargetMs;
+    public double SearchDeadlineMs;
+    public double FirstVerifiedIncumbentMs;
+    public double BestImprovementMs;
+    public double FinalElapsedMs;
+    public int FinalRoutes;
+    public double FinalDistance;
+    public bool FinalVerified;
 
     // Hot-method call counts.
     public long SearchKeyCalls;
@@ -61,10 +77,19 @@ public sealed class RouteSearchProfiler {
     public string Report() {
         var sb = new StringBuilder();
         sb.AppendLine("--- RouteSearchProfiler ---");
+        if (!string.IsNullOrEmpty(OptimizationMode))
+            sb.AppendLine($"mode={OptimizationMode} target={TotalTargetMs:F0}ms searchDeadline={SearchDeadlineMs:F0}ms " +
+                $"stop={StopReason} verified={FinalVerified}");
+        if (FirstVerifiedIncumbentMs > 0 || BestImprovementMs > 0 || FinalElapsedMs > 0)
+            sb.AppendLine($"timing_ms firstIncumbent={FirstVerifiedIncumbentMs:F0} " +
+                $"bestImprovement={BestImprovementMs:F0} final={FinalElapsedMs:F0}");
+        if (FinalRoutes > 0 || FinalDistance > 0)
+            sb.AppendLine($"result routes={FinalRoutes} distance={FinalDistance:F1}");
         sb.AppendLine($"phase_ms preflight={Ms(PreflightTicks):F1} heuristic={Ms(HeuristicTicks):F1} " +
             $"beam={Ms(BeamTicks):F1} finalOptimize={Ms(FinalOptimizeTicks):F1} finalVerify={Ms(FinalVerifyTicks):F1}");
         sb.AppendLine($"beam parentsExpanded={BeamParentsExpanded} successorsGenerated={SuccessorsGenerated} " +
-            $"candidatesDeduped={CandidatesDeduped} trimCalls={TrimCandidatesCalls}");
+            $"candidatesDeduped={CandidatesDeduped} trimCalls={TrimCandidatesCalls} " +
+            $"completes={CompleteCandidatesFound} localEval={LocalEvaluations}");
         sb.AppendLine($"beam_region_ms complete={Ms(BeamCompleteTicks):F1} expand={Ms(BeamExpandTicks):F1} " +
             $"rank={Ms(BeamRankTicks):F1} distance={Ms(DistanceTicks):F1} bundleGen={Ms(BundleGenTicks):F1}");
         sb.AppendLine($"calls searchKey={SearchKeyCalls} stableKey={StableKeyCalls} " +

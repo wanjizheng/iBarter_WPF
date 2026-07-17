@@ -27,6 +27,21 @@ public static class AutomaticRoutePlanningAdapter {
         IReadOnlyList<IslandRouteSnapshot> islands,
         CargoCapacitySnapshot cargo,
         RouteSearchLimits limits) {
+        return BuildRequest(plannerRows, storageItems, islands, cargo, limits,
+            RouteOptimizationProfile.For(RouteOptimizationMode.Balanced));
+    }
+
+    // Overload that carries the user-selected optimization profile through to the
+    // planner. The profile's MaxLocalEvaluations is forwarded as the request's
+    // MaxLocalMoves so the optimizers still see a per-call cap when a budget is
+    // not provided.
+    public static AutomaticRoutePlanningRequest BuildRequest(
+        IReadOnlyList<PlannerRouteSnapshot> plannerRows,
+        IReadOnlyList<StorageItemSnapshot> storageItems,
+        IReadOnlyList<IslandRouteSnapshot> islands,
+        CargoCapacitySnapshot cargo,
+        RouteSearchLimits limits,
+        RouteOptimizationProfile profile) {
         var points = islands
             .GroupBy(x => x.IslandId, StringComparer.Ordinal)
             .ToDictionary(x => x.Key, x => x.First().Point, StringComparer.Ordinal);
@@ -117,6 +132,12 @@ public static class AutomaticRoutePlanningAdapter {
             tasks, items, warehouses, cargo.ExtraLT, cargo.TotalLT, limits,
             "automatic-route-v3-inventory-aware", initialOnBoard);
     }
+
+    // Convenience for callers that just need the profile's local-moves cap.
+    public static RouteSearchLimits WithProfileLimits(
+        RouteSearchLimits limits, RouteOptimizationProfile profile) =>
+        new(limits.MaxExpandedStates, profile.MaxLocalEvaluations);
+
 
     private static void AddBalance(Dictionary<string, long> balance, string itemId, long delta) {
         if (string.IsNullOrWhiteSpace(itemId) || delta == 0) return;

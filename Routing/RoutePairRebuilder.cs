@@ -8,6 +8,9 @@ using System.Numerics;
 /// candidate may replace the incumbent.
 /// </summary>
 public static class RoutePairRebuilder {
+    // Original 3-arg entry: unchanged from baseline so existing tests see the
+    // exact same behavior. Budget-aware overload added below for the shared
+    // RouteSearchBudget path.
     public static RouteSimulationState Improve(
         AutomaticRoutePlanningRequest request,
         RouteSimulationState initial,
@@ -37,6 +40,46 @@ public static class RoutePairRebuilder {
                     best = candidate;
                     bestObjective = plan.Objective.Value;
                 }
+            }
+
+            if (best is null) break;
+            current = best;
+        }
+        return current;
+    }
+
+    public static RouteSimulationState Improve(
+        AutomaticRoutePlanningRequest request,
+        RouteSimulationState initial,
+        RouteSearchBudget? budget,
+        CancellationToken cancellationToken) {
+        if (budget is null) return Improve(request, initial, cancellationToken);
+
+        if (RouteSearchProfiler.Current is { } p) p.RoutePairRebuildCalls++;
+        if (budget.MaxLocalEvaluations <= 0 || initial.FinishedRoutes.Count < 2) return initial;
+
+        var current = initial;
+        while (budget.TryConsumeLocalEvaluation()) {
+            var routes = current.FinishedRoutes.ToArray();
+            var currentPlan = RoutePlanFactory.FromState(
+                request, current, RoutePlanStatus.BestKnownWithinLimit, []);
+            RouteSimulationState? best = null;
+            RoutePlanObjective bestObjective = currentPlan.Objective!.Value;
+
+            for (int left = 0; left < routes.Length - 1; left++) {
+                for (int right = left + 1; right < routes.Length; right++) {
+                    if (!budget.TryConsumeLocalEvaluation()) { best = null; break; }
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var candidate = TryRebuild(request, routes, left, right);
+                    if (candidate is null) continue;
+                    var plan = RoutePlanFactory.FromState(
+                        request, candidate, RoutePlanStatus.BestKnownWithinLimit, []);
+                    if (plan.Objective is null || plan.Objective.Value.CompareTo(bestObjective) >= 0) continue;
+                    if (!RoutePlanVerifier.Verify(request, plan).Success) continue;
+                    best = candidate;
+                    bestObjective = plan.Objective.Value;
+                }
+                if (best is null) break;
             }
 
             if (best is null) break;

@@ -6,6 +6,10 @@ namespace iBarter.Routing;
 /// large early route cannot starve later routes of all local-improvement work.
 /// </summary>
 public static class IntraRouteOrderOptimizer {
+    // Backwards-compatible 3-arg entry: unchanged from the baseline so that
+    // existing tests and call sites see the exact original behaviour. The
+    // budget-aware overload below adds shared-budget support for the new
+    // anytime search without changing the legacy code path.
     public static RouteSimulationState Improve(
         AutomaticRoutePlanningRequest request,
         RouteSimulationState initial,
@@ -31,6 +35,40 @@ public static class IntraRouteOrderOptimizer {
             return initial;
         return rebuilt;
     }
+
+    public static RouteSimulationState Improve(
+        AutomaticRoutePlanningRequest request,
+        RouteSimulationState initial,
+        RouteSearchBudget? budget,
+        CancellationToken cancellationToken) {
+        // Null budget: delegate to the original implementation so its
+        // "++evaluated" contract (and the relocation tests that depend on it)
+        // is preserved bit-for-bit.
+        if (budget is null) return Improve(request, initial, cancellationToken);
+
+        if (RouteSearchProfiler.Current is { } p) p.IntraRouteImproveCalls++;
+        if (budget.MaxLocalEvaluations <= 0 || initial.FinishedRoutes.Count == 0) return initial;
+
+        var rebuilt = RouteSimulationState.CreateInitial(request);
+        foreach (var route in initial.FinishedRoutes) {
+            cancellationToken.ThrowIfCancellationRequested();
+            var optimized = OptimizeRouteWithBudget(request, rebuilt, route, budget, cancellationToken);
+            if (optimized is null) return initial;
+            rebuilt = optimized;
+        }
+
+        var originalPlanBudget = RoutePlanFactory.FromState(
+            request, initial, RoutePlanStatus.BestKnownWithinLimit, []);
+        var rebuiltPlanBudget = RoutePlanFactory.FromState(
+            request, rebuilt, RoutePlanStatus.BestKnownWithinLimit, []);
+        if (rebuiltPlanBudget.Objective is null || originalPlanBudget.Objective is null
+            || rebuiltPlanBudget.Objective.Value.CompareTo(originalPlanBudget.Objective.Value) >= 0
+            || !RoutePlanVerifier.Verify(request, rebuiltPlanBudget).Success)
+            return initial;
+        return rebuilt;
+    }
+
+    // ---- Original 3-arg helpers (unchanged from baseline) ----
 
     private static RouteSimulationState? OptimizeRoute(
         AutomaticRoutePlanningRequest request,
@@ -142,6 +180,123 @@ public static class IntraRouteOrderOptimizer {
         }
         return best;
     }
+
+    // ---- Budget-aware variants for the shared RouteSearchBudget path ----
+
+    private static RouteSimulationState? OptimizeRouteWithBudget(
+        AutomaticRoutePlanningRequest request,
+        RouteSimulationState start,
+        PlannedRoute route,
+        RouteSearchBudget budget,
+        CancellationToken cancellationToken) {
+        var actions = route.Steps.Where(step => step is not WarehouseUnloadStep).ToArray();
+        if (actions.Length == 0) return ReplayOriginal(request, start, actions);
+
+        var original = ReplayOriginal(request, start, actions);
+        if (original is null) return null;
+        var best = original;
+        var bestActions = actions;
+        var bestObjective = RoutePlanFactory.FromState(
+            request, best, RoutePlanStatus.BestKnownWithinLimit, []).Objective!.Value;
+
+        if (actions.Length <= 12 && budget.LocalEvaluations < budget.MaxLocalEvaluations) {
+            var frontier = new Dictionary<SearchKey, RouteSimulationState> {
+                [new SearchKey(0, start.CurrentIslandId)] = start,
+            };
+
+            for (int depth = 0; depth < actions.Length && frontier.Count > 0; depth++) {
+                if (budget.LocalEvaluations >= budget.MaxLocalEvaluations) break;
+                var next = new Dictionary<SearchKey, RouteSimulationState>();
+                foreach (var entry in frontier
+                    .OrderBy(x => x.Value.TotalDistance)
+                    .ThenBy(x => x.Key.IslandId, StringComparer.Ordinal)
+                    .ThenBy(x => x.Key.Mask)) {
+                    for (int actionIndex = 0; actionIndex < actions.Length; actionIndex++) {
+                        if ((entry.Key.Mask & (1UL << actionIndex)) != 0) continue;
+                        if (!budget.TryConsumeLocalEvaluation()) break;
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        var transition = Apply(request, entry.Value, actions[actionIndex]);
+                        if (!transition.Success) continue;
+                        ulong mask = entry.Key.Mask | (1UL << actionIndex);
+                        var key = new SearchKey(mask, transition.State.CurrentIslandId);
+                        if (!next.TryGetValue(key, out var incumbent)
+                            || IsBetterPartial(transition.State, incumbent))
+                            next[key] = transition.State;
+                    }
+                    if (budget.LocalEvaluations >= budget.MaxLocalEvaluations) break;
+                }
+                frontier = next;
+            }
+
+            ulong fullMask = (1UL << actions.Length) - 1;
+            foreach (var state in frontier
+                .Where(x => x.Key.Mask == fullMask)
+                .Select(x => x.Value)) {
+                var unload = WarehouseUnloadPlanner.TryCompleteRoute(request, state);
+                if (!unload.Success) continue;
+                var plan = RoutePlanFactory.FromState(
+                    request, unload.State, RoutePlanStatus.BestKnownWithinLimit, []);
+                if (plan.Objective is null || plan.Objective.Value.CompareTo(bestObjective) >= 0) continue;
+                best = unload.State;
+                bestObjective = plan.Objective.Value;
+                bestActions = state.CurrentRouteSteps.ToArray();
+            }
+        }
+
+        return ImproveByRelocationWithBudget(
+            request, start, bestActions, best, bestObjective, budget, cancellationToken);
+    }
+
+    private static RouteSimulationState ImproveByRelocationWithBudget(
+        AutomaticRoutePlanningRequest request,
+        RouteSimulationState start,
+        IReadOnlyList<RouteStep> initialActions,
+        RouteSimulationState initialBest,
+        RoutePlanObjective initialObjective,
+        RouteSearchBudget budget,
+        CancellationToken cancellationToken) {
+        var actions = initialActions.ToList();
+        var best = initialBest;
+        var bestObjective = initialObjective;
+
+        while (budget.TryConsumeLocalEvaluation()) {
+            RouteSimulationState? roundBest = null;
+            RoutePlanObjective? roundObjective = null;
+            List<RouteStep>? roundActions = null;
+
+            for (int from = 0; from < actions.Count; from++) {
+                for (int to = 0; to < actions.Count; to++) {
+                    if (from == to) continue;
+                    if (!budget.TryConsumeLocalEvaluation()) { roundBest = null; break; }
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var candidateActions = actions.ToList();
+                    var moved = candidateActions[from];
+                    candidateActions.RemoveAt(from);
+                    candidateActions.Insert(to, moved);
+                    var candidate = ReplayOriginal(request, start, candidateActions);
+                    if (candidate is null) continue;
+                    var objective = RoutePlanFactory.FromState(
+                        request, candidate, RoutePlanStatus.BestKnownWithinLimit, []).Objective!.Value;
+                    if (objective.CompareTo(bestObjective) >= 0
+                        || roundObjective is { } existing && objective.CompareTo(existing) >= 0)
+                        continue;
+                    roundBest = candidate;
+                    roundObjective = objective;
+                    roundActions = candidateActions;
+                }
+                if (roundBest is null) break;
+            }
+
+            if (roundBest is null || roundObjective is null || roundActions is null) break;
+            best = roundBest;
+            bestObjective = roundObjective.Value;
+            actions = roundActions;
+        }
+        return best;
+    }
+
+    // ---- Shared helpers (unchanged) ----
 
     private static RouteSimulationState? ReplayOriginal(
         AutomaticRoutePlanningRequest request,

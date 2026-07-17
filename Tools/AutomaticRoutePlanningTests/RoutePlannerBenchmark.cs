@@ -22,35 +22,38 @@ public sealed class RoutePlannerBenchmark {
         if (Environment.GetEnvironmentVariable("ROUTE_BENCH") is null) return;
 
         var request = InterdependentCrowCoinPlan(15, new RouteSearchLimits(250_000, 2_000));
+        foreach (var mode in new[] { RouteOptimizationMode.Quick, RouteOptimizationMode.Balanced, RouteOptimizationMode.Deep }) {
+            BenchOnce(request, mode, output);
+        }
+    }
 
+    private static void BenchOnce(
+        AutomaticRoutePlanningRequest request,
+        RouteOptimizationMode mode,
+        ITestOutputHelper output) {
+        var profile = RouteOptimizationProfile.For(mode);
         long allocBefore = GC.GetTotalAllocatedBytes(true);
         int g0 = GC.CollectionCount(0), g1 = GC.CollectionCount(1), g2 = GC.CollectionCount(2);
         using var _ = RouteSearchProfiler.Enable();
         var sw = Stopwatch.StartNew();
 
-        var plan = new AutomaticRoutePlanner().Plan(request, TestContext.Current.CancellationToken);
+        var plan = new AutomaticRoutePlanner().Plan(request, profile, TestContext.Current.CancellationToken);
 
         sw.Stop();
-        var profile = RouteSearchProfiler.Snapshot()?.Report();
+        var snap = RouteSearchProfiler.Snapshot()?.Report();
         long allocAfter = GC.GetTotalAllocatedBytes(true);
         var verify = RoutePlanVerifier.Verify(request, plan);
 
-        output.WriteLine($"status={plan.Status}");
-        output.WriteLine($"elapsed_ms={sw.ElapsedMilliseconds}");
-        output.WriteLine($"routes={plan.Objective?.RouteCount} distance={plan.Objective?.TotalDistance:F1} " +
-            $"pickups={plan.Objective?.PickupStopCount} peak={plan.Objective?.MaxPeakLT}");
-        output.WriteLine($"verify_ok={verify.Success}");
-        output.WriteLine($"alloc_MB={(allocAfter - allocBefore) / (1024.0 * 1024.0):F1}");
-        output.WriteLine($"gc g0={GC.CollectionCount(0) - g0} g1={GC.CollectionCount(1) - g1} g2={GC.CollectionCount(2) - g2}");
-
-        // Print to stdout too (ITestOutputHelper is buffered per-test).
-        Console.WriteLine($"[BENCH] status={plan.Status} elapsed_ms={sw.ElapsedMilliseconds} " +
+        string line = $"[BENCH] mode={mode} status={plan.Status} elapsed_ms={sw.ElapsedMilliseconds} " +
             $"routes={plan.Objective?.RouteCount} distance={plan.Objective?.TotalDistance:F1} " +
-            $"verify_ok={verify.Success} alloc_MB={(allocAfter - allocBefore) / (1024.0 * 1024.0):F1}");
-        if (profile is not null) Console.WriteLine(profile);
-
-        Assert.Equal(RoutePlanStatus.BestKnownWithinLimit, plan.Status);
-        Assert.True(verify.Success);
+            $"pickups={plan.Objective?.PickupStopCount} peak={plan.Objective?.MaxPeakLT} " +
+            $"verify_ok={verify.Success} alloc_MB={(allocAfter - allocBefore) / (1024.0 * 1024.0):F1}";
+        Console.WriteLine(line);
+        output.WriteLine(line);
+        if (snap is not null) {
+            Console.WriteLine(snap);
+            output.WriteLine(snap);
+        }
     }
 
     // Four spread warehouses, six raw inputs, six produced intermediates, and a

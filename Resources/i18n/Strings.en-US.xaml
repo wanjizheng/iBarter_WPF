@@ -73,6 +73,10 @@
     <sys:String x:Key="str.Planner.AutoPlan.CrowCoinFirst">Crow Coin First</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.ProfitFirst">Profit First</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.RestockFirst">Restock First</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimMode">Search mode</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimQuick">Quick (≈3s)</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimBalanced">Balanced (≈10s)</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimDeep">Deep (≈30s)</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.ManualSelection">Manual Selection</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlan">Auto Plan</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlanTip">Automatic strategies fill exchange counts; Manual Selection only optimizes the route for the current counts</sys:String>
@@ -278,7 +282,14 @@
     <sys:String x:Key="str.ShipCargo.AutoRoute.PeakLT">Peak LT</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Solving">Finding automatic routes…</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Optimal">Optimal automatic plan: {0} route(s), distance {1:N1}.</sys:String>
-    <sys:String x:Key="str.Log.AutoRoute.BestKnown">Best known automatic plan: {0} route(s), distance {1:N1}; search limit reached.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.BestKnown">Best known automatic plan ({0}): {1} route(s), distance {2:N1}; stop: {3}; {4}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.NotOptimal">verified best so far; not proven globally optimal.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.StopCompleted">completed</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.StopParentBudget">parent-state budget reached</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.StopSuccessorBudget">successor budget reached</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.StopTimeBudget">optimization-mode time budget reached</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.StopDepthLimit">depth limit reached</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.StopFrontierExhausted">no more feasible candidates</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Infeasible">No feasible automatic route. {0}</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.NoFeasibleWithinLimit">No feasible route was found before the search limit.</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Cancelled">Automatic route search cancelled.</sys:String>

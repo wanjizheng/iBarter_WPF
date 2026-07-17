@@ -7,113 +7,186 @@ namespace iBarter.Routing;
 /// <summary>
 /// A bounded feasibility fallback for large plans.  It keeps several distinct
 /// partial cargo states instead of committing to the heuristic's single greedy
-/// pickup/exchange choice.
+/// pickup/exchange choice. The new overload accepts a <see cref="RouteSearchBudget"/>
+/// that controls parent/successor/time/local-evaluation budgets and returns a
+/// structured <see cref="BeamSearchResult"/> so callers can reason about the
+/// stop reason instead of guessing from null vs. non-null.
 /// </summary>
 public static class AutomaticRouteBeamSearch {
-    private const int BeamWidth = 512;
-    private const int CandidateRetainLimit = BeamWidth * 4;
+    private const int CandidateRetainLimit = 2_048;
     private const int CandidateTrimThreshold = CandidateRetainLimit * 2;
 
+    // Backwards-compatible entry point used by older callers and tests that did
+    // not yet pass a profile/budget. Falls back to request.Limits.MaxExpandedStates
+    // and never sets a deadline; preserves the previous return shape.
     public static RouteIncumbent? TryBuildIncumbent(
         AutomaticRoutePlanningRequest request,
         RoutePreflightResult preflight,
         CancellationToken cancellationToken,
         int? maxExpandedStates = null,
         long deadlineTimestamp = 0) {
-        if (!preflight.IsValid || request.Tasks.Count == 0) return null;
+        var budget = new RouteSearchBudget(
+            new RouteOptimizationProfile(
+                Mode: RouteOptimizationMode.Balanced,
+                TotalTarget: TimeSpan.FromMilliseconds(deadlineTimestamp == 0 ? 0 : Math.Max(1, (deadlineTimestamp - Stopwatch.GetTimestamp()) * 1000L / Stopwatch.Frequency)),
+                FinalizationReserve: TimeSpan.Zero,
+                MaxBeamParents: maxExpandedStates ?? request.Limits.MaxExpandedStates,
+                MaxSuccessors: long.MaxValue,
+                MaxLocalEvaluations: request.Limits.MaxLocalMoves,
+                BeamWidth: 512),
+            clock: deadlineTimestamp == 0 ? null : () => Stopwatch.GetTimestamp(),
+            planStartTimestamp: deadlineTimestamp == 0 ? null : Stopwatch.GetTimestamp());
+        // The legacy overload never times out (deadline=0 means "disabled").
+        if (deadlineTimestamp == 0)
+            budget = new RouteSearchBudget(
+                new RouteOptimizationProfile(
+                    RouteOptimizationMode.Balanced,
+                    TimeSpan.FromHours(1), TimeSpan.Zero,
+                    maxExpandedStates ?? request.Limits.MaxExpandedStates,
+                    long.MaxValue, request.Limits.MaxLocalMoves, 512));
+        return TryBuildIncumbent(request, preflight, budget, cancellationToken).Incumbent;
+    }
+
+    public static BeamSearchResult TryBuildIncumbent(
+        AutomaticRoutePlanningRequest request,
+        RoutePreflightResult preflight,
+        RouteSearchBudget budget,
+        CancellationToken cancellationToken) {
+        if (!preflight.IsValid || request.Tasks.Count == 0)
+            return new BeamSearchResult(null, BeamStopReason.Completed, 0, 0, 0);
+
         ulong fullMask = request.Tasks.Count == 64 ? ulong.MaxValue : (1UL << request.Tasks.Count) - 1;
         var frontier = new[] { RouteSimulationState.CreateInitial(request) };
-        int expanded = 0;
-        int budget = maxExpandedStates ?? request.Limits.MaxExpandedStates;
         int maxDepth = Math.Max(64, request.Tasks.Count * 4 + request.Warehouses.Count * request.Tasks.Count);
 
-        // The best fully-complete state seen so far, tracked cheaply via its raw
-        // objective (which already carries a deterministic stable tie-break). The
-        // expensive local optimization and full verification run exactly once on
-        // this final winner after the search loop, rather than on every
-        // completion at every beam depth.
+        // The best fully-complete state seen so far. Updated both during the
+        // per-depth frontier sweep AND for every complete successor found
+        // inside the per-parent expand loop, so a stop triggered by budget
+        // exhaustion mid-depth never silently drops a better complete plan
+        // that was just generated.
         RouteSimulationState? bestRaw = null;
         RoutePlanObjective? bestRawObjective = null;
-        bool stop = false;
 
-        for (int depth = 0; depth < maxDepth && frontier.Length > 0 && !stop; depth++) {
+        void ConsiderComplete(RouteSimulationState state) {
+            if (state.CompletedMask != fullMask || state.CurrentRouteSteps.Count != 0) return;
+            budget.RegisterComplete();
+            var objective = Objective(request, state);
+            if (bestRawObjective is null || objective.CompareTo(bestRawObjective.Value) < 0) {
+                bestRaw = state;
+                bestRawObjective = objective;
+            }
+        }
+
+        for (int depth = 0; depth < maxDepth && frontier.Length > 0; depth++) {
             cancellationToken.ThrowIfCancellationRequested();
-            if (Expired(deadlineTimestamp)) break;
+            if (budget.SearchTimeExpired) { budget.MarkStop(BeamStopReason.TimeBudget); break; }
 
             var completeStart = Stopwatch.GetTimestamp();
-            foreach (var state in frontier) {
-                if (state.CompletedMask != fullMask || state.CurrentRouteSteps.Count != 0) continue;
-                var objective = Objective(request, state);
-                if (bestRawObjective is null || objective.CompareTo(bestRawObjective.Value) < 0) {
-                    bestRaw = state;
-                    bestRawObjective = objective;
-                }
-            }
+            for (int i = 0; i < frontier.Length; i++) ConsiderComplete(frontier[i]);
             if (RouteSearchProfiler.Current is { } tc) tc.BeamCompleteTicks += Stopwatch.GetTimestamp() - completeStart;
 
             var expandStart = Stopwatch.GetTimestamp();
             var candidates = new Dictionary<string, RouteSimulationState>(StringComparer.Ordinal);
-            foreach (var state in frontier) {
+            bool stop = false;
+            for (int p = 0; p < frontier.Length && !stop; p++) {
+                var state = frontier[p];
                 if (state.CompletedMask == fullMask && state.CurrentRouteSteps.Count == 0) continue;
-                if (++expanded > budget || Expired(deadlineTimestamp)) { stop = true; break; }
+                if (!budget.TryConsumeParent()) { stop = true; break; }
+                if (budget.SearchTimeExpired) { budget.MarkStop(BeamStopReason.TimeBudget); stop = true; break; }
                 if (RouteSearchProfiler.Current is { } pp) pp.BeamParentsExpanded++;
+
                 foreach (var successor in Expand(request, state, fullMask)) {
+                    if (!budget.TryConsumeSuccessor()) { stop = true; break; }
                     if (RouteSearchProfiler.Current is { } sp) sp.SuccessorsGenerated++;
+                    // Per-successor complete check: a complete state produced
+                    // by this expansion is captured even if a later budget
+                    // stop interrupts this depth layer.
+                    ConsiderComplete(successor);
                     string key = SearchKey(successor);
                     if (!candidates.TryGetValue(key, out var existing) || IsBetter(successor, existing))
                         candidates[key] = successor;
                     if (candidates.Count >= CandidateTrimThreshold)
                         candidates = TrimCandidates(candidates, CandidateRetainLimit);
                 }
+                if (stop) break;
             }
             if (RouteSearchProfiler.Current is { } cp) cp.CandidatesDeduped += candidates.Count;
             if (RouteSearchProfiler.Current is { } te) te.BeamExpandTicks += Stopwatch.GetTimestamp() - expandStart;
             if (stop) break;
 
             var rankStart = Stopwatch.GetTimestamp();
-            frontier = RankCandidates(candidates.Values)
-                .Take(BeamWidth)
-                .ToArray();
+            int beamWidth = budget.BeamWidthFor(request.Tasks.Count);
+            var ranked = RankCandidates(candidates.Values, beamWidth).ToArray();
+            if (ranked.Length > beamWidth) {
+                var trimmed = new RouteSimulationState[beamWidth];
+                Array.Copy(ranked, trimmed, beamWidth);
+                frontier = trimmed;
+            } else {
+                frontier = ranked;
+            }
             if (RouteSearchProfiler.Current is { } tr) tr.BeamRankTicks += Stopwatch.GetTimestamp() - rankStart;
+
+            if (frontier.Length == 0) { budget.MarkStop(BeamStopReason.FrontierExhausted); break; }
+        }
+        if (budget.StopReason is BeamStopReason.NotSet) budget.MarkStop(BeamStopReason.DepthLimit);
+
+        if (bestRaw is null) {
+            // Nothing complete was found at all. If we still have no explicit
+            // reason, attribute the absence to an exhausted frontier.
+            if (budget.StopReason is BeamStopReason.DepthLimit)
+                budget.MarkStop(BeamStopReason.FrontierExhausted);
+            return new BeamSearchResult(
+                null, budget.StopReason,
+                budget.ParentsExpanded, budget.SuccessorsEvaluated, budget.CompleteCandidatesFound);
         }
 
-        if (bestRaw is null) return null;
+        // The search produced at least one complete plan; only then do we
+        // describe the search as "Completed" from the user's perspective.
+        if (budget.StopReason is BeamStopReason.DepthLimit) budget.MarkStop(BeamStopReason.Completed);
+
         var optimizeStart = Stopwatch.GetTimestamp();
-        var result = VerifyAndImprove(request, bestRaw, cancellationToken);
+        var final = VerifyAndImprove(request, bestRaw, budget, cancellationToken);
         if (RouteSearchProfiler.Current is { } fo) fo.FinalOptimizeTicks += Stopwatch.GetTimestamp() - optimizeStart;
-        return result;
+        return new BeamSearchResult(
+            final, budget.StopReason,
+            budget.ParentsExpanded, budget.SuccessorsEvaluated, budget.CompleteCandidatesFound);
     }
 
-    private static bool Expired(long deadlineTimestamp) =>
-        deadlineTimestamp != 0 && Stopwatch.GetTimestamp() >= deadlineTimestamp;
-
-    private static IOrderedEnumerable<RouteSimulationState> RankCandidates(
-        IEnumerable<RouteSimulationState> candidates) =>
+    private static IEnumerable<RouteSimulationState> RankCandidates(
+        IEnumerable<RouteSimulationState> candidates, int beamWidth) =>
         candidates
             .OrderByDescending(state => BitOperations.PopCount(state.CompletedMask))
             .ThenBy(state => state.FinishedRoutes.Count)
             .ThenByDescending(state => state.CurrentRouteSteps.OfType<BarterStep>().Count())
             .ThenBy(state => state.TotalDistance)
             .ThenBy(state => state.PickupStopCount)
-            .ThenBy(state => StableKey(state), StringComparer.Ordinal);
+            .ThenBy(state => StableKey(state), StringComparer.Ordinal)
+            .Take(beamWidth);
 
     private static Dictionary<string, RouteSimulationState> TrimCandidates(
         Dictionary<string, RouteSimulationState> candidates,
         int retainCount) {
         if (RouteSearchProfiler.Current is { } p) p.TrimCandidatesCalls++;
-        return RankCandidates(candidates.Values)
-            .Take(retainCount)
+        return RankCandidates(candidates.Values, retainCount)
             .ToDictionary(SearchKey, state => state, StringComparer.Ordinal);
     }
 
     private static RouteIncumbent? VerifyAndImprove(
         AutomaticRoutePlanningRequest request,
         RouteSimulationState state,
+        RouteSearchBudget budget,
         CancellationToken cancellationToken) {
         if (RouteSearchProfiler.Current is { } p) p.VerifyAndImproveCalls++;
-        state = IntraRouteOrderOptimizer.Improve(request, state, cancellationToken);
-        state = RoutePairRebuilder.Improve(request, state, cancellationToken);
-        state = IntraRouteOrderOptimizer.Improve(request, state, cancellationToken);
+        // The local optimizers consume the same shared budget so a Deep run
+        // cannot keep re-acquiring fresh quotas inside the finalization phase.
+        // When the budget is exhausted we still call Verify so the planner
+        // always returns a verified incumbent (correctness over last-mile
+        // distance improvement).
+        state = IntraRouteOrderOptimizer.Improve(request, state, budget, cancellationToken);
+        if (budget.LocalEvaluations < budget.MaxLocalEvaluations)
+            state = RoutePairRebuilder.Improve(request, state, budget, cancellationToken);
+        if (budget.LocalEvaluations < budget.MaxLocalEvaluations)
+            state = IntraRouteOrderOptimizer.Improve(request, state, budget, cancellationToken);
         var plan = RoutePlanFactory.FromState(
             request, state, RoutePlanStatus.BestKnownWithinLimit, []);
         var verification = RoutePlanVerifier.Verify(request, plan);
@@ -191,4 +264,11 @@ public static class AutomaticRouteBeamSearch {
         AutomaticRoutePlanningRequest request,
         RouteSimulationState state) => RoutePlanFactory.FromState(
             request, state, RoutePlanStatus.BestKnownWithinLimit, []).Objective!.Value;
+}
+
+internal static class RouteSearchBudgetExtensions {
+    public static int BeamWidthFor(this RouteSearchBudget budget, int taskCount) =>
+        taskCount >= 20 ? 128
+        : taskCount >= 17 ? 256
+        : 384;
 }

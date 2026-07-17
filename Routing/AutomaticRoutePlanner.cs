@@ -5,15 +5,31 @@ using System.Text;
 namespace iBarter.Routing;
 
 public sealed class AutomaticRoutePlanner {
+    // Legacy entry: defaults to Balanced so the call site is unchanged.
     public RoutePlan Plan(
         AutomaticRoutePlanningRequest request,
+        CancellationToken cancellationToken = default)
+        => Plan(request, RouteOptimizationProfile.For(RouteOptimizationMode.Balanced), cancellationToken);
+
+    public RoutePlan Plan(
+        AutomaticRoutePlanningRequest request,
+        RouteOptimizationProfile profile,
         CancellationToken cancellationToken = default) {
         string fingerprint = RoutePlanFingerprint.Compute(request);
-        long planStart = Stopwatch.GetTimestamp();
+        var budget = new RouteSearchBudget(profile);
+        long planStart = budget.PlanStartTimestamp;
+        if (RouteSearchProfiler.Current is { } sp) {
+            sp.OptimizationMode = profile.Mode.ToString();
+            sp.TotalTargetMs = profile.TotalTarget.TotalMilliseconds;
+            sp.SearchDeadlineMs = (budget.SearchDeadlineTimestamp - planStart) * 1000L / Stopwatch.Frequency;
+        }
         RoutePlan? incumbent = null;
+        long firstVerifiedIncumbentTimestamp = 0;
         try {
             cancellationToken.ThrowIfCancellationRequested();
+            var preflightStart = Stopwatch.GetTimestamp();
             var preflight = AutomaticRoutePreflight.Validate(request);
+            if (RouteSearchProfiler.Current is { } pp) pp.PreflightTicks += Stopwatch.GetTimestamp() - preflightStart;
             if (!preflight.IsValid) {
                 bool provenInfeasible = preflight.Diagnostics.Any(x =>
                     x.Code is "unreachable-input" or "task-overweight");
@@ -25,39 +41,82 @@ public sealed class AutomaticRoutePlanner {
                 return new RoutePlan(RoutePlanStatus.Optimal, [],
                     new RoutePlanObjective(0, 0, 0, request.ExtraLT, ""), [], fingerprint);
 
+            // 1) Heuristic: get a complete, verified incumbent as early as possible.
             var heuristicStart = Stopwatch.GetTimestamp();
             var heuristicIncumbent = AutomaticRouteHeuristic.TryBuildIncumbent(
                 request, preflight, cancellationToken)?.Plan;
             if (RouteSearchProfiler.Current is { } hp) hp.HeuristicTicks += Stopwatch.GetTimestamp() - heuristicStart;
             if (heuristicIncumbent is not null) {
                 var checkedIncumbent = RoutePlanVerifier.Verify(request, heuristicIncumbent);
-                incumbent = checkedIncumbent.Success ? checkedIncumbent.VerifiedPlan : null;
+                if (checkedIncumbent.Success) {
+                    incumbent = checkedIncumbent.VerifiedPlan;
+                    firstVerifiedIncumbentTimestamp = budget.Clock();
+                    if (RouteSearchProfiler.Current is { } f) {
+                        f.FirstVerifiedIncumbentMs = (firstVerifiedIncumbentTimestamp - planStart) * 1000L / Stopwatch.Frequency;
+                    }
+                }
             }
 
             if (request.Tasks.Count > AutomaticRouteSearchPolicy.ExactTaskLimit) {
+                // 2) Anytime beam: search in remaining time-budget, keep best complete.
                 var beamStart = Stopwatch.GetTimestamp();
-                var beamPlan = AutomaticRouteBeamSearch.TryBuildIncumbent(
-                    request, preflight, cancellationToken,
-                    AutomaticRouteSearchPolicy.BeamStateBudget(request.Tasks.Count, request.Limits.MaxExpandedStates),
-                    planStart + AutomaticRouteSearchPolicy.HardCapTicks())?.Plan;
-                if (RouteSearchProfiler.Current is { } bp) bp.BeamTicks += Stopwatch.GetTimestamp() - beamStart;
-                if (beamPlan is not null) {
-                    var checkedBeam = RoutePlanVerifier.Verify(request, beamPlan);
+                var beamResult = AutomaticRouteBeamSearch.TryBuildIncumbent(
+                    request, preflight, budget, cancellationToken);
+                if (RouteSearchProfiler.Current is { } bp) {
+                    bp.BeamTicks += Stopwatch.GetTimestamp() - beamStart;
+                    bp.BeamParentsExpanded = budget.ParentsExpanded;
+                    bp.SuccessorsEvaluated = budget.SuccessorsEvaluated;
+                    bp.CompleteCandidatesFound = budget.CompleteCandidatesFound;
+                    bp.LocalEvaluations = budget.LocalEvaluations;
+                    bp.StopReason = beamResult.StopReason.ToString();
+                }
+                if (beamResult.Incumbent is not null) {
+                    // Re-verify on the planner side too — this is the only verified
+                    // incumbent that may be published.  If verification fails we
+                    // keep the previously verified heuristic plan, never adopting
+                    // an unverified improvement.
+                    var checkedBeam = RoutePlanVerifier.Verify(request, beamResult.Incumbent.Plan);
                     if (checkedBeam.Success && checkedBeam.VerifiedPlan?.Objective is { } beamObjective
                         && (incumbent?.Objective is null
-                            || beamObjective.CompareTo(incumbent.Objective.Value) < 0))
+                            || beamObjective.CompareTo(incumbent.Objective.Value) < 0)) {
                         incumbent = checkedBeam.VerifiedPlan;
+                        if (RouteSearchProfiler.Current is { } bm) {
+                            bm.BestImprovementMs = (budget.Clock() - planStart) * 1000L / Stopwatch.Frequency;
+                        }
+                    }
                 }
-                var diagnostic = new RouteDiagnostic(
-                    "exact-search-skipped",
-                    Detail: $"{request.Tasks.Count}>{AutomaticRouteSearchPolicy.ExactTaskLimit}");
-                if (incumbent is null)
+
+                // 3) Final verify the published incumbent.
+                var finalVerifyStart = Stopwatch.GetTimestamp();
+                RoutePlan? finalPlan = null;
+                if (incumbent is not null) {
+                    var verification = RoutePlanVerifier.Verify(request, incumbent);
+                    if (RouteSearchProfiler.Current is { } fv) fv.FinalVerifyTicks += Stopwatch.GetTimestamp() - finalVerifyStart;
+                    finalPlan = verification.Success ? verification.VerifiedPlan : null;
+                } else {
+                    if (RouteSearchProfiler.Current is { } fv) fv.FinalVerifyTicks += Stopwatch.GetTimestamp() - finalVerifyStart;
+                }
+
+                if (RouteSearchProfiler.Current is { } fp) {
+                    fp.FinalElapsedMs = (budget.Clock() - planStart) * 1000L / Stopwatch.Frequency;
+                    if (finalPlan is not null) {
+                        fp.FinalRoutes = finalPlan.Routes.Count;
+                        fp.FinalDistance = finalPlan.Objective?.TotalDistance ?? 0;
+                        fp.FinalVerified = true;
+                    }
+                }
+
+                if (finalPlan is null)
                     return new RoutePlan(RoutePlanStatus.NoFeasibleSolutionWithinLimit,
-                        [], null, [diagnostic], fingerprint);
+                        [], null, [AnytimeDiagnostic(profile.Mode, beamResult.StopReason, request.Tasks.Count)], fingerprint);
                 return new RoutePlan(RoutePlanStatus.BestKnownWithinLimit,
-                    incumbent.Routes, incumbent.Objective, [diagnostic], fingerprint);
+                    finalPlan.Routes, finalPlan.Objective,
+                    [AnytimeDiagnostic(profile.Mode, beamResult.StopReason, request.Tasks.Count)], fingerprint);
             }
 
+            // Exact search path for small plans (≤ ExactTaskLimit). This path
+            // remains budget-aware so a Quick mode can also impose a wall-clock
+            // ceiling, but it is the only path that can return Optimal.
             var initial = RouteSimulationState.CreateInitial(request);
             var queue = new PriorityQueue<RouteSimulationState, SearchPriority>();
             long sequence = 0;
@@ -71,7 +130,11 @@ public sealed class AutomaticRoutePlanner {
 
             while (queue.Count > 0) {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (expanded >= request.Limits.MaxExpandedStates) {
+                // Honor the tighter of the profile's parent budget and the
+                // request's MaxExpandedStates (legacy test contracts rely on
+                // the request's value when it is the smaller one).
+                int parentCap = Math.Min(profile.MaxBeamParents, request.Limits.MaxExpandedStates);
+                if (expanded >= parentCap || budget.SearchTimeExpired) {
                     limited = true;
                     break;
                 }
@@ -113,6 +176,7 @@ public sealed class AutomaticRoutePlanner {
             return WithStatus(incumbent, RoutePlanStatus.Optimal);
         }
         catch (OperationCanceledException) {
+            if (RouteSearchProfiler.Current is { } p) p.StopReason = BeamStopReason.Cancelled.ToString();
             return new RoutePlan(RoutePlanStatus.Cancelled, [], null, [], fingerprint);
         }
         catch (OutOfMemoryException) {
@@ -133,6 +197,15 @@ public sealed class AutomaticRoutePlanner {
                     [diagnostic],
                     fingerprint);
         }
+    }
+
+    private static RouteDiagnostic AnytimeDiagnostic(
+        RouteOptimizationMode mode, BeamStopReason reason, int taskCount) {
+        // For large-task plans the historical "exact-search-skipped" code is
+        // preserved as the diagnostic code so existing UI log messages keep
+        // working; the structured mode + reason is recorded in the detail.
+        string code = "exact-search-skipped";
+        return new RouteDiagnostic(code, Detail: $"mode={mode} reason={reason} tasks={taskCount}");
     }
 
     private static IEnumerable<RouteSimulationState> Expand(
@@ -251,30 +324,6 @@ internal static class AutomaticRouteSearchPolicy {
     // publishes the fully replayed heuristic incumbent and reports its status
     // truthfully as BestKnownWithinLimit instead of freezing before UI publish.
     public const int ExactTaskLimit = 12;
-
-    // Beam expansion cost rises sharply once exact subset search is skipped.
-    // Medium plans retain enough states for inventory-first ordering, while
-    // full 20+ task resets use a tighter cap so UI publication stays prompt.
-    private const int MediumTaskBeamStateLimit = 5_000;
-    private const int LargeTaskBeamThreshold = 20;
-    private const int LargeTaskBeamStateLimit = 2_000;
-
-    // Wall-clock safety budget for beam-mode (task count > ExactTaskLimit) plans.
-    // The heuristic incumbent is published first (typically well under 500ms), so
-    // even if the beam is cut here the planner still returns a verified plan. The
-    // hard cap guarantees the UI is never blocked the way the field 184s run was.
-    public const int LargePlanTimeTargetMs = 3_000;
-    public const int LargePlanHardCapMs = 5_000;
-
-    public static long HardCapTicks() =>
-        (long)(LargePlanHardCapMs / 1000.0 * Stopwatch.Frequency);
-
-    public static int BeamStateBudget(int taskCount, int requestedBudget) =>
-        taskCount >= LargeTaskBeamThreshold
-            ? Math.Min(requestedBudget, LargeTaskBeamStateLimit)
-            : taskCount > ExactTaskLimit
-                ? Math.Min(requestedBudget, MediumTaskBeamStateLimit)
-                : requestedBudget;
 
     public static bool HasExecutableBarter(
         AutomaticRoutePlanningRequest request,

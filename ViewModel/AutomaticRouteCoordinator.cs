@@ -18,6 +18,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private long requestId;
     private string? activeFingerprint;
     private CargoMode mode = CargoMode.Manual;
+    private RouteOptimizationMode selectedOptimizationMode = RouteOptimizationMode.Balanced;
     private RoutePlan? currentPlan;
     private int? selectedRouteNumber;
     private bool showAllRoutes;
@@ -43,6 +44,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     }
 
     public CargoMode Mode => mode;
+    public RouteOptimizationMode SelectedOptimizationMode => selectedOptimizationMode;
     public RoutePlan? CurrentPlan => currentPlan;
     public int? SelectedRouteNumber => selectedRouteNumber;
     public bool ShowAllRoutes => showAllRoutes;
@@ -56,6 +58,12 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     public event EventHandler? RouteDisplayChanged;
 
     public async Task<RoutePlan> CalculateAsync(AutomaticRoutePlanningRequest request) {
+        return await CalculateAsync(request, RouteOptimizationProfile.For(selectedOptimizationMode));
+    }
+
+    public async Task<RoutePlan> CalculateAsync(
+        AutomaticRoutePlanningRequest request,
+        RouteOptimizationProfile profile) {
         CancellationTokenSource ownCancellation;
         long ownRequestId;
         string fingerprint = RoutePlanFingerprint.Compute(request);
@@ -68,7 +76,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         }
 
         RoutePlan plan = await Task.Run(
-            () => planner.Plan(request, ownCancellation.Token), ownCancellation.Token)
+            () => planner.Plan(request, profile, ownCancellation.Token), ownCancellation.Token)
             .ContinueWith(task => task.IsCanceled
                     ? new RoutePlan(RoutePlanStatus.Cancelled, [], null, [], fingerprint)
                     : task.GetAwaiter().GetResult(),
@@ -92,6 +100,12 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             }
         }
         return plan;
+    }
+
+    public void SetOptimizationMode(RouteOptimizationMode mode) {
+        if (mode == selectedOptimizationMode) return;
+        selectedOptimizationMode = mode;
+        Invalidate("optimization-mode");
     }
 
     public async Task<RoutePlan> GenerateAsync(AutomaticRoutePlanningRequest request) {
