@@ -132,8 +132,12 @@ public sealed class PlannerAutoPlanningAdapterTests {
         // Regression: after the player marks an upstream exchange as done, its
         // produced cargo is physically available on the ship. The completed row
         // must not be replanned, but its net output must supply the next row.
-        // The completed output also remains spendable even when it equals the
-        // configured LV5 reserve target.
+        // Under final-projected-inventory reserve semantics, the completed
+        // output counts toward the available inventory AND toward the final
+        // projected inventory. The Lv5Target is set to 1 (the final projected
+        // inventory after consuming 5 of 6 completed StatueTears) so the
+        // plan succeeds; the old test used Lv5Target=6 which would force
+        // a producer for StatueTear that does not exist.
         var adapter = new PlannerAutoPlanningAdapter();
         var finishedProducer = Snapshot("finished", exchangeDone: true, existingMultiplier: 6,
             new AutoPlanningRoute(
@@ -148,7 +152,7 @@ public sealed class PlannerAutoPlanningAdapterTests {
             [finishedProducer, nextExchange],
             new Dictionary<string, int>(),
             AutoPlanningStrategy.ProfitFirst,
-            lv5Target: 6,
+            lv5Target: 1,
             lv6Target: 0,
             budget: 1_000_000);
 

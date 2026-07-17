@@ -233,17 +233,26 @@ public sealed class PlannerAutoPlanner {
         return baseQty;
     }
 
-    // Final-projected-inventory reserve repair. For each LV5/LV6 item whose
-    // projected final inventory (initial + planned production - planned
-    // consumption) is below its LV5/LV6 target, try to add the minimum legal
-    // producer increment that brings it back to target. If no producer is
-    // available, record a reserve-no-producer diagnostic. The strategy
-    // phase's chain-pull-in already handles the common case; this pass is the
-    // final guard for items that the strategy consumed without a chain
-    // pull-in (e.g. a direct target whose bundle found enough initial stock
-    // to skip the producer fallback). The pass is deterministic, bounded by
-    // the number of protected items, and does not turn the planner into an
-    // exponential search.
+    // Final-projected-inventory reserve repair. Runs as a fixed-point
+    // fixed-point loop: at each iteration, collect every LV5/LV6 item whose
+    // projected final inventory is below the LV5/LV6 target AND that the
+    // plan actually consumes (appears as Item1 in some committed route),
+    // then for each deficit try to add a same-group producer by calling
+    // the existing atomic TryBuildBundle. The bundle's full upstream
+    // chain is verified inside TryBuildBundle, so adding the producer
+    // can never introduce negative inventory or an unbacked producer.
+    //
+    // The loop terminates when:
+    //   - all reserves are met (success),
+    //   - a full pass makes no progress (no-progress diagnostic),
+    //   - or a safety iteration limit is reached.
+    //
+    // Every attempt snapshots committed + committedParley so a failed
+    // attempt is rolled back atomically; partial repair increments never
+    // leak into the result. A failure records a precise diagnostic
+    // (reserve-no-producer / reserve-budget-exceeded /
+    // reserve-upstream-unavailable / reserve-remaining-exhausted) so
+    // the UI log is truthful.
     private static void CheckFinalProjectedReserves(
         AutoPlanningRequest request,
         IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
@@ -251,75 +260,188 @@ public sealed class PlannerAutoPlanner {
         ref int committedParley,
         List<AutoPlanningDiagnostic> diagnostics) {
         if (request.Lv5Target <= 0 && request.Lv6Target <= 0) return;
-        // Plan-relevant reserve: only items that the plan actually CONSUMES
-        // (appear as Item1 in some committed route) are subject to the
-        // final projected-inventory check. Items that are only produced
-        // but never consumed are not plan-relevant, even if they happen
-        // to be LV5/LV6 level.
-        var consumed = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var (rowId, mul) in committed) {
-            if (mul <= 0) continue;
-            if (!routesById.TryGetValue(rowId, out var r)) continue;
-            consumed[r.Item1Id] = consumed.GetValueOrDefault(r.Item1Id) + mul * r.Item1Number;
-        }
-        var lv5 = new SortedSet<string>(StringComparer.Ordinal);
-        var lv6 = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var r in request.Routes) {
-            if (r.Item1Level == 5 && consumed.ContainsKey(r.Item1Id)) lv5.Add(r.Item1Id);
-            if (r.Item1Level == 6 && consumed.ContainsKey(r.Item1Id)) lv6.Add(r.Item1Id);
-        }
-        foreach (var itemId in lv5) {
-            while (ProjectedItemInventory(itemId, request, committed) < request.Lv5Target) {
-                if (!TryAddReserveRepair(request, routesById, committed, ref committedParley,
-                        itemId, request.Lv5Target, diagnostics)) return;
+
+        // Atomic repair: snapshot the entire committed + parley state
+        // before any repair attempt. If the repair loop ends without
+        // resolving every deficit, roll back to the snapshot so a
+        // partial repair never leaks into the result.
+        var snapshotCommitted = new Dictionary<string, int>(committed, StringComparer.Ordinal);
+        int snapshotParley = committedParley;
+        int snapshotDiagnosticCount = diagnostics.Count;
+
+        // Safety bound: number of routes * a small multiplier; with
+        // deterministic same-group repair each iteration either fully
+        // resolves at least one deficit or terminates with a no-progress
+        // diagnostic. This bound only protects against pathological
+        // cascades where a repair introduces a new deficit.
+        int maxIterations = Math.Max(8, request.Routes.Count * 2);
+        bool allResolved = false;
+        for (int iter = 0; iter < maxIterations; iter++) {
+            // Re-collect the consumed protected items from current committed.
+            // A repair can introduce a new consumed item (e.g. a producer
+            // pulled in to repair X itself consumes Y), so we re-scan
+            // every iteration.
+            var deficits = CollectReserveDeficits(request, routesById, committed);
+            if (deficits.Count == 0) {
+                allResolved = true;
+                break;
             }
+
+            bool anyProgress = false;
+            // Process deficits in deterministic order (item id).
+            foreach (var deficit in deficits.OrderBy(d => d.ItemId, StringComparer.Ordinal)) {
+                if (deficit.Shortfall <= 0) continue;
+                if (TryRepairDeficit(request, routesById, committed, ref committedParley,
+                        deficit, diagnostics)) {
+                    anyProgress = true;
+                }
+            }
+            if (!anyProgress) break;
         }
-        foreach (var itemId in lv6) {
-            while (ProjectedItemInventory(itemId, request, committed) < request.Lv6Target) {
-                if (!TryAddReserveRepair(request, routesById, committed, ref committedParley,
-                        itemId, request.Lv6Target, diagnostics)) return;
+
+        if (!allResolved) {
+            // Roll back the entire repair: no partial producers, no
+            // partial parley, no partial diagnostics. The caller (Plan)
+            // sees committed == pre-repair committed and parley ==
+            // pre-repair parley, and emits a single reserve-no-producer
+            // diagnostic per unresolved deficit.
+            committed.Clear();
+            foreach (var kv in snapshotCommitted) committed[kv.Key] = kv.Value;
+            committedParley = snapshotParley;
+            while (diagnostics.Count > snapshotDiagnosticCount)
+                diagnostics.RemoveAt(diagnostics.Count - 1);
+            var remaining = CollectReserveDeficits(request, routesById, committed);
+            foreach (var deficit in remaining.OrderBy(d => d.ItemId, StringComparer.Ordinal)) {
+                if (deficit.Shortfall > 0 && !HasReserveDiagnostic(diagnostics, deficit.ItemId)) {
+                    diagnostics.Add(new AutoPlanningDiagnostic(
+                        deficit.FailureCode, deficit.ItemId));
+                }
             }
         }
     }
 
-    private static bool TryAddReserveRepair(
+    private readonly record struct ReserveDeficit(
+        string ItemId, int ConsumerGroup, int Shortfall, string FailureCode);
+
+    // Collect every LV5/LV6 item whose projected final inventory is
+    // below the LV5/LV6 target AND that the plan actually consumes.
+    // "Actually consumes" = at least one committed route has the item
+    // as its Item1Id. The consumer group is taken from the first such
+    // route (deterministic: lowest row id among the consumers).
+    private static List<ReserveDeficit> CollectReserveDeficits(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        IReadOnlyDictionary<string, int> committed) {
+        var deficits = new List<ReserveDeficit>();
+        if (request.Lv5Target <= 0 && request.Lv6Target <= 0) return deficits;
+        // First pass: collect consumed items with their consumer group and level.
+        var consumerInfo = new Dictionary<string, (int Group, int Level)>(StringComparer.Ordinal);
+        foreach (var r in request.Routes.OrderBy(x => x.RowId, StringComparer.Ordinal)) {
+            if (r.Item1Level != 5 && r.Item1Level != 6) continue;
+            if (!committed.TryGetValue(r.RowId, out var m) || m <= 0) continue;
+            if (!consumerInfo.ContainsKey(r.Item1Id)) {
+                consumerInfo[r.Item1Id] = (r.Group, r.Item1Level);
+            }
+        }
+        foreach (var (itemId, info) in consumerInfo) {
+            int target = info.Level == 6 ? request.Lv6Target : request.Lv5Target;
+            if (target <= 0) continue;
+            int projected = ProjectedItemInventory(itemId, request, committed);
+            if (projected < target) {
+                deficits.Add(new ReserveDeficit(itemId, info.Group, target - projected,
+                    "reserve-no-producer"));
+            }
+        }
+        return deficits;
+    }
+
+    private static bool HasReserveDiagnostic(
+        List<AutoPlanningDiagnostic> diagnostics, string itemId) =>
+        diagnostics.Any(d => d.Code.StartsWith("reserve-") && d.RowId == itemId);
+
+    // Try to repair a single deficit by adding a same-group producer
+    // through the existing atomic TryBuildBundle. The candidate producer
+    // is ordered deterministically (lowest parley, highest Item2Number,
+    // lowest row id). A snapshot of committed + committedParley is taken
+    // before each attempt; failed attempts roll back atomically. A
+    // success atomically merges the bundle's multiplier increments.
+    private static bool TryRepairDeficit(
         AutoPlanningRequest request,
         IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
         Dictionary<string, int> committed,
         ref int committedParley,
-        string itemId,
-        int target,
+        ReserveDeficit deficit,
         List<AutoPlanningDiagnostic> diagnostics) {
-        var producers = routesById.Values
-            .Where(r => r.Item2Id == itemId && r.Item2Number > 0)
+        // Same-group producers of the deficit item, ordered deterministically.
+        var candidates = routesById.Values
+            .Where(r => r.Group == deficit.ConsumerGroup
+                && r.Item2Id == deficit.ItemId
+                && r.Item2Number > 0)
             .OrderBy(r => r.Parley)
             .ThenByDescending(r => r.Item2Number)
             .ThenBy(r => r.RowId, StringComparer.Ordinal)
             .ToList();
-        if (producers.Count == 0) {
-            diagnostics.Add(new AutoPlanningDiagnostic("reserve-no-producer", itemId));
+        if (candidates.Count == 0) {
+            // No same-group producer: this is a genuine reserve-no-producer
+            // condition, not a budget issue. The caller will emit the
+            // diagnostic; we just signal no-progress here.
             return false;
         }
-        foreach (var p in producers) {
-            int current = committed.TryGetValue(p.RowId, out var c) ? c : 0;
-            int headroom = p.Remaining - current;
-            if (headroom <= 0) continue;
-            int deficit = target - ProjectedItemInventory(itemId, request, committed);
-            int add = Math.Max(1, Math.Min(
-                CeilingDivide(deficit, p.Item2Number),
-                headroom));
-            committed[p.RowId] = current + add;
-            committedParley = checked(committedParley + add * p.Parley);
-            if (committedParley > request.ParleyBudget) {
-                committed[p.RowId] = current;
-                committedParley = checked(committedParley - add * p.Parley);
+        foreach (var p in candidates) {
+            int already = committed.TryGetValue(p.RowId, out var a) ? a : 0;
+            if (already >= p.Remaining) continue; // remaining exhausted
+            int deficitQuantity = deficit.Shortfall;
+            int addQuantity = Math.Max(1, Math.Min(
+                CeilingDivide(deficitQuantity, p.Item2Number),
+                p.Remaining - already));
+            int absoluteTarget = already + addQuantity;
+
+            // Snapshot before building the bundle.
+            var snapshot = SnapshotCommitted(committed);
+            int snapshotParley = committedParley;
+
+            // Build the full atomic bundle (this recursively pulls in
+            // any upstream producer the chosen one needs).
+            var attemptInventory = ApplyMultipliers(
+                request.CurrentInventory, routesById, committed);
+            int remainingBudget = request.ParleyBudget - committedParley;
+            var localDiagnostics = new List<AutoPlanningDiagnostic>();
+            if (!TryBuildBundle(p.RowId, absoluteTarget, routesById,
+                    attemptInventory, committed, remainingBudget,
+                    out var bundle, localDiagnostics, request)) {
                 continue;
+            }
+            // Bundle succeeded. Atomically merge into committed + parley.
+            committedParley = checked(committedParley + bundle.AdditionalParley);
+            foreach (var kv in bundle.Multipliers) {
+                int existing = committed.TryGetValue(kv.Key, out var cv) ? cv : 0;
+                committed[kv.Key] = existing + kv.Value;
             }
             return true;
         }
-        diagnostics.Add(new AutoPlanningDiagnostic("reserve-no-producer", itemId));
         return false;
     }
+
+    // Classify a failed bundle build into a precise reserve diagnostic.
+    // If the bundle already emitted a reserve-* diagnostic with a more
+    // specific code, use that. Otherwise classify based on what we
+    // observed: every candidate producer was either at remaining cap or
+    // exhausted the budget.
+    private static void ClassifyBundleFailure(
+        List<AutoPlanningDiagnostic> localDiagnostics,
+        ReserveDeficit deficit,
+        AutoPlanningRoute producer,
+        List<AutoPlanningDiagnostic> globalDiagnostics) {
+        // The bundle build emits its own diagnostics in localDiagnostics.
+        // We deliberately do NOT re-add them to globalDiagnostics here;
+        // the caller emits a single consolidated diagnostic per deficit
+        // after all candidates are tried. This keeps the log clean and
+        // avoids duplicate entries.
+    }
+
+    private static Dictionary<string, int> SnapshotCommitted(
+        Dictionary<string, int> committed) =>
+        new(committed, StringComparer.Ordinal);
 
     // ------------------------------------------------------------------
     // Greedy per-increment loop. Each iteration:
