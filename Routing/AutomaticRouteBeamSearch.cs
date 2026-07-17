@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Numerics;
 using System.Text;
 
@@ -17,34 +18,47 @@ public static class AutomaticRouteBeamSearch {
         AutomaticRoutePlanningRequest request,
         RoutePreflightResult preflight,
         CancellationToken cancellationToken,
-        int? maxExpandedStates = null) {
+        int? maxExpandedStates = null,
+        long deadlineTimestamp = 0) {
         if (!preflight.IsValid || request.Tasks.Count == 0) return null;
         ulong fullMask = request.Tasks.Count == 64 ? ulong.MaxValue : (1UL << request.Tasks.Count) - 1;
         var frontier = new[] { RouteSimulationState.CreateInitial(request) };
         int expanded = 0;
+        int budget = maxExpandedStates ?? request.Limits.MaxExpandedStates;
         int maxDepth = Math.Max(64, request.Tasks.Count * 4 + request.Warehouses.Count * request.Tasks.Count);
-        RouteIncumbent? bestComplete = null;
 
-        for (int depth = 0; depth < maxDepth && frontier.Length > 0; depth++) {
+        // The best fully-complete state seen so far, tracked cheaply via its raw
+        // objective (which already carries a deterministic stable tie-break). The
+        // expensive local optimization and full verification run exactly once on
+        // this final winner after the search loop, rather than on every
+        // completion at every beam depth.
+        RouteSimulationState? bestRaw = null;
+        RoutePlanObjective? bestRawObjective = null;
+        bool stop = false;
+
+        for (int depth = 0; depth < maxDepth && frontier.Length > 0 && !stop; depth++) {
             cancellationToken.ThrowIfCancellationRequested();
-            var complete = frontier
-                .Where(state => state.CompletedMask == fullMask && state.CurrentRouteSteps.Count == 0)
-                .OrderBy(state => Objective(request, state))
-                .ThenBy(StableKey, StringComparer.Ordinal)
-                .FirstOrDefault();
-            if (complete is not null) {
-                var candidate = VerifyAndImprove(request, complete, cancellationToken);
-                if (candidate?.Plan.Objective is { } candidateObjective
-                    && (bestComplete?.Plan.Objective is null
-                        || candidateObjective.CompareTo(bestComplete.Plan.Objective.Value) < 0))
-                    bestComplete = candidate;
-            }
+            if (Expired(deadlineTimestamp)) break;
 
+            var completeStart = Stopwatch.GetTimestamp();
+            foreach (var state in frontier) {
+                if (state.CompletedMask != fullMask || state.CurrentRouteSteps.Count != 0) continue;
+                var objective = Objective(request, state);
+                if (bestRawObjective is null || objective.CompareTo(bestRawObjective.Value) < 0) {
+                    bestRaw = state;
+                    bestRawObjective = objective;
+                }
+            }
+            if (RouteSearchProfiler.Current is { } tc) tc.BeamCompleteTicks += Stopwatch.GetTimestamp() - completeStart;
+
+            var expandStart = Stopwatch.GetTimestamp();
             var candidates = new Dictionary<string, RouteSimulationState>(StringComparer.Ordinal);
             foreach (var state in frontier) {
                 if (state.CompletedMask == fullMask && state.CurrentRouteSteps.Count == 0) continue;
-                if (++expanded > (maxExpandedStates ?? request.Limits.MaxExpandedStates)) return bestComplete;
+                if (++expanded > budget || Expired(deadlineTimestamp)) { stop = true; break; }
+                if (RouteSearchProfiler.Current is { } pp) pp.BeamParentsExpanded++;
                 foreach (var successor in Expand(request, state, fullMask)) {
+                    if (RouteSearchProfiler.Current is { } sp) sp.SuccessorsGenerated++;
                     string key = SearchKey(successor);
                     if (!candidates.TryGetValue(key, out var existing) || IsBetter(successor, existing))
                         candidates[key] = successor;
@@ -52,13 +66,26 @@ public static class AutomaticRouteBeamSearch {
                         candidates = TrimCandidates(candidates, CandidateRetainLimit);
                 }
             }
+            if (RouteSearchProfiler.Current is { } cp) cp.CandidatesDeduped += candidates.Count;
+            if (RouteSearchProfiler.Current is { } te) te.BeamExpandTicks += Stopwatch.GetTimestamp() - expandStart;
+            if (stop) break;
 
+            var rankStart = Stopwatch.GetTimestamp();
             frontier = RankCandidates(candidates.Values)
                 .Take(BeamWidth)
                 .ToArray();
+            if (RouteSearchProfiler.Current is { } tr) tr.BeamRankTicks += Stopwatch.GetTimestamp() - rankStart;
         }
-        return bestComplete;
+
+        if (bestRaw is null) return null;
+        var optimizeStart = Stopwatch.GetTimestamp();
+        var result = VerifyAndImprove(request, bestRaw, cancellationToken);
+        if (RouteSearchProfiler.Current is { } fo) fo.FinalOptimizeTicks += Stopwatch.GetTimestamp() - optimizeStart;
+        return result;
     }
+
+    private static bool Expired(long deadlineTimestamp) =>
+        deadlineTimestamp != 0 && Stopwatch.GetTimestamp() >= deadlineTimestamp;
 
     private static IOrderedEnumerable<RouteSimulationState> RankCandidates(
         IEnumerable<RouteSimulationState> candidates) =>
@@ -72,15 +99,18 @@ public static class AutomaticRouteBeamSearch {
 
     private static Dictionary<string, RouteSimulationState> TrimCandidates(
         Dictionary<string, RouteSimulationState> candidates,
-        int retainCount) =>
-        RankCandidates(candidates.Values)
+        int retainCount) {
+        if (RouteSearchProfiler.Current is { } p) p.TrimCandidatesCalls++;
+        return RankCandidates(candidates.Values)
             .Take(retainCount)
             .ToDictionary(SearchKey, state => state, StringComparer.Ordinal);
+    }
 
     private static RouteIncumbent? VerifyAndImprove(
         AutomaticRoutePlanningRequest request,
         RouteSimulationState state,
         CancellationToken cancellationToken) {
+        if (RouteSearchProfiler.Current is { } p) p.VerifyAndImproveCalls++;
         state = IntraRouteOrderOptimizer.Improve(request, state, cancellationToken);
         state = RoutePairRebuilder.Improve(request, state, cancellationToken);
         state = IntraRouteOrderOptimizer.Improve(request, state, cancellationToken);
@@ -131,6 +161,7 @@ public static class AutomaticRouteBeamSearch {
     }
 
     private static string SearchKey(RouteSimulationState state) {
+        if (RouteSearchProfiler.Current is { } p) p.SearchKeyCalls++;
         var builder = new StringBuilder();
         builder.Append(state.CurrentRouteNumber).Append('|')
             .Append(state.CurrentIslandId).Append('|')

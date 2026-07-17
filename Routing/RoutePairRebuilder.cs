@@ -12,6 +12,7 @@ public static class RoutePairRebuilder {
         AutomaticRoutePlanningRequest request,
         RouteSimulationState initial,
         CancellationToken cancellationToken) {
+        if (RouteSearchProfiler.Current is { } p) p.RoutePairRebuildCalls++;
         if (request.Limits.MaxLocalMoves <= 0 || initial.FinishedRoutes.Count < 2) return initial;
 
         var current = initial;

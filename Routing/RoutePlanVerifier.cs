@@ -9,6 +9,7 @@ public static class RoutePlanVerifier {
     public static RouteVerificationResult Verify(
         AutomaticRoutePlanningRequest request,
         RoutePlan plan) {
+        if (RouteSearchProfiler.Current is { } p) p.VerifyCalls++;
         try {
             if (!StringComparer.Ordinal.Equals(plan.InputFingerprint, RoutePlanFingerprint.Compute(request)))
                 return Mismatch("fingerprint");
@@ -57,7 +58,9 @@ public static class RoutePlanVerifier {
         AutomaticRoutePlanningRequest request,
         RouteSimulationState state,
         string rowId) {
-        int index = request.Tasks.ToList().FindIndex(x => x.RowId == rowId);
+        int index = -1;
+        for (int i = 0; i < request.Tasks.Count; i++)
+            if (StringComparer.Ordinal.Equals(request.Tasks[i].RowId, rowId)) { index = i; break; }
         return index < 0
             ? new RouteTransitionResult(false, state, null,
                 new RouteDiagnostic("verification-mismatch", rowId, Detail: "row"))
@@ -112,13 +115,15 @@ internal static class RoutePlanFactory {
 
     public static string StableRouteKey(
         IEnumerable<PlannedRoute> routes,
-        IEnumerable<RouteStep> currentSteps) =>
-        string.Join("|", routes.SelectMany(x => x.Steps).Concat(currentSteps).Select(step => step switch {
+        IEnumerable<RouteStep> currentSteps) {
+        if (RouteSearchProfiler.Current is { } p) p.StableKeyCalls++;
+        return string.Join("|", routes.SelectMany(x => x.Steps).Concat(currentSteps).Select(step => step switch {
             WarehousePickupStep pickup => $"P:{pickup.WarehouseId}:{ItemsKey(pickup.Items)}",
             BarterStep barter => $"B:{barter.RowId}",
             WarehouseUnloadStep unload => $"U:{unload.WarehouseId}",
             _ => step.IslandId,
         }));
+    }
 
     private static string ItemsKey(IEnumerable<RouteItemQuantity> items) =>
         string.Join(",", items.Select(x => $"{x.ItemId}={x.Quantity}"));

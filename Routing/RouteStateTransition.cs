@@ -1,5 +1,6 @@
 namespace iBarter.Routing;
 
+using System.Diagnostics;
 using iBarter.Navigation;
 
 public sealed record RouteTransitionResult(
@@ -14,6 +15,7 @@ public static class RouteStateTransition {
         RouteSimulationState state,
         string warehouseId,
         IReadOnlyList<RouteItemQuantity> items) {
+        if (RouteSearchProfiler.Current is { } p) p.TryPickupCalls++;
         var warehouse = request.Warehouses.FirstOrDefault(x => x.WarehouseId == warehouseId);
         if (warehouse is null || !state.WarehouseInventory.TryGetValue(warehouseId, out var stock))
             return Failure(state, "unknown-warehouse", detail: warehouseId);
@@ -53,10 +55,36 @@ public static class RouteStateTransition {
             state.TotalDistance + distance, state.PickupStopCount + 1);
     }
 
+    /// <summary>
+    /// Allocation-free feasibility probe that mirrors <see cref="TryBarter"/>'s
+    /// success conditions without cloning inventory, computing distances, or
+    /// building steps. Cargo weight is updated incrementally from the state's
+    /// cached <see cref="RouteSimulationState.CargoLT"/> because item weight is
+    /// linear, so this yields the same overweight verdict as a full recompute.
+    /// </summary>
+    public static bool CanBarterFast(
+        AutomaticRoutePlanningRequest request,
+        RouteSimulationState state,
+        int taskIndex) {
+        if (RouteSearchProfiler.Current is { } p) p.CanBarterFastCalls++;
+        if (taskIndex < 0 || taskIndex >= request.Tasks.Count) return false;
+        if ((state.CompletedMask & (1UL << taskIndex)) != 0) return false;
+        var task = request.Tasks[taskIndex];
+        if (!state.OnBoard.TryGetValue(task.Item1Id, out int available) || available < task.InputQuantity)
+            return false;
+        int inputWeight = request.Items[task.Item1Id].UnitWeight;
+        int outputWeight = request.Items[task.Item2Id].UnitWeight;
+        long total = (long)request.ExtraLT + state.CargoLT
+            + (long)outputWeight * task.OutputQuantity
+            - (long)inputWeight * task.InputQuantity;
+        return total <= request.TotalLT;
+    }
+
     public static RouteTransitionResult TryBarter(
         AutomaticRoutePlanningRequest request,
         RouteSimulationState state,
         int taskIndex) {
+        if (RouteSearchProfiler.Current is { } p) p.TryBarterCalls++;
         if (taskIndex < 0 || taskIndex >= request.Tasks.Count)
             return Failure(state, "missing-input", detail: taskIndex.ToString());
         ulong bit = 1UL << taskIndex;
@@ -107,6 +135,7 @@ public static class RouteStateTransition {
         string warehouseId,
         IReadOnlyList<RouteItemQuantity> items,
         bool finishRoute) {
+        if (RouteSearchProfiler.Current is { } p) p.TryUnloadCalls++;
         var warehouse = request.Warehouses.FirstOrDefault(x => x.WarehouseId == warehouseId);
         if (warehouse is null || !state.WarehouseInventory.ContainsKey(warehouseId))
             return Failure(state, "unknown-warehouse", detail: warehouseId);
@@ -204,11 +233,13 @@ public static class RouteStateTransition {
     private static Dictionary<string, int> Clone(IReadOnlyDictionary<string, int> source) =>
         source.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
 
-    private static Dictionary<string, Dictionary<string, int>> CloneWarehouseInventory(RouteSimulationState state) =>
-        state.WarehouseInventory.ToDictionary(
+    private static Dictionary<string, Dictionary<string, int>> CloneWarehouseInventory(RouteSimulationState state) {
+        if (RouteSearchProfiler.Current is { } p) p.CloneWarehouseInventoryCalls++;
+        return state.WarehouseInventory.ToDictionary(
             x => x.Key,
             x => Clone(x.Value),
             StringComparer.Ordinal);
+    }
 
     private static IEnumerable<KeyValuePair<string, IReadOnlyDictionary<string, int>>> ToReadOnlyInventory(
         Dictionary<string, Dictionary<string, int>> source) =>
@@ -235,12 +266,17 @@ public static class RouteStateTransition {
         string destinationIslandId,
         RoutePoint destination) {
         if (string.IsNullOrEmpty(currentIslandId)) return 0;
+        var profiler = RouteSearchProfiler.Current;
+        if (profiler is not null) profiler.DistanceCalls++;
+        long start = profiler is null ? 0 : Stopwatch.GetTimestamp();
         RoutePoint origin = FindPoint(request, currentIslandId);
-        return ShippingCorridorGraph.Distance(
+        double result = ShippingCorridorGraph.Distance(
             currentIslandId,
             new NavigationPoint(origin.X, origin.Y),
             destinationIslandId,
             new NavigationPoint(destination.X, destination.Y));
+        if (profiler is not null) profiler.DistanceTicks += Stopwatch.GetTimestamp() - start;
+        return result;
     }
 
     private static RoutePoint FindPoint(AutomaticRoutePlanningRequest request, string islandId) {

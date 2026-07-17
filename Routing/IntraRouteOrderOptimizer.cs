@@ -10,6 +10,7 @@ public static class IntraRouteOrderOptimizer {
         AutomaticRoutePlanningRequest request,
         RouteSimulationState initial,
         CancellationToken cancellationToken) {
+        if (RouteSearchProfiler.Current is { } p) p.IntraRouteImproveCalls++;
         if (request.Limits.MaxLocalMoves <= 0 || initial.FinishedRoutes.Count == 0) return initial;
 
         var rebuilt = RouteSimulationState.CreateInitial(request);

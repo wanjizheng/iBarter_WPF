@@ -14,8 +14,31 @@ public static class DemandBundleGenerator {
         RouteSimulationState state,
         string warehouseId,
         ulong remainingMask) {
+        var profiler = RouteSearchProfiler.Current;
+        long start = profiler is null ? 0 : System.Diagnostics.Stopwatch.GetTimestamp();
+        try {
+            return GenerateCore(request, state, warehouseId, remainingMask);
+        }
+        finally {
+            if (profiler is not null) profiler.BundleGenTicks += System.Diagnostics.Stopwatch.GetTimestamp() - start;
+        }
+    }
+
+    private static IReadOnlyList<DemandBundle> GenerateCore(
+        AutomaticRoutePlanningRequest request,
+        RouteSimulationState state,
+        string warehouseId,
+        ulong remainingMask) {
         if (!state.WarehouseInventory.TryGetValue(warehouseId, out var warehouseStock)) return [];
-        if (BitOperations.PopCount(remainingMask) > AutomaticRouteSearchPolicy.ExactTaskLimit)
+        // The exact, non-dominated subset enumeration below is exponential in the
+        // number of still-open tasks. It is only affordable — and only needed —
+        // when the whole plan is small enough for exact search. Once the plan is
+        // in beam mode (tasks > ExactTaskLimit) we must use the bounded greedy
+        // generator at every node, otherwise each node pays exponential bundle
+        // enumeration as soon as the remaining count drops to <= ExactTaskLimit,
+        // which was measured to be ~99% of large-plan planning time.
+        if (request.Tasks.Count > AutomaticRouteSearchPolicy.ExactTaskLimit
+            || BitOperations.PopCount(remainingMask) > AutomaticRouteSearchPolicy.ExactTaskLimit)
             return GenerateBounded(request, state, warehouseStock, remainingMask);
 
         var initialInventory = state.OnBoard.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);

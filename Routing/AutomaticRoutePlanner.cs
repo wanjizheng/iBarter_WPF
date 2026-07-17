@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Numerics;
 using System.Text;
 
@@ -8,6 +9,7 @@ public sealed class AutomaticRoutePlanner {
         AutomaticRoutePlanningRequest request,
         CancellationToken cancellationToken = default) {
         string fingerprint = RoutePlanFingerprint.Compute(request);
+        long planStart = Stopwatch.GetTimestamp();
         RoutePlan? incumbent = null;
         try {
             cancellationToken.ThrowIfCancellationRequested();
@@ -23,17 +25,22 @@ public sealed class AutomaticRoutePlanner {
                 return new RoutePlan(RoutePlanStatus.Optimal, [],
                     new RoutePlanObjective(0, 0, 0, request.ExtraLT, ""), [], fingerprint);
 
+            var heuristicStart = Stopwatch.GetTimestamp();
             var heuristicIncumbent = AutomaticRouteHeuristic.TryBuildIncumbent(
                 request, preflight, cancellationToken)?.Plan;
+            if (RouteSearchProfiler.Current is { } hp) hp.HeuristicTicks += Stopwatch.GetTimestamp() - heuristicStart;
             if (heuristicIncumbent is not null) {
                 var checkedIncumbent = RoutePlanVerifier.Verify(request, heuristicIncumbent);
                 incumbent = checkedIncumbent.Success ? checkedIncumbent.VerifiedPlan : null;
             }
 
             if (request.Tasks.Count > AutomaticRouteSearchPolicy.ExactTaskLimit) {
+                var beamStart = Stopwatch.GetTimestamp();
                 var beamPlan = AutomaticRouteBeamSearch.TryBuildIncumbent(
                     request, preflight, cancellationToken,
-                    AutomaticRouteSearchPolicy.BeamStateBudget(request.Tasks.Count, request.Limits.MaxExpandedStates))?.Plan;
+                    AutomaticRouteSearchPolicy.BeamStateBudget(request.Tasks.Count, request.Limits.MaxExpandedStates),
+                    planStart + AutomaticRouteSearchPolicy.HardCapTicks())?.Plan;
+                if (RouteSearchProfiler.Current is { } bp) bp.BeamTicks += Stopwatch.GetTimestamp() - beamStart;
                 if (beamPlan is not null) {
                     var checkedBeam = RoutePlanVerifier.Verify(request, beamPlan);
                     if (checkedBeam.Success && checkedBeam.VerifiedPlan?.Objective is { } beamObjective
@@ -187,6 +194,7 @@ public sealed class AutomaticRoutePlanner {
         RoutePlanFactory.StableRouteKey(state.FinishedRoutes, state.CurrentRouteSteps));
 
     private static string SearchKey(RouteSimulationState state) {
+        if (RouteSearchProfiler.Current is { } p) p.SearchKeyCalls++;
         var builder = new StringBuilder();
         builder.Append(state.CurrentRouteNumber).Append('|')
             .Append(state.CurrentIslandId).Append('|')
@@ -251,6 +259,16 @@ internal static class AutomaticRouteSearchPolicy {
     private const int LargeTaskBeamThreshold = 20;
     private const int LargeTaskBeamStateLimit = 2_000;
 
+    // Wall-clock safety budget for beam-mode (task count > ExactTaskLimit) plans.
+    // The heuristic incumbent is published first (typically well under 500ms), so
+    // even if the beam is cut here the planner still returns a verified plan. The
+    // hard cap guarantees the UI is never blocked the way the field 184s run was.
+    public const int LargePlanTimeTargetMs = 3_000;
+    public const int LargePlanHardCapMs = 5_000;
+
+    public static long HardCapTicks() =>
+        (long)(LargePlanHardCapMs / 1000.0 * Stopwatch.Frequency);
+
     public static int BeamStateBudget(int taskCount, int requestedBudget) =>
         taskCount >= LargeTaskBeamThreshold
             ? Math.Min(requestedBudget, LargeTaskBeamStateLimit)
@@ -262,9 +280,10 @@ internal static class AutomaticRouteSearchPolicy {
         AutomaticRoutePlanningRequest request,
         RouteSimulationState state,
         ulong remainingMask) {
+        if (RouteSearchProfiler.Current is { } p) p.HasExecutableBarterCalls++;
         for (int index = 0; index < request.Tasks.Count; index++) {
             if ((remainingMask & (1UL << index)) == 0) continue;
-            if (RouteStateTransition.TryBarter(request, state, index).Success)
+            if (RouteStateTransition.CanBarterFast(request, state, index))
                 return true;
         }
         return false;
