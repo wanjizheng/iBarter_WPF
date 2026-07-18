@@ -141,13 +141,64 @@ public static class RoutePlanPersistence {
             snapshot = null;
             return false;
         }
-        if (!TryRead(path, out snapshot) || snapshot is null
-            || !RoutePlanRestoreCompatibility.IsCompatibleAfterProgress(
-                currentRequest, snapshot.Plan, completedBarterRowIds)) {
+        if (!TryRead(path, out snapshot) || snapshot is null) {
             snapshot = null;
             return false;
         }
-        return true;
+        // Audit round 7: with-CK restore.  If the user has marked
+        // any barters done, the strict progress path is the right
+        // one — every saved RowId must match a current task.
+        if (completedBarterRowIds.Count > 0) {
+            if (!RoutePlanRestoreCompatibility.IsCompatibleAfterProgress(
+                    currentRequest, snapshot.Plan, completedBarterRowIds)) {
+                snapshot = null;
+                return false;
+            }
+            return true;
+        }
+        // Audit round 7: no-CK restore.  The strict progress path
+        // would fail because no saved RowId is in the (empty) CK
+        // set; instead, try identity migration.  The persisted
+        // plan's BarterStep.RowIds may be legacy business-tuple
+        // strings ("Iliya:800208:800241") or "br-*" GUIDs from a
+        // prior migration run.
+        var identity = RoutePlanRestoreCompatibility.TryMigrateIdentityOnly(
+            currentRequest, snapshot.Plan);
+        if (identity.IsCompatible && identity.MappedPlan is not null) {
+            // Re-host the snapshot on the migrated plan so callers
+            // see the new RowIds; also save back to disk so the
+            // next reload doesn't re-migrate.
+            snapshot = new PersistedRoutePlan(
+                identity.MappedPlan,
+                snapshot.SelectedRouteNumber,
+                snapshot.ShowAll,
+                snapshot.SelectedBarterRowId);
+            try {
+                Save(path, identity.MappedPlan,
+                    snapshot.SelectedRouteNumber, snapshot.ShowAll,
+                    snapshot.SelectedBarterRowId);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                // The restore itself succeeded; the save-back is
+                // best-effort.  Log so the user can save manually.
+                System.Diagnostics.Debug.WriteLine(
+                    $"[RoutePlan] identity migration save-back failed: {ex.GetType().Name}: {ex.Message}");
+            }
+            return true;
+        }
+        // Log the precise mismatch so the user knows what to fix.
+        if (identity.AmbiguousTuples is { Count: > 0 }) {
+            System.Diagnostics.Debug.WriteLine(
+                $"[RoutePlan] identity migration refused: " +
+                $"{identity.AmbiguousTuples.Count} ambiguous business tuples");
+        }
+        if (identity.MismatchComponents is { Count: > 0 }) {
+            System.Diagnostics.Debug.WriteLine(
+                $"[RoutePlan] identity migration mismatch: " +
+                string.Join("; ", identity.MismatchComponents));
+        }
+        snapshot = null;
+        return false;
     }
 
     private static bool TryRead(string path, out PersistedRoutePlan? snapshot) {

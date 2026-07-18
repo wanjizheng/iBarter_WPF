@@ -118,6 +118,148 @@ public static class RoutePlanRestoreCompatibility {
         return false;
     }
 
+    /// <summary>
+    /// Audit round 7: identity-only restore.  The persisted
+    /// plan's <c>BarterStep.RowId</c> values may be legacy
+    /// <c>{Island}:{Item1}:{Item2}</c> strings (or with a leading
+    /// index) rather than the new <c>br-*</c> GUIDs.  When no CK
+    /// progress is involved (the user has not yet marked any
+    /// barter done), we can re-host the plan on the current
+    /// request by mapping every saved RowId to a unique current
+    /// task, then run the same <see cref="IsCompatibleBody"/>
+    /// check on the mapped plan.  Ambiguous matches refuse the
+    /// restore; warehouse / LT / mode mismatches still fail.
+    /// </summary>
+    public sealed record IdentityMigrationResult(
+        bool IsCompatible,
+        RoutePlan? MappedPlan,
+        IReadOnlyDictionary<(string IslandId, string Item1Id, string Item2Id), List<string>>? AmbiguousTuples,
+        IReadOnlyList<string>? MismatchComponents);
+
+    public static IdentityMigrationResult TryMigrateIdentityOnly(
+        AutomaticRoutePlanningRequest currentRequest,
+        RoutePlan persistedPlan) {
+        // Sanity: status + non-empty.
+        if (persistedPlan.Status is not (RoutePlanStatus.Optimal
+                or RoutePlanStatus.BestKnownWithinLimit)
+            || persistedPlan.Routes.Count == 0) {
+            return new IdentityMigrationResult(
+                false, null, null,
+                new[] { "saved plan status or empty routes" });
+        }
+
+        // Try the direct match first — no migration needed.
+        if (IsRestoredPlanInternallyConsistent(currentRequest, persistedPlan,
+                out var directMismatch)) {
+            return new IdentityMigrationResult(true, persistedPlan, null, null);
+        }
+
+        // Run the legacy migration shim.  It returns a saved->current
+        // RowId mapping when the business-tuple match is unique.
+        var migration = TryMigrateLegacyRowIds(persistedPlan, currentRequest,
+            out var ambiguous);
+        if (ambiguous is { Count: > 0 }) {
+            return new IdentityMigrationResult(
+                false, null, ambiguous, null);
+        }
+        if (!migration.IsCompatible) {
+            // No legacy match either.  The "every saved RowId" loop
+            // found nothing — return the mismatch components so
+            // the caller can log them.
+            return new IdentityMigrationResult(
+                false, null, null,
+                new[] { "no saved RowId matched any current task" });
+        }
+
+        // Build the remapped plan: re-host the persisted
+        // BarterSteps on the current tasks' RowIds.
+        var mapped = RemapPersistedPlan(persistedPlan, migration.SavedRowIdToCurrentRowId);
+        if (IsRestoredPlanInternallyConsistent(currentRequest, mapped,
+                out var mappedMismatch)) {
+            return new IdentityMigrationResult(true, mapped, null, null);
+        }
+        return new IdentityMigrationResult(false, mapped, null, mappedMismatch);
+    }
+
+    private static RoutePlan RemapPersistedPlan(
+        RoutePlan source,
+        IReadOnlyDictionary<string, string> savedToCurrent) {
+        var routes = new List<PlannedRoute>(source.Routes.Count);
+        foreach (var route in source.Routes) {
+            var newSteps = new List<RouteStep>(route.Steps.Count);
+            foreach (var step in route.Steps) {
+                if (step is BarterStep barter
+                    && savedToCurrent.TryGetValue(barter.RowId, out var mapped)
+                    && mapped != barter.RowId) {
+                    newSteps.Add(new BarterStep(
+                        mapped, barter.IslandId, barter.Consumed, barter.Produced,
+                        barter.Load));
+                }
+                else {
+                    newSteps.Add(step);
+                }
+            }
+            routes.Add(new PlannedRoute(
+                route.Number, route.StartWarehouseId, route.EndWarehouseId,
+                newSteps, route.Distance, route.InitialLT, route.CurrentLT, route.PeakLT));
+        }
+        return new RoutePlan(source.Status, routes, source.Objective, source.Diagnostics,
+            source.InputFingerprint);
+    }
+
+    /// <summary>
+    /// Internal consistency: warehouses must still exist; LT
+    /// invariants must hold; legacy migration must already have
+    /// re-id'd any business-tuple RowIds (so we don't re-check
+    /// the identity mismatch path here — that lives in the public
+    /// IsCompatibleBody).
+    /// </summary>
+    private static bool IsRestoredPlanInternallyConsistent(
+        AutomaticRoutePlanningRequest currentRequest,
+        RoutePlan plan,
+        out IReadOnlyList<string>? mismatchComponents) {
+        var warehouses = currentRequest.Warehouses.ToDictionary(
+            w => w.WarehouseId, StringComparer.Ordinal);
+        var errors = new List<string>();
+        int expectedRouteNumber = 1;
+        foreach (var route in plan.Routes) {
+            if (route.Number != expectedRouteNumber++) {
+                errors.Add($"route number gap at {route.Number}");
+                continue;
+            }
+            foreach (var step in route.Steps) {
+                if (step.Load.TotalWithExtraLT - step.Load.CargoLT != currentRequest.ExtraLT
+                    || step.Load.TotalWithExtraLT > currentRequest.TotalLT) {
+                    errors.Add(
+                        $"step {step.GetType().Name} island={step.IslandId} " +
+                        $"LT out of range (Total={step.Load.TotalWithExtraLT} " +
+                        $"Extra={currentRequest.ExtraLT} Cargo={step.Load.CargoLT})");
+                    continue;
+                }
+                if (step is WarehousePickupStep pickup
+                    && (!warehouses.TryGetValue(pickup.WarehouseId, out var pw)
+                        || !StringComparer.Ordinal.Equals(pw.IslandId, pickup.IslandId))) {
+                    errors.Add(
+                        $"pickup warehouse {pickup.WarehouseId} " +
+                        $"on island {pickup.IslandId} not in current request");
+                }
+                if (step is WarehouseUnloadStep unload
+                    && (!warehouses.TryGetValue(unload.WarehouseId, out var uw)
+                        || !StringComparer.Ordinal.Equals(uw.IslandId, unload.IslandId))) {
+                    errors.Add(
+                        $"unload warehouse {unload.WarehouseId} " +
+                        $"on island {unload.IslandId} not in current request");
+                }
+            }
+        }
+        if (errors.Count > 0) {
+            mismatchComponents = errors;
+            return false;
+        }
+        mismatchComponents = null;
+        return true;
+    }
+
     private static bool IsCompatibleDirect(
         AutomaticRoutePlanningRequest currentRequest,
         RoutePlan persistedPlan,
