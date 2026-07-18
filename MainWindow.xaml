@@ -26,12 +26,13 @@
     RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
     AllowsTransparency="True"
     Visibility="Visible"
-    Title="{loc:Localize str.MainWindow.Title}" Height="868" Width="1254" Loaded="Window_Loaded">
+    Title="{loc:Localize str.MainWindow.Title}" Height="868" Width="1254" Loaded="Window_Loaded"
+    Background="{DynamicResource AppSurfaceBrush}"
+    Foreground="{DynamicResource AppTextBrush}">
     <syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="/View/WindowStyle.xaml"></ResourceDictionary>
-                <ResourceDictionary Source="/PresentationFramework.Aero2;component/themes/Aero2.NormalColor.xaml"/>
             </ResourceDictionary.MergedDictionaries>
             <CollectionViewSource x:Key="ThemeList"
                                   Source="{Binding Path=DataContext.ThemeList, ElementName=ThemeList}">
@@ -71,7 +72,7 @@
             </ToggleButton>
         </collections:ArrayList>
     </syncfusion:ChromelessWindow.RightHeaderItemsSource>
-    <Border Background="White" BorderThickness="1" BorderBrush="LightGray">
+    <Border Background="{DynamicResource AppSurfaceBrush}" BorderThickness="1" BorderBrush="{DynamicResource AppBorderBrush}">
         <Border.Effect>
             <DropShadowEffect ShadowDepth="5" Direction="320" Color="Gray"/>
         </Border.Effect>

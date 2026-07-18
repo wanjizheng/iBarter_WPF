@@ -5,6 +5,21 @@
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
     <Application.Resources>
         <ResourceDictionary>
+            <!--
+                Application-owned colours used by the few custom controls that
+                intentionally draw their own surfaces.  They are DynamicResource
+                values, so a running window updates when the user changes theme.
+                Syncfusion continues to own the standard control chrome.
+            -->
+            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="AppRaisedSurfaceBrush" Color="#F7F9FC" />
+            <SolidColorBrush x:Key="AppTextBrush" Color="#18212B" />
+            <SolidColorBrush x:Key="AppMutedTextBrush" Color="#526170" />
+            <SolidColorBrush x:Key="AppBorderBrush" Color="#D5DCE5" />
+            <SolidColorBrush x:Key="AppCardBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="AppCardBorderBrush" Color="#C3CDD8" />
+            <SolidColorBrush x:Key="AppAccentBrush" Color="#176F7F" />
+            <SolidColorBrush x:Key="AppAccentTextBrush" Color="#FFFFFF" />
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="/Resources/Styles/FluentControls.xaml" />
             </ResourceDictionary.MergedDictionaries>

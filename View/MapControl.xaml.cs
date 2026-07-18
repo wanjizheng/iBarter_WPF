@@ -1150,39 +1150,26 @@ namespace iBarter.View {
             return null;
         }
 
-        // Return a light-tinted brush derived from the input colour,
-        // so the text label remains readable on the dark map
-        // background regardless of which group colour was passed in.
-        // Strategy: invert lightness (light colours become darker,
-        // dark colours become lighter) so the text contrasts with
-        // both the dark navy map background AND the island block
-        // (which uses the input brush colour directly).
+        // Return a readable group tint for the dark map.  Do not push light
+        // group colours to pure white: that erased the group distinction and
+        // made a label appear white until an unrelated hover visual changed
+        // the surface beneath it.
         private static Brush LightenForMapBg(Brush _brush) {
             if (_brush is SolidColorBrush scb) {
                 Color c = scb.Color;
-                // Compute perceived lightness, then flip toward 1.0
-                // for dark inputs and 0.0 for light inputs. Target a
-                // brightness that contrasts with both the map (very
-                // dark navy) and the caller's brush (saturated, mid-).
                 double lum = (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255.0;
-                double target;
-                if (lum < 0.5) {
-                    // dark input -> push to a light/pale tint of the
-                    // same hue so it still reads as part of the group
-                    target = Math.Min(1.0, lum + 0.7);
-                }
-                else {
-                    // already-light input -> keep light, push even paler
-                    target = Math.Min(1.0, lum + 0.15);
-                }
+                // Dark colours need lifting; bright colours need preserving,
+                // not whitening.  0.74 provides contrast against the map and
+                // still leaves the original group hue visible.
+                double target = lum < 0.56 ? Math.Min(0.82, lum + 0.42) : 0.74;
                 byte r = (byte)Math.Min(255, (int)(c.R * (target / Math.Max(0.001, lum))));
                 byte g = (byte)Math.Min(255, (int)(c.G * (target / Math.Max(0.001, lum))));
                 byte b = (byte)Math.Min(255, (int)(c.B * (target / Math.Max(0.001, lum))));
                 return new SolidColorBrush(Color.FromRgb(r, g, b));
             }
-            // Non-SolidColorBrush (e.g. linear gradient) - fall back
-            // to white so the text is always readable.
-            return Brushes.White;
+            // Non-solid brushes are not used for groups today.  Keep the
+            // fallback neutral-but-readable rather than pure white.
+            return Brushes.Gainsboro;
         }
 
         private static Brush GetBrushForGroup(int group) {

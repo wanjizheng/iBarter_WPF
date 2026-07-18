@@ -16,7 +16,7 @@
     <Geometry x:Key="FluentIcon.BuildingBank">M13,6.25C13,6.803 12.552,7.25 12,7.25C11.448,7.25 11,6.803 11,6.25C11,5.698 11.448,5.25 12,5.25C12.552,5.25 13,5.698 13,6.25 M13.032,2.325C12.417,1.876 11.583,1.876 10.968,2.325L3.547,7.741C2.569,8.454 3.074,10 4.283,10H4.5V15.8C3.61,16.255 3,17.182 3,18.25V19.75C3,20.165 3.336,20.5 3.75,20.5H20.25C20.664,20.5 21,20.165 21,19.75V18.25C21,17.182 20.39,16.255 19.5,15.8V10H19.717C20.926,10 21.431,8.454 20.453,7.741L13.032,2.325 M11.853,3.536C11.94,3.472 12.06,3.472 12.147,3.536L18.95,8.5H5.05L11.853,3.536 M18,10V15.5H16V10H18 M14.5,10V15.5H12.75V10H14.5 M11.25,10V15.5H9.5V10H11.25 M5.75,17H18.25C18.94,17 19.5,17.56 19.5,18.25V19H4.5V18.25C4.5,17.56 5.06,17 5.75,17 M6,15.5V10H8V15.5H6Z</Geometry>
 
     <Style TargetType="{x:Type controls:FluentIconButton}">
-        <Setter Property="Foreground" Value="#35515E" />
+        <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="1" />
@@ -42,9 +42,9 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="#32B8C6" />
-                            <Setter TargetName="Surface" Property="Background" Value="#1832B8C6" />
-                            <Setter TargetName="Surface" Property="BorderBrush" Value="#6632B8C6" />
+                            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+                            <Setter TargetName="Surface" Property="Background" Value="{DynamicResource AppRaisedSurfaceBrush}" />
+                            <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Surface" Property="RenderTransform"><Setter.Value><ScaleTransform ScaleX="0.96" ScaleY="0.96" /></Setter.Value></Setter>

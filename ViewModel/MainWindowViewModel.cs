@@ -12,6 +12,7 @@ using iBarter.View;
 using Syncfusion.SfSkinManager;
 using Syncfusion.UI.Xaml.Diagram;
 using Syncfusion.Windows.Shared;
+using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Reflection;
@@ -32,6 +33,10 @@ namespace iBarter.ViewModel {
         /// Maintains the selected <see cref="VisualStyles"/>
         /// </summary>
         private string selectedthemename = MainWindowViewModel.DefaultThemeName;
+        // Selecting a theme replaces the palette collection and selects its
+        // default palette.  Suppress the nested SelectedPalette callback so
+        // one user selection produces exactly one theme application.
+        private bool synchronizingThemeSelection;
 
         /// <summary>
         /// Maintains busy status of sample browser while switching between themes.
@@ -154,6 +159,9 @@ namespace iBarter.ViewModel {
         public string SelectedThemeName {
             get { return selectedthemename; }
             set {
+                if (string.IsNullOrWhiteSpace(value) || selectedthemename == value)
+                    return;
+
                 selectedthemename = value;
                 if (selectedthemename == "SystemTheme") {
                     ColorPaletteVisibility = false;
@@ -161,11 +169,15 @@ namespace iBarter.ViewModel {
                 else {
                     ColorPaletteVisibility = true;
                     Palettes = new ObservableCollection<Palette>(PaletteList.Where(x => (x.Theme.Equals(selectedthemename))).ToList<Palette>());
-                    SelectedPalette = Palettes.Where(x => x.Name.Equals("Default")).ToList<Palette>()[0];
+                    synchronizingThemeSelection = true;
+                    SelectedPalette = Palettes.FirstOrDefault(x => x.Name.Equals("Default"))
+                        ?? Palettes.FirstOrDefault();
+                    synchronizingThemeSelection = false;
                 }
 
-                OnThemeChanged(selectedthemename);
-                this.RaisePropertyChanged("SelectedTheme");
+                ApplySelectedTheme();
+                RaisePropertyChanged(nameof(SelectedThemeName));
+                RaisePropertyChanged(nameof(SelectedTheme));
             }
         }
 
@@ -265,18 +277,14 @@ namespace iBarter.ViewModel {
         /// Method helps to perform product selection change.
         /// </summary>
         public void OnSelectedProductChanged() {
-            selectedthemename = MainWindowViewModel.DefaultThemeName;
-
-            // Fluent theme is the default theme.
-            selectedtheme = themelist.FirstOrDefault(theme => theme.ThemeName == "Windows11Light");
-            Palettes = new ObservableCollection<Palette>(PaletteList.Where(x => (x.Theme.Equals(selectedthemename))).ToList<Palette>());
-            SelectedPalette = Palettes.Where(x => x.Name.Equals("Default")).ToList<Palette>()[0];
-            UpdateTitleBarBackgroundandForeground(selectedthemename);
-
-
-            if (ThemeChanged != null) {
-                ThemeChanged();
-            }
+            // Use the same path as the selector.  The previous direct-field
+            // initialization skipped SetTheme on startup, then the first UI
+            // change had to repair a partially themed visual tree.
+            selectedtheme = themelist.FirstOrDefault(theme =>
+                theme.ThemeName == MainWindowViewModel.DefaultThemeName);
+            selectedthemename = string.Empty;
+            SelectedThemeName = MainWindowViewModel.DefaultThemeName;
+            RaisePropertyChanged(nameof(SelectedTheme));
         }
 
 
@@ -298,29 +306,19 @@ namespace iBarter.ViewModel {
         /// </summary>
         /// <param name="selectedTheme">Selected Theme</param>
         private void OnThemeChanged(string selectedTheme) {
-            var mainWindow = Application.Current.Windows.OfType<MainWindow>();
-            foreach (var window in mainWindow) {
-                SfSkinManager.SetTheme(window, new Theme() { ThemeName = SelectedThemeName });
-
-                //SfSkinManager.SetTheme(window.MenuGrid, new Theme() { ThemeName = SelectedThemeName });
-            }
-
-            var barterScannerWindow = Application.Current.Windows.OfType<BarterScanner>();
-            foreach (var window in barterScannerWindow) {
-                SfSkinManager.SetTheme(window, new Theme() { ThemeName = SelectedThemeName });
-            }
-
-            var storageWindow = Application.Current.Windows.OfType<StorageManagement>();
-            foreach (var window in storageWindow) {
-                SfSkinManager.SetTheme(window, new Theme() { ThemeName = SelectedThemeName });
-            }
+            // Apply to every open window.  Applying only the main window plus
+            // two special cases left document/docking content on an older skin
+            // after a second theme change.
+            foreach (Window window in Application.Current.Windows.OfType<Window>())
+                SfSkinManager.SetTheme(window, new Theme { ThemeName = selectedTheme });
 
             UpdateTitleBarBackgroundandForeground(selectedTheme);
+            UpdateApplicationPalette(selectedTheme);
 
             var navigationService = DemosNavigationService.DemoNavigationService;
             if (navigationService != null && navigationService.Content != null) {
                 if (navigationService.Content is BarterScanner || navigationService.Content is StorageManagement || navigationService.Content is MapControl || navigationService.Content is PlannerControl || navigationService.Content is ShipCargoControl || navigationService.Content is MainWindow) {
-                    SfSkinManager.SetTheme(navigationService.Content as DependencyObject, new Theme() { ThemeName = SelectedThemeName });
+                    SfSkinManager.SetTheme(navigationService.Content as DependencyObject, new Theme() { ThemeName = selectedTheme });
                 }
 
                 // if (navigationService.Content is DemoControl demoControl && SelectedSample?.ThemeMode == ThemeMode.Inherit &&
@@ -360,6 +358,37 @@ namespace iBarter.ViewModel {
                 App.mySVM.TitleBarForeground = SelectedPalette.PrimaryForeground;
             }
         }
+
+        private void ApplySelectedTheme() {
+            if (selectedthemename != "SystemTheme" && SelectedPalette is not null)
+                RegisterSelectedPalette(selectedthemename);
+
+            OnThemeChanged(selectedthemename);
+        }
+
+        private static bool IsDarkTheme(string themeName) =>
+            themeName.Contains("Dark", StringComparison.OrdinalIgnoreCase)
+            || themeName.Contains("Black", StringComparison.OrdinalIgnoreCase)
+            || themeName.Equals("Office2019HighContrast", StringComparison.Ordinal);
+
+        private static void UpdateApplicationPalette(string themeName) {
+            if (Application.Current is null) return;
+
+            bool dark = IsDarkTheme(themeName);
+            var resources = Application.Current.Resources;
+            resources["AppSurfaceBrush"] = CreateBrush(dark ? "#1E1E1E" : "#FFFFFF");
+            resources["AppRaisedSurfaceBrush"] = CreateBrush(dark ? "#2A2A2A" : "#F7F9FC");
+            resources["AppTextBrush"] = CreateBrush(dark ? "#F1F4F6" : "#18212B");
+            resources["AppMutedTextBrush"] = CreateBrush(dark ? "#B9C4CC" : "#526170");
+            resources["AppBorderBrush"] = CreateBrush(dark ? "#4A5058" : "#D5DCE5");
+            resources["AppCardBrush"] = CreateBrush(dark ? "#252D35" : "#FFFFFF");
+            resources["AppCardBorderBrush"] = CreateBrush(dark ? "#5A6672" : "#C3CDD8");
+            resources["AppAccentBrush"] = CreateBrush(dark ? "#60D6E4" : "#176F7F");
+            resources["AppAccentTextBrush"] = CreateBrush(dark ? "#102126" : "#FFFFFF");
+        }
+
+        private static SolidColorBrush CreateBrush(string color) =>
+            new SolidColorBrush((Color)System.Windows.Media.ColorConverter.ConvertFromString(color)!);
 
 
         private ObservableCollection<Themes> themelist = new ObservableCollection<Themes>() {
@@ -457,9 +486,10 @@ namespace iBarter.ViewModel {
         public Palette SelectedPalette {
             get { return selectedpalette; }
             set {
+                if (ReferenceEquals(selectedpalette, value)) return;
                 selectedpalette = value;
-                if (SelectedPalette != null && SelectedPalette.Name != null) {
-                    OnPaletteChanged(selectedthemename);
+                if (!synchronizingThemeSelection && SelectedPalette != null && SelectedPalette.Name != null) {
+                    ApplySelectedTheme();
                 }
 
                 RaisePropertyChanged("SelectedPalette");
@@ -471,6 +501,11 @@ namespace iBarter.ViewModel {
         /// </summary>
         /// <param name="ThemeName">Selected Theme</param>
         public void OnPaletteChanged(string ThemeName) {
+            RegisterSelectedPalette(ThemeName);
+            OnThemeChanged(ThemeName);
+        }
+
+        private void RegisterSelectedPalette(string ThemeName) {
             switch (ThemeName) {
                 case "Windows11Light": {
                         changePalette("Syncfusion.Themes.Windows11Light.WPF.Windows11LightThemeSettings, Syncfusion.Themes.Windows11Light.WPF", "Syncfusion.Themes.Windows11Light.WPF.Windows11Palette, Syncfusion.Themes.Windows11Light.WPF", ThemeName);
@@ -530,7 +565,6 @@ namespace iBarter.ViewModel {
                     }
             }
 
-            OnThemeChanged(ThemeName);
         }
 
         /// <summary>

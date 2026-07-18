@@ -60,7 +60,10 @@ namespace iBarter {
             this.DispatcherUnhandledException += App_DispatcherUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
-            //SfSkinManager.ApplyStylesOnApplication = true;
+            // Let Syncfusion refresh child controls from the active application
+            // theme.  Previously only a few top-level windows received a theme,
+            // so docked controls could remain on the first selected theme.
+            SfSkinManager.ApplyStylesOnApplication = true;
 
             // Phase 9 hotfix: install the i18n dictionary FIRST, before
             // MainWindow is constructed below.  The XAML parser evaluates
