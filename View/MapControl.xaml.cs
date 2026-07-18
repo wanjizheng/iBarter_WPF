@@ -1238,13 +1238,28 @@ namespace iBarter.View {
             listGrid_Islands = new List<Grid>();
 
             InitTempGrid();
-            // Filter barters by completeness + LV ceiling. With MAX_MAP_LV=7 (post Phase
-            // A+B), every legitimate barter in the catalog is shown; the hook is in
-            // place for future tier filtering without touching this site again.
-            foreach (Barter myBarter in App.myPVM.BarterCollection.Where(b =>
-                b.ExchangeDone == false && b.ExchangeQuantity > 0 &&
-                (!int.TryParse(b.Item1?.ItemLV, out int lv) || lv <= MAX_MAP_LV))) {
-                ButtonInitialisation(myBarter, GetBursh(myBarter));
+            // Bug 3 fix: when an automatic route is active the map must
+            // show the route's actual steps (pickup/barter/unload) only.
+            // The legacy code also rendered every Planner barter that had
+            // ExchangeQuantity > 0, which:
+            //   * put a "金色仙人掌花束 → 匠人的贝壳项链" label on top of an
+            //     Iliya unload step even though the barter was not part of
+            //     the current route;
+            //   * subscribed Islands_MouseLeftButtonDown on that grid, so
+            //     double-clicking what the user perceived as the unload
+            //     node flipped the unrelated barter's ExchangeDone.
+            // The fix is to skip Planner-barter nodes while in
+            // AutomaticRoute mode (EnsureAutomaticWarehouseNodes handles
+            // the route nodes, including the unload label).
+            bool suppressPlannerBarters = App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute
+                && App.myRouteCoordinator.CurrentPlan is not null
+                && App.myRouteCoordinator.CurrentPlan.Routes.Count > 0;
+            if (!suppressPlannerBarters) {
+                foreach (Barter myBarter in App.myPVM.BarterCollection.Where(b =>
+                    b.ExchangeDone == false && b.ExchangeQuantity > 0 &&
+                    (!int.TryParse(b.Item1?.ItemLV, out int lv) || lv <= MAX_MAP_LV))) {
+                    ButtonInitialisation(myBarter, GetBursh(myBarter));
+                }
             }
             EnsureAutomaticWarehouseNodes();
         }
@@ -1530,17 +1545,42 @@ namespace iBarter.View {
 
         private void Islands_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
             var clickedGrid = sender as Grid;
-            if (clickedGrid != null && e.ClickCount == 2) {
-                Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == clickedGrid.Name.Substring(14, clickedGrid.Name.Length - 14))!;
-                myBarter.ExchangeDone = true;
-                App.myfmMain.myPlannerControl.Grouping();
-                App.myfmMain.myPlannerControl.SaveData();
-                App.myRouteCoordinator?.RefreshCompletedBarters(App.myPVM.BarterCollection);
-                if (App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName) != null) {
-                    App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName));
-                    App.myfmMain.myShipCargo.UpdateCurrentLV();
-                    App.myfmMain.myShipCargo.SaveData();
-                }
+            if (clickedGrid == null || e.ClickCount != 2) return;
+
+            // Bug 3 fix: warehouse / pickup / unload grids must NEVER
+            // complete a barter. Their name suffix ("Warehouse"/"Temp") and
+            // lack of a registered Islands_MouseLeftButtonDown subscription
+            // both protect them at render time, but defense-in-depth here
+            // means a future regression that wires the handler up by
+            // accident still can't mark an unrelated barter done.
+            if (clickedGrid.Name.EndsWith("Warehouse", StringComparison.Ordinal)
+                || clickedGrid.Name.EndsWith("Temp", StringComparison.Ordinal))
+                return;
+
+            string islandId = clickedGrid.Name.Substring(14, clickedGrid.Name.Length - 14);
+            Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(
+                b => b.IsLandName == islandId);
+            if (myBarter == null) return;
+            myBarter.ExchangeDone = true;
+            App.myfmMain.myPlannerControl.Grouping();
+            App.myfmMain.myPlannerControl.SaveData();
+            // Use the unified progress pipeline so the auto-route plan,
+            // parley, cargo and persistence stay consistent.
+            string rowId = RoutePlannerRowIdentity.Create(
+                App.myPVM.BarterCollection.IndexOf(myBarter),
+                myBarter.IsLandName,
+                myBarter.Item1?.ItemID ?? string.Empty,
+                myBarter.Item2?.ItemID ?? string.Empty);
+            App.myRouteCoordinator?.ApplyBarterCompletionProgress(
+                App.myfmMain.myPlannerControl.BuildCurrentAutomaticRouteRequest(
+                    App.myfmMain.myPlannerControl.ResolveSelectedOptimizationProfileSafe()),
+                App.myPVM.BarterCollection,
+                rowId,
+                completed: true);
+            if (App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName) != null) {
+                App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName));
+                App.myfmMain.myShipCargo.UpdateCurrentLV();
+                App.myfmMain.myShipCargo.SaveData();
             }
         }
 
