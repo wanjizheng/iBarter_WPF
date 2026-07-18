@@ -66,6 +66,17 @@ public static class RouteStepLabelPlanner {
             for (int stepIndex = 0; stepIndex < route.Steps.Count; stepIndex++) {
                 var step = route.Steps[stepIndex];
                 if (string.IsNullOrEmpty(step.IslandId)) continue;
+                // Audit round 7: EnsureAutomaticWarehouseNodes is the
+                // single owner of pickup / unload labels (the
+                // "伊利亚岛 · 装货" / "伊利亚岛 · 卸货" text). The
+                // step-label pipeline renders ONLY BarterStep labels
+                // — those need a RouteNumber + StepIndex identity and
+                // show the actual trade. Mixing the two would stack
+                // a second "装货" text on top of the warehouse
+                // marker, which is exactly the v1 bug the audit
+                // closed.
+                if (step is WarehousePickupStep or WarehouseUnloadStep)
+                    continue;
                 var label = Build(route.Number, stepIndex, step, itemDisplayNames);
                 if (label is not null) result.Add(label);
             }

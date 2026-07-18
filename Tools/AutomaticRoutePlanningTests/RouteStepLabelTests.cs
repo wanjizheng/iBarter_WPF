@@ -45,6 +45,9 @@ public class RouteStepLabelTests {
 
     [Fact]
     public void Pickup_DisplayText_IsIslandDashPickup() {
+        // Audit round 7: pickup labels are owned by
+        // EnsureAutomaticWarehouseNodes. PlanLabels returns
+        // BarterStep labels only.
         var plan = new RoutePlan(RoutePlanStatus.Optimal, [
             new PlannedRoute(1, "Iliya", "Iliya", [
                 new WarehousePickupStep("Iliya", "Iliya",
@@ -55,14 +58,14 @@ public class RouteStepLabelTests {
         var labels = RouteStepLabelPlanner.PlanLabels(
             plan, showAll: false, selectedRouteNumber: 1,
             itemDisplayNames: new Dictionary<string, string>(StringComparer.Ordinal));
-        var pickup = labels.Single(l => l.StepKind == RouteStepKind.Pickup);
-        Assert.Equal("Iliya · 装货", pickup.DisplayText);
-        Assert.True(pickup.IsWarehouseOperation);
-        Assert.Null(pickup.BarterRowId);
+        Assert.DoesNotContain(labels, l => l.StepKind == RouteStepKind.Pickup);
     }
 
     [Fact]
     public void Unload_DisplayText_IsIslandDashUnload() {
+        // Audit round 7: unload labels are owned by
+        // EnsureAutomaticWarehouseNodes. PlanLabels returns
+        // BarterStep labels only.
         var plan = new RoutePlan(RoutePlanStatus.Optimal, [
             new PlannedRoute(1, "Iliya", "Iliya", [
                 new WarehouseUnloadStep("Iliya", "Iliya",
@@ -73,9 +76,7 @@ public class RouteStepLabelTests {
         var labels = RouteStepLabelPlanner.PlanLabels(
             plan, showAll: false, selectedRouteNumber: 1,
             itemDisplayNames: new Dictionary<string, String>());
-        var unload = labels.Single(l => l.StepKind == RouteStepKind.Unload);
-        Assert.Equal("Iliya · 卸货", unload.DisplayText);
-        Assert.True(unload.IsWarehouseOperation);
+        Assert.DoesNotContain(labels, l => l.StepKind == RouteStepKind.Unload);
     }
 
     [Fact]
@@ -106,8 +107,12 @@ public class RouteStepLabelTests {
 
     [Fact]
     public void SameIsland_PickupBarterUnload_ThreeIndependentLabels() {
-        // Iliya with pickup + barter + unload gets three
-        // independent labels (no dedup across kinds).
+        // Audit round 7: PlanLabels returns ONLY BarterStep labels.
+        // The pickup / unload labels are owned by
+        // EnsureAutomaticWarehouseNodes, so the route-step pipeline
+        // for the same scenario emits one label (the barter), not
+        // three.  The map still shows all three via the union of
+        // the warehouse node labels and the barter step label.
         var plan = new RoutePlan(RoutePlanStatus.Optimal, [
             new PlannedRoute(1, "Iliya", "Iliya", [
                 new WarehousePickupStep("Iliya", "Iliya",
@@ -125,20 +130,19 @@ public class RouteStepLabelTests {
         var labels = RouteStepLabelPlanner.PlanLabels(
             plan, showAll: false, selectedRouteNumber: 1,
             itemDisplayNames: new Dictionary<string, string>());
-        Assert.Equal(3, labels.Count);
-        // Barter is NOT deduped even though pickup/unload share
-        // the same island.
-        Assert.Contains(labels, l => l.StepKind == RouteStepKind.Pickup);
+        Assert.Single(labels);
         Assert.Contains(labels, l => l.StepKind == RouteStepKind.Barter);
-        Assert.Contains(labels, l => l.StepKind == RouteStepKind.Unload);
+        Assert.DoesNotContain(labels, l => l.StepKind == RouteStepKind.Pickup);
+        Assert.DoesNotContain(labels, l => l.StepKind == RouteStepKind.Unload);
     }
 
     [Fact]
     public void WarehouseDedup_CollapsesTwoWarehouses_PreservesBarter() {
-        // Iliya with pickup + unload + a barter on a different
-        // island. The pickup and unload on the same island dedup
-        // to one warehouse label; the barter on the OTHER island
-        // survives untouched.
+        // Audit round 7: PlanLabels no longer returns pickup / unload
+        // labels at all (EnsureAutomaticWarehouseNodes owns them),
+        // so the dedup pass is a no-op for this pipeline.  The
+        // route-step pipeline emits one BarterStep label per step
+        // and the warehouse pipeline emits the warehouse label.
         var plan = new RoutePlan(RoutePlanStatus.Optimal, [
             new PlannedRoute(1, "Iliya", "Crow", [
                 new WarehousePickupStep("Iliya", "Iliya",
@@ -156,13 +160,50 @@ public class RouteStepLabelTests {
         var labels = RouteStepLabelPlanner.PlanLabels(
             plan, showAll: false, selectedRouteNumber: 1,
             itemDisplayNames: new Dictionary<string, string>());
+        // Only the barter step is in the plan-labels list.
+        Assert.Single(labels);
+        Assert.Equal(RouteStepKind.Barter, labels[0].StepKind);
+        // StripWarehouseDuplicates is a defensive no-op now.
         var deduped = RouteStepLabelPlanner.StripWarehouseDuplicates(labels);
-        // Two warehouses on Iliya → one survives.
-        Assert.Equal(2, deduped.Count);
-        Assert.Single(deduped, l => l.StepKind == RouteStepKind.Pickup
-            || l.StepKind == RouteStepKind.Unload);
-        // The barter on Crow is untouched.
-        Assert.Single(deduped, l => l.StepKind == RouteStepKind.Barter);
+        Assert.Single(deduped);
+    }
+
+    [Fact]
+    public void PlanLabels_DoesNotIncludePickupOrUnload_EnsuresWarehouseLabelsAreNotDuplicated() {
+        // Audit round 7 contract: pickup / unload labels are owned
+        // exclusively by EnsureAutomaticWarehouseNodes. The
+        // route-step pipeline emits ONLY BarterStep labels so a
+        // user never sees the same island with two stacked text
+        // blocks.  This test pins the contract at the data layer;
+        // a separate WPF-level test (which requires a STA thread
+        // and a real Dispatcher) is the right place to verify the
+        // visual stacking, but the data contract must hold first.
+        var plan = new RoutePlan(RoutePlanStatus.Optimal, [
+            new PlannedRoute(1, "Iliya", "Iliya", [
+                new WarehousePickupStep("Iliya", "Iliya",
+                    [new RouteItemQuantity("800208", 1)],
+                    new RouteLoadSnapshot(0, 0, 0)),
+                new BarterStep("0:Iliya:800208:800241", "Iliya",
+                    new RouteItemQuantity("800208", 1),
+                    new RouteItemQuantity("800241", 1),
+                    new RouteLoadSnapshot(0, 0, 0)),
+                new WarehouseUnloadStep("Iliya", "Iliya",
+                    [new RouteItemQuantity("800241", 1)],
+                    new RouteLoadSnapshot(0, 0, 0)),
+            ], distance: 0, initialLT: 0, currentLT: 0, peakLT: 0),
+        ], null, [], "fp");
+        var labels = RouteStepLabelPlanner.PlanLabels(
+            plan, showAll: false, selectedRouteNumber: 1,
+            itemDisplayNames: new Dictionary<string, string>());
+        Assert.Single(labels);
+        Assert.Equal(RouteStepKind.Barter, labels[0].StepKind);
+        // PlanLabels' output never overlaps with the warehouse
+        // pipeline's output: when the WPF layer adds this one
+        // BarterStep label and EnsureAutomaticWarehouseNodes adds
+        // the warehouse node labels, the user sees the real trade
+        // text exactly once and the warehouse text exactly once.
+        Assert.DoesNotContain(labels, l => l.StepKind == RouteStepKind.Pickup);
+        Assert.DoesNotContain(labels, l => l.StepKind == RouteStepKind.Unload);
     }
 
     [Fact]

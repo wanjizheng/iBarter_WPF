@@ -1588,7 +1588,14 @@ namespace iBarter.View {
                     iBarter.Routing.RouteStepLabelRenderer.ComputeVerticalOffset(
                         occurrence, host.ActualHeight));
                 host.Children.Add(wrapper);
-                listLabels.Add((Label)wrapper.Children[0]);
+                // Audit round 7: the wrapper's child is a TextBlock,
+                // not a Label. The legacy `listLabels` collection is
+                // owned by ButtonInitialisation; route step labels do
+                // not belong there and must not be cast. Repositioning
+                // is driven entirely by RepositionRouteStepLabels which
+                // walks the visual tree by Tag, so this list is
+                // intentionally not extended for the new step
+                // pipeline.
             }
         }
 
