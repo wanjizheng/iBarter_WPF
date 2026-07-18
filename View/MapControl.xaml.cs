@@ -1619,7 +1619,7 @@ namespace iBarter.View {
             }
         }
 
-        private static Grid CreateRouteStepLabelWrapper(RouteStepMapLabel label) {
+        private Grid CreateRouteStepLabelWrapper(RouteStepMapLabel label) {
             // Restore the legacy map language: a barter's label colour
             // comes from its Planner BarterGroup, while warehouse
             // operations remain gold. The RowId -> group lookup happens
@@ -1652,13 +1652,26 @@ namespace iBarter.View {
                 Padding = new Thickness(3, 1, 3, 1),
                 Child = textBlock,
             };
+            var interactionNode = iBarter.Routing.RouteStepLabelInteraction.CreateNode(label);
             var wrapper = new Grid {
                 Name = "RouteStepLabel_" + label.Identity,
-                IsHitTestVisible = false,
+                // The legacy exchange labels supported left double-click
+                // (complete) and right-click (locate in Planner). Restore
+                // that only for an actual BarterStep with a persistent
+                // RowId. Pickup/unload labels remain non-interactive.
+                IsHitTestVisible = interactionNode.AuthorizesCompletion,
                 Tag = label,
+                DataContext = interactionNode,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top,
+                Cursor = interactionNode.AuthorizesCompletion
+                    ? Cursors.Hand
+                    : Cursors.Arrow,
             };
+            if (interactionNode.AuthorizesCompletion) {
+                wrapper.MouseLeftButtonDown += Islands_MouseLeftButtonDown;
+                wrapper.MouseRightButtonDown += Islands_MouseRightButtonDown;
+            }
             Panel.SetZIndex(wrapper, 60); // above route lines (default 0)
             wrapper.Children.Add(border);
 
@@ -2018,6 +2031,7 @@ namespace iBarter.View {
                 if (myBarter == null) return;
                 myBarter.ExchangeDone = true;
                 CompleteBarterViaPipeline(myBarter);
+                e.Handled = true;
                 return;
             }
 
@@ -2048,6 +2062,7 @@ namespace iBarter.View {
             if (targetBarter == null) return;
             targetBarter.ExchangeDone = true;
             CompleteBarterViaPipeline(targetBarter);
+            e.Handled = true;
         }
 
         private void CompleteBarterViaPipeline(Barter myBarter) {
@@ -2073,12 +2088,38 @@ namespace iBarter.View {
         private void Islands_MouseRightButtonDown(object sender, MouseButtonEventArgs e) {
             var clickedGrid = sender as Grid;
             if (clickedGrid != null) {
-                Barter? myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName == clickedGrid.Name.Substring(14, clickedGrid.Name.Length - 14));
+                RouteMapNode? node = clickedGrid.DataContext as RouteMapNode
+                    ?? clickedGrid.Tag as RouteMapNode;
+                Barter? myBarter;
+                if (node is not null) {
+                    // Route-step labels must select the exact Planner row.
+                    // An island can contain multiple exchanges, so falling
+                    // back to FirstOrDefault(IsLandName) would select the
+                    // wrong row even though the visible text was correct.
+                    if (node.StepKind != RouteStepKind.Barter
+                        || string.IsNullOrWhiteSpace(node.BarterRowId)) return;
+                    myBarter = App.myPVM.BarterCollection.FirstOrDefault(b =>
+                        string.Equals(
+                            b.PlannerRowId,
+                            node.BarterRowId,
+                            StringComparison.Ordinal));
+                }
+                else {
+                    // Preserve the legacy manual-map behavior for the old
+                    // island containers, whose identity is still encoded in
+                    // GridContainer_<IslandId>.
+                    if (!clickedGrid.Name.StartsWith("GridContainer_", StringComparison.Ordinal)
+                        || clickedGrid.Name.Length <= 14) return;
+                    string islandId = clickedGrid.Name.Substring(14);
+                    myBarter = App.myPVM.BarterCollection.FirstOrDefault(
+                        b => b.IsLandName == islandId);
+                }
                 if (myBarter != null) {
                     App.myfmMain.dockingManager_Main.ActiveWindow = App.myfmMain.document_Planner;
                     App.myfmMain.myPlannerControl.DataGrid_Planner.SelectedItem = myBarter;
 
                     App.myfmMain.myPlannerControl.DataGrid_Planner.ScrollInView(new RowColumnIndex(App.myfmMain.myPlannerControl.DataGrid_Planner.SelectedIndex, 0));
+                    e.Handled = true;
                 }
             }
         }

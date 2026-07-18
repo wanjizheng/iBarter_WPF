@@ -373,29 +373,52 @@ public class RouteStepLabelTests {
     }
 
     [Fact]
-    public void RouteStepMapLabel_NeverAuthorizesCompletion() {
-        // The label's Tag is the descriptor. The WPF layer binds
-        // IsHitTestVisible=false on the wrapper so a double-click
-        // cannot fire. The audit's claim is that the renderer
-        // never produces anything that grants completion
-        // authority. The descriptor's only field that COULD be
-        // misinterpreted is BarterRowId — but that is just an
-        // identifier, not a handler. There's no StepKind-aware
-        // callback or AuthorizesCompletion flag on the descriptor.
+    public void RouteStepMapLabel_DescriptorContainsNoExecutableCallback() {
+        // The label's Tag remains a passive positioning/content
+        // descriptor. RouteStepLabelInteraction creates a separate,
+        // StepKind-aware RouteMapNode for DataContext; no callback or
+        // mutable completion authority is hidden in this record.
         var label = new RouteStepMapLabel(
             1, 0, RouteStepKind.Barter, "Iliya", "0:Iliya:800208:800241",
             "800208 × 1 → 800241 × 1", false);
-        // AuthorizesCompletion is the existing map-level gate;
-        // it lives on RouteMapNode, not on RouteStepMapLabel.
         // The renderer's descriptor only carries identity + content.
         Assert.False(label.IsWarehouseOperation);
-        // The wrapper's IsHitTestVisible=false in the WPF layer
-        // is what blocks the click. The test contract here is
-        // that the descriptor itself has no handler, no callback,
-        // and no "can complete" flag.
         var props = typeof(RouteStepMapLabel).GetProperties();
         Assert.DoesNotContain(props, p => p.Name.Contains("Authorize")
             || p.Name.Contains("CanComplete")
             || p.Name.Contains("Handler"));
+    }
+
+    [Fact]
+    public void BarterLabelInteraction_AuthorizesExactPersistentRowId() {
+        var label = new RouteStepMapLabel(
+            2, 4, RouteStepKind.Barter, "Baremi",
+            "br-11111111111111111111111111111111",
+            "紫水晶碎片 × 1 → 白色幼虫标本 × 1",
+            IsWarehouseOperation: false,
+            BarterGroup: 7);
+
+        var node = RouteStepLabelInteraction.CreateNode(label);
+
+        Assert.True(node.AuthorizesCompletion);
+        Assert.Equal(label.BarterRowId, node.BarterRowId);
+        Assert.Equal(label.RouteNumber, node.RouteNumber);
+        Assert.Equal(label.StepIndex, node.StepIndex);
+    }
+
+    [Theory]
+    [InlineData(RouteStepKind.Pickup, "br-should-not-authorize", true)]
+    [InlineData(RouteStepKind.Unload, "br-should-not-authorize", true)]
+    [InlineData(RouteStepKind.Barter, null, false)]
+    [InlineData(RouteStepKind.Barter, "", false)]
+    public void NonBarterOrMissingRowIdLabelInteraction_RefusesCompletion(
+        RouteStepKind kind,
+        string? rowId,
+        bool warehouse) {
+        var label = new RouteStepMapLabel(
+            1, 0, kind, "Iliya", rowId,
+            "Iliya · 装货/卸货", warehouse);
+
+        Assert.False(RouteStepLabelInteraction.CreateNode(label).AuthorizesCompletion);
     }
 }
