@@ -221,8 +221,8 @@ namespace iBarter.View {
                 || App.myCargoProperty.TotalLT <= 0)
                 return null;
 
-            var routeRows = App.myPVM.BarterCollection.Select((b, index) => new PlannerRouteSnapshot(
-                RowId: RoutePlannerRowIdentity.Create(index, b.IsLandName, b.Item1.ItemID, b.Item2.ItemID),
+            var routeRows = App.myPVM.BarterCollection.Select(b => new PlannerRouteSnapshot(
+                RowId: b.PlannerRowId,
                 ExchangeDone: b.ExchangeDone,
                 ExchangeQuantity: b.ExchangeQuantity,
                 IslandId: b.IsLandName,
@@ -726,13 +726,29 @@ namespace iBarter.View {
                     List<Barter> dataSource = JsonConvert.DeserializeObject<List<Barter>>(readJsonData);
                     if (dataSource != null && dataSource.Count > 0) {
                         App.listBarterPlanner.Clear();
+                        int migratedCount = 0;
                         for (int i = 0; i < dataSource.Count; i++) {
                             Barter myBarter = dataSource[i];
+                            // Audit round 3: one-shot migration assigns a
+                            // fresh PlannerRowId to any row loaded from
+                            // an older file that lacks the field. The
+                            // field is then persisted on the next
+                            // SaveData call so reloads reuse it.
+                            if (string.IsNullOrEmpty(myBarter.PlannerRowId)
+                                || myBarter.PlannerRowId.StartsWith("INVALID:", StringComparison.Ordinal)) {
+                                myBarter.PlannerRowId = "br-" + Guid.NewGuid().ToString("N");
+                                migratedCount++;
+                            }
                             App.listBarterPlanner.Add(myBarter);
                         }
 
                         RefreshDataGrid();
                         //Grouping();
+                        if (migratedCount > 0) {
+                            App.myCFun.Log(
+                                $"[Planner] 已为 {migratedCount} 条旧记录生成持久化 PlannerRowId，下次保存即生效。",
+                                Brushes.SteelBlue);
+                        }
                         App.myCFun.Log(Localization.LanguageService.Instance.Localize(
                             "str.Log.Planner.Loaded")
                             + (loadedSetting ? "" : " (UI state XML missing, skipped)")
@@ -869,11 +885,7 @@ namespace iBarter.View {
                 Barter myBarter = (Barter)e.Record;
                 string rowId = myBarter is null
                     ? string.Empty
-                    : RoutePlannerRowIdentity.Create(
-                        App.myPVM.BarterCollection.IndexOf(myBarter),
-                        myBarter.IsLandName,
-                        myBarter.Item1?.ItemID ?? string.Empty,
-                        myBarter.Item2?.ItemID ?? string.Empty);
+                    : myBarter.PlannerRowId;
                 bool completed = myBarter?.ExchangeDone ?? false;
                 App.myRouteCoordinator?.ApplyBarterCompletionProgress(
                     BuildCurrentAutomaticRouteRequest(
@@ -1348,7 +1360,7 @@ namespace iBarter.View {
                 // Phase 6 review caught this — ItemID is the canonical, locale-
                 // independent key both sides agree on.
                 var route = new AutoPlanningRoute(
-                    RowId: i.ToString(CultureInfo.InvariantCulture),
+                    RowId: b.PlannerRowId,
                     Group: b.BarterGroup,
                     Item1Id: b.Item1.ItemID,
                     Item1Level: int.TryParse(b.Item1.ItemLV, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedLv1) ? parsedLv1 : 0,
@@ -1419,11 +1431,11 @@ namespace iBarter.View {
                 return;
             }
 
-            var routeRows = liveRows.Select((b, index) => new PlannerRouteSnapshot(
-                RowId: RoutePlannerRowIdentity.Create(index, b.IsLandName, b.Item1.ItemID, b.Item2.ItemID),
+            var routeRows = liveRows.Select(b => new PlannerRouteSnapshot(
+                RowId: b.PlannerRowId,
                 ExchangeDone: b.ExchangeDone,
                 ExchangeQuantity: calculation.ApplySet.Multipliers.GetValueOrDefault(
-                    index.ToString(CultureInfo.InvariantCulture), b.ExchangeQuantity),
+                    b.PlannerRowId, b.ExchangeQuantity),
                 IslandId: b.IsLandName,
                 Item1Id: b.Item1.ItemID,
                 Item1DisplayName: b.Item1NameDisplay,
@@ -1481,10 +1493,13 @@ namespace iBarter.View {
             if (!manualSelection) {
                 DataGrid_Planner.BeginInit();
                 try {
-                    for (int i = 0; i < liveRows.Count; i++) {
-                        string key = i.ToString(CultureInfo.InvariantCulture);
-                        if (calculation.ApplySet.Multipliers.TryGetValue(key, out int multiplier))
-                            liveRows[i].ExchangeQuantity = multiplier;
+                    // Audit round 3: the planner's Multipliers dictionary
+                    // is keyed by Barter.PlannerRowId (persistent), not
+                    // by collection index. Look each row up by its stable
+                    // id so duplicate tuples get their own multiplier.
+                    foreach (var b in liveRows) {
+                        if (calculation.ApplySet.Multipliers.TryGetValue(b.PlannerRowId, out int multiplier))
+                            b.ExchangeQuantity = multiplier;
                     }
                 }
                 finally {

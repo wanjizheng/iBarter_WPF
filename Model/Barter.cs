@@ -15,6 +15,13 @@ namespace iBarter {
         int intChange = 0, intInv = 0;
         private volatile int totalitem1ExchangeQuantity, totalitem2ExchangeQuantity;
         private bool tofGrouped = false;
+        // Persistent identity assigned exactly once on construction and
+        // round-tripped through myPlan_Data.json. The Planner's row
+        // index, sort order, filter, and grouping MUST NOT change this
+        // value. The only allowed regeneration is the one-shot loader
+        // migration for old files that lack the field.
+        [JsonProperty("PlannerRowId")]
+        private string plannerRowId = null!;
 
         public Barter() {
         }
@@ -45,6 +52,38 @@ namespace iBarter {
             if (InvQuantityChange == 0) {
                 InvQuantityChange = InvQuantity;
             }
+
+            // New rows get a fresh GUID. Existing rows loaded from
+            // myPlan_Data.json keep their PlannerRowId via the JSON
+            // setter (string is deserialized into the field directly).
+            if (string.IsNullOrEmpty(plannerRowId)) {
+                plannerRowId = "br-" + Guid.NewGuid().ToString("N");
+            }
+        }
+
+        /// <summary>
+        /// Stable, unique identity for the row. Assigned on first
+        /// construction and persisted through <c>myPlan_Data.json</c>.
+        /// All Planner/CK/map/progress paths read this directly
+        /// instead of re-deriving from list position or business
+        /// keys. Never null on a constructed instance.
+        /// </summary>
+        [JsonIgnore]
+        public string PlannerRowId {
+            get {
+                if (string.IsNullOrEmpty(plannerRowId)) {
+                    // Defensive: a default-constructed Barter that
+                    // bypasses the constructor must still expose a
+                    // usable id. The constructor normally fills this,
+                    // so this branch only fires for objects built via
+                    // Json deserialization that omitted the field
+                    // (handled by migration) or via reflection-based
+                    // tests.
+                    plannerRowId = "br-" + Guid.NewGuid().ToString("N");
+                }
+                return plannerRowId;
+            }
+            set => plannerRowId = value;
         }
 
         public bool CalculatedAlready {

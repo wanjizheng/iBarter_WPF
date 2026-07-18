@@ -237,13 +237,12 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     }
 
     public void RefreshCompletedBarters(IReadOnlyList<Barter> plannerBarters) {
-        var refreshed = plannerBarters.Select((barter, index) => (barter, index))
-            .Where(x => x.barter.ExchangeDone)
-            .Select(x => RoutePlannerRowIdentity.Create(
-                x.index,
-                x.barter.IsLandName,
-                x.barter.Item1.ItemID,
-                x.barter.Item2.ItemID))
+        // Audit round 3: completed-set is keyed by Barter.PlannerRowId,
+        // the persistent stable id stored in myPlan_Data.json. The
+        // legacy index-based derivation is removed.
+        var refreshed = plannerBarters
+            .Where(x => x.ExchangeDone)
+            .Select(x => x.PlannerRowId)
             .ToHashSet(StringComparer.Ordinal);
         if (completedBarterRowIds.SetEquals(refreshed)) return;
 
@@ -277,19 +276,15 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
 
         // Step 1: rebuild the authoritative completed set so any indirect
         // mutation (row reorder, edit, undo) is observed before we touch the
-        // plan.
-        var refreshed = plannerBarters.Select((barter, index) => (barter, index))
-            .Where(x => x.barter.ExchangeDone)
-            .Select(x => RoutePlannerRowIdentity.Create(
-                x.index,
-                x.barter.IsLandName,
-                x.barter.Item1.ItemID,
-                x.barter.Item2.ItemID))
+        // plan. Audit round 3: the identity is Barter.PlannerRowId
+        // (persistent), not index/business-key derived.
+        var refreshed = plannerBarters
+            .Where(x => x.ExchangeDone)
+            .Select(x => x.PlannerRowId)
             .ToHashSet(StringComparer.Ordinal);
         // Honor the explicit toggle requested by the caller even if the
-        // grid hasn't propagated it yet (the CK editor sets ExchangeDone
-        // and triggers us on CurrentCellValueChanged; if the caller's
-        // intent disagrees with the grid we trust the caller).
+        // grid hasn't propagated it yet. The caller MUST pass the same
+        // PlannerRowId the planner used to build the row.
         if (completed) refreshed.Add(rowId);
         else refreshed.Remove(rowId);
         completedBarterRowIds = refreshed;

@@ -28,6 +28,11 @@ public static class RouteReplay {
     /// </summary>
     public static PlannedRoute? ReplayRoute(AutomaticRoutePlanningRequest request, PlannedRoute route) {
         if (request is null || route is null) return null;
+        if (route.Steps.Count == 0) {
+            // Nothing to replay. A zero-step route is not publishable;
+            // return null so the caller can fall back to the original.
+            return null;
+        }
         var state = RouteSimulationState.CreateInitial(request);
         var newSteps = new List<RouteStep>(route.Steps.Count);
         for (int stepIndex = 0; stepIndex < route.Steps.Count; stepIndex++) {
