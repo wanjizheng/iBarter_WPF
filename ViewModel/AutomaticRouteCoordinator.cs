@@ -135,7 +135,18 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         var verification = RoutePlanVerifier.Verify(request, plan);
         if (!verification.Success || verification.VerifiedPlan is null) return false;
         currentPlanMode = generationMode;
-        Publish(verification.VerifiedPlan);
+
+        // Bug 2 fix: even a verifier-approved plan can carry a phantom
+        // pickup that no remaining BarterStep actually consumes. Re-run the
+        // normalization pass before publishing so the user never sees the
+        // "pickup-then-unload the same item at the same warehouse" round
+        // trip that the bug report called out.
+        var normalized = RouteCargoNormalizer.Normalize(verification.VerifiedPlan);
+        var finalVerification = RoutePlanVerifier.Verify(request, normalized);
+        var publishable = finalVerification.Success && finalVerification.VerifiedPlan is not null
+            ? finalVerification.VerifiedPlan
+            : verification.VerifiedPlan;
+        Publish(publishable);
         SaveCurrentPlan();
         return true;
     }
@@ -235,6 +246,140 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         UpdateVisibleRoute();
         SelectPreferredOrFirstBarter(selectedRouteNumber, selectedBarterRowId);
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Single source of truth for "the user finished a barter" — invoked by
+    /// both the Planner CK checkbox and the map's real <c>BarterStep</c>
+    /// double-click.  Reconciliation is in-memory; persistence is the
+    /// caller's responsibility.
+    /// <para>Bug 1 root cause: the CK path used to call
+    /// <c>Invalidate("planner-check")</c>, which set <c>currentPlan = null</c>
+    /// and dropped every auto route on the floor.  Bug 4 root cause: the CK
+    /// path used to call a UI-only <c>displayedParley -= ...</c> that drifted
+    /// under repeated events and reloads.  Both are replaced by this method,
+    /// which derives the remaining parley and the post-progress route plan
+    /// from the current authoritative Planner/Routing state.</para>
+    /// </summary>
+    /// <returns>True when at least one route is still live; false when the
+    /// plan is fully consumed by the new completion.</returns>
+    public bool ApplyBarterCompletionProgress(
+        AutomaticRoutePlanningRequest? request,
+        IReadOnlyList<Barter> plannerBarters,
+        string rowId,
+        bool completed) {
+        if (string.IsNullOrWhiteSpace(rowId)) return currentPlan is not null;
+
+        // Step 1: rebuild the authoritative completed set so any indirect
+        // mutation (row reorder, edit, undo) is observed before we touch the
+        // plan.
+        var refreshed = plannerBarters.Select((barter, index) => (barter, index))
+            .Where(x => x.barter.ExchangeDone)
+            .Select(x => RoutePlannerRowIdentity.Create(
+                x.index,
+                x.barter.IsLandName,
+                x.barter.Item1.ItemID,
+                x.barter.Item2.ItemID))
+            .ToHashSet(StringComparer.Ordinal);
+        // Honor the explicit toggle requested by the caller even if the
+        // grid hasn't propagated it yet (the CK editor sets ExchangeDone
+        // and triggers us on CurrentCellValueChanged; if the caller's
+        // intent disagrees with the grid we trust the caller).
+        if (completed) refreshed.Add(rowId);
+        else refreshed.Remove(rowId);
+        completedBarterRowIds = refreshed;
+
+        // Step 2: re-project the in-memory plan against the new completed
+        // set.  If no plan exists yet, the user just hasn't generated one —
+        // nothing else to do.
+        if (currentPlan is null) {
+            UpdateVisibleRoute();
+            RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+            return false;
+        }
+
+        // Step 3: prune completed BarterSteps from every route; drop routes
+        // whose only purpose was the removed barter; cargo-normalize the
+        // survivors so an undo/CK combination never leaves a phantom pickup
+        // hanging.
+        var reconciledRoutes = new List<PlannedRoute>(currentPlan.Routes.Count);
+        foreach (var route in currentPlan.Routes) {
+            var remaining = RouteProgressFilter.ExcludeCompletedBarters(
+                route.Steps, completedBarterRowIds).ToArray();
+            if (remaining.Length == 0) continue; // whole route consumed
+
+            // Drop a leading pickup whose entire contents would sit unused,
+            // and a trailing unload that became empty.  The full normalization
+            // pass below catches the rest.
+            remaining = TrimPickupAndUnload(remaining);
+
+            // Detect "the last remaining step is the unload of the start
+            // warehouse" and drop it: a route that has only pickup/unload
+            // left with no barters between them has no value.
+            if (!remaining.OfType<BarterStep>().Any()) continue;
+
+            reconciledRoutes.Add(new PlannedRoute(
+                route.Number, route.StartWarehouseId, route.EndWarehouseId,
+                remaining, route.Distance, route.InitialLT, route.CurrentLT, route.PeakLT));
+        }
+
+        // Step 4: cargo-normalize the survivors so unused pickup items
+        // (Bug 2) are dropped even though the verifier originally accepted
+        // them — they made it past the verifier only because the verifier
+        // saw the consumed bookkeeping match the bundle.  After pruning
+        // completed barters, those counts no longer hold, so re-run.
+        var reconciled = new RoutePlan(
+            currentPlan.Status,
+            reconciledRoutes.Select(route => {
+                var (normalized, _) = RouteCargoNormalizer.NormalizeRoute(route);
+                return normalized;
+            }).ToArray(),
+            currentPlan.Objective,
+            currentPlan.Diagnostics,
+            currentPlan.InputFingerprint);
+
+        // Step 5: verify what survived.  If the verifier rejects the
+        // adjusted plan, fall back to keeping the previous plan rather
+        // than overwriting a known-good snapshot.
+        RoutePlan finalPlan = reconciled;
+        if (request is not null && reconciled.Routes.Count > 0) {
+            var verification = RoutePlanVerifier.Verify(request, reconciled);
+            if (verification.Success && verification.VerifiedPlan is not null) {
+                finalPlan = verification.VerifiedPlan;
+            }
+        }
+
+        // Step 6: publish.
+        Publish(finalPlan, selectedRouteNumber, showAllRoutes, selectedBarterRowId);
+        RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+
+        // Step 7: persist the updated plan (best-effort: never overwrite a
+        // good snapshot with an empty one).
+        if (finalPlan.Routes.Count > 0 || currentPlan.Routes.Count == 0) {
+            SaveCurrentPlan();
+        }
+        return finalPlan.Routes.Count > 0;
+    }
+
+    /// <summary>
+    /// Helper used by <see cref="ApplyBarterCompletionProgress"/>: drops a
+    /// pickup whose items are all zero, drops an unload whose items are all
+    /// zero. Preserves the rest of the step list verbatim.
+    /// </summary>
+    private static RouteStep[] TrimPickupAndUnload(RouteStep[] steps) {
+        var result = new List<RouteStep>(steps.Length);
+        foreach (var step in steps) {
+            switch (step) {
+                case WarehousePickupStep pickup when pickup.Items.Count == 0:
+                    continue;
+                case WarehouseUnloadStep unload when unload.Items.Count == 0:
+                    continue;
+                default:
+                    result.Add(step);
+                    break;
+            }
+        }
+        return result.ToArray();
     }
 
     public void Invalidate(string reason) {
