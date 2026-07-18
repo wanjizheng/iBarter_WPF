@@ -132,10 +132,53 @@ namespace iBarter.View {
         private void TryRestoreAutomaticRouteAfterLoad() {
             try {
                 App.myRouteCoordinator?.RefreshCompletedBarters(App.myPVM.BarterCollection);
-                var request = BuildCurrentAutomaticRouteRequest();
-                if (request is not null
-                    && App.myRouteCoordinator?.TryRestore(request) == true)
-                    App.myfmMain?.ActivateShipCargoSelection();
+
+                // Discover the optimization mode that was used to generate the
+                // saved plan. v2 envelopes persist it explicitly; v1 envelopes
+                // do not, so we fall back to trying each profile until one
+                // matches the saved fingerprint. This is the fix for the
+                // "saved route plan does not appear after restart" bug:
+                // previously the restore path hard-coded MaxLocalMoves=2000,
+                // which only matched the Deep profile's fingerprint.
+                var persistencePath = AutomaticRoutePlanStorage.RuntimeResourcesPath;
+                RouteOptimizationMode[]? modesToTry = null;
+                if (RoutePlanPersistence.TryReadMetadata(
+                        persistencePath,
+                        out int schemaVersion,
+                        out _,
+                        out var savedMode,
+                        out _)
+                    && savedMode.HasValue) {
+                    modesToTry = new[] { savedMode.Value };
+                }
+                else {
+                    modesToTry = new[] {
+                        RouteOptimizationMode.Quick,
+                        RouteOptimizationMode.Balanced,
+                        RouteOptimizationMode.Deep,
+                    };
+                }
+
+                RoutePlanLoadResult? lastResult = null;
+                foreach (var mode in modesToTry) {
+                    var profile = RouteOptimizationProfile.For(mode);
+                    var request = BuildCurrentAutomaticRouteRequest(profile);
+                    if (request is null) continue;
+                    var result = App.myRouteCoordinator!.TryRestore(request);
+                    lastResult = result;
+                    if (result.Status == RoutePlanLoadStatus.Loaded) {
+                        LogRestoreSuccess(result);
+                        App.myfmMain?.ActivateShipCargoSelection();
+                        return;
+                    }
+                }
+
+                // No mode matched (or no request could be built). Log the
+                // most informative failure we saw so the user knows whether
+                // to retry AutoPlan or whether the save file is broken.
+                if (lastResult is not null) {
+                    LogRestoreFailure(lastResult);
+                }
             }
             catch (Exception exception) {
                 // A stale or partially edited Planner must never make startup fail.
@@ -143,7 +186,34 @@ namespace iBarter.View {
             }
         }
 
-        public AutomaticRoutePlanningRequest? BuildCurrentAutomaticRouteRequest() {
+        private void LogRestoreSuccess(RoutePlanLoadResult result) {
+            string mode = result.SavedOptimizationMode?.ToString() ?? "Balanced";
+            int routeCount = result.Snapshot?.Plan.Routes.Count ?? 0;
+            App.myCFun?.Log(
+                $"[AutoRoute] 已恢复上次保存的路线（{mode} 模式，{routeCount} 条路线）。",
+                Brushes.DarkOliveGreen);
+        }
+
+        private void LogRestoreFailure(RoutePlanLoadResult result) {
+            string fingerprintShort = result.SavedFingerprint is { } saved
+                ? saved.Substring(0, Math.Min(12, saved.Length))
+                : "<none>";
+            string message = result.Status switch {
+                RoutePlanLoadStatus.FileNotFound =>
+                    "[AutoRoute] 首次启动，没有可恢复的自动路线。",
+                RoutePlanLoadStatus.FingerprintMismatch =>
+                    $"[AutoRoute] 已保存的路线与当前 Planner、仓库、船舶设置或搜索模式不一致，需重新生成 (saved={fingerprintShort})。",
+                RoutePlanLoadStatus.UnsupportedSchema =>
+                    $"[AutoRoute] 路线保存格式版本 (Schema {result.SchemaVersion}) 不受支持，需重新生成。",
+                RoutePlanLoadStatus.CorruptFile =>
+                    "[AutoRoute] 自动路线保存文件已损坏，无法恢复。",
+                _ => $"[AutoRoute] 自动路线恢复失败 ({result.Status})。",
+            };
+            App.myCFun?.Log(message, Brushes.OrangeRed);
+        }
+
+        public AutomaticRoutePlanningRequest? BuildCurrentAutomaticRouteRequest(
+            RouteOptimizationProfile profile) {
             if (App.myPVM?.BarterCollection is null || App.myPVM.BarterCollection.Count == 0
                 || App.myStorageVM?.StorageCollection is null
                 || App.myCargoProperty is null
@@ -179,8 +249,15 @@ namespace iBarter.View {
             var cargo = new CargoCapacitySnapshot(
                 Convert.ToInt32(Math.Round(App.myCargoProperty.ExtraLT, MidpointRounding.AwayFromZero)),
                 Convert.ToInt32(Math.Round(App.myCargoProperty.TotalLT, MidpointRounding.AwayFromZero)));
+            // Forward the caller-supplied profile's MaxLocalEvaluations into
+            // the request limits. The fingerprint includes MaxLocalMoves, so
+            // using the saved mode's value here is what lets restore match
+            // the fingerprint that was computed at save time.
             return AutomaticRoutePlanningAdapter.BuildRequest(
-                routeRows, storageRows, islandRows, cargo, new RouteSearchLimits(250_000, 2_000));
+                routeRows, storageRows, islandRows, cargo,
+                AutomaticRoutePlanningAdapter.WithProfileLimits(
+                    new RouteSearchLimits(250_000, 2_000), profile),
+                profile);
         }
 
         private void RegisterLocalizedDropDownRenderer() {
@@ -1374,7 +1451,7 @@ namespace iBarter.View {
                 }
             }
 
-            if (!App.myRouteCoordinator.PublishGeneratedPlan(request, routePlan))
+            if (!App.myRouteCoordinator.PublishGeneratedPlan(request, routePlan, profile.Mode))
                 throw new InvalidOperationException("The generated route failed commit verification.");
 
             UpdateInvChange(-1);

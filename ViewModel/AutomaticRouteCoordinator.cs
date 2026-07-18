@@ -20,6 +20,11 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private CargoMode mode = CargoMode.Manual;
     private RouteOptimizationMode selectedOptimizationMode = RouteOptimizationMode.Balanced;
     private RoutePlan? currentPlan;
+    // Mode that the currently published plan was generated under. Tracked
+    // separately from `selectedOptimizationMode` (which mirrors the live
+    // ComboBox) so that subsequent interactive saves do not silently change
+    // to whatever the user most recently picked in the dropdown.
+    private RouteOptimizationMode currentPlanMode = RouteOptimizationMode.Balanced;
     private int? selectedRouteNumber;
     private bool showAllRoutes;
     private int? focusedRouteNumber;
@@ -109,47 +114,73 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     }
 
     public async Task<RoutePlan> GenerateAsync(AutomaticRoutePlanningRequest request) {
+        // Legacy single-arg overload. Caller did not pass a profile, so we
+        // fall back to whatever the ComboBox currently shows. The caller in
+        // PlannerControl.xaml.cs now passes profile.Mode explicitly via the
+        // 3-arg PublishGeneratedPlan; this overload remains for any future
+        // test or non-UI code path that builds a request without a profile.
         var plan = await CalculateAsync(request);
-        PublishGeneratedPlan(request, plan);
+        PublishGeneratedPlan(request, plan, selectedOptimizationMode);
         return plan;
     }
 
-    public bool PublishGeneratedPlan(AutomaticRoutePlanningRequest request, RoutePlan plan) {
+    public bool PublishGeneratedPlan(
+        AutomaticRoutePlanningRequest request,
+        RoutePlan plan,
+        RouteOptimizationMode generationMode) {
         if (plan.Status is not (RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit))
             return false;
         if (!StringComparer.Ordinal.Equals(plan.InputFingerprint, RoutePlanFingerprint.Compute(request)))
             return false;
         var verification = RoutePlanVerifier.Verify(request, plan);
         if (!verification.Success || verification.VerifiedPlan is null) return false;
+        currentPlanMode = generationMode;
         Publish(verification.VerifiedPlan);
         SaveCurrentPlan();
         return true;
     }
 
-    public bool TryRestore(AutomaticRoutePlanningRequest request) {
+    /// <summary>
+    /// Loads the persisted plan (if any) and, on a fingerprint match, publishes
+    /// it as the active route. Returns the rich load result so the caller can
+    /// surface the precise reason when restore fails (mismatch / corrupt /
+    /// unsupported schema / progress-incompatible).
+    /// </summary>
+    public RoutePlanLoadResult TryRestore(AutomaticRoutePlanningRequest request) {
         string fingerprint = RoutePlanFingerprint.Compute(request);
-        if (RoutePlanPersistence.TryLoad(PersistencePath, fingerprint, out var exact)
-            && exact is not null) {
-            var verification = RoutePlanVerifier.Verify(request, exact.Plan);
-            if (!verification.Success || verification.VerifiedPlan is null) return false;
+        var exact = RoutePlanPersistence.TryLoad(PersistencePath, fingerprint);
+        if (exact.Status == RoutePlanLoadStatus.Loaded && exact.Snapshot is not null) {
+            var verification = RoutePlanVerifier.Verify(request, exact.Snapshot.Plan);
+            if (!verification.Success || verification.VerifiedPlan is null) {
+                return exact with { Status = RoutePlanLoadStatus.FingerprintMismatch };
+            }
+            currentPlanMode = exact.SavedOptimizationMode ?? RouteOptimizationMode.Balanced;
             Publish(
                 verification.VerifiedPlan,
-                exact.SelectedRouteNumber,
-                exact.ShowAll,
-                exact.SelectedBarterRowId);
-            return true;
+                exact.Snapshot.SelectedRouteNumber,
+                exact.Snapshot.ShowAll,
+                exact.Snapshot.SelectedBarterRowId);
+            return exact;
         }
 
-        if (!RoutePlanPersistence.TryLoadAfterProgress(
+        // Direct fingerprint match failed. Try the progress-restore path so a
+        // partially completed plan can still be restored when the user has
+        // ticked off some barters since the file was saved.
+        if (RoutePlanPersistence.TryLoadAfterProgress(
                 PersistencePath, request, completedBarterRowIds, out var progressed)
-            || progressed is null)
-            return false;
-        Publish(
-            progressed.Plan,
-            progressed.SelectedRouteNumber,
-            progressed.ShowAll,
-            progressed.SelectedBarterRowId);
-        return true;
+            && progressed is not null) {
+            currentPlanMode = exact.SavedOptimizationMode ?? currentPlanMode;
+            Publish(
+                progressed.Plan,
+                progressed.SelectedRouteNumber,
+                progressed.ShowAll,
+                progressed.SelectedBarterRowId);
+            return exact with {
+                Status = RoutePlanLoadStatus.Loaded,
+                Snapshot = progressed,
+            };
+        }
+        return exact;
     }
 
     public void SelectRoute(int routeNumber) {
@@ -213,6 +244,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             activeFingerprint = null;
         }
         currentPlan = null;
+        currentPlanMode = RouteOptimizationMode.Balanced;
         selectedRouteNumber = null;
         showAllRoutes = false;
         visibleAutomaticSteps = [];
@@ -376,7 +408,17 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         App.listIslands?.FirstOrDefault(x => x.IslandsName == islandId)?.IslandsNameDisplay
         ?? islandId;
 
-    private void SaveCurrentPlan() {
+    /// <summary>
+    /// Flushes the currently active plan to disk. Called from any user
+    /// interaction that mutates the persisted snapshot (publish, select,
+    /// focus). Also invoked from <c>MainWindow_Closing</c> as a final
+    /// safety net so that a crash or forced shutdown does not lose the
+    /// most recently displayed route.
+    /// No-op when there is no active plan or when the UI is in manual
+    /// cargo mode (the user is editing the cargo list directly and the
+    /// plan reflects nothing).
+    /// </summary>
+    public void SaveCurrentPlan() {
         if (currentPlan is null || mode != CargoMode.AutomaticRoute) return;
         try {
             RoutePlanPersistence.Save(
@@ -384,7 +426,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 currentPlan,
                 selectedRouteNumber,
                 showAllRoutes,
-                selectedBarterRowId);
+                selectedBarterRowId,
+                currentPlanMode);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             App.myCFun?.Log(ex.Message, System.Windows.Media.Brushes.OrangeRed);

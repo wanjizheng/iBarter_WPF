@@ -15,16 +15,16 @@ public sealed class RoutePlanPersistenceTests {
             RoutePlanPersistence.Save(
                 path, plan, plan.Routes[0].Number,
                 showAll: true, selectedBarterRowId: "r1");
-            bool loaded = RoutePlanPersistence.TryLoad(path, plan.InputFingerprint, out var snapshot);
+            var result = RoutePlanPersistence.TryLoad(path, plan.InputFingerprint);
 
-            Assert.True(loaded);
-            Assert.NotNull(snapshot);
-            Assert.Equal(plan.InputFingerprint, snapshot.Plan.InputFingerprint);
-            Assert.Equal(plan.Objective, snapshot.Plan.Objective);
-            Assert.True(RoutePlanVerifier.Verify(request, snapshot.Plan).Success);
-            Assert.Equal(plan.Routes[0].Number, snapshot.SelectedRouteNumber);
-            Assert.True(snapshot.ShowAll);
-            Assert.Equal("r1", snapshot.SelectedBarterRowId);
+            Assert.Equal(RoutePlanLoadStatus.Loaded, result.Status);
+            Assert.NotNull(result.Snapshot);
+            Assert.Equal(plan.InputFingerprint, result.Snapshot!.Plan.InputFingerprint);
+            Assert.Equal(plan.Objective, result.Snapshot.Plan.Objective);
+            Assert.True(RoutePlanVerifier.Verify(request, result.Snapshot.Plan).Success);
+            Assert.Equal(plan.Routes[0].Number, result.Snapshot.SelectedRouteNumber);
+            Assert.True(result.Snapshot.ShowAll);
+            Assert.Equal("r1", result.Snapshot.SelectedBarterRowId);
         }
         finally { File.Delete(path); }
     }
@@ -37,10 +37,14 @@ public sealed class RoutePlanPersistenceTests {
             var plan = new AutomaticRoutePlanner().Plan(request, CancellationToken.None);
             RoutePlanPersistence.Save(path, plan, 1, false);
 
-            Assert.False(RoutePlanPersistence.TryLoad(path, "different", out _));
+            var mismatchResult = RoutePlanPersistence.TryLoad(path, "different");
+            Assert.Equal(RoutePlanLoadStatus.FingerprintMismatch, mismatchResult.Status);
+            Assert.Null(mismatchResult.Snapshot);
 
             File.WriteAllText(path, "{ definitely not json");
-            Assert.False(RoutePlanPersistence.TryLoad(path, plan.InputFingerprint, out _));
+            var corruptResult = RoutePlanPersistence.TryLoad(path, plan.InputFingerprint);
+            Assert.Equal(RoutePlanLoadStatus.CorruptFile, corruptResult.Status);
+            Assert.Null(corruptResult.Snapshot);
         }
         finally { File.Delete(path); }
     }
@@ -63,14 +67,17 @@ public sealed class RoutePlanPersistenceTests {
                 original.Limits,
                 original.ConfigurationVersion);
 
-            Assert.False(RoutePlanPersistence.TryLoad(
-                path, RoutePlanFingerprint.Compute(remaining), out _));
-            Assert.True(RoutePlanPersistence.TryLoadAfterProgress(
+            var directResult = RoutePlanPersistence.TryLoad(
+                path, RoutePlanFingerprint.Compute(remaining));
+            Assert.Equal(RoutePlanLoadStatus.FingerprintMismatch, directResult.Status);
+
+            bool restored = RoutePlanPersistence.TryLoadAfterProgress(
                 path,
                 remaining,
                 new HashSet<string>(["r1"], StringComparer.Ordinal),
-                out var restored));
-            Assert.Equal(plan.InputFingerprint, restored?.Plan.InputFingerprint);
+                out var snapshot);
+            Assert.True(restored);
+            Assert.Equal(plan.InputFingerprint, snapshot?.Plan.InputFingerprint);
         }
         finally { File.Delete(path); }
     }

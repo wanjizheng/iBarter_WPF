@@ -47,6 +47,15 @@ namespace iBarter {
         // down when the main window closes - otherwise OnLastWindowClose
         // sees SplashScreen still open and never exits the process.
         private void MainWindow_Closing(object? sender, CancelEventArgs e) {
+            // Final-safety-net flush of the automatic-route plan so a crash
+            // or forced shutdown does not lose the most recently displayed
+            // route. SaveCurrentPlan is a no-op when there is no active
+            // plan, so this never overwrites a saved file with empty data.
+            try {
+                App.myRouteCoordinator?.SaveCurrentPlan();
+            }
+            catch { /* never block shutdown on a save failure */ }
+
             try {
                 if (App.mySplashScreen != null && App.mySplashScreen.IsLoaded) {
                     var splash = App.mySplashScreen;

@@ -9,8 +9,42 @@ public sealed record PersistedRoutePlan(
     bool ShowAll,
     string? SelectedBarterRowId);
 
+/// <summary>
+/// Discriminated result of an attempt to load a persisted route plan.
+/// Each value tells the caller exactly why a load failed so the UI can
+/// produce a useful diagnostic instead of swallowing every failure as
+/// the same silent "false".
+/// </summary>
+public enum RoutePlanLoadStatus {
+    Loaded,
+    FileNotFound,
+    UnsupportedSchema,
+    CorruptFile,
+    FingerprintMismatch,
+}
+
+/// <summary>
+/// Full result of <see cref="RoutePlanPersistence.TryLoad"/>. Carries the
+/// loaded snapshot on success and enough metadata on failure to log a
+/// useful diagnostic (which mode was saved, which fingerprint was expected).
+/// </summary>
+public sealed record RoutePlanLoadResult(
+    RoutePlanLoadStatus Status,
+    PersistedRoutePlan? Snapshot = null,
+    int SchemaVersion = 0,
+    string? SavedFingerprint = null,
+    string? ExpectedFingerprint = null,
+    RouteOptimizationMode? SavedOptimizationMode = null,
+    DateTimeOffset? SavedAtUtc = null);
+
 public static class RoutePlanPersistence {
-    private const int SchemaVersion = 1;
+    /// <summary>
+    /// Bumped from 1 to 2 when <see cref="OptimizationMode"/> and
+    /// <see cref="SavedAtUtc"/> were added to the envelope. v1 files are
+    /// still readable: the missing fields deserialize to null and the
+    /// caller is expected to try each profile until one matches.
+    /// </summary>
+    public const int SchemaVersion = 2;
     private static readonly JsonSerializerOptions JsonOptions = new() {
         WriteIndented = true,
         PropertyNameCaseInsensitive = true,
@@ -21,25 +55,81 @@ public static class RoutePlanPersistence {
         RoutePlan plan,
         int? selectedRouteNumber,
         bool showAll,
-        string? selectedBarterRowId = null) {
+        string? selectedBarterRowId = null,
+        RouteOptimizationMode? optimizationMode = null,
+        DateTimeOffset? savedAtUtc = null) {
         string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
         string temp = path + ".tmp";
-        var dto = ToDto(plan, selectedRouteNumber, showAll, selectedBarterRowId);
+        var dto = ToDto(plan, selectedRouteNumber, showAll, selectedBarterRowId,
+            optimizationMode, savedAtUtc ?? DateTimeOffset.UtcNow);
         File.WriteAllText(temp, JsonSerializer.Serialize(dto, JsonOptions));
         File.Move(temp, path, overwrite: true);
     }
 
-    public static bool TryLoad(
+    public static RoutePlanLoadResult TryLoad(
         string path,
-        string expectedFingerprint,
-        out PersistedRoutePlan? snapshot) {
-        if (!TryRead(path, out snapshot) || snapshot is null
-            || !StringComparer.Ordinal.Equals(snapshot.Plan.InputFingerprint, expectedFingerprint)) {
-            snapshot = null;
-            return false;
+        string expectedFingerprint) {
+        if (!TryReadEnvelope(path, out var dto, out _)) {
+            // Distinguish file-missing from corrupt: TryReadEnvelope returns
+            // false in both cases, so check File.Exists to set the right status.
+            if (!File.Exists(path)) {
+                return new RoutePlanLoadResult(
+                    RoutePlanLoadStatus.FileNotFound,
+                    ExpectedFingerprint: expectedFingerprint);
+            }
+            return new RoutePlanLoadResult(
+                RoutePlanLoadStatus.CorruptFile,
+                ExpectedFingerprint: expectedFingerprint);
         }
-        return true;
+
+        if (dto!.SchemaVersion != SchemaVersion && dto.SchemaVersion != 1) {
+            // 1 is the legacy schema we still read; anything else is unsupported.
+            return new RoutePlanLoadResult(
+                RoutePlanLoadStatus.UnsupportedSchema,
+                SchemaVersion: dto.SchemaVersion,
+                ExpectedFingerprint: expectedFingerprint);
+        }
+
+        if (!StringComparer.Ordinal.Equals(dto.InputFingerprint, expectedFingerprint)) {
+            return new RoutePlanLoadResult(
+                RoutePlanLoadStatus.FingerprintMismatch,
+                SchemaVersion: dto.SchemaVersion,
+                SavedFingerprint: dto.InputFingerprint,
+                ExpectedFingerprint: expectedFingerprint,
+                SavedOptimizationMode: dto.OptimizationMode,
+                SavedAtUtc: dto.SavedAtUtc);
+        }
+
+        try {
+            var plan = FromDto(dto);
+            int? selected = plan.Routes.Any(x => x.Number == dto.SelectedRouteNumber)
+                ? dto.SelectedRouteNumber
+                : plan.Routes.FirstOrDefault()?.Number;
+            var snapshot = new PersistedRoutePlan(
+                plan,
+                selected,
+                dto.ShowAll && plan.Routes.Count > 0,
+                dto.SelectedBarterRowId);
+            return new RoutePlanLoadResult(
+                RoutePlanLoadStatus.Loaded,
+                snapshot,
+                dto.SchemaVersion,
+                dto.InputFingerprint,
+                expectedFingerprint,
+                dto.OptimizationMode,
+                dto.SavedAtUtc);
+        }
+        catch (Exception ex) when (ex is InvalidDataException
+                                       or IOException or UnauthorizedAccessException) {
+            return new RoutePlanLoadResult(
+                RoutePlanLoadStatus.CorruptFile,
+                SchemaVersion: dto.SchemaVersion,
+                SavedFingerprint: dto.InputFingerprint,
+                ExpectedFingerprint: expectedFingerprint,
+                SavedOptimizationMode: dto.OptimizationMode,
+                SavedAtUtc: dto.SavedAtUtc);
+        }
     }
 
     public static bool TryLoadAfterProgress(
@@ -47,6 +137,10 @@ public static class RoutePlanPersistence {
         AutomaticRoutePlanningRequest currentRequest,
         IReadOnlySet<string> completedBarterRowIds,
         out PersistedRoutePlan? snapshot) {
+        if (!File.Exists(path)) {
+            snapshot = null;
+            return false;
+        }
         if (!TryRead(path, out snapshot) || snapshot is null
             || !RoutePlanRestoreCompatibility.IsCompatibleAfterProgress(
                 currentRequest, snapshot.Plan, completedBarterRowIds)) {
@@ -57,11 +151,16 @@ public static class RoutePlanPersistence {
     }
 
     private static bool TryRead(string path, out PersistedRoutePlan? snapshot) {
+        // Progress-restore helper: reads the envelope without validating the
+        // fingerprint. The caller (RoutePlanRestoreCompatibility) does its own
+        // row-id + warehouse + LT comparison, so we must not reject the file
+        // just because the saved fingerprint no longer matches the current
+        // request's fingerprint.
         snapshot = null;
+        if (!TryReadEnvelope(path, out var dto, out _)) return false;
+        if (dto is null) return false;
+        if (dto.SchemaVersion != SchemaVersion && dto.SchemaVersion != 1) return false;
         try {
-            if (!File.Exists(path)) return false;
-            var dto = JsonSerializer.Deserialize<EnvelopeDto>(File.ReadAllText(path), JsonOptions);
-            if (dto is null || dto.SchemaVersion != SchemaVersion) return false;
             var plan = FromDto(dto);
             int? selected = plan.Routes.Any(x => x.Number == dto.SelectedRouteNumber)
                 ? dto.SelectedRouteNumber
@@ -73,7 +172,55 @@ public static class RoutePlanPersistence {
                 dto.SelectedBarterRowId);
             return true;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException) {
+        catch (Exception ex) when (ex is InvalidDataException
+                                       or IOException or UnauthorizedAccessException) {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Lightweight metadata peek used by the restore flow to discover which
+    /// mode was used to generate the saved plan. Does not validate the
+    /// fingerprint - the caller supplies the expected fingerprint and calls
+    /// <see cref="TryLoad"/> afterwards.
+    /// </summary>
+    public static bool TryReadMetadata(
+        string path,
+        out int schemaVersion,
+        out string? savedFingerprint,
+        out RouteOptimizationMode? savedOptimizationMode,
+        out DateTimeOffset? savedAtUtc) {
+        schemaVersion = 0;
+        savedFingerprint = null;
+        savedOptimizationMode = null;
+        savedAtUtc = null;
+        if (!TryReadEnvelope(path, out var dto, out _)) return false;
+        if (dto is null) return false;
+        schemaVersion = dto.SchemaVersion;
+        savedFingerprint = dto.InputFingerprint;
+        savedOptimizationMode = dto.OptimizationMode;
+        savedAtUtc = dto.SavedAtUtc;
+        return true;
+    }
+
+    private static bool TryReadEnvelope(
+        string path, out EnvelopeDto? dto, out string rawContent) {
+        dto = null;
+        rawContent = string.Empty;
+        if (!File.Exists(path)) return false;
+        try {
+            rawContent = File.ReadAllText(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            return false;
+        }
+        try {
+            dto = JsonSerializer.Deserialize<EnvelopeDto>(rawContent, JsonOptions);
+            return dto is not null;
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidDataException
+                                       or IOException or UnauthorizedAccessException) {
+            dto = null;
             return false;
         }
     }
@@ -82,7 +229,9 @@ public static class RoutePlanPersistence {
         RoutePlan plan,
         int? selectedRouteNumber,
         bool showAll,
-        string? selectedBarterRowId) => new(
+        string? selectedBarterRowId,
+        RouteOptimizationMode? optimizationMode,
+        DateTimeOffset savedAtUtc) => new(
         SchemaVersion,
         plan.InputFingerprint,
         plan.Status,
@@ -99,7 +248,9 @@ public static class RoutePlanPersistence {
             route.PeakLT)).ToArray(),
         selectedRouteNumber,
         showAll,
-        selectedBarterRowId);
+        selectedBarterRowId,
+        optimizationMode,
+        savedAtUtc);
 
     private static StepDto ToDto(RouteStep step) => step switch {
         WarehousePickupStep pickup => new(
@@ -151,7 +302,9 @@ public static class RoutePlanPersistence {
         RouteDto[] Routes,
         int? SelectedRouteNumber,
         bool ShowAll,
-        string? SelectedBarterRowId = null);
+        string? SelectedBarterRowId = null,
+        RouteOptimizationMode? OptimizationMode = null,
+        DateTimeOffset? SavedAtUtc = null);
 
     private sealed record RouteDto(
         int Number,
