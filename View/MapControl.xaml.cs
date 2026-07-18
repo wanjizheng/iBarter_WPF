@@ -234,12 +234,21 @@ namespace iBarter.View {
                 MapTranslateTransform.X = 0;
                 MapTranslateTransform.Y = 0;
                 RefreshHdMap();
+                // Audit round 6: HD camera moves also need route
+                // step labels repositioned.
+                RepositionRouteStepLabels();
                 return;
             }
             MapScaleTransform.ScaleX = viewportState.Scale;
             MapScaleTransform.ScaleY = viewportState.Scale;
             MapTranslateTransform.X = viewportState.OffsetX;
             MapTranslateTransform.Y = viewportState.OffsetY;
+            // Audit round 6: every viewport change (zoom / pan)
+            // must reposition existing route-step labels so the
+            // labels track the projected island centres.  Identity
+            // is preserved (no re-create), so the BarterStep text
+            // stays attached to its wrapper.
+            RepositionRouteStepLabels();
         }
 
         private double GetLabelScreenFontSize(bool highlighted) {
@@ -1276,15 +1285,27 @@ namespace iBarter.View {
             }
             EnsureAutomaticWarehouseNodes();
             EnsureRouteIslandLabels();
+            // Audit round 6: explicit reposition at the end of every
+            // IslandsButtonInitialisation. The reconcile pass above
+            // already calls RepositionRouteStepLabels on the Empty
+            // outcome, but the Bulk outcome (Built) does not — and
+            // public callers of IslandsButtonInitialisation expect
+            // the freshly-added wrappers to be positioned before
+            // the call returns.
+            RepositionRouteStepLabels();
         }
 
         /// <summary>
         /// Sentinel Tag used by route-only island labels so the next
         /// refresh can distinguish them from ButtonInitialisation
-        /// containers and warehouse markers. The Tag itself carries
-        /// the canonical island id so test code can introspect it
-        /// without touching the WPF visual tree.
+        /// containers and warehouse markers. Deprecated by
+        /// <see cref="RouteStepMapLabel"/>; kept here temporarily
+        /// so the visual tree-walk helpers compile while the
+        /// old tests migrate.
         /// </summary>
+        [System.Obsolete("Use RouteStepMapLabel as the wrapper tag; " +
+            "RouteIslandLabelTag is the v1 per-island label and is " +
+            "replaced by the per-step descriptor.")]
         internal sealed record RouteIslandLabelTag(string IslandId);
 
         /// <summary>
@@ -1315,208 +1336,341 @@ namespace iBarter.View {
         /// <c>ExchangeDone</c>.</para>
         /// </summary>
         private void EnsureRouteIslandLabels() {
+            // Audit round 6: the v1 system keyed every label on a
+            // HashSet<IslandId>, which meant two BarterSteps on the
+            // same island lost their individual identity — the second
+            // step either dropped or got the first step's text. This
+            // round keys each label on (RouteNumber, StepIndex) so
+            // every real route step gets its own label.
             var coordinator = App.myRouteCoordinator;
-            if (coordinator?.Mode != CargoMode.AutomaticRoute) {
-                // Audit round 5: dropping the mode also drops every
-                // route-only label so we don't leak them back into
-                // manual mode. The WPF layer that drives label creation
-                // (this method) never ties itself to Planner barters.
-                RemoveAllRouteIslandLabels();
-                return;
-            }
-            if (coordinator.CurrentPlan is not { } plan) {
-                RemoveAllRouteIslandLabels();
+            if (coordinator?.Mode != CargoMode.AutomaticRoute
+                || coordinator.CurrentPlan is not { } plan) {
+                // Mode exit or no plan: drop every route-step label
+                // so the manual-mode Planner map isn't polluted by
+                // automatic-route residues.
+                RemoveAllRouteStepLabels();
                 return;
             }
 
-            // Audit round 4: the pure decision lives in
-            // RouteIslandLabelPlanner; round 5 adds the lifecycle
-            // reconcile in RouteIslandLabelRenderer.
-            var visibleIslands = iBarter.Routing.RouteIslandLabelPlanner.VisibleIslandIds(
+            var planned = iBarter.Routing.RouteStepLabelPlanner.PlanLabels(
                 plan,
                 coordinator.ShowAllRoutes,
-                coordinator.SelectedRouteNumber);
+                coordinator.SelectedRouteNumber,
+                BuildItemDisplayNameLookup());
 
-            // Use the authoritative render snapshot for warehouse
-            // ids; the legacy Label_<island>Warehouse child scan was
-            // unreliable because warehouse labels live inside
-            // GridContainer_*Warehouse wrappers, not as direct
-            // children of Grid_MapMain.
-            IReadOnlySet<string> warehouseIds = CurrentRenderSnapshot().WarehouseIslandIds;
-            var planned = iBarter.Routing.RouteIslandLabelRenderer.PlanLabels(
-                visibleIslands, warehouseIds);
+            // Warehouse dedup pass: Iliya with both pickup AND
+            // unload gets only one warehouse label.  Real Barter
+            // labels are NEVER deduped by island.
+            planned = iBarter.Routing.RouteStepLabelPlanner.StripWarehouseDuplicates(planned);
 
-            // Reconcile against the labels that are currently in the
-            // visual tree.  Reconcile returns Deferred when the host
-            // has no size yet — we leave the existing labels in place
-            // and schedule a retry.
-            var existing = CollectExistingRouteIslandLabelIds();
-            var outcome = iBarter.Routing.RouteIslandLabelRenderer.Reconcile(
-                planned,
-                existing,
-                Grid_MapMain.ActualWidth,
-                Grid_MapMain.ActualHeight,
-                out var toAdd,
-                out var toRemove);
+            var existing = CollectExistingRouteStepLabelIdentities();
+            var outcome = iBarter.Routing.RouteStepLabelRenderer.Reconcile(
+                planned, existing,
+                Grid_MapMain.ActualWidth, Grid_MapMain.ActualHeight,
+                out var toAdd, out var toRemove);
 
             if (RouteIslandLabelDiagnostics.Enabled) {
                 RouteIslandLabelDiagnostics.Log(
-                    $"EnsureRouteIslandLabels: outcome={outcome} " +
+                    $"EnsureRouteStepLabels: outcome={outcome} " +
                     $"host={Grid_MapMain.ActualWidth:0.##}x{Grid_MapMain.ActualHeight:0.##} " +
                     $"planned={planned.Count} existing={existing.Count} " +
-                    $"add={toAdd.Count} remove={toRemove.Count} " +
-                    $"warehouses={warehouseIds.Count}");
+                    $"add={toAdd.Count} remove={toRemove.Count}");
             }
 
-            if (toRemove.Count > 0) RemoveRouteIslandLabels(toRemove);
+            if (toRemove.Count > 0) RemoveRouteStepLabelsByIdentity(toRemove);
 
-            if (outcome == iBarter.Routing.RouteIslandLabelRenderer.RebuildOutcome.Deferred) {
-                // Host has no size yet (the very first call after
-                // IslandsButtonInitialisation often lands before
-                // layout). Schedule a retry at Render priority so it
-                // happens AFTER the layout pass — that is the whole
-                // bug the audit caught: previous wiring dropped every
-                // label and never retried.
-                ScheduleRouteIslandLabelsRetry();
+            if (outcome == iBarter.Routing.RouteStepLabelRenderer.RebuildOutcome.Deferred) {
+                ScheduleRouteStepLabelsRetry();
                 return;
             }
-            if (outcome == iBarter.Routing.RouteIslandLabelRenderer.RebuildOutcome.Empty) {
+            if (outcome == iBarter.Routing.RouteStepLabelRenderer.RebuildOutcome.Empty) {
+                // Even when no add/remove is required, a viewport
+                // geometry change (zoom, pan, HD camera move) can
+                // still require a reposition pass.  Calling
+                // RepositionRouteStepLabels here is cheap (it's a
+                // Margin update, not a label rebuild) and keeps the
+                // first call after a route change consistent with
+                // later viewport changes.
+                RepositionRouteStepLabels();
                 return;
             }
-            if (toAdd.Count > 0) AddRouteIslandLabels(toAdd);
+            if (toAdd.Count > 0) AddRouteStepLabels(toAdd);
         }
 
-        private HashSet<string> CollectExistingRouteIslandLabelIds() {
-            var ids = new HashSet<string>(StringComparer.Ordinal);
-            CollectRouteIslandLabelIds(Grid_MapMain, ids);
-            return ids;
+        /// <summary>
+        /// Audit round 6: every viewport change (zoom, pan, HD
+        /// camera, resize) calls this.  It walks all existing
+        /// <see cref="RouteStepMapLabel"/> wrappers in the visual
+        /// tree and updates their <c>Margin</c> based on the current
+        /// island centres returned by <see cref="TryGetIslandCenter"/>.
+        /// Identity is preserved — the wrapper's <c>Tag</c> is
+        /// untouched, so the route-step distinction survives.
+        /// </summary>
+        public void RepositionRouteStepLabels() {
+            if (Grid_MapMain.ActualWidth <= 0 || Grid_MapMain.ActualHeight <= 0) {
+                return; // not laid out yet; retry path handles it
+            }
+            int updated = 0, missing = 0;
+            // occurrenceByIsland tracks how many step labels we've
+            // already placed on the same island; the renderer uses
+            // this index to compute the deterministic vertical
+            // offset.
+            var occurrenceByIsland = new Dictionary<string, int>(StringComparer.Ordinal);
+            RepositionChildren(Grid_MapMain, occurrenceByIsland, ref updated, ref missing);
+            if (RouteIslandLabelDiagnostics.Enabled) {
+                RouteIslandLabelDiagnostics.Log(
+                    $"RepositionRouteStepLabels: updated={updated} missing={missing} " +
+                    $"host={Grid_MapMain.ActualWidth:0.##}x{Grid_MapMain.ActualHeight:0.##}");
+            }
         }
 
-        private static void CollectRouteIslandLabelIds(DependencyObject parent, HashSet<string> ids) {
+        private void RepositionChildren(
+            DependencyObject parent,
+            Dictionary<string, int> occurrenceByIsland,
+            ref int updated, ref int missing) {
             int count = VisualTreeHelper.GetChildrenCount(parent);
             for (int i = 0; i < count; i++) {
                 var child = VisualTreeHelper.GetChild(parent, i);
-                if (child is FrameworkElement fe && fe.Tag is RouteIslandLabelTag tag) {
-                    ids.Add(tag.IslandId);
+                if (child is FrameworkElement fe && fe.Tag is RouteStepMapLabel label) {
+                    RepositionSingle(fe, label, occurrenceByIsland, ref updated, ref missing);
                 }
-                CollectRouteIslandLabelIds(child, ids);
+                else {
+                    // Recurse into non-label containers so we find
+                    // every RouteStepMapLabel, even when the WPF
+                    // tree has been re-arranged.
+                    RepositionChildren(child, occurrenceByIsland, ref updated, ref missing);
+                }
             }
         }
 
-        private void RemoveRouteIslandLabels(IReadOnlyList<string> idsToRemove) {
-            var idSet = new HashSet<string>(idsToRemove, StringComparer.Ordinal);
-            RemoveMatchingRouteIslandLabels(Grid_MapMain, idSet);
+        private void RepositionSingle(
+            FrameworkElement wrapper,
+            RouteStepMapLabel label,
+            Dictionary<string, int> occurrenceByIsland,
+            ref int updated, ref int missing) {
+            // Look up the island metadata.  If the island has been
+            // removed from the catalog (e.g. the user removed a
+            // warehouse row from App.listIslands), do NOT silently
+            // keep the wrapper at its old position — the audit
+            // requires an explicit failure rather than a stale
+            // orphan.
+            var island = App.listIslands?.FirstOrDefault(x => x.IslandsName == label.IslandId);
+            if (island is null) {
+                missing++;
+                RouteIslandLabelDiagnostics.LogMissing(label.IslandId);
+                return;
+            }
+            if (!TryGetIslandCenter(island, out Grid? host, out Point center) || host is null) {
+                // Same failure: don't keep the wrapper at a stale
+                // position.  We could hide the wrapper instead, but
+                // the audit's "explicit failure" rule says: report
+                // it and leave the wrapper for the next reconcile
+                // pass to remove.
+                missing++;
+                RouteIslandLabelDiagnostics.LogMissing(label.IslandId);
+                return;
+            }
+            int occurrence = occurrenceByIsland.TryGetValue(label.IslandId, out var n) ? n : 0;
+            occurrenceByIsland[label.IslandId] = occurrence + 1;
+            double verticalOffset = iBarter.Routing.RouteStepLabelRenderer
+                .ComputeVerticalOffset(occurrence, host.ActualHeight);
+            PositionRouteStepLabel(wrapper, host, center, verticalOffset);
+            // Ensure the wrapper sits in the per-island overlay host
+            // (its actual owner).  If a previous bug ever added it
+            // directly to Grid_MapMain, the next add/remove cycle
+            // leaves the wrapper stranded; we re-parent to host.
+            if (!ReferenceEquals(wrapper.Parent, host)) {
+                if (wrapper.Parent is Panel oldParent) oldParent.Children.Remove(wrapper);
+                host.Children.Add(wrapper);
+            }
+            updated++;
         }
 
-        private static void RemoveMatchingRouteIslandLabels(DependencyObject parent, HashSet<string> idSet) {
+        private static void PositionRouteStepLabel(
+            FrameworkElement wrapper, Grid host, Point center, double verticalOffset) {
+            // Centre horizontally on the island block; stack
+            // vertically by occurrence offset (so pickup + barter +
+            // unload on the same island don't overlap).
+            wrapper.Margin = new Thickness(
+                center.X - wrapper.Width / 2,
+                center.Y + verticalOffset,
+                host.ActualWidth - (center.X - wrapper.Width / 2) - wrapper.Width,
+                host.ActualHeight - (center.Y + verticalOffset) - wrapper.Height);
+        }
+
+        private HashSet<string> CollectExistingRouteStepLabelIdentities() {
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            CollectRouteStepLabelIdentities(Grid_MapMain, ids);
+            return ids;
+        }
+
+        private static void CollectRouteStepLabelIdentities(
+            DependencyObject parent, HashSet<string> ids) {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++) {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is FrameworkElement fe && fe.Tag is RouteStepMapLabel label) {
+                    ids.Add(label.Identity);
+                }
+                CollectRouteStepLabelIdentities(child, ids);
+            }
+        }
+
+        private void RemoveRouteStepLabelsByIdentity(IReadOnlyList<string> identities) {
+            var idSet = new HashSet<string>(identities, StringComparer.Ordinal);
+            RemoveMatchingRouteStepLabels(Grid_MapMain, idSet);
+        }
+
+        private static void RemoveMatchingRouteStepLabels(
+            DependencyObject parent, HashSet<string> idSet) {
             int count = VisualTreeHelper.GetChildrenCount(parent);
             for (int i = count - 1; i >= 0; i--) {
                 var child = VisualTreeHelper.GetChild(parent, i);
-                if (child is FrameworkElement fe && fe.Tag is RouteIslandLabelTag tag
-                    && idSet.Contains(tag.IslandId)) {
+                if (child is FrameworkElement fe && fe.Tag is RouteStepMapLabel label
+                    && idSet.Contains(label.Identity)) {
                     if (parent is Panel panel) panel.Children.Remove(fe);
                 }
                 else {
-                    // Recurse only into containers that don't match so
-                    // we don't accidentally remove grandchildren of
-                    // wrappers we already removed.
-                    RemoveMatchingRouteIslandLabels(child, idSet);
+                    RemoveMatchingRouteStepLabels(child, idSet);
                 }
             }
         }
 
-        private void RemoveAllRouteIslandLabels() {
+        private void RemoveAllRouteStepLabels() {
             int count = Grid_MapMain.Children.Count;
             for (int i = count - 1; i >= 0; i--) {
                 if (Grid_MapMain.Children[i] is FrameworkElement fe
-                    && fe.Tag is RouteIslandLabelTag) {
+                    && fe.Tag is RouteStepMapLabel) {
                     Grid_MapMain.Children.RemoveAt(i);
                 }
             }
+            // Recurse into nested hosts (per-island overlay grids)
+            // to catch any step labels that ended up in a child host.
+            RemoveAllNestedStepLabels(Grid_MapMain);
         }
 
-        private void AddRouteIslandLabels(IReadOnlyList<string> islandIds) {
-            foreach (var islandId in islandIds) {
-                var island = App.listIslands?.FirstOrDefault(x => x.IslandsName == islandId);
-                if (island is null) {
-                    RouteIslandLabelDiagnostics.LogMissing(islandId);
-                    continue;
+        private static void RemoveAllNestedStepLabels(DependencyObject parent) {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = count - 1; i >= 0; i--) {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is Panel panel
+                    && child is FrameworkElement fe
+                    && fe.Tag is RouteStepMapLabel) {
+                    panel.Children.Remove(fe);
                 }
-                if (!TryGetIslandCenter(island, out Grid? host, out Point center)
-                    || host is null) {
-                    // TryGetIslandCenter can still fail even after a
-                    // positive size check (e.g. island missing from
-                    // hdIslandCoordinates for the HD map). The retry
-                    // scheduled by the caller will pick this up next
-                    // time.
-                    RouteIslandLabelDiagnostics.LogMissing(islandId);
-                    continue;
-                }
-
-                var wrapper = CreateRouteIslandLabelWrapper(island);
-                PositionRouteIslandLabel(wrapper, host, center);
-                host.Children.Add(wrapper);
-                listLabels.Add((Label)wrapper.Children[0]);
-
-                if (RouteIslandLabelDiagnostics.Enabled) {
-                    RouteIslandLabelDiagnostics.Log(
-                        $"  added label for {islandId} at host={host.Name ?? "(anon)"} " +
-                        $"margin=({wrapper.Margin.Left:0.##},{wrapper.Margin.Top:0.##})");
+                else {
+                    RemoveAllNestedStepLabels(child);
                 }
             }
         }
 
-        private static Grid CreateRouteIslandLabelWrapper(Islands island) {
-            var label = new Label {
-                Name = "RouteIslandLabelText_" + island.IslandsName,
-                Content = island.IslandsNameDisplay,
-                Foreground = Brushes.Gainsboro,
-                Background = new SolidColorBrush(Color.FromArgb(110, 0, 0, 0)),
+        private void AddRouteStepLabels(IReadOnlyList<RouteStepMapLabel> labels) {
+            // occurrenceByIsland lets us compute the vertical offset
+            // that pairs with RepositionRouteStepLabels' pass.
+            var occurrenceByIsland = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var existing in EnumerateExistingStepLabels())
+                occurrenceByIsland[existing.IslandId] =
+                    occurrenceByIsland.GetValueOrDefault(existing.IslandId) + 1;
+            foreach (var label in labels) {
+                var island = App.listIslands?.FirstOrDefault(x => x.IslandsName == label.IslandId);
+                if (island is null) {
+                    RouteIslandLabelDiagnostics.LogMissing(label.IslandId);
+                    continue;
+                }
+                if (!TryGetIslandCenter(island, out Grid? host, out Point center) || host is null) {
+                    RouteIslandLabelDiagnostics.LogMissing(label.IslandId);
+                    continue;
+                }
+                int occurrence = occurrenceByIsland.TryGetValue(label.IslandId, out var n) ? n : 0;
+                occurrenceByIsland[label.IslandId] = occurrence + 1;
+                var wrapper = CreateRouteStepLabelWrapper(label);
+                PositionRouteStepLabel(wrapper, host, center,
+                    iBarter.Routing.RouteStepLabelRenderer.ComputeVerticalOffset(
+                        occurrence, host.ActualHeight));
+                host.Children.Add(wrapper);
+                listLabels.Add((Label)wrapper.Children[0]);
+            }
+        }
+
+        private IEnumerable<RouteStepMapLabel> EnumerateExistingStepLabels() {
+            return EnumerateStepLabelsRecursive(Grid_MapMain);
+        }
+
+        private static IEnumerable<RouteStepMapLabel> EnumerateStepLabelsRecursive(
+            DependencyObject parent) {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++) {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is FrameworkElement fe && fe.Tag is RouteStepMapLabel label)
+                    yield return label;
+                foreach (var nested in EnumerateStepLabelsRecursive(child))
+                    yield return nested;
+            }
+        }
+
+        private static Grid CreateRouteStepLabelWrapper(RouteStepMapLabel label) {
+            // Barter steps get a slightly different background so
+            // the user can tell a real trade from a warehouse
+            // operation at a glance; warehouse steps use the gold
+            // tint that the warehouse marker already paints.
+            var labelForeground = label.IsWarehouseOperation
+                ? Brushes.Gold
+                : Brushes.Gainsboro;
+            var labelBackground = label.IsWarehouseOperation
+                ? new SolidColorBrush(Color.FromArgb(140, 5, 22, 30))
+                : new SolidColorBrush(Color.FromArgb(110, 0, 0, 0));
+            var textBlock = new TextBlock {
+                Text = label.DisplayText,
+                Foreground = labelForeground,
                 FontWeight = FontWeights.SemiBold,
-                Padding = new Thickness(4, 1, 4, 1),
-                IsHitTestVisible = false,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
+                TextWrapping = TextWrapping.NoWrap,
             };
             var wrapper = new Grid {
-                Name = "RouteIslandLabel_" + island.IslandsName,
+                Name = "RouteStepLabel_" + label.Identity,
                 IsHitTestVisible = false,
-                Tag = new RouteIslandLabelTag(island.IslandsName),
+                Tag = label,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top,
             };
             Panel.SetZIndex(wrapper, 60); // above route lines (default 0)
-            wrapper.Children.Add(label);
+            wrapper.Children.Add(textBlock);
 
-            var size = MeasureLabelForPlacement(label);
+            var size = MeasureTextBlockForPlacement(textBlock);
             wrapper.Width = size.Width;
             wrapper.Height = size.Height;
-            label.Width = size.Width;
-            label.Height = size.Height;
             return wrapper;
         }
 
-        private static void PositionRouteIslandLabel(Grid wrapper, Grid host, Point center) {
-            wrapper.Margin = new Thickness(
-                center.X - wrapper.Width / 2,
-                center.Y + 5,
-                host.ActualWidth - (center.X - wrapper.Width / 2) - wrapper.Width,
-                host.ActualHeight - (center.Y + 5) - wrapper.Height);
-        }
-
-        private bool routeIslandLabelsRetryScheduled;
-        private void ScheduleRouteIslandLabelsRetry() {
-            if (routeIslandLabelsRetryScheduled) return;
-            routeIslandLabelsRetryScheduled = true;
+        private bool routeStepLabelsRetryScheduled;
+        private void ScheduleRouteStepLabelsRetry() {
+            if (routeStepLabelsRetryScheduled) return;
+            routeStepLabelsRetryScheduled = true;
             Dispatcher.BeginInvoke(new Action(() => {
-                routeIslandLabelsRetryScheduled = false;
-                // Audit round 5: the retry runs at Render priority so
-                // the layout pass that supplies the host's ActualWidth
-                // / ActualHeight completes first. Without this hop
-                // every first-call attempt would always Deferred and
-                // no label would ever be created.
+                routeStepLabelsRetryScheduled = false;
                 EnsureRouteIslandLabels();
             }), DispatcherPriority.Render);
+        }
+
+        private Dictionary<string, string> BuildItemDisplayNameLookup() {
+            // The WPF catalog may be unavailable in tests; fall back
+            // to an empty dictionary and let RouteStepLabelPlanner
+            // use the raw ItemId for display.
+            var map = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (App.listItems is null) return map;
+            foreach (var item in App.listItems) {
+                if (item is null || string.IsNullOrEmpty(item.ItemID)) continue;
+                var display = !string.IsNullOrEmpty(item.ItemNameDisplay)
+                    ? item.ItemNameDisplay
+                    : item.ItemName;
+                if (!string.IsNullOrEmpty(display) && !map.ContainsKey(item.ItemID))
+                    map[item.ItemID] = display;
+            }
+            return map;
+        }
+
+        private static Size MeasureTextBlockForPlacement(TextBlock tb) {
+            tb.Measure(new Size(Double.PositiveInfinity, Double.PositiveInfinity));
+            return tb.DesiredSize;
         }
 
         private void ButtonInitialisation(
