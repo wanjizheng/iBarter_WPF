@@ -732,22 +732,30 @@ namespace iBarter.View {
                     List<Barter> dataSource = JsonConvert.DeserializeObject<List<Barter>>(readJsonData);
                     if (dataSource != null && dataSource.Count > 0) {
                         App.listBarterPlanner.Clear();
+                        var seen = new HashSet<string>(StringComparer.Ordinal);
                         int migratedCount = 0;
                         for (int i = 0; i < dataSource.Count; i++) {
                             Barter myBarter = dataSource[i];
-                            // Audit round 7: use the side-effect-free
-                            // HasPlannerRowId check + the sanctioned
-                            // EnsurePlannerRowId materialiser. The
-                            // v1 code used the auto-generating getter
-                            // to detect "is empty?" which materialised
-                            // a fresh id on every read — so a second
-                            // load round trip would always look
-                            // "migrated" even when nothing changed.
+                            // Audit round 8: load-time migration
+                            // handles all four invalid cases in one
+                            // pass:
+                            //   * null / empty PlannerRowId
+                            //   * "INVALID:" sentinel from the v1
+                            //     migration path
+                            //   * duplicate id (collision)
+                            //   * any malformed value
+                            // The rule: the FIRST valid unique id is
+                            // kept; subsequent duplicates / invalids
+                            // are REGENERATED with a fresh br-* GUID.
+                            // After the pass, one SaveData() commits
+                            // every new id atomically.
                             if (!myBarter.HasPlannerRowId
-                                || myBarter.PlannerRowId.StartsWith("INVALID:", StringComparison.Ordinal)) {
-                                myBarter.EnsurePlannerRowId();
+                                || myBarter.PlannerRowId.StartsWith("INVALID:", StringComparison.Ordinal)
+                                || !seen.Add(myBarter.PlannerRowId)) {
+                                myBarter.RegeneratePlannerRowId();
                                 migratedCount++;
                             }
+                            seen.Add(myBarter.PlannerRowId);
                             App.listBarterPlanner.Add(myBarter);
                         }
 
