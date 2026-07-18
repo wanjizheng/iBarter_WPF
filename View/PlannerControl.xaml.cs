@@ -400,16 +400,14 @@ namespace iBarter.View {
 
         private void UpdateParley() {
             if (Label_SelectedParley != null) {
-                long intParley = 0;
-                // Bug 4 fix: filter by !ExchangeDone so a ticked CK
-                // immediately removes that barter's contribution. The
-                // formula is otherwise identical to the legacy one so the
-                // displayed number and the planner budget stay aligned.
-                foreach (Barter barter in App.myPVM.BarterCollection
-                             .Where(b => b.ExchangeQuantity > 0 && !b.ExchangeDone)) {
-                    intParley += (long)GetEffectiveParley(barter) * barter.ExchangeQuantity;
-                }
-
+                // Audit round 2: route the entire UI label through the
+                // authoritative RouteParleyCalculator. No second LINQ
+                // formula lives here; if anyone wants to change the
+                // parley contract, they must change the calculator and
+                // every consumer (Planner CK, map double-click,
+                // Auto Plan) moves in lockstep.
+                long intParley = RouteParleyCalculator.CalculateRemaining(
+                    App.myPVM.BarterCollection.Select(b => new PlannerParleyRow(b)));
                 Label_SelectedParley.Content = intParley;
                 if (intParley > 1000000) {
                     Label_SelectedParley.Foreground = Brushes.Red;
@@ -418,6 +416,20 @@ namespace iBarter.View {
                     Label_SelectedParley.Foreground = Brushes.Black;
                 }
             }
+        }
+
+        /// <summary>
+        /// Adapter that exposes the Planner's <see cref="Barter"/>
+        /// as the <see cref="IRouteParleyRow"/> contract without forcing
+        /// the model to implement the interface directly.
+        /// </summary>
+        private sealed class PlannerParleyRow : IRouteParleyRow {
+            private readonly Barter _barter;
+            public PlannerParleyRow(Barter barter) { _barter = barter; }
+            public string RowId => string.Empty;
+            public int Parley => PlannerControl.GetEffectiveParley(_barter);
+            public int ExchangeQuantity => _barter.ExchangeQuantity;
+            public bool ExchangeDone => _barter.ExchangeDone;
         }
 
         // Phase 6 (i18n) / Task 6: pull the UsingALT island switch out of UpdateParley

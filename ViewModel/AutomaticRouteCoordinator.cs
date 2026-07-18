@@ -136,12 +136,17 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         if (!verification.Success || verification.VerifiedPlan is null) return false;
         currentPlanMode = generationMode;
 
-        // Bug 2 fix: even a verifier-approved plan can carry a phantom
-        // pickup that no remaining BarterStep actually consumes. Re-run the
-        // normalization pass before publishing so the user never sees the
-        // "pickup-then-unload the same item at the same warehouse" round
-        // trip that the bug report called out.
-        var normalized = RouteCargoNormalizer.Normalize(verification.VerifiedPlan);
+        // Bug 2 fix (round 2): even a verifier-approved plan can carry a
+        // phantom pickup that no remaining BarterStep actually consumes.
+        // Re-run the normalization pass before publishing so the user
+        // never sees the "pickup-then-unload the same item at the same
+        // warehouse" round trip that the bug report called out. The
+        // normalizer now requires the request and recomputes LT through
+        // RouteReplay; we then re-verify the normalized plan and refuse
+        // to publish if the post-normalize plan fails verification
+        // (defensive — the original plan already passed, but LT changes
+        // could in principle introduce a regression).
+        var normalized = RouteCargoNormalizer.Normalize(request, verification.VerifiedPlan);
         var finalVerification = RoutePlanVerifier.Verify(request, normalized);
         var publishable = finalVerification.Success && finalVerification.VerifiedPlan is not null
             ? finalVerification.VerifiedPlan
@@ -328,35 +333,83 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         // them — they made it past the verifier only because the verifier
         // saw the consumed bookkeeping match the bundle.  After pruning
         // completed barters, those counts no longer hold, so re-run.
-        var reconciled = new RoutePlan(
-            currentPlan.Status,
-            reconciledRoutes.Select(route => {
-                var (normalized, _) = RouteCargoNormalizer.NormalizeRoute(route);
-                return normalized;
-            }).ToArray(),
-            currentPlan.Objective,
-            currentPlan.Diagnostics,
-            currentPlan.InputFingerprint);
-
-        // Step 5: verify what survived.  If the verifier rejects the
-        // adjusted plan, fall back to keeping the previous plan rather
-        // than overwriting a known-good snapshot.
-        RoutePlan finalPlan = reconciled;
-        if (request is not null && reconciled.Routes.Count > 0) {
-            var verification = RoutePlanVerifier.Verify(request, reconciled);
-            if (verification.Success && verification.VerifiedPlan is not null) {
-                finalPlan = verification.VerifiedPlan;
-            }
+        // Audit round 2 (1, 2): the normalizer now requires the request
+        // so it can replay every route through the simulator and recompute
+        // LT; the verifier then gates whether the result is safe to publish.
+        RoutePlan? reconciled = null;
+        if (request is not null) {
+            reconciled = RouteCargoNormalizer.Normalize(request, new RoutePlan(
+                currentPlan.Status,
+                reconciledRoutes,
+                currentPlan.Objective,
+                currentPlan.Diagnostics,
+                currentPlan.InputFingerprint));
+        }
+        else {
+            // No request available — refuse to publish anything that
+            // could be a half-truth (LT not recomputed). The caller is
+            // expected to provide a request in all CK / map paths.
+            reconciled = new RoutePlan(
+                currentPlan.Status,
+                reconciledRoutes,
+                currentPlan.Objective,
+                currentPlan.Diagnostics,
+                currentPlan.InputFingerprint);
         }
 
-        // Step 6: publish.
+        // Step 5: atomic rollback on verifier failure.
+        //   candidate = Reconcile + Normalize
+        //   verification = Verify(candidate)
+        //   if success: Publish(VerifiedPlan) and SaveCurrentPlan()
+        //   if failure: keep currentPlan entirely; do NOT touch currentPlan
+        //               references, visible routes, or the persisted file.
+        //               The atomic contract guarantees that an unverified
+        //               candidate never reaches UI or disk.
+        if (reconciled is null || reconciled.Routes.Count == 0) {
+            // Either no routes survived or normalization could not
+            // build a replayable plan. Keep the old plan visible.
+            // Publish the (still-old) plan so listeners get a stable
+            // refresh notification, but DO NOT save a snapshot.
+            Publish(currentPlan, selectedRouteNumber, showAllRoutes, selectedBarterRowId);
+            RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+            App.myCFun?.Log(
+                "[AutoRoute] 完成状态无法安全应用到现有路线，请重新生成自动路线。",
+                System.Windows.Media.Brushes.OrangeRed);
+            return currentPlan.Routes.Count > 0;
+        }
+        if (request is null) {
+            // No verifier reachable. Refuse to publish without verification.
+            Publish(currentPlan, selectedRouteNumber, showAllRoutes, selectedBarterRowId);
+            RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+            return currentPlan.Routes.Count > 0;
+        }
+        var verification2 = RoutePlanVerifier.Verify(request, reconciled);
+        if (!verification2.Success || verification2.VerifiedPlan is null) {
+            // Verifier rejected the adjusted plan. Atomic rollback:
+            // keep currentPlan reference, do not save.
+            Publish(currentPlan, selectedRouteNumber, showAllRoutes, selectedBarterRowId);
+            RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+            App.myCFun?.Log(
+                "[AutoRoute] 当前完成状态无法安全应用到已有路线，请重新生成自动路线。",
+                System.Windows.Media.Brushes.OrangeRed);
+            return currentPlan.Routes.Count > 0;
+        }
+
+        // Step 6: publish the verified plan (use the verifier's exact LT).
+        RoutePlan finalPlan = verification2.VerifiedPlan;
         Publish(finalPlan, selectedRouteNumber, showAllRoutes, selectedBarterRowId);
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
 
-        // Step 7: persist the updated plan (best-effort: never overwrite a
-        // good snapshot with an empty one).
+        // Step 7: persist the verified plan. Never overwrite a known-good
+        // snapshot with an empty one.
         if (finalPlan.Routes.Count > 0 || currentPlan.Routes.Count == 0) {
             SaveCurrentPlan();
+        }
+        if (finalPlan.Routes.Count > 0) {
+            App.myCFun?.Log(
+                "[AutoRoute] 已应用路线进度：完成 1 个交换，剩余 " +
+                finalPlan.Routes.Count + " 条路线。",
+                System.Windows.Media.Brushes.DarkOliveGreen);
         }
         return finalPlan.Routes.Count > 0;
     }
