@@ -419,7 +419,12 @@ namespace iBarter.View {
                     Label_SelectedParley.Foreground = Brushes.Red;
                 }
                 else {
-                    Label_SelectedParley.Foreground = Brushes.Black;
+                    // Do not freeze the normal value to black.  A dynamic
+                    // resource follows the application's active light/dark
+                    // palette whenever the theme changes.
+                    Label_SelectedParley.SetResourceReference(
+                        Control.ForegroundProperty,
+                        "AppTextBrush");
                 }
             }
         }

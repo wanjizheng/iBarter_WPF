@@ -306,30 +306,16 @@ namespace iBarter.ViewModel {
         /// </summary>
         /// <param name="selectedTheme">Selected Theme</param>
         private void OnThemeChanged(string selectedTheme) {
-            // Apply to every open window.  Applying only the main window plus
-            // two special cases left document/docking content on an older skin
-            // after a second theme change.
-            foreach (Window window in Application.Current.Windows.OfType<Window>())
-                SfSkinManager.SetTheme(window, new Theme { ThemeName = selectedTheme });
+            // App.xaml opts into ApplyStylesOnApplication.  In that mode the
+            // application-level API is the single source of truth: mixing it
+            // with SetTheme(window, ...) leaves the previous theme's resource
+            // dictionaries behind (notably Dark -> Light).  ApplicationTheme
+            // replaces those dictionaries and updates both current and future
+            // windows in one operation.
+            SfSkinManager.ApplicationTheme = new Theme { ThemeName = selectedTheme };
 
             UpdateTitleBarBackgroundandForeground(selectedTheme);
             UpdateApplicationPalette(selectedTheme);
-
-            var navigationService = DemosNavigationService.DemoNavigationService;
-            if (navigationService != null && navigationService.Content != null) {
-                if (navigationService.Content is BarterScanner || navigationService.Content is StorageManagement || navigationService.Content is MapControl || navigationService.Content is PlannerControl || navigationService.Content is ShipCargoControl || navigationService.Content is MainWindow) {
-                    SfSkinManager.SetTheme(navigationService.Content as DependencyObject, new Theme() { ThemeName = selectedTheme });
-                }
-
-                // if (navigationService.Content is DemoControl demoControl && SelectedSample?.ThemeMode == ThemeMode.Inherit &&
-                //     demoControl.Resources["WPFHyperlinkStyle"] is Style hyperlinkStyle && hyperlinkStyle != null) {
-                //     demoControl.HyperLinkStyle = hyperlinkStyle;
-                // }
-                // else if (navigationService.Content is DemoLauncherView demoLauncherView &&
-                //          demoLauncherView.Resources["WPFHyperlinkStyle"] is Style launcherHyperlinkStyle && launcherHyperlinkStyle != null) {
-                //     demoLauncherView.HyperLinkStyle = launcherHyperlinkStyle;
-                // }
-            }
 
             if (ThemeChanged != null) {
                 ThemeChanged();

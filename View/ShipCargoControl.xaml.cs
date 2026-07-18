@@ -29,6 +29,7 @@ namespace iBarter.View {
             if (App.myCargoProperty == null)
                 App.myCargoProperty = new CargoProperty();
             Loaded += ShipCargoControl_Loaded;
+            App.myMainWVM.ThemeChanged += ApplyThemeAwareSurfaces;
             Localization.LanguageService.Instance.LanguageChanged += (_, _) => {
                 App.myRouteCoordinator?.RefreshLocalization();
                 if (App.myRouteCoordinator?.Mode != CargoMode.AutomaticRoute)
@@ -38,6 +39,22 @@ namespace iBarter.View {
         }
 
         private bool updatingRouteSelector;
+
+        // PropertyGrid caches its view surface internally, so the dynamic
+        // resource in XAML alone is not enough after a live skin change.
+        // Reapply the two visual properties after the app-level theme has
+        // replaced its resource dictionaries.
+        private void ApplyThemeAwareSurfaces() {
+            if (!IsLoaded || PropertyGrid_Ship is null) return;
+
+            if (Application.Current?.Resources["AppTextBrush"] is Brush foreground)
+                PropertyGrid_Ship.Foreground = foreground;
+            if (Application.Current?.Resources["AppSurfaceBrush"] is Brush surface)
+                PropertyGrid_Ship.ViewBackgroundColor = surface;
+
+            PropertyGrid_Ship.InvalidateVisual();
+            PropertyGrid_Ship.UpdateLayout();
+        }
         private bool updatingRouteGuideCheckBox;
 
         private void ShipCargoControl_Loaded(object sender, RoutedEventArgs e) {
@@ -45,6 +62,7 @@ namespace iBarter.View {
                 App.myRouteCoordinator.RouteDisplayChanged -= RouteCoordinator_RouteDisplayChanged;
                 App.myRouteCoordinator.RouteDisplayChanged += RouteCoordinator_RouteDisplayChanged;
             }
+            ApplyThemeAwareSurfaces();
             RefreshRouteMode();
         }
 
