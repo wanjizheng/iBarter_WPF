@@ -266,6 +266,10 @@ namespace iBarter.View {
         }
 
         private RouteOptimizationProfile ResolveSelectedOptimizationProfile() {
+            return ResolveSelectedOptimizationProfileSafe();
+        }
+
+        public RouteOptimizationProfile ResolveSelectedOptimizationProfileSafe() {
             var mode = RouteOptimizationMode.Balanced;
             if (ComboBoxAdv_OptimMode?.SelectedItem is System.Windows.Controls.ContentControl { Tag: string tag }) {
                 if (Enum.TryParse(tag, out RouteOptimizationMode parsed)) mode = parsed;
@@ -397,7 +401,12 @@ namespace iBarter.View {
         private void UpdateParley() {
             if (Label_SelectedParley != null) {
                 long intParley = 0;
-                foreach (Barter barter in App.myPVM.BarterCollection.Where(b => b.ExchangeQuantity > 0)) {
+                // Bug 4 fix: filter by !ExchangeDone so a ticked CK
+                // immediately removes that barter's contribution. The
+                // formula is otherwise identical to the legacy one so the
+                // displayed number and the planner budget stay aligned.
+                foreach (Barter barter in App.myPVM.BarterCollection
+                             .Where(b => b.ExchangeQuantity > 0 && !b.ExchangeDone)) {
                     intParley += (long)GetEffectiveParley(barter) * barter.ExchangeQuantity;
                 }
 
@@ -839,8 +848,28 @@ namespace iBarter.View {
 
         private void DataGrid_Planner_CurrentCellValueChanged(object sender, CurrentCellValueChangedEventArgs e) {
             if (e.Column.MappingName == "ExchangeDone") {
-                App.myRouteCoordinator?.Invalidate("planner-check");
+                // Bug 1 fix: instead of Invalidate() (which nuked the
+                // current plan), invoke the unified progress pipeline so
+                // the in-memory route plan is reconciled, parley is
+                // re-derived, and the auto-route-plan.json is updated
+                // atomically. Both the Planner CK and the map double-click
+                // call the same code path.
                 Barter myBarter = (Barter)e.Record;
+                string rowId = myBarter is null
+                    ? string.Empty
+                    : RoutePlannerRowIdentity.Create(
+                        App.myPVM.BarterCollection.IndexOf(myBarter),
+                        myBarter.IsLandName,
+                        myBarter.Item1?.ItemID ?? string.Empty,
+                        myBarter.Item2?.ItemID ?? string.Empty);
+                bool completed = myBarter?.ExchangeDone ?? false;
+                App.myRouteCoordinator?.ApplyBarterCompletionProgress(
+                    BuildCurrentAutomaticRouteRequest(
+                        ResolveSelectedOptimizationProfile()),
+                    App.myPVM.BarterCollection,
+                    rowId,
+                    completed);
+
                 if (App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName) != null) {
                     App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName));
                     App.myfmMain.myShipCargo.UpdateCurrentLV();
