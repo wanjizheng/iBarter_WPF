@@ -1176,8 +1176,8 @@ namespace iBarter.View {
             return Brushes.White;
         }
 
-        private Brush GetBursh(Barter _barter) {
-            switch (_barter.BarterGroup) {
+        private static Brush GetBrushForGroup(int group) {
+            switch (group) {
                 case -1:
                     return Brushes.Bisque;
                     break;
@@ -1249,6 +1249,9 @@ namespace iBarter.View {
                     break;
             }
         }
+
+        private static Brush GetBursh(Barter _barter) =>
+            GetBrushForGroup(_barter.BarterGroup);
 
         public void IslandsButtonInitialisation(Barter _barter, Brush _brush) {
             ButtonInitialisation(_barter, _brush);
@@ -1356,7 +1359,8 @@ namespace iBarter.View {
                 plan,
                 coordinator.ShowAllRoutes,
                 coordinator.SelectedRouteNumber,
-                BuildItemDisplayNameLookup());
+                BuildItemDisplayNameLookup(),
+                BuildBarterGroupLookup());
 
             // Warehouse dedup pass: Iliya with both pickup AND
             // unload gets only one warehouse label.  Real Barter
@@ -1616,21 +1620,37 @@ namespace iBarter.View {
         }
 
         private static Grid CreateRouteStepLabelWrapper(RouteStepMapLabel label) {
-            // Barter steps get a slightly different background so
-            // the user can tell a real trade from a warehouse
-            // operation at a glance; warehouse steps use the gold
-            // tint that the warehouse marker already paints.
+            // Restore the legacy map language: a barter's label colour
+            // comes from its Planner BarterGroup, while warehouse
+            // operations remain gold. The RowId -> group lookup happens
+            // before rendering, so this never guesses a barter from the
+            // island name (which is ambiguous when an island has several
+            // exchanges).
+            var groupBrush = label.IsWarehouseOperation
+                ? Brushes.Gold
+                : GetBrushForGroup(label.BarterGroup ?? Int32.MinValue);
             var labelForeground = label.IsWarehouseOperation
                 ? Brushes.Gold
-                : Brushes.Gainsboro;
+                : LightenForMapBg(groupBrush);
             var labelBackground = label.IsWarehouseOperation
                 ? new SolidColorBrush(Color.FromArgb(140, 5, 22, 30))
-                : new SolidColorBrush(Color.FromArgb(110, 0, 0, 0));
+                // Same translucent black panel used by the legacy
+                // Planner labels. The previous route-step renderer
+                // calculated this brush but never attached it.
+                : new SolidColorBrush(Color.FromArgb(80, 0, 0, 0));
             var textBlock = new TextBlock {
                 Text = label.DisplayText,
                 Foreground = labelForeground,
                 FontWeight = FontWeights.SemiBold,
                 TextWrapping = TextWrapping.NoWrap,
+            };
+            var border = new Border {
+                Background = labelBackground,
+                BorderBrush = labelForeground,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(2),
+                Padding = new Thickness(3, 1, 3, 1),
+                Child = textBlock,
             };
             var wrapper = new Grid {
                 Name = "RouteStepLabel_" + label.Identity,
@@ -1640,9 +1660,9 @@ namespace iBarter.View {
                 VerticalAlignment = VerticalAlignment.Top,
             };
             Panel.SetZIndex(wrapper, 60); // above route lines (default 0)
-            wrapper.Children.Add(textBlock);
+            wrapper.Children.Add(border);
 
-            var size = MeasureTextBlockForPlacement(textBlock);
+            var size = MeasureElementForPlacement(border);
             wrapper.Width = size.Width;
             wrapper.Height = size.Height;
             return wrapper;
@@ -1675,9 +1695,19 @@ namespace iBarter.View {
             return map;
         }
 
-        private static Size MeasureTextBlockForPlacement(TextBlock tb) {
-            tb.Measure(new Size(Double.PositiveInfinity, Double.PositiveInfinity));
-            return tb.DesiredSize;
+        private static Dictionary<string, int> BuildBarterGroupLookup() {
+            var map = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (App.myPVM?.BarterCollection is null) return map;
+            foreach (var barter in App.myPVM.BarterCollection) {
+                if (barter is null || string.IsNullOrWhiteSpace(barter.PlannerRowId)) continue;
+                map.TryAdd(barter.PlannerRowId, barter.BarterGroup);
+            }
+            return map;
+        }
+
+        private static Size MeasureElementForPlacement(FrameworkElement element) {
+            element.Measure(new Size(Double.PositiveInfinity, Double.PositiveInfinity));
+            return element.DesiredSize;
         }
 
         private void ButtonInitialisation(

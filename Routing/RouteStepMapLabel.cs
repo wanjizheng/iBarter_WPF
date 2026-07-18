@@ -32,7 +32,8 @@ public sealed record RouteStepMapLabel(
     string IslandId,
     string? BarterRowId,
     string DisplayText,
-    bool IsWarehouseOperation) {
+    bool IsWarehouseOperation,
+    int? BarterGroup = null) {
     /// <summary>
     /// Stable identity across reconcile + reposition cycles. The
     /// audit forbids collapsing multiple steps on the same island

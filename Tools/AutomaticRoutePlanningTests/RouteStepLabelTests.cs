@@ -44,6 +44,51 @@ public class RouteStepLabelTests {
     }
 
     [Fact]
+    public void BarterStep_CarriesGroupFromExactPersistentRowId() {
+        var rowId = "br-11111111111111111111111111111111";
+        var plan = new RoutePlan(RoutePlanStatus.Optimal, [
+            new PlannedRoute(1, "Baremi", "Baremi", [
+                new BarterStep(rowId, "Baremi",
+                    new RouteItemQuantity("800056", 1),
+                    new RouteItemQuantity("800060", 1),
+                    new RouteLoadSnapshot(0, 0, 0)),
+            ], distance: 0, initialLT: 0, currentLT: 0, peakLT: 0),
+        ], null, [], "fp");
+
+        var labels = RouteStepLabelPlanner.PlanLabels(
+            plan, showAll: false, selectedRouteNumber: 1,
+            itemDisplayNames: new Dictionary<string, string>(),
+            barterGroupsByRowId: new Dictionary<string, int>(StringComparer.Ordinal) {
+                [rowId] = 12,
+                // Same island-shaped legacy key must not influence the
+                // stable row-id lookup.
+                ["Baremi:800056:800060"] = 3,
+            });
+
+        var label = Assert.Single(labels);
+        Assert.Equal(12, label.BarterGroup);
+    }
+
+    [Fact]
+    public void BarterStep_MissingPersistentRowIdGroup_UsesRendererFallback() {
+        var plan = new RoutePlan(RoutePlanStatus.Optimal, [
+            new PlannedRoute(1, "Crow", "Crow", [
+                new BarterStep("br-missing", "Crow",
+                    new RouteItemQuantity("800049", 1),
+                    new RouteItemQuantity("10", 163),
+                    new RouteLoadSnapshot(0, 0, 0)),
+            ], distance: 0, initialLT: 0, currentLT: 0, peakLT: 0),
+        ], null, [], "fp");
+
+        var labels = RouteStepLabelPlanner.PlanLabels(
+            plan, showAll: false, selectedRouteNumber: 1,
+            itemDisplayNames: new Dictionary<string, string>(),
+            barterGroupsByRowId: new Dictionary<string, int>());
+
+        Assert.Null(Assert.Single(labels).BarterGroup);
+    }
+
+    [Fact]
     public void Pickup_DisplayText_IsIslandDashPickup() {
         // Audit round 7: pickup labels are owned by
         // EnsureAutomaticWarehouseNodes. PlanLabels returns

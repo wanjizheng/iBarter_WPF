@@ -58,7 +58,8 @@ public static class RouteStepLabelPlanner {
         RoutePlan? plan,
         bool showAll,
         int? selectedRouteNumber,
-        IReadOnlyDictionary<string, string> itemDisplayNames) {
+        IReadOnlyDictionary<string, string> itemDisplayNames,
+        IReadOnlyDictionary<string, int>? barterGroupsByRowId = null) {
         if (plan is null) return Array.Empty<RouteStepMapLabel>();
         var result = new List<RouteStepMapLabel>();
         foreach (var route in plan.Routes) {
@@ -77,7 +78,12 @@ public static class RouteStepLabelPlanner {
                 // closed.
                 if (step is WarehousePickupStep or WarehouseUnloadStep)
                     continue;
-                var label = Build(route.Number, stepIndex, step, itemDisplayNames);
+                var label = Build(
+                    route.Number,
+                    stepIndex,
+                    step,
+                    itemDisplayNames,
+                    barterGroupsByRowId);
                 if (label is not null) result.Add(label);
             }
         }
@@ -88,7 +94,8 @@ public static class RouteStepLabelPlanner {
         int routeNumber,
         int stepIndex,
         RouteStep step,
-        IReadOnlyDictionary<string, string> itemDisplayNames) {
+        IReadOnlyDictionary<string, string> itemDisplayNames,
+        IReadOnlyDictionary<string, int>? barterGroupsByRowId) {
         return step switch {
             WarehousePickupStep pickup => new RouteStepMapLabel(
                 RouteNumber: routeNumber,
@@ -121,7 +128,11 @@ public static class RouteStepLabelPlanner {
                     itemDisplayNames.TryGetValue(barter.Produced.ItemId, out var outDisp)
                         ? outDisp : barter.Produced.ItemId,
                     barter.Produced.Quantity),
-                IsWarehouseOperation: false),
+                IsWarehouseOperation: false,
+                BarterGroup: barterGroupsByRowId is not null
+                    && barterGroupsByRowId.TryGetValue(barter.RowId, out int group)
+                        ? group
+                        : null),
             _ => null, // unknown step kind — caller skips.
         };
     }
