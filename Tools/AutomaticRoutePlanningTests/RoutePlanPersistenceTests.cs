@@ -1,4 +1,5 @@
 using iBarter.Routing;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace AutomaticRoutePlanningTests;
@@ -14,7 +15,8 @@ public sealed class RoutePlanPersistenceTests {
 
             RoutePlanPersistence.Save(
                 path, plan, plan.Routes[0].Number,
-                showAll: true, selectedBarterRowId: "r1");
+                showAll: true, selectedBarterRowId: "r1",
+                showRouteGuides: false);
             var result = RoutePlanPersistence.TryLoad(path, plan.InputFingerprint);
 
             Assert.Equal(RoutePlanLoadStatus.Loaded, result.Status);
@@ -25,6 +27,29 @@ public sealed class RoutePlanPersistenceTests {
             Assert.Equal(plan.Routes[0].Number, result.Snapshot.SelectedRouteNumber);
             Assert.True(result.Snapshot.ShowAll);
             Assert.Equal("r1", result.Snapshot.SelectedBarterRowId);
+            Assert.False(result.Snapshot.ShowRouteGuides);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Legacy_plan_without_route_guide_setting_defaults_to_visible() {
+        string path = TempPath();
+        try {
+            var request = RouteTestData.SingleTask();
+            var plan = new AutomaticRoutePlanner().Plan(request, CancellationToken.None);
+            RoutePlanPersistence.Save(
+                path, plan, plan.Routes[0].Number,
+                showAll: false, showRouteGuides: false);
+
+            var legacyEnvelope = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+            Assert.True(legacyEnvelope.Remove("ShowRouteGuides"));
+            File.WriteAllText(path, legacyEnvelope.ToJsonString());
+
+            var result = RoutePlanPersistence.TryLoad(path, plan.InputFingerprint);
+
+            Assert.Equal(RoutePlanLoadStatus.Loaded, result.Status);
+            Assert.True(result.Snapshot!.ShowRouteGuides);
         }
         finally { File.Delete(path); }
     }
@@ -56,7 +81,9 @@ public sealed class RoutePlanPersistenceTests {
             var original = RouteTestData.TwoItemRequest(reverseDictionaryOrder: false);
             var plan = new AutomaticRoutePlanner().Plan(original, CancellationToken.None);
             Assert.True(plan.Routes.Count > 0);
-            RoutePlanPersistence.Save(path, plan, plan.Routes[0].Number, showAll: false);
+            RoutePlanPersistence.Save(
+                path, plan, plan.Routes[0].Number,
+                showAll: false, showRouteGuides: false);
 
             var remaining = new AutomaticRoutePlanningRequest(
                 original.Tasks.Where(task => task.RowId != "r1").ToArray(),
@@ -78,6 +105,7 @@ public sealed class RoutePlanPersistenceTests {
                 out var snapshot);
             Assert.True(restored);
             Assert.Equal(plan.InputFingerprint, snapshot?.Plan.InputFingerprint);
+            Assert.False(snapshot?.ShowRouteGuides);
         }
         finally { File.Delete(path); }
     }

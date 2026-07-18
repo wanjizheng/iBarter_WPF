@@ -598,6 +598,9 @@ namespace iBarter.View {
             }
 
             var coordinator = App.myRouteCoordinator;
+            if (coordinator?.Mode == CargoMode.AutomaticRoute
+                && !coordinator.ShowRouteGuides)
+                return;
             IReadOnlyList<Barter> manualCargo = coordinator?.Mode == CargoMode.Manual
                 ? App.myCVM.CargoDetails.ToList()
                 : Array.Empty<Barter>();

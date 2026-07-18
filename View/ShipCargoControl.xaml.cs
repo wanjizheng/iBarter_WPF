@@ -38,6 +38,7 @@ namespace iBarter.View {
         }
 
         private bool updatingRouteSelector;
+        private bool updatingRouteGuideCheckBox;
 
         private void ShipCargoControl_Loaded(object sender, RoutedEventArgs e) {
             if (App.myRouteCoordinator != null) {
@@ -66,6 +67,7 @@ namespace iBarter.View {
             ButtonAdv_Clean.IsEnabled = !automatic;
             Panel_AutomaticRouteSelector.Visibility = Visibility.Visible;
             ComboBoxAdv_RouteSelector.IsEnabled = coordinator?.RouteOptions.Count > 0;
+            CheckBox_ShowRouteGuides.IsEnabled = automatic;
 
             updatingRouteSelector = true;
             try {
@@ -78,6 +80,13 @@ namespace iBarter.View {
             finally {
                 updatingRouteSelector = false;
             }
+            updatingRouteGuideCheckBox = true;
+            try {
+                CheckBox_ShowRouteGuides.IsChecked = coordinator?.ShowRouteGuides ?? true;
+            }
+            finally {
+                updatingRouteGuideCheckBox = false;
+            }
             PropertyGrid_Ship.SelectedObject = App.myCargoProperty;
             CollectionViewSource.GetDefaultView(ListBox_ShipCargo.ItemsSource)?.Refresh();
             Dispatcher.BeginInvoke(FocusSelectedAutomaticStep, System.Windows.Threading.DispatcherPriority.Loaded);
@@ -88,6 +97,12 @@ namespace iBarter.View {
                 return;
             if (option.IsAll) App.myRouteCoordinator.SelectAll();
             else if (option.RouteNumber is int routeNumber) App.myRouteCoordinator.SelectRoute(routeNumber);
+        }
+
+        private void CheckBox_ShowRouteGuides_Changed(object sender, RoutedEventArgs e) {
+            if (updatingRouteGuideCheckBox || App.myRouteCoordinator is null) return;
+            App.myRouteCoordinator.SetShowRouteGuides(
+                CheckBox_ShowRouteGuides.IsChecked == true);
         }
 
         private void RefreshLocalizedDisplay() {

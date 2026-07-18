@@ -133,6 +133,14 @@
                           IsEnabled="False"
                           ItemsSource="{Binding RouteOptions}" DisplayMemberPath="DisplayName"
                           SelectionChanged="ComboBoxAdv_RouteSelector_SelectionChanged" />
+                <CheckBox x:Name="CheckBox_ShowRouteGuides"
+                          Margin="0,3,0,0"
+                          IsChecked="True"
+                          IsEnabled="False"
+                          Foreground="White"
+                          Content="{loc:Localize str.ShipCargo.AutoRoute.ShowGuides}"
+                          Checked="CheckBox_ShowRouteGuides_Changed"
+                          Unchecked="CheckBox_ShowRouteGuides_Changed" />
             </StackPanel>
             <Separator />
             <controls:FluentIconButton x:Name="ButtonAdv_Clean" IconData="{StaticResource FluentIcon.Delete}"

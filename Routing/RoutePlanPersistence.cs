@@ -7,7 +7,8 @@ public sealed record PersistedRoutePlan(
     RoutePlan Plan,
     int? SelectedRouteNumber,
     bool ShowAll,
-    string? SelectedBarterRowId);
+    string? SelectedBarterRowId,
+    bool ShowRouteGuides = true);
 
 /// <summary>
 /// Discriminated result of an attempt to load a persisted route plan.
@@ -57,12 +58,13 @@ public static class RoutePlanPersistence {
         bool showAll,
         string? selectedBarterRowId = null,
         RouteOptimizationMode? optimizationMode = null,
-        DateTimeOffset? savedAtUtc = null) {
+        DateTimeOffset? savedAtUtc = null,
+        bool showRouteGuides = true) {
         string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
         string temp = path + ".tmp";
         var dto = ToDto(plan, selectedRouteNumber, showAll, selectedBarterRowId,
-            optimizationMode, savedAtUtc ?? DateTimeOffset.UtcNow);
+            optimizationMode, savedAtUtc ?? DateTimeOffset.UtcNow, showRouteGuides);
         File.WriteAllText(temp, JsonSerializer.Serialize(dto, JsonOptions));
         File.Move(temp, path, overwrite: true);
     }
@@ -110,7 +112,8 @@ public static class RoutePlanPersistence {
                 plan,
                 selected,
                 dto.ShowAll && plan.Routes.Count > 0,
-                dto.SelectedBarterRowId);
+                dto.SelectedBarterRowId,
+                dto.ShowRouteGuides ?? true);
             return new RoutePlanLoadResult(
                 RoutePlanLoadStatus.Loaded,
                 snapshot,
@@ -189,11 +192,13 @@ public static class RoutePlanPersistence {
                 identity.MappedPlan,
                 snapshot.SelectedRouteNumber,
                 snapshot.ShowAll,
-                migratedSelected);
+                migratedSelected,
+                snapshot.ShowRouteGuides);
             try {
                 Save(path, identity.MappedPlan,
                     snapshot.SelectedRouteNumber, snapshot.ShowAll,
-                    migratedSelected);
+                    migratedSelected,
+                    showRouteGuides: snapshot.ShowRouteGuides);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 // The restore itself succeeded; the save-back is
@@ -237,7 +242,8 @@ public static class RoutePlanPersistence {
                 plan,
                 selected,
                 dto.ShowAll && plan.Routes.Count > 0,
-                dto.SelectedBarterRowId);
+                dto.SelectedBarterRowId,
+                dto.ShowRouteGuides ?? true);
             return true;
         }
         catch (Exception ex) when (ex is InvalidDataException
@@ -299,7 +305,8 @@ public static class RoutePlanPersistence {
         bool showAll,
         string? selectedBarterRowId,
         RouteOptimizationMode? optimizationMode,
-        DateTimeOffset savedAtUtc) => new(
+        DateTimeOffset savedAtUtc,
+        bool showRouteGuides) => new(
         SchemaVersion,
         plan.InputFingerprint,
         plan.Status,
@@ -318,7 +325,8 @@ public static class RoutePlanPersistence {
         showAll,
         selectedBarterRowId,
         optimizationMode,
-        savedAtUtc);
+        savedAtUtc,
+        showRouteGuides);
 
     private static StepDto ToDto(RouteStep step) => step switch {
         WarehousePickupStep pickup => new(
@@ -372,7 +380,8 @@ public static class RoutePlanPersistence {
         bool ShowAll,
         string? SelectedBarterRowId = null,
         RouteOptimizationMode? OptimizationMode = null,
-        DateTimeOffset? SavedAtUtc = null);
+        DateTimeOffset? SavedAtUtc = null,
+        bool? ShowRouteGuides = null);
 
     private sealed record RouteDto(
         int Number,

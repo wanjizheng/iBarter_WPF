@@ -274,6 +274,7 @@
     <sys:String x:Key="str.ShipCargo.AutoRoute.Selector">Automatic route</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.All">ALL</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.RouteFormat">Route {0}</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.ShowGuides">Show route guides</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.Pickup">Load at {0}</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.Unload">Unload at {0}</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.Barter">Barter at {0}</sys:String>

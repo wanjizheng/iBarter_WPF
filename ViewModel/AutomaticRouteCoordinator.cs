@@ -27,6 +27,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private RouteOptimizationMode currentPlanMode = RouteOptimizationMode.Balanced;
     private int? selectedRouteNumber;
     private bool showAllRoutes;
+    private bool showRouteGuides = true;
     private int? focusedRouteNumber;
     private string? selectedBarterRowId;
     private string? focusedFromIslandId;
@@ -53,6 +54,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     public RoutePlan? CurrentPlan => currentPlan;
     public int? SelectedRouteNumber => selectedRouteNumber;
     public bool ShowAllRoutes => showAllRoutes;
+    public bool ShowRouteGuides => showRouteGuides;
     public string? SelectedBarterRowId => selectedBarterRowId;
     public IReadOnlySet<string> CompletedBarterRowIds => completedBarterRowIds;
     public int? FocusedRouteNumber => focusedRouteNumber;
@@ -152,7 +154,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         var publishable = finalVerification.Success && finalVerification.VerifiedPlan is not null
             ? finalVerification.VerifiedPlan
             : verification.VerifiedPlan;
-        Publish(publishable);
+        Publish(publishable, preferredShowRouteGuides: showRouteGuides);
         SaveCurrentPlan();
         return true;
     }
@@ -176,7 +178,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 verification.VerifiedPlan,
                 exact.Snapshot.SelectedRouteNumber,
                 exact.Snapshot.ShowAll,
-                exact.Snapshot.SelectedBarterRowId);
+                exact.Snapshot.SelectedBarterRowId,
+                exact.Snapshot.ShowRouteGuides);
             return exact;
         }
 
@@ -191,7 +194,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 progressed.Plan,
                 progressed.SelectedRouteNumber,
                 progressed.ShowAll,
-                progressed.SelectedBarterRowId);
+                progressed.SelectedBarterRowId,
+                progressed.ShowRouteGuides);
             return exact with {
                 Status = RoutePlanLoadStatus.Loaded,
                 Snapshot = progressed,
@@ -216,6 +220,14 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         mode = CargoMode.AutomaticRoute;
         showAllRoutes = true;
         RaisePropertyChanged(nameof(ShowAllRoutes));
+        RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+        SaveCurrentPlan();
+    }
+
+    public void SetShowRouteGuides(bool show) {
+        if (showRouteGuides == show) return;
+        showRouteGuides = show;
+        RaisePropertyChanged(nameof(ShowRouteGuides));
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
         SaveCurrentPlan();
     }
@@ -430,9 +442,11 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         RoutePlan plan,
         int? preferredRouteNumber = null,
         bool preferredShowAll = false,
-        string? preferredBarterRowId = null) {
+        string? preferredBarterRowId = null,
+        bool preferredShowRouteGuides = true) {
         currentPlan = plan;
         ClearFocus();
+        showRouteGuides = preferredShowRouteGuides;
         bool hasUsableRoutes = plan.Status is RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit
             && plan.Routes.Count > 0;
         mode = hasUsableRoutes ? CargoMode.AutomaticRoute : CargoMode.Manual;
@@ -530,7 +544,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 selectedRouteNumber,
                 showAllRoutes,
                 selectedBarterRowId,
-                currentPlanMode);
+                currentPlanMode,
+                showRouteGuides: showRouteGuides);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             App.myCFun?.Log(ex.Message, System.Windows.Media.Brushes.OrangeRed);
@@ -542,6 +557,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         RaisePropertyChanged(nameof(CurrentPlan));
         RaisePropertyChanged(nameof(SelectedRouteNumber));
         RaisePropertyChanged(nameof(ShowAllRoutes));
+        RaisePropertyChanged(nameof(ShowRouteGuides));
         RaisePropertyChanged(nameof(VisibleAutomaticSteps));
         RaisePropertyChanged(nameof(RouteOptions));
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);

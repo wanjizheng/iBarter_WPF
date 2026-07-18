@@ -238,6 +238,7 @@
     <sys:String x:Key="str.ShipCargo.AutoRoute.Selector">自动路线</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.All">全部路线</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.RouteFormat">路线 {0}</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.ShowGuides">顯示路線指引</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.Pickup">在 {0} 装货</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.Unload">在 {0} 卸货</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.Barter">在 {0} 交换</sys:String>
