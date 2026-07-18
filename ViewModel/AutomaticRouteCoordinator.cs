@@ -54,6 +54,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     public int? SelectedRouteNumber => selectedRouteNumber;
     public bool ShowAllRoutes => showAllRoutes;
     public string? SelectedBarterRowId => selectedBarterRowId;
+    public IReadOnlySet<string> CompletedBarterRowIds => completedBarterRowIds;
     public int? FocusedRouteNumber => focusedRouteNumber;
     public string? FocusedFromIslandId => focusedFromIslandId;
     public string? FocusedToIslandId => focusedToIslandId;
@@ -255,8 +256,9 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     /// <summary>
     /// Single source of truth for "the user finished a barter" — invoked by
     /// both the Planner CK checkbox and the map's real <c>BarterStep</c>
-    /// double-click.  Reconciliation is in-memory; persistence is the
-    /// caller's responsibility.
+    /// double-click. Progress is projected over the immutable verified plan;
+    /// the plan snapshot and Planner completion state are then persisted by
+    /// their respective existing stores.
     /// <para>Bug 1 root cause: the CK path used to call
     /// <c>Invalidate("planner-check")</c>, which set <c>currentPlan = null</c>
     /// and dropped every auto route on the floor.  Bug 4 root cause: the CK
@@ -298,136 +300,44 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             return false;
         }
 
-        // Step 3: prune completed BarterSteps from every route; drop routes
-        // whose only purpose was the removed barter; cargo-normalize the
-        // survivors so an undo/CK combination never leaves a phantom pickup
-        // hanging.
-        var reconciledRoutes = new List<PlannedRoute>(currentPlan.Routes.Count);
-        foreach (var route in currentPlan.Routes) {
-            var remaining = RouteProgressFilter.ExcludeCompletedBarters(
-                route.Steps, completedBarterRowIds).ToArray();
-            if (remaining.Length == 0) continue; // whole route consumed
-
-            // Drop a leading pickup whose entire contents would sit unused,
-            // and a trailing unload that became empty.  The full normalization
-            // pass below catches the rest.
-            remaining = TrimPickupAndUnload(remaining);
-
-            // Detect "the last remaining step is the unload of the start
-            // warehouse" and drop it: a route that has only pickup/unload
-            // left with no barters between them has no value.
-            if (!remaining.OfType<BarterStep>().Any()) continue;
-
-            reconciledRoutes.Add(new PlannedRoute(
-                route.Number, route.StartWarehouseId, route.EndWarehouseId,
-                remaining, route.Distance, route.InitialLT, route.CurrentLT, route.PeakLT));
+        // Step 3: keep the originally verified plan immutable and project
+        // execution progress through completedBarterRowIds.  A CK is not a
+        // new route-planning request: rebuilding a smaller plan and passing
+        // it to the full verifier uses a different task set/fingerprint and
+        // incorrectly rejects valid execution progress.  The render, cargo
+        // list and restart-compatibility paths already consume this same
+        // completed-row overlay.
+        var remainingRoutes = currentPlan.Routes
+            .Where(route => route.Steps.OfType<BarterStep>()
+                .Any(step => !completedBarterRowIds.Contains(step.RowId)))
+            .ToArray();
+        if (!showAllRoutes
+            && (selectedRouteNumber is null
+                || !remainingRoutes.Any(route => route.Number == selectedRouteNumber))) {
+            selectedRouteNumber = remainingRoutes.FirstOrDefault()?.Number;
         }
 
-        // Step 4: cargo-normalize the survivors so unused pickup items
-        // (Bug 2) are dropped even though the verifier originally accepted
-        // them — they made it past the verifier only because the verifier
-        // saw the consumed bookkeeping match the bundle.  After pruning
-        // completed barters, those counts no longer hold, so re-run.
-        // Audit round 2 (1, 2): the normalizer now requires the request
-        // so it can replay every route through the simulator and recompute
-        // LT; the verifier then gates whether the result is safe to publish.
-        RoutePlan? reconciled = null;
-        if (request is not null) {
-            reconciled = RouteCargoNormalizer.Normalize(request, new RoutePlan(
-                currentPlan.Status,
-                reconciledRoutes,
-                currentPlan.Objective,
-                currentPlan.Diagnostics,
-                currentPlan.InputFingerprint));
-        }
-        else {
-            // No request available — refuse to publish anything that
-            // could be a half-truth (LT not recomputed). The caller is
-            // expected to provide a request in all CK / map paths.
-            reconciled = new RoutePlan(
-                currentPlan.Status,
-                reconciledRoutes,
-                currentPlan.Objective,
-                currentPlan.Diagnostics,
-                currentPlan.InputFingerprint);
-        }
-
-        // Step 5: atomic rollback on verifier failure.
-        //   candidate = Reconcile + Normalize
-        //   verification = Verify(candidate)
-        //   if success: Publish(VerifiedPlan) and SaveCurrentPlan()
-        //   if failure: keep currentPlan entirely; do NOT touch currentPlan
-        //               references, visible routes, or the persisted file.
-        //               The atomic contract guarantees that an unverified
-        //               candidate never reaches UI or disk.
-        if (reconciled is null || reconciled.Routes.Count == 0) {
-            // Either no routes survived or normalization could not
-            // build a replayable plan. Keep the old plan visible.
-            // Publish the (still-old) plan so listeners get a stable
-            // refresh notification, but DO NOT save a snapshot.
-            Publish(currentPlan, selectedRouteNumber, showAllRoutes, selectedBarterRowId);
-            RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
-            App.myCFun?.Log(
-                "[AutoRoute] 完成状态无法安全应用到现有路线，请重新生成自动路线。",
-                System.Windows.Media.Brushes.OrangeRed);
-            return currentPlan.Routes.Count > 0;
-        }
-        if (request is null) {
-            // No verifier reachable. Refuse to publish without verification.
-            Publish(currentPlan, selectedRouteNumber, showAllRoutes, selectedBarterRowId);
-            RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
-            return currentPlan.Routes.Count > 0;
-        }
-        var verification2 = RoutePlanVerifier.Verify(request, reconciled);
-        if (!verification2.Success || verification2.VerifiedPlan is null) {
-            // Verifier rejected the adjusted plan. Atomic rollback:
-            // keep currentPlan reference, do not save.
-            Publish(currentPlan, selectedRouteNumber, showAllRoutes, selectedBarterRowId);
-            RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
-            App.myCFun?.Log(
-                "[AutoRoute] 当前完成状态无法安全应用到已有路线，请重新生成自动路线。",
-                System.Windows.Media.Brushes.OrangeRed);
-            return currentPlan.Routes.Count > 0;
-        }
-
-        // Step 6: publish the verified plan (use the verifier's exact LT).
-        RoutePlan finalPlan = verification2.VerifiedPlan;
-        Publish(finalPlan, selectedRouteNumber, showAllRoutes, selectedBarterRowId);
+        UpdateVisibleRoute();
+        SelectPreferredOrFirstBarter(selectedRouteNumber, selectedBarterRowId);
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
+        // Persist the known-good base plan. Planner CK state is stored in
+        // myPlan_Data.json; TryLoadAfterProgress combines the two on restart.
+        SaveCurrentPlan();
 
-        // Step 7: persist the verified plan. Never overwrite a known-good
-        // snapshot with an empty one.
-        if (finalPlan.Routes.Count > 0 || currentPlan.Routes.Count == 0) {
-            SaveCurrentPlan();
-        }
-        if (finalPlan.Routes.Count > 0) {
-            App.myCFun?.Log(
-                "[AutoRoute] 已应用路线进度：完成 1 个交换，剩余 " +
-                finalPlan.Routes.Count + " 条路线。",
-                System.Windows.Media.Brushes.DarkOliveGreen);
-        }
-        return finalPlan.Routes.Count > 0;
-    }
-
-    /// <summary>
-    /// Helper used by <see cref="ApplyBarterCompletionProgress"/>: drops a
-    /// pickup whose items are all zero, drops an unload whose items are all
-    /// zero. Preserves the rest of the step list verbatim.
-    /// </summary>
-    private static RouteStep[] TrimPickupAndUnload(RouteStep[] steps) {
-        var result = new List<RouteStep>(steps.Length);
-        foreach (var step in steps) {
-            switch (step) {
-                case WarehousePickupStep pickup when pickup.Items.Count == 0:
-                    continue;
-                case WarehouseUnloadStep unload when unload.Items.Count == 0:
-                    continue;
-                default:
-                    result.Add(step);
-                    break;
+        if (completed) {
+            if (remainingRoutes.Length == 0) {
+                App.myCFun?.Log(
+                    "[AutoRoute] 所有自动路线均已完成。",
+                    System.Windows.Media.Brushes.DarkOliveGreen);
+            }
+            else {
+                App.myCFun?.Log(
+                    "[AutoRoute] 已应用路线进度：完成 1 个交换，剩余 " +
+                    remainingRoutes.Length + " 条路线。",
+                    System.Windows.Media.Brushes.DarkOliveGreen);
             }
         }
-        return result.ToArray();
+        return remainingRoutes.Length > 0;
     }
 
     public void Invalidate(string reason) {

@@ -89,6 +89,34 @@ public class RouteStepLabelTests {
     }
 
     [Fact]
+    public void CompletedBarterStep_IsExcludedWhileSiblingLabelRemains() {
+        var completedRowId = "br-completed";
+        var remainingRowId = "br-remaining";
+        var plan = new RoutePlan(RoutePlanStatus.Optimal, [
+            new PlannedRoute(1, "Baremi", "Crow", [
+                new BarterStep(completedRowId, "Baremi",
+                    new RouteItemQuantity("800056", 1),
+                    new RouteItemQuantity("800060", 1),
+                    new RouteLoadSnapshot(0, 0, 0)),
+                new BarterStep(remainingRowId, "Crow",
+                    new RouteItemQuantity("800049", 1),
+                    new RouteItemQuantity("10", 163),
+                    new RouteLoadSnapshot(0, 0, 0)),
+            ], distance: 0, initialLT: 0, currentLT: 0, peakLT: 0),
+        ], null, [], "fp");
+
+        var labels = RouteStepLabelPlanner.PlanLabels(
+            plan, showAll: false, selectedRouteNumber: 1,
+            itemDisplayNames: new Dictionary<string, string>(),
+            completedBarterRowIds: new HashSet<string>(StringComparer.Ordinal) {
+                completedRowId,
+            });
+
+        var label = Assert.Single(labels);
+        Assert.Equal(remainingRowId, label.BarterRowId);
+    }
+
+    [Fact]
     public void Pickup_DisplayText_IsIslandDashPickup() {
         // Audit round 7: pickup labels are owned by
         // EnsureAutomaticWarehouseNodes. PlanLabels returns

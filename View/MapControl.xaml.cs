@@ -1,4 +1,5 @@
 ﻿using Syncfusion.Windows.Controls.PivotGrid;
+using Syncfusion.UI.Xaml.Grid;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
@@ -257,6 +258,13 @@ namespace iBarter.View {
             return Math.Clamp(requested, 11, 16);
         }
 
+        // Both legacy warehouse Labels and automatic-route TextBlocks
+        // live below the map scale transform. Use one effective-font
+        // calculation so they have the same on-screen size at every zoom.
+        private double GetMapLabelFontSize(bool highlighted) =>
+            GetLabelScreenFontSize(highlighted)
+                / (hdMapEnabled ? 1 : viewportState.Scale);
+
         public void InitTempGrid() {
             Islands myIsland = new Islands(Island.Ancient, 1000, 10);
             Barter myBater = new Barter(myIsland, new Items("", "000", "0"), new Items("", "000", "0"), 0, false, 0, 0, 0);
@@ -397,8 +405,7 @@ namespace iBarter.View {
                     if (routeHighlight) {
                         Brush highlightBrush = ResolveHighlightBrush(renderSnapshot, myIslands.IslandsName);
                         myLabel.FontWeight = FontWeights.ExtraBold;
-                        myLabel.FontSize = GetLabelScreenFontSize(true)
-                            / (hdMapEnabled ? 1 : viewportState.Scale);
+                        myLabel.FontSize = GetMapLabelFontSize(true);
                         myLabel.BorderBrush = highlightBrush;
                         myLabel.BorderThickness = new Thickness(2);
                         myLabel.Background = new SolidColorBrush(Color.FromArgb(155, 5, 22, 30));
@@ -407,8 +414,7 @@ namespace iBarter.View {
                     }
                     else {
                         myLabel.FontWeight = visual.BaseFontWeight;
-                        myLabel.FontSize = GetLabelScreenFontSize(false)
-                            / (hdMapEnabled ? 1 : viewportState.Scale);
+                        myLabel.FontSize = GetMapLabelFontSize(false);
                         myLabel.BorderBrush = visual.BaseBorderBrush;
                         myLabel.BorderThickness = visual.BaseBorderThickness;
                         myLabel.Background = visual.BaseBackground;
@@ -1360,7 +1366,8 @@ namespace iBarter.View {
                 coordinator.ShowAllRoutes,
                 coordinator.SelectedRouteNumber,
                 BuildItemDisplayNameLookup(),
-                BuildBarterGroupLookup());
+                BuildBarterGroupLookup(),
+                coordinator.CompletedBarterRowIds);
 
             // Warehouse dedup pass: Iliya with both pickup AND
             // unload gets only one warehouse label.  Real Barter
@@ -1476,6 +1483,7 @@ namespace iBarter.View {
             }
             int occurrence = occurrenceByIsland.TryGetValue(label.IslandId, out var n) ? n : 0;
             occurrenceByIsland[label.IslandId] = occurrence + 1;
+            UpdateRouteStepLabelTypography(wrapper, label);
             double verticalOffset = iBarter.Routing.RouteStepLabelRenderer
                 .ComputeVerticalOffset(occurrence, host.ActualHeight);
             PositionRouteStepLabel(wrapper, host, center, verticalOffset);
@@ -1638,10 +1646,12 @@ namespace iBarter.View {
                 // Planner labels. The previous route-step renderer
                 // calculated this brush but never attached it.
                 : new SolidColorBrush(Color.FromArgb(80, 0, 0, 0));
+            bool highlighted = CurrentRenderSnapshot().HighlightedIslandIds.Contains(label.IslandId);
             var textBlock = new TextBlock {
                 Text = label.DisplayText,
                 Foreground = labelForeground,
-                FontWeight = FontWeights.SemiBold,
+                FontSize = GetMapLabelFontSize(highlighted),
+                FontWeight = highlighted ? FontWeights.ExtraBold : FontWeights.SemiBold,
                 TextWrapping = TextWrapping.NoWrap,
             };
             var border = new Border {
@@ -1679,6 +1689,26 @@ namespace iBarter.View {
             wrapper.Width = size.Width;
             wrapper.Height = size.Height;
             return wrapper;
+        }
+
+        private void UpdateRouteStepLabelTypography(
+            FrameworkElement wrapper,
+            RouteStepMapLabel label) {
+            if (wrapper is not Grid grid
+                || grid.Children.OfType<Border>().FirstOrDefault() is not { } border
+                || border.Child is not TextBlock textBlock) return;
+
+            bool highlighted = CurrentRenderSnapshot().HighlightedIslandIds.Contains(label.IslandId);
+            double fontSize = GetMapLabelFontSize(highlighted);
+            FontWeight fontWeight = highlighted ? FontWeights.ExtraBold : FontWeights.SemiBold;
+            if (Math.Abs(textBlock.FontSize - fontSize) <= 0.01
+                && textBlock.FontWeight == fontWeight) return;
+
+            textBlock.FontSize = fontSize;
+            textBlock.FontWeight = fontWeight;
+            var size = MeasureElementForPlacement(border);
+            wrapper.Width = size.Width;
+            wrapper.Height = size.Height;
         }
 
         private bool routeStepLabelsRetryScheduled;
@@ -2115,13 +2145,51 @@ namespace iBarter.View {
                         b => b.IsLandName == islandId);
                 }
                 if (myBarter != null) {
-                    App.myfmMain.dockingManager_Main.ActiveWindow = App.myfmMain.document_Planner;
-                    App.myfmMain.myPlannerControl.DataGrid_Planner.SelectedItem = myBarter;
-
-                    App.myfmMain.myPlannerControl.DataGrid_Planner.ScrollInView(new RowColumnIndex(App.myfmMain.myPlannerControl.DataGrid_Planner.SelectedIndex, 0));
+                    SelectAndRevealPlannerBarter(myBarter);
                     e.Handled = true;
                 }
             }
+        }
+
+        private void SelectAndRevealPlannerBarter(Barter barter) {
+            var main = App.myfmMain;
+            var planner = main?.myPlannerControl;
+            var grid = planner?.DataGrid_Planner;
+            if (main is null || planner is null || grid is null) return;
+
+            main.dockingManager_Main.ActiveWindow = main.document_Planner;
+            grid.SelectedItem = barter;
+
+            // Activating a docked document is asynchronous. Calling
+            // SfDataGrid.ScrollInView immediately can reach its visual-row
+            // generator before it exists (the user-reported NRE). Defer to
+            // Render and resolve the real row/column rather than passing
+            // SelectedIndex/-1 to the third-party control.
+            grid.Dispatcher.BeginInvoke(new Action(() => {
+                if (!grid.IsLoaded || grid.View is null) return;
+                grid.UpdateLayout();
+                int rowIndex = grid.ResolveToRowIndex(barter);
+                if (rowIndex <= 0) return;
+
+                int columnIndex = 1;
+                var firstVisible = grid.Columns.FirstOrDefault(column => !column.IsHidden)
+                    ?? grid.Columns.FirstOrDefault();
+                if (firstVisible is not null) {
+                    int resolved = grid.ResolveToGridVisibleColumnIndex(
+                        grid.Columns.IndexOf(firstVisible));
+                    if (resolved >= 1) columnIndex = resolved;
+                }
+
+                try {
+                    grid.ScrollInView(new RowColumnIndex(rowIndex, columnIndex));
+                }
+                catch (NullReferenceException) {
+                    // Selection and Planner activation already succeeded.
+                    // Some Syncfusion layouts still have no visual row on
+                    // this render pass; scrolling is optional and must not
+                    // terminate the application.
+                }
+            }), DispatcherPriority.Render);
         }
     }
 }

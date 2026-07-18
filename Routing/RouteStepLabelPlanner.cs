@@ -59,7 +59,8 @@ public static class RouteStepLabelPlanner {
         bool showAll,
         int? selectedRouteNumber,
         IReadOnlyDictionary<string, string> itemDisplayNames,
-        IReadOnlyDictionary<string, int>? barterGroupsByRowId = null) {
+        IReadOnlyDictionary<string, int>? barterGroupsByRowId = null,
+        IReadOnlySet<string>? completedBarterRowIds = null) {
         if (plan is null) return Array.Empty<RouteStepMapLabel>();
         var result = new List<RouteStepMapLabel>();
         foreach (var route in plan.Routes) {
@@ -77,6 +78,9 @@ public static class RouteStepLabelPlanner {
                 // marker, which is exactly the v1 bug the audit
                 // closed.
                 if (step is WarehousePickupStep or WarehouseUnloadStep)
+                    continue;
+                if (step is BarterStep completedBarter
+                    && completedBarterRowIds?.Contains(completedBarter.RowId) == true)
                     continue;
                 var label = Build(
                     route.Number,
