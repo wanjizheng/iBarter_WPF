@@ -134,51 +134,121 @@ public static class RoutePlanRestoreCompatibility {
         bool IsCompatible,
         RoutePlan? MappedPlan,
         IReadOnlyDictionary<(string IslandId, string Item1Id, string Item2Id), List<string>>? AmbiguousTuples,
-        IReadOnlyList<string>? MismatchComponents);
+        IReadOnlyList<string>? MismatchComponents,
+        string? MigratedSelectedBarterRowId);
 
     public static IdentityMigrationResult TryMigrateIdentityOnly(
         AutomaticRoutePlanningRequest currentRequest,
-        RoutePlan persistedPlan) {
+        RoutePlan persistedPlan,
+        string? selectedBarterRowId = null) {
         // Sanity: status + non-empty.
         if (persistedPlan.Status is not (RoutePlanStatus.Optimal
                 or RoutePlanStatus.BestKnownWithinLimit)
             || persistedPlan.Routes.Count == 0) {
             return new IdentityMigrationResult(
                 false, null, null,
-                new[] { "saved plan status or empty routes" });
+                new[] { "saved plan status or empty routes" },
+                null);
         }
 
-        // Try the direct match first — no migration needed.
-        if (IsRestoredPlanInternallyConsistent(currentRequest, persistedPlan,
-                out var directMismatch)) {
-            return new IdentityMigrationResult(true, persistedPlan, null, null);
-        }
+        var savedBarters = persistedPlan.Routes
+            .SelectMany(route => route.Steps.OfType<BarterStep>())
+            .ToList();
+        var currentTasks = currentRequest.Tasks.ToArray();
+        var currentTasksByRow = currentTasks.ToDictionary(
+            t => t.RowId, StringComparer.Ordinal);
 
-        // Run the legacy migration shim.  It returns a saved->current
-        // RowId mapping when the business-tuple match is unique.
-        var migration = TryMigrateLegacyRowIds(persistedPlan, currentRequest,
-            out var ambiguous);
-        if (ambiguous is { Count: > 0 }) {
+        // Audit round 8: EVERY saved BarterStep must map to a
+        // current task. Unmapped steps mean a route was deleted
+        // or a RowId was renamed — the whole plan is unsafe to
+        // restore. The v1 path silently `continue`d past unmapped
+        // steps which let invalid plans appear "compatible".
+        var mapping = new Dictionary<string, string>(StringComparer.Ordinal);
+        var ambiguous = new Dictionary<(string, string, string), List<string>>();
+        var errors = new List<string>();
+        foreach (var saved in savedBarters) {
+            if (currentTasksByRow.ContainsKey(saved.RowId)) {
+                mapping[saved.RowId] = saved.RowId;
+                continue;
+            }
+            // No direct match — try legacy business-tuple.
+            var tuple = ParseLegacyTuple(saved.RowId);
+            if (tuple is null) {
+                // RowId is neither current nor legacy; treat as
+                // an unrecoverable mismatch.
+                errors.Add(
+                    $"saved BarterStep rowId '{saved.RowId}' " +
+                    $"is neither a current task nor a legacy " +
+                    $"(Island,Item1,Item2) tuple");
+                continue;
+            }
+            // Find all current tasks whose business tuple matches
+            // the saved step.  The audit requires that quantity
+            // changes be rejected, so we also check that the
+            // saved step's Consumed/Produced quantities match the
+            // candidate task's Input/Output quantities.  The
+            // legacy RowId does not carry quantities, but the
+            // saved BarterStep itself does (consumed/produced).
+            var key = tuple.Value;
+            var savedConsumed = saved.Consumed.Quantity;
+            var savedProduced = saved.Produced.Quantity;
+            var candidates = currentTasks
+                .Where(t => t.IslandId == key.IslandId
+                    && t.Item1Id == key.Item1Id
+                    && t.Item2Id == key.Item2Id
+                    && t.InputQuantity == savedConsumed
+                    && t.OutputQuantity == savedProduced)
+                .ToList();
+            if (candidates.Count == 0) {
+                // Tuple doesn't match any current task.  Either
+                // the item was removed, the quantities changed, or
+                // the island was renamed.
+                errors.Add(
+                    $"saved BarterStep (Island={key.IslandId} " +
+                    $"Item1={key.Item1Id}×{savedConsumed} " +
+                    $"Item2={key.Item2Id}×{savedProduced}) " +
+                    $"has no current-task match");
+                continue;
+            }
+            if (candidates.Count > 1) {
+                if (!ambiguous.TryGetValue(key, out var seenList)) seenList = new List<string>();
+                ambiguous[key] = seenList
+                    .Concat(candidates.Select(c => c.RowId))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+                continue;
+            }
+            mapping[saved.RowId] = candidates[0].RowId;
+        }
+        if (ambiguous.Count > 0) {
             return new IdentityMigrationResult(
-                false, null, ambiguous, null);
+                false, null, ambiguous, null, null);
         }
-        if (!migration.IsCompatible) {
-            // No legacy match either.  The "every saved RowId" loop
-            // found nothing — return the mismatch components so
-            // the caller can log them.
+        if (errors.Count > 0) {
             return new IdentityMigrationResult(
-                false, null, null,
-                new[] { "no saved RowId matched any current task" });
+                false, null, null, errors, null);
         }
 
-        // Build the remapped plan: re-host the persisted
-        // BarterSteps on the current tasks' RowIds.
-        var mapped = RemapPersistedPlan(persistedPlan, migration.SavedRowIdToCurrentRowId);
-        if (IsRestoredPlanInternallyConsistent(currentRequest, mapped,
-                out var mappedMismatch)) {
-            return new IdentityMigrationResult(true, mapped, null, null);
+        // Apply the mapping: re-host each saved BarterStep on the
+        // current task's RowId. Steps that already matched keep
+        // their identity. The remapped plan then has the new
+        // task catalog's PlannerRowIds.
+        var remapped = RemapPersistedPlan(persistedPlan, mapping);
+        // Update the InputFingerprint to the current request's
+        // fingerprint so the post-restore check (the verifier) and
+        // any future direct match all use the same key. The
+        // v1 path left the saved fingerprint in place, which
+        // caused repeated FingerprintMismatch on the next reload.
+        var updated = new RoutePlan(
+            remapped.Status, remapped.Routes, remapped.Objective,
+            remapped.Diagnostics, RoutePlanFingerprint.Compute(currentRequest));
+        // Migrate SelectedBarterRowId through the same mapping.
+        string? migratedSelected = null;
+        if (selectedBarterRowId is not null
+            && mapping.TryGetValue(selectedBarterRowId, out var mappedSelected)) {
+            migratedSelected = mappedSelected;
         }
-        return new IdentityMigrationResult(false, mapped, null, mappedMismatch);
+        return new IdentityMigrationResult(true, updated, null, null, migratedSelected);
     }
 
     private static RoutePlan RemapPersistedPlan(

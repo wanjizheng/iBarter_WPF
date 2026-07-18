@@ -156,6 +156,19 @@ public Barter() {
             return true;
         }
 
+        /// <summary>
+        /// Audit round 8: regenerates the <see cref="PlannerRowId"/>
+        /// unconditionally.  Use only for collision repair on load
+        /// (duplicate ids, the "INVALID:" sentinel from the
+        /// migration path, or any malformed value the loader
+        /// decides to replace).  Do NOT call this in the
+        /// RefreshDataGrid path; the user explicitly required the
+        /// reload/clone to keep the persisted id.
+        /// </summary>
+        public void RegeneratePlannerRowId() {
+            plannerRowId = "br-" + Guid.NewGuid().ToString("N");
+        }
+
         public bool CalculatedAlready {
             get { return calculatedAlready; }
             set { calculatedAlready = value; }

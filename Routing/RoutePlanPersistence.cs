@@ -163,20 +163,37 @@ public static class RoutePlanPersistence {
         // strings ("Iliya:800208:800241") or "br-*" GUIDs from a
         // prior migration run.
         var identity = RoutePlanRestoreCompatibility.TryMigrateIdentityOnly(
-            currentRequest, snapshot.Plan);
+            currentRequest, snapshot.Plan, snapshot.SelectedBarterRowId);
         if (identity.IsCompatible && identity.MappedPlan is not null) {
+            // Audit round 8: verify the migrated plan via
+            // RoutePlanVerifier before publishing. If the
+            // verifier fails, the migration produced a plan that
+            // the planner cannot accept — refuse the restore, do
+            // not save back, do not return a snapshot.
+            var verification = RoutePlanVerifier.Verify(
+                currentRequest, identity.MappedPlan);
+            if (!verification.Success || verification.VerifiedPlan is null) {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[RoutePlan] identity migration refused: verifier failure: " +
+                    $"{verification.Diagnostic?.Code} " +
+                    $"{verification.Diagnostic?.Detail}");
+                snapshot = null;
+                return false;
+            }
             // Re-host the snapshot on the migrated plan so callers
             // see the new RowIds; also save back to disk so the
             // next reload doesn't re-migrate.
+            string migratedSelected = identity.MigratedSelectedBarterRowId
+                ?? snapshot.SelectedBarterRowId;
             snapshot = new PersistedRoutePlan(
                 identity.MappedPlan,
                 snapshot.SelectedRouteNumber,
                 snapshot.ShowAll,
-                snapshot.SelectedBarterRowId);
+                migratedSelected);
             try {
                 Save(path, identity.MappedPlan,
                     snapshot.SelectedRouteNumber, snapshot.ShowAll,
-                    snapshot.SelectedBarterRowId);
+                    migratedSelected);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 // The restore itself succeeded; the save-back is
