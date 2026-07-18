@@ -88,6 +88,13 @@ namespace iBarter.View {
                 Dispatcher.BeginInvoke(
                     new Action(CenterFocusedSegmentIfNeeded),
                     DispatcherPriority.Render);
+                // Audit round 5: schedule an island-label rebuild at
+                // Render priority. The first call almost always lands
+                // before layout; the retry path inside
+                // EnsureRouteIslandLabels fires the actual create
+                // once Grid_MapMain has ActualWidth/ActualHeight > 0.
+                Dispatcher.BeginInvoke(new Action(EnsureRouteIslandLabels),
+                    DispatcherPriority.Render);
             };
             this.Unloaded += (_, _) => {
                 if (myTimer != null && myTimer.IsEnabled) myTimer.Stop();
@@ -99,11 +106,17 @@ namespace iBarter.View {
             // islands at 0,0 (i.e. top-left = centre of a tiny map). The
             // timer keeps running as a fallback.
             Grid_MapMain.SizeChanged += (_, _) =>
-                Dispatcher.BeginInvoke(new Action(IslandsButtonRearrange),
-                    DispatcherPriority.Render);
+                Dispatcher.BeginInvoke(new Action(() => {
+                    IslandsButtonRearrange();
+                    EnsureRouteIslandLabels();
+                }), DispatcherPriority.Render);
             MapViewport.SizeChanged += (_, _) => {
                 if (hdMapEnabled) RefreshHdMap();
                 CenterFocusedSegmentIfNeeded();
+                // HD camera updates can shift the projected island
+                // centres, so re-run the label layout pass too.
+                Dispatcher.BeginInvoke(new Action(EnsureRouteIslandLabels),
+                    DispatcherPriority.Render);
             };
             myTimer.Start();
         }
@@ -1303,92 +1316,207 @@ namespace iBarter.View {
         /// </summary>
         private void EnsureRouteIslandLabels() {
             var coordinator = App.myRouteCoordinator;
-            if (coordinator?.Mode != CargoMode.AutomaticRoute) return;
-            if (coordinator.CurrentPlan is not { } plan) return;
+            if (coordinator?.Mode != CargoMode.AutomaticRoute) {
+                // Audit round 5: dropping the mode also drops every
+                // route-only label so we don't leak them back into
+                // manual mode. The WPF layer that drives label creation
+                // (this method) never ties itself to Planner barters.
+                RemoveAllRouteIslandLabels();
+                return;
+            }
+            if (coordinator.CurrentPlan is not { } plan) {
+                RemoveAllRouteIslandLabels();
+                return;
+            }
 
-            // Audit round 4: the pure decision (which island ids
-            // need a label) lives in RouteIslandLabelPlanner so it
-            // has a unit test. The WPF wiring below only renders.
+            // Audit round 4: the pure decision lives in
+            // RouteIslandLabelPlanner; round 5 adds the lifecycle
+            // reconcile in RouteIslandLabelRenderer.
             var visibleIslands = iBarter.Routing.RouteIslandLabelPlanner.VisibleIslandIds(
                 plan,
                 coordinator.ShowAllRoutes,
                 coordinator.SelectedRouteNumber);
-            if (visibleIslands.Count == 0) return;
 
-            // Islands that already have a warehouse node label are
-            // skipped so we never stack two text blocks on top of
-            // each other.  Warehouse labels carry a "Warehouse"
-            // suffix on the Label_<island>Warehouse naming scheme.
-            var warehouseIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (UIElement child in Grid_MapMain.Children) {
-                if (child is FrameworkElement fe
-                    && fe.Name is { } name
-                    && name.StartsWith("Label_", StringComparison.Ordinal)
-                    && name.EndsWith("Warehouse", StringComparison.Ordinal)) {
-                    int islandStart = "Label_".Length;
-                    int islandEnd = name.Length - "Warehouse".Length - islandStart;
-                    if (islandEnd > 0)
-                        warehouseIds.Add(name.Substring(islandStart, islandEnd));
+            // Use the authoritative render snapshot for warehouse
+            // ids; the legacy Label_<island>Warehouse child scan was
+            // unreliable because warehouse labels live inside
+            // GridContainer_*Warehouse wrappers, not as direct
+            // children of Grid_MapMain.
+            IReadOnlySet<string> warehouseIds = CurrentRenderSnapshot().WarehouseIslandIds;
+            var planned = iBarter.Routing.RouteIslandLabelRenderer.PlanLabels(
+                visibleIslands, warehouseIds);
+
+            // Reconcile against the labels that are currently in the
+            // visual tree.  Reconcile returns Deferred when the host
+            // has no size yet — we leave the existing labels in place
+            // and schedule a retry.
+            var existing = CollectExistingRouteIslandLabelIds();
+            var outcome = iBarter.Routing.RouteIslandLabelRenderer.Reconcile(
+                planned,
+                existing,
+                Grid_MapMain.ActualWidth,
+                Grid_MapMain.ActualHeight,
+                out var toAdd,
+                out var toRemove);
+
+            if (RouteIslandLabelDiagnostics.Enabled) {
+                RouteIslandLabelDiagnostics.Log(
+                    $"EnsureRouteIslandLabels: outcome={outcome} " +
+                    $"host={Grid_MapMain.ActualWidth:0.##}x{Grid_MapMain.ActualHeight:0.##} " +
+                    $"planned={planned.Count} existing={existing.Count} " +
+                    $"add={toAdd.Count} remove={toRemove.Count} " +
+                    $"warehouses={warehouseIds.Count}");
+            }
+
+            if (toRemove.Count > 0) RemoveRouteIslandLabels(toRemove);
+
+            if (outcome == iBarter.Routing.RouteIslandLabelRenderer.RebuildOutcome.Deferred) {
+                // Host has no size yet (the very first call after
+                // IslandsButtonInitialisation often lands before
+                // layout). Schedule a retry at Render priority so it
+                // happens AFTER the layout pass — that is the whole
+                // bug the audit caught: previous wiring dropped every
+                // label and never retried.
+                ScheduleRouteIslandLabelsRetry();
+                return;
+            }
+            if (outcome == iBarter.Routing.RouteIslandLabelRenderer.RebuildOutcome.Empty) {
+                return;
+            }
+            if (toAdd.Count > 0) AddRouteIslandLabels(toAdd);
+        }
+
+        private HashSet<string> CollectExistingRouteIslandLabelIds() {
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            CollectRouteIslandLabelIds(Grid_MapMain, ids);
+            return ids;
+        }
+
+        private static void CollectRouteIslandLabelIds(DependencyObject parent, HashSet<string> ids) {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++) {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is FrameworkElement fe && fe.Tag is RouteIslandLabelTag tag) {
+                    ids.Add(tag.IslandId);
+                }
+                CollectRouteIslandLabelIds(child, ids);
+            }
+        }
+
+        private void RemoveRouteIslandLabels(IReadOnlyList<string> idsToRemove) {
+            var idSet = new HashSet<string>(idsToRemove, StringComparer.Ordinal);
+            RemoveMatchingRouteIslandLabels(Grid_MapMain, idSet);
+        }
+
+        private static void RemoveMatchingRouteIslandLabels(DependencyObject parent, HashSet<string> idSet) {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = count - 1; i >= 0; i--) {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is FrameworkElement fe && fe.Tag is RouteIslandLabelTag tag
+                    && idSet.Contains(tag.IslandId)) {
+                    if (parent is Panel panel) panel.Children.Remove(fe);
+                }
+                else {
+                    // Recurse only into containers that don't match so
+                    // we don't accidentally remove grandchildren of
+                    // wrappers we already removed.
+                    RemoveMatchingRouteIslandLabels(child, idSet);
                 }
             }
-            foreach (var islandId in RouteIslandLabelPlanner.ExcludeWarehouseIslands(
-                visibleIslands, warehouseIds)) {
+        }
 
-                var island = App.listIslands?.FirstOrDefault(x => x.IslandsName == islandId);
-                if (island is null) continue;
-                if (!TryGetIslandCenter(island, out Grid? host, out Point center)
-                    || host is null) continue;
-
-                // Wrap the label in a Grid so future visual tweaks
-                // (background, border, hit-test area) don't have to
-                // retouch Label itself. IsHitTestVisible=false on
-                // both wrapper and label means double-clicks fall
-                // through to whatever marker (BarterStep / pickup /
-                // unload) sits underneath.
-                var wrapper = new Grid {
-                    IsHitTestVisible = false,
-                    Tag = new RouteIslandLabelTag(islandId),
-                };
-                wrapper.Name = "RouteIslandLabel_" + islandId;
-                wrapper.HorizontalAlignment = HorizontalAlignment.Left;
-                wrapper.VerticalAlignment = VerticalAlignment.Top;
-                Panel.SetZIndex(wrapper, 60); // above route lines (default 0)
-                wrapper.IsHitTestVisible = false;
-
-                var label = new Label {
-                    Name = "RouteIslandLabelText_" + islandId,
-                    Content = island.IslandsNameDisplay,
-                    Foreground = Brushes.Gainsboro,
-                    Background = new SolidColorBrush(Color.FromArgb(110, 0, 0, 0)),
-                    FontWeight = FontWeights.SemiBold,
-                    Padding = new Thickness(4, 1, 4, 1),
-                    IsHitTestVisible = false,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-
-                wrapper.Children.Add(label);
-                // Wrap width/height follow the measured label so the
-                // wrapper's bounds (used by AdjustLabels overlap
-                // avoidance) line up with the visible text.
-                var size = MeasureLabelForPlacement(label);
-                wrapper.Width = size.Width;
-                wrapper.Height = size.Height;
-                label.Width = size.Width;
-                label.Height = size.Height;
-
-                // Place the label centered horizontally on the island
-                // centre, BELOW the island block (matches the legacy
-                // Planner label position from ButtonInitialisation).
-                wrapper.Margin = new Thickness(
-                    center.X - size.Width / 2,
-                    center.Y + 5,
-                    host.ActualWidth - (center.X - size.Width / 2) - size.Width,
-                    host.ActualHeight - (center.Y + 5) - size.Height);
-
-                Grid_MapMain.Children.Add(wrapper);
-                listLabels.Add(label);
+        private void RemoveAllRouteIslandLabels() {
+            int count = Grid_MapMain.Children.Count;
+            for (int i = count - 1; i >= 0; i--) {
+                if (Grid_MapMain.Children[i] is FrameworkElement fe
+                    && fe.Tag is RouteIslandLabelTag) {
+                    Grid_MapMain.Children.RemoveAt(i);
+                }
             }
+        }
+
+        private void AddRouteIslandLabels(IReadOnlyList<string> islandIds) {
+            foreach (var islandId in islandIds) {
+                var island = App.listIslands?.FirstOrDefault(x => x.IslandsName == islandId);
+                if (island is null) {
+                    RouteIslandLabelDiagnostics.LogMissing(islandId);
+                    continue;
+                }
+                if (!TryGetIslandCenter(island, out Grid? host, out Point center)
+                    || host is null) {
+                    // TryGetIslandCenter can still fail even after a
+                    // positive size check (e.g. island missing from
+                    // hdIslandCoordinates for the HD map). The retry
+                    // scheduled by the caller will pick this up next
+                    // time.
+                    RouteIslandLabelDiagnostics.LogMissing(islandId);
+                    continue;
+                }
+
+                var wrapper = CreateRouteIslandLabelWrapper(island);
+                PositionRouteIslandLabel(wrapper, host, center);
+                host.Children.Add(wrapper);
+                listLabels.Add((Label)wrapper.Children[0]);
+
+                if (RouteIslandLabelDiagnostics.Enabled) {
+                    RouteIslandLabelDiagnostics.Log(
+                        $"  added label for {islandId} at host={host.Name ?? "(anon)"} " +
+                        $"margin=({wrapper.Margin.Left:0.##},{wrapper.Margin.Top:0.##})");
+                }
+            }
+        }
+
+        private static Grid CreateRouteIslandLabelWrapper(Islands island) {
+            var label = new Label {
+                Name = "RouteIslandLabelText_" + island.IslandsName,
+                Content = island.IslandsNameDisplay,
+                Foreground = Brushes.Gainsboro,
+                Background = new SolidColorBrush(Color.FromArgb(110, 0, 0, 0)),
+                FontWeight = FontWeights.SemiBold,
+                Padding = new Thickness(4, 1, 4, 1),
+                IsHitTestVisible = false,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var wrapper = new Grid {
+                Name = "RouteIslandLabel_" + island.IslandsName,
+                IsHitTestVisible = false,
+                Tag = new RouteIslandLabelTag(island.IslandsName),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            Panel.SetZIndex(wrapper, 60); // above route lines (default 0)
+            wrapper.Children.Add(label);
+
+            var size = MeasureLabelForPlacement(label);
+            wrapper.Width = size.Width;
+            wrapper.Height = size.Height;
+            label.Width = size.Width;
+            label.Height = size.Height;
+            return wrapper;
+        }
+
+        private static void PositionRouteIslandLabel(Grid wrapper, Grid host, Point center) {
+            wrapper.Margin = new Thickness(
+                center.X - wrapper.Width / 2,
+                center.Y + 5,
+                host.ActualWidth - (center.X - wrapper.Width / 2) - wrapper.Width,
+                host.ActualHeight - (center.Y + 5) - wrapper.Height);
+        }
+
+        private bool routeIslandLabelsRetryScheduled;
+        private void ScheduleRouteIslandLabelsRetry() {
+            if (routeIslandLabelsRetryScheduled) return;
+            routeIslandLabelsRetryScheduled = true;
+            Dispatcher.BeginInvoke(new Action(() => {
+                routeIslandLabelsRetryScheduled = false;
+                // Audit round 5: the retry runs at Render priority so
+                // the layout pass that supplies the host's ActualWidth
+                // / ActualHeight completes first. Without this hop
+                // every first-call attempt would always Deferred and
+                // no label would ever be created.
+                EnsureRouteIslandLabels();
+            }), DispatcherPriority.Render);
         }
 
         private void ButtonInitialisation(
