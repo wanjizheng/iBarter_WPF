@@ -294,6 +294,8 @@
     <sys:String x:Key="str.Log.AutoRoute.NoFeasibleWithinLimit">No feasible route was found before the search limit.</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Cancelled">Automatic route search cancelled.</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.InvalidInput">Automatic route input is invalid: {0}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.SaveFailed">Automatic route save failed: {0}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.MapRenderFailed">Automatic route map render failed: {0}</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.MissingIsland">Cannot draw automatic route because island '{0}' is missing.</sys:String>
     <sys:String x:Key="str.Msg.AutoRoute.MissingStock">Warehouse stock is insufficient for item {0}.</sys:String>
     <sys:String x:Key="str.Msg.AutoRoute.TaskOverweight">The barter at {0} cannot fit within Total LT.</sys:String>

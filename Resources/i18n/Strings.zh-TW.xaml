@@ -258,6 +258,8 @@
     <sys:String x:Key="str.Log.AutoRoute.NoFeasibleWithinLimit">达到搜索限制前尚未找到可行路线。</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Cancelled">自动路线搜索已取消。</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.InvalidInput">自动路线输入无效：{0}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.SaveFailed">自动路线保存失败：{0}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.MapRenderFailed">自动路线地图渲染失败：{0}</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.MissingIsland">无法绘制自动路线，因为缺少岛屿「{0}」。</sys:String>
     <sys:String x:Key="str.Msg.AutoRoute.MissingStock">仓库中的物品 {0} 库存不足。</sys:String>
     <sys:String x:Key="str.Msg.AutoRoute.TaskOverweight">{0} 的单次交换无法满足总 LT 限制。</sys:String>
