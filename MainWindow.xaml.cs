@@ -54,7 +54,20 @@ namespace iBarter {
             try {
                 App.myRouteCoordinator?.SaveCurrentPlan();
             }
-            catch { /* never block shutdown on a save failure */ }
+            catch (Exception exception) {
+                // The shutdown path must keep moving even if the safety-net
+                // save fails (disk full, ACL, antivirus lock, etc.), but the
+                // failure should still be observable in the log so the user
+                // knows the last route may not have been persisted.
+                try {
+                    System.IO.File.AppendAllText(
+                        AppDomain.CurrentDomain.BaseDirectory + "crash.log",
+                        "==== " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                            + " (shutdown-save-failed) ====\r\n"
+                            + exception + "\r\n\r\n");
+                }
+                catch { /* last-resort logger must never throw */ }
+            }
 
             try {
                 if (App.mySplashScreen != null && App.mySplashScreen.IsLoaded) {
