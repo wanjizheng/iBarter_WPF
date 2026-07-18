@@ -129,12 +129,9 @@ public sealed class PlannerAutoPlanner {
         ref int committedParley,
         List<AutoPlanningDiagnostic> diagnostics) {
 
-        // Plan-relevant reserve (no Universal Reserve Phase): every LV5/LV6
-        // reserve is handled atomically inside TryAddRoute / TryBuildBundle
-        // when a selected bundle consumes the item as Item1. If a consumed
-        // reserve cannot be replenished, TryBuildBundle emits a reserve-*
-        // diagnostic and GreedyFillIncrements rolls back any committed
-        // progress so the plan can fail atomically.
+        // Plan-relevant reserve: every proposed LV5/LV6 consumer is hardened
+        // against final inventory before it can be committed.  This preserves
+        // valid earlier work while rejecting only the over-consuming candidate.
 
         // Phase 1: Crow-Coin routes identified by Item2Id (locale-independent).
         // Higher coin output wins; on ties, lower full-bundle parley.
@@ -159,8 +156,8 @@ public sealed class PlannerAutoPlanner {
         ref int committedParley,
         List<AutoPlanningDiagnostic> diagnostics) {
 
-        // Plan-relevant reserve (no Universal Reserve Phase). Same note as
-        // PlanCrowCoinFirst: reserve handling is inside the bundle build.
+        // Plan-relevant reserve is enforced per candidate by
+        // GreedyFillIncrements before ranking and commit.
         // Crow coin is excluded. Direct targets are restricted to LV4-LV6
         // input (LV6→LV7, LV5→LV6, LV4→LV5). LV1-LV3 routes never appear as
         // Profit First candidates — they only show up as upstream supply
@@ -180,9 +177,9 @@ public sealed class PlannerAutoPlanner {
         List<AutoPlanningDiagnostic> diagnostics) {
 
         // Phase 1: LV5/LV6 capped restock by largest deficit ratio. Only
-        // routes whose produced LV5/LV6 stock is below target are
-        // candidates; reserve is satisfied by TryAddRoute's same-group
-        // producer pull-in inside each atomic bundle.
+        // routes whose produced LV5/LV6 stock is below target are candidates;
+        // consuming a protected item is then checked by per-candidate reserve
+        // hardening before it can enter the plan.
         GreedyFillIncrements(
             request, routesById, committed, ref committedParley, diagnostics,
             filter: r => IsCappedRestockEligible(r, request, committed),
@@ -269,38 +266,8 @@ public sealed class PlannerAutoPlanner {
         int snapshotParley = committedParley;
         int snapshotDiagnosticCount = diagnostics.Count;
 
-        // Safety bound: number of routes * a small multiplier; with
-        // deterministic same-group repair each iteration either fully
-        // resolves at least one deficit or terminates with a no-progress
-        // diagnostic. This bound only protects against pathological
-        // cascades where a repair introduces a new deficit.
-        int maxIterations = Math.Max(8, request.Routes.Count * 2);
-        bool allResolved = false;
-        for (int iter = 0; iter < maxIterations; iter++) {
-            // Re-collect the consumed protected items from current committed.
-            // A repair can introduce a new consumed item (e.g. a producer
-            // pulled in to repair X itself consumes Y), so we re-scan
-            // every iteration.
-            var deficits = CollectReserveDeficits(request, routesById, committed,
-                diagnostics);
-            if (deficits.Count == 0) {
-                allResolved = true;
-                break;
-            }
-
-            bool anyProgress = false;
-            // Process deficits in deterministic order (item id).
-            foreach (var deficit in deficits.OrderBy(d => d.ItemId, StringComparer.Ordinal)) {
-                if (deficit.MissingQuantity <= 0) continue;
-                if (TryRepairDeficit(request, routesById, committed, ref committedParley,
-                        deficit, diagnostics)) {
-                    anyProgress = true;
-                }
-            }
-            if (!anyProgress) break;
-        }
-
-        if (!allResolved) {
+        if (!TryResolveReserveDeficits(request, routesById, committed,
+                ref committedParley, diagnostics)) {
             // Roll back the entire repair: no partial producers, no
             // partial parley, no partial diagnostics. The caller (Plan)
             // sees committed == pre-repair committed and parley ==
@@ -319,6 +286,92 @@ public sealed class PlannerAutoPlanner {
                 }
             }
         }
+    }
+
+    // Resolves final LV5/LV6 deficits against the supplied state.  This is
+    // deliberately reusable: normal planning invokes it as a final safety net,
+    // while GreedyFillIncrements invokes it on a private candidate probe before
+    // allowing that candidate to become part of the real plan.
+    private static bool TryResolveReserveDeficits(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        Dictionary<string, int> committed,
+        ref int committedParley,
+        List<AutoPlanningDiagnostic> diagnostics) {
+        if (request.Lv5Target <= 0 && request.Lv6Target <= 0) return true;
+
+        int maxIterations = Math.Max(8, request.Routes.Count * 2);
+        for (int iter = 0; iter < maxIterations; iter++) {
+            var deficits = CollectReserveDeficits(request, routesById, committed,
+                diagnostics);
+            if (deficits.Count == 0) return true;
+
+            bool anyProgress = false;
+            foreach (var deficit in deficits.OrderBy(d => d.ItemId, StringComparer.Ordinal)) {
+                if (deficit.MissingQuantity <= 0) continue;
+                if (TryRepairDeficit(request, routesById, committed, ref committedParley,
+                        deficit, diagnostics)) {
+                    anyProgress = true;
+                }
+            }
+            if (!anyProgress) return false;
+        }
+        return false;
+    }
+
+    // Candidate reserve hardening is the crucial distinction between a final
+    // inventory target and a late, lossy repair attempt.  We first combine the
+    // proposed incremental bundle with the already committed plan, then prove
+    // that every LV5/LV6 final reserve remains satisfiable.  The probe owns all
+    // mutable state; rejected candidates cannot alter parley, multipliers or
+    // diagnostics of another candidate.
+    private static Bundle? TryHardenCandidateAgainstReserve(
+        AutoPlanningRequest request,
+        IReadOnlyDictionary<string, AutoPlanningRoute> routesById,
+        IReadOnlyDictionary<string, int> committed,
+        int committedParley,
+        Bundle candidateBundle,
+        List<AutoPlanningDiagnostic> localDiagnostics) {
+        if (request.Lv5Target <= 0 && request.Lv6Target <= 0) {
+            return candidateBundle;
+        }
+
+        var probeCommitted = new Dictionary<string, int>(committed, StringComparer.Ordinal);
+        foreach (var (rowId, increment) in candidateBundle.Multipliers) {
+            int existing = probeCommitted.TryGetValue(rowId, out var value) ? value : 0;
+            probeCommitted[rowId] = checked(existing + increment);
+        }
+        int probeParley = checked(committedParley + candidateBundle.AdditionalParley);
+
+        if (!TryResolveReserveDeficits(request, routesById, probeCommitted,
+                ref probeParley, localDiagnostics)) {
+            // TryRepairDeficit deliberately keeps failed internal producer
+            // diagnostics local.  A rejected top-level candidate still needs a
+            // precise reason so GreedyFillIncrements can report an atomic
+            // reserve failure when there is no alternative candidate at all.
+            foreach (var deficit in CollectReserveDeficits(request, routesById, probeCommitted)) {
+                if (deficit.MissingQuantity > 0 && !HasReserveDiagnostic(localDiagnostics, deficit.ItemId)) {
+                    localDiagnostics.Add(new AutoPlanningDiagnostic(
+                        deficit.FailureCode, deficit.ItemId));
+                }
+            }
+            return null;
+        }
+
+        // Convert the final probe totals back into INCREMENTAL bundle values.
+        // Writing probe totals directly would double-count prior committed
+        // exchanges when the winner is merged into the master map.
+        var hardened = new Bundle {
+            AdditionalParley = checked(probeParley - committedParley)
+        };
+        foreach (var (rowId, probeValue) in probeCommitted) {
+            int prior = committed.TryGetValue(rowId, out var value) ? value : 0;
+            int increment = probeValue - prior;
+            if (increment > 0) {
+                hardened.Multipliers[rowId] = increment;
+            }
+        }
+        return hardened;
     }
 
     // A single LV5/LV6 reserve deficit is a GLOBAL final-inventory
@@ -604,7 +657,26 @@ public sealed class PlannerAutoPlanner {
                 if (TryBuildBundle(c.RowId, absoluteTarget, routesById,
                         attemptInventory, committed, remainingBudget,
                         out var bundle, localDiagnostics, request)) {
-                    bundles[c.RowId] = bundle;
+                    // A route can be locally executable but still leave the
+                    // final LV5/LV6 inventory below its configured minimum.
+                    // Validate that constraint *before* ranking or committing
+                    // the candidate.  This is what caps Grandiha at four
+                    // exchanges when 800058 must finish at seven: the fifth
+                    // candidate is rejected rather than accepted and repaired
+                    // too late after its CK producer is unavailable.
+                    var hardened = TryHardenCandidateAgainstReserve(
+                        request, routesById, committed, committedParley,
+                        bundle, localDiagnostics);
+                    if (hardened is not null) {
+                        bundles[c.RowId] = hardened;
+                    }
+                    else {
+                        foreach (var d in localDiagnostics) {
+                            if (d.Code.StartsWith("reserve-")) {
+                                reserveFailures.Add(d);
+                            }
+                        }
+                    }
                 }
                 else {
                     // A failed probe. The reserve-* entries are only promoted

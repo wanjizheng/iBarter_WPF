@@ -214,6 +214,35 @@ public sealed class PlannerAutoPlanningAdapterTests {
         Assert.Contains(calculation.Diagnostics, d => d.Code.StartsWith("reserve-"));
     }
 
+    [Fact]
+    public void Calculate_uses_completed_lv5_output_but_never_reexecutes_the_completed_producer() {
+        // Real 800058 shape: warehouse stock is seven, a CK Balvege row has
+        // already produced four more, and Grandiha may consume only four if
+        // the final LV5 reserve must remain seven.  The CK row stays at four;
+        // it supplies inventory but is never selected as a fresh route.
+        var adapter = new PlannerAutoPlanningAdapter();
+        var balvege = Snapshot("balvege", exchangeDone: true, existingMultiplier: 4,
+            new AutoPlanningRoute("balvege", 9, "A", 4, 1,
+                "800058", 5, 1, false, 5_000, 10));
+        var grandiha = Snapshot("grandiha", exchangeDone: false, existingMultiplier: 0,
+            new AutoPlanningRoute("grandiha", 9, "800058", 5, 1,
+                "800212", 6, 1, false, 10_000, 5));
+
+        var calculation = adapter.Calculate(
+            [balvege, grandiha],
+            new Dictionary<string, int> { ["A"] = 100, ["800058"] = 7 },
+            AutoPlanningStrategy.ProfitFirst,
+            lv5Target: 7,
+            lv6Target: 0,
+            budget: 1_000_000);
+
+        Assert.NotNull(calculation.ApplySet);
+        Assert.Equal(4, calculation.ApplySet!.Multipliers["balvege"]);
+        Assert.Equal(4, calculation.ApplySet.Multipliers["grandiha"]);
+        Assert.Equal(60_000, calculation.UsedParley);
+        Assert.DoesNotContain(calculation.Diagnostics, d => d.Code.StartsWith("reserve-"));
+    }
+
     private static PlannerRowSnapshot Snapshot(
         string rowId, bool exchangeDone, int existingMultiplier, AutoPlanningRoute route) =>
         new(rowId, exchangeDone, existingMultiplier, route);

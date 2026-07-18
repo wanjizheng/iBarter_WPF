@@ -31,6 +31,28 @@ public sealed class ReserveRepairRegressionTests {
         Assert.Equal(5, result.ProjectedInventory["X"]);
     }
 
+    [Fact]
+    public void Candidate_reserve_hardening_merges_only_incremental_repair_multipliers() {
+        // The second consumer increment needs a second producer increment.
+        // Both are already present once in committed state, so the hardened
+        // candidate must contribute +1/+1, never re-merge the probe totals
+        // (+2/+2) and exceed Remaining.
+        var consumer = R("consumer", 1, "X", 6, 1, "Top", 7, 1, false, 10_000, 2);
+        var producer = R("producer", 1, "P", 1, 1, "X", 6, 1, false, 5_000, 2);
+        var request = new AutoPlanningRequest(
+            new[] { consumer, producer },
+            new Dictionary<string, int> { ["X"] = 5, ["P"] = 2, ["Top"] = 0 },
+            AutoPlanningStrategy.ProfitFirst, 0, 5, 1_000_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(d => d.Code)));
+        Assert.Equal(2, result.Multipliers["consumer"]);
+        Assert.Equal(2, result.Multipliers["producer"]);
+        Assert.Equal(5, result.ProjectedInventory["X"]);
+        Assert.Equal(30_000, result.UsedParley);
+    }
+
     // 3. Producer input missing: reserve repair needs a producer whose
     //    input is not available and has no upstream. Plan must fail with
     //    reserve-no-producer (no negative inventory, no half-committed
@@ -138,12 +160,13 @@ public sealed class ReserveRepairRegressionTests {
         Assert.Equal(5, result.ProjectedInventory["Y"]);
     }
 
-    // 8. Atomic rollback: if the second reserve repair fails, the first
-    //    repair's multiplier must NOT be in the result.
+    // 8. Candidate hardening: if a later consumer would violate an
+    //    unfillable reserve, keep the earlier independently valid bundle.
     [Fact]
-    public void Reserve_repair_atomic_rollback_on_second_failure() {
-        // First reserve (X) can be repaired. Second reserve (Y) cannot.
-        // The result must have neither producer committed.
+    public void Candidate_reserve_hardening_preserves_prior_valid_bundle_when_later_consumer_is_unfillable() {
+        // X can be consumed and replenished. Y cannot be replenished, so its
+        // candidate is rejected before commit. A rejected later candidate must
+        // not erase the already verified X bundle.
         var consumerX = R("consumerX", 1, "X", 6, 1, "Top", 7, 1, false, 10_000, 1);
         var producerX = R("producerX", 1, "P", 1, 1, "X", 6, 1, false, 5_000, 10);
         var consumerY = R("consumerY", 2, "Y", 6, 1, "Side", 7, 1, false, 10_000, 1);
@@ -153,9 +176,11 @@ public sealed class ReserveRepairRegressionTests {
             new Dictionary<string, int> { ["X"] = 5, ["Y"] = 5, ["P"] = 100, ["Top"] = 0, ["Side"] = 0 },
             AutoPlanningStrategy.ProfitFirst, 0, 5, 1_000_000);
         var result = new PlannerAutoPlanner().Plan(request);
-        Assert.False(result.Success);
-        // No producer committed by the (failed) repair.
-        Assert.Equal(0, result.Multipliers["producerX"]);
+        Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(d => d.Code)));
+        Assert.Equal(1, result.Multipliers["consumerX"]);
+        Assert.Equal(1, result.Multipliers["producerX"]);
+        Assert.Equal(0, result.Multipliers["consumerY"]);
+        Assert.DoesNotContain(result.Diagnostics, d => d.Code.StartsWith("reserve-"));
     }
 
     // 9. All final inventory nonneg.
@@ -397,15 +422,15 @@ public sealed class ReserveRepairRegressionTests {
         Assert.True(result.Multipliers["pb"] >= 1);
     }
 
-    // 18. Multiple groups have producers, but no executable bundle fits
-    //     the budget. The diagnostic must be reserve-budget-exceeded,
-    //     NOT reserve-no-producer.
+    // 18. A later candidate whose reserve producer would exceed the budget is
+    //     rejected before commit; the earlier valid reserve-safe bundle remains.
     [Fact]
-    public void Multi_group_repair_distinguishes_budget_vs_no_producer() {
+    public void Candidate_reserve_hardening_does_not_rollback_a_valid_bundle_when_later_bundle_exceeds_budget() {
         var consumerG1 = R("cg1", 1, "X", 6, 1, "Top", 7, 1, false, 10_000, 1);
         var consumerG2 = R("cg2", 2, "X", 6, 1, "Top", 7, 1, false, 10_000, 1);
-        // Both producers exist but each costs 8_000. Two consumers (20k) +
-        // one producer (8k) = 28k > budget 25k.
+        // Each consumer needs an 8k producer to preserve X. One pair fits in
+        // 25k; adding the second does not. The planner must keep one valid
+        // pair rather than accept both and fail only at the final repair.
         var producerG1 = R("pg1", 1, "P", 1, 1, "X", 6, 1, false, 8_000, 10);
         var producerG2 = R("pg2", 2, "Q", 1, 1, "X", 6, 1, false, 8_000, 10);
         var request = new AutoPlanningRequest(
@@ -414,12 +439,13 @@ public sealed class ReserveRepairRegressionTests {
             AutoPlanningStrategy.ProfitFirst, 0, 5,
             25_000);
         var result = new PlannerAutoPlanner().Plan(request);
-        Assert.False(result.Success);
-        // No producer committed by the (rolled back) repair.
-        Assert.Equal(0, result.Multipliers["pg1"]);
+        Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(d => d.Code)));
+        Assert.Equal(1, result.Multipliers["cg1"]);
+        Assert.Equal(1, result.Multipliers["pg1"]);
+        Assert.Equal(0, result.Multipliers["cg2"]);
         Assert.Equal(0, result.Multipliers["pg2"]);
-        Assert.Contains(result.Diagnostics,
-            d => d.Code == "reserve-budget-exceeded" || d.Code == "reserve-no-producer");
+        Assert.Equal(18_000, result.UsedParley);
+        Assert.DoesNotContain(result.Diagnostics, d => d.Code.StartsWith("reserve-"));
     }
 
     // 19. Determinism under multi-group repair. Three consecutive runs.

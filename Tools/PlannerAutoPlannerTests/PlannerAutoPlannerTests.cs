@@ -826,6 +826,44 @@ public sealed class PlannerAutoPlannerTests {
         Assert.DoesNotContain(result.Diagnostics, d => d.Code.StartsWith("reserve-"));
     }
 
+    [Fact]
+    public void Candidate_reserve_hardening_caps_the_fifth_lv5_consumer_before_commit() {
+        // Mirrors the real 800058 failure after Balvege has already completed
+        // four production exchanges: 11 are available, but the configured
+        // final LV5 reserve is 7.  Grandiha may consume exactly four.  The
+        // fifth candidate must be rejected during selection, not accepted and
+        // then rejected later because the completed producer is unavailable.
+        var grandiha = Route("grandiha", 9, "800058", 5, 1,
+            "800212", 6, 1, 10_000, 5);
+        var request = new AutoPlanningRequest(
+            [grandiha],
+            new Dictionary<string, int> { ["800058"] = 11, ["800212"] = 0 },
+            AutoPlanningStrategy.ProfitFirst, 7, 0, 1_000_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(d => d.Code)));
+        Assert.Equal(4, result.Multipliers["grandiha"]);
+        Assert.Equal(7, result.ProjectedInventory["800058"]);
+        Assert.DoesNotContain(result.Diagnostics, d => d.Code.StartsWith("reserve-"));
+    }
+
+    [Fact]
+    public void Candidate_reserve_hardening_allows_the_fifth_consumer_when_target_is_zero() {
+        var grandiha = Route("grandiha", 9, "800058", 5, 1,
+            "800212", 6, 1, 10_000, 5);
+        var request = new AutoPlanningRequest(
+            [grandiha],
+            new Dictionary<string, int> { ["800058"] = 11, ["800212"] = 0 },
+            AutoPlanningStrategy.ProfitFirst, 0, 0, 1_000_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success);
+        Assert.Equal(5, result.Multipliers["grandiha"]);
+        Assert.Equal(6, result.ProjectedInventory["800058"]);
+    }
+
     private static AutoPlanningRequest PlanProfit(
         IReadOnlyList<AutoPlanningRoute> routes,
         IReadOnlyDictionary<string, int> inventory,
