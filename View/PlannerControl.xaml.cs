@@ -387,8 +387,14 @@ namespace iBarter.View {
                     App.myPVM.BarterCollection.Clear();
 
                     foreach (Barter barter in App.listBarterPlanner) {
-                        Barter myBarter = new Barter(barter.IsLand, barter.Item1, barter.Item2, barter.ExchangeQuantity,
-                            barter.ExchangeDone, barter.BarterGroup, barter.InvQuantity, barter.InvQuantityChange, barter.UsingALT, barter.CalculatedAlready, barter.TotalItem1ExchangeQuantity);
+                        // Audit round 7: the parameter constructor
+                        // generates a fresh PlannerRowId; the v1 code
+                        // path here silently re-id'd every row on
+                        // refresh, which broke the
+                        // RoutePlanFingerprint round trip. Use the
+                        // clone constructor so the row keeps its
+                        // persisted id.
+                        Barter myBarter = new Barter(barter);
                         App.myPVM.BarterCollection.Add(myBarter);
                     }
                 }
@@ -729,14 +735,17 @@ namespace iBarter.View {
                         int migratedCount = 0;
                         for (int i = 0; i < dataSource.Count; i++) {
                             Barter myBarter = dataSource[i];
-                            // Audit round 3: one-shot migration assigns a
-                            // fresh PlannerRowId to any row loaded from
-                            // an older file that lacks the field. The
-                            // field is then persisted on the next
-                            // SaveData call so reloads reuse it.
-                            if (string.IsNullOrEmpty(myBarter.PlannerRowId)
+                            // Audit round 7: use the side-effect-free
+                            // HasPlannerRowId check + the sanctioned
+                            // EnsurePlannerRowId materialiser. The
+                            // v1 code used the auto-generating getter
+                            // to detect "is empty?" which materialised
+                            // a fresh id on every read — so a second
+                            // load round trip would always look
+                            // "migrated" even when nothing changed.
+                            if (!myBarter.HasPlannerRowId
                                 || myBarter.PlannerRowId.StartsWith("INVALID:", StringComparison.Ordinal)) {
-                                myBarter.PlannerRowId = "br-" + Guid.NewGuid().ToString("N");
+                                myBarter.EnsurePlannerRowId();
                                 migratedCount++;
                             }
                             App.listBarterPlanner.Add(myBarter);
@@ -745,8 +754,15 @@ namespace iBarter.View {
                         RefreshDataGrid();
                         //Grouping();
                         if (migratedCount > 0) {
+                            // Audit round 7: the v1 deferred the
+                            // "save to persist the new ids" until the
+                            // next user action. That meant a restart
+                            // before any save could trigger the
+                            // migration again. Atomic save here so
+                            // the next reload reuses the same ids.
+                            SaveData();
                             App.myCFun.Log(
-                                $"[Planner] 已为 {migratedCount} 条旧记录生成持久化 PlannerRowId，下次保存即生效。",
+                                $"[Planner] 已为 {migratedCount} 条旧记录生成持久化 PlannerRowId，已立即持久化。",
                                 Brushes.SteelBlue);
                         }
                         App.myCFun.Log(Localization.LanguageService.Instance.Localize(
@@ -1323,6 +1339,14 @@ namespace iBarter.View {
             // snapshot (otherwise we'd plan against a stale ExchangeQuantity).
             DataGrid_Planner.SelectionController?.CurrentCellManager?.EndEdit();
 
+            // ---- Plan-input / search phase: any failure here is a
+            // legitimate "invalid input" or "search budget exhausted"
+            // and should be logged with that code. The catch below
+            // also catches map-render and save errors, which we
+            // classify explicitly instead of bundling them under
+            // InvalidInput.  See the four catch arms at the end of
+            // this method.
+
             if (App.myPVM?.BarterCollection == null || App.myPVM.BarterCollection.Count == 0) {
                 App.myCFun.Log(svc.Localize("str.Msg.Planner.AutoPlan.NoRows"), Brushes.Orange);
                 return;
@@ -1556,8 +1580,33 @@ namespace iBarter.View {
                     break;
             }
             }
-            catch (Exception exception) {
+            catch (Exception exception) when (
+                exception is ArgumentException
+                || exception is InvalidOperationException
+                || exception is NullReferenceException) {
+                // Audit round 7: the failure mode is "planner input
+                // invalid / search budget exhausted" — the route
+                // never reached the publish / save / map-render
+                // phases.  Log with the dedicated InvalidInput
+                // resource key so the user knows the cause is in
+                // their own data, not in a downstream system.
                 App.myCFun.Log(svc.Localize("str.Log.AutoRoute.InvalidInput", exception.Message), Brushes.Red);
+            }
+            catch (Exception exception) when (
+                exception is IOException
+                || exception is UnauthorizedAccessException) {
+                // The plan was generated and verified; only the
+                // save back to disk failed (locked file, missing
+                // perms, etc.).  Don't blame the user's input.
+                App.myCFun.Log(svc.Localize("str.Log.AutoRoute.SaveFailed", exception.Message), Brushes.Red);
+            }
+            catch (Exception exception) {
+                // Map-render, fingerprint-compute, or any other
+                // post-publish exception.  The plan and the
+                // automatic-route-plan.json are already in memory
+                // and on disk respectively, so the user keeps
+                // their work even if the map UI failed to refresh.
+                App.myCFun.Log(svc.Localize("str.Log.AutoRoute.MapRenderFailed", exception.Message), Brushes.OrangeRed);
             }
             finally {
                 ButtonAdv_AutoPlan.IsEnabled = true;

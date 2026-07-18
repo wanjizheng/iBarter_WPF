@@ -23,7 +23,50 @@ namespace iBarter {
         [JsonProperty("PlannerRowId")]
         private string plannerRowId = null!;
 
-        public Barter() {
+public Barter() {
+        }
+
+        /// <summary>
+        /// Audit round 7: explicit clone constructor that preserves
+        /// the source row's <see cref="PlannerRowId"/>. The
+        /// <c>RefreshDataGrid</c> code path (and any other reload /
+        /// re-clone site) must use this rather than the parameter
+        /// constructor, so a save → reload → fingerprint round trip
+        /// produces a byte-identical <c>RoutePlanFingerprint</c>.
+        /// </summary>
+        public Barter(Barter source) {
+            if (source is null) throw new ArgumentNullException(nameof(source));
+            isLand = ResolveCatalogIsland(source.IsLand, source.IsLand?.IslandsName);
+            WireUpIsland(isLand);
+
+            item1 = ResolveCatalogItem(source.Item1, source.Item1?.ItemName);
+            WireUpItem1(item1);
+            item2 = ResolveCatalogItem(source.Item2, source.Item2?.ItemName);
+            WireUpItem2(item2);
+
+            item1Name = item1?.ItemName ?? "";
+            icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+            item2Name = item2?.ItemName ?? "";
+            icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+
+            exchangeQuantity = source.ExchangeQuantity;
+            barterGroup = source.BarterGroup;
+            exchangeDone = source.ExchangeDone;
+            usingALT = source.UsingALT;
+            intInv = source.InvQuantity;
+            intChange = source.InvQuantityChange;
+            calculatedAlready = source.CalculatedAlready;
+
+            totalitem1ExchangeQuantity = source.TotalItem1ExchangeQuantity;
+            if (InvQuantityChange == 0) {
+                InvQuantityChange = InvQuantity;
+            }
+
+            // Preserve identity. Source already has a stable id; do NOT
+            // generate a new one.
+            plannerRowId = string.IsNullOrEmpty(source.plannerRowId)
+                ? "br-" + Guid.NewGuid().ToString("N")
+                : source.plannerRowId;
         }
 
         public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = 0, int _intInv = 0, int _intChange = 0, bool _usingALT = false, bool _calculatedAlready = false, int _totalitem1ExchangeQuantity = -1) {
@@ -71,19 +114,46 @@ namespace iBarter {
         [JsonIgnore]
         public string PlannerRowId {
             get {
+                // Audit round 7: the v1 getter had a side-effecting
+                // fallback (assigning a fresh Guid when the backing
+                // field was empty). That made "is the id missing?" an
+                // unsafe question — every read could materialise a new
+                // id. The migration site now uses
+                // <see cref="HasPlannerRowId"/> (side-effect-free
+                // check) and <see cref="EnsurePlannerRowId"/> (single
+                // side-effecting call).
                 if (string.IsNullOrEmpty(plannerRowId)) {
-                    // Defensive: a default-constructed Barter that
-                    // bypasses the constructor must still expose a
-                    // usable id. The constructor normally fills this,
-                    // so this branch only fires for objects built via
-                    // Json deserialization that omitted the field
-                    // (handled by migration) or via reflection-based
-                    // tests.
-                    plannerRowId = "br-" + Guid.NewGuid().ToString("N");
+                    throw new InvalidOperationException(
+                        "Barter.PlannerRowId is empty; call EnsurePlannerRowId() " +
+                        "or load the row through the migration path first.");
                 }
                 return plannerRowId;
             }
             set => plannerRowId = value;
+        }
+
+        /// <summary>
+        /// Side-effect-free check: does the row already have a
+        /// non-empty <see cref="PlannerRowId"/>?  Used by the
+        /// loader to decide whether migration is required without
+        /// triggering the v1 getter's hidden materialisation.
+        /// </summary>
+        [JsonIgnore]
+        public bool HasPlannerRowId => !string.IsNullOrEmpty(plannerRowId);
+
+        /// <summary>
+        /// Audit round 7: the only sanctioned way to materialise a
+        /// fresh <see cref="PlannerRowId"/>.  Returns true when a
+        /// new id was assigned; false when the row already had one.
+        /// Use this in the one-shot loader migration path.  Do NOT
+        /// use it for the reload / RefreshDataGrid path; the row is
+        /// already supposed to have an id (loaded from disk) and a
+        /// new one would change the RoutePlanFingerprint.
+        /// </summary>
+        public bool EnsurePlannerRowId() {
+            if (!string.IsNullOrEmpty(plannerRowId)) return false;
+            plannerRowId = "br-" + Guid.NewGuid().ToString("N");
+            return true;
         }
 
         public bool CalculatedAlready {
