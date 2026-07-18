@@ -37,6 +37,11 @@ namespace iBarter.ViewModel {
         // default palette.  Suppress the nested SelectedPalette callback so
         // one user selection produces exactly one theme application.
         private bool synchronizingThemeSelection;
+        // Mirrors iMacro's working palette lifecycle.  Avoid re-registering an
+        // identical settings object while still allowing a different palette
+        // for the same theme to replace it.
+        private readonly Dictionary<string, string> registeredThemePalettes =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Maintains busy status of sample browser while switching between themes.
@@ -306,19 +311,14 @@ namespace iBarter.ViewModel {
         /// </summary>
         /// <param name="selectedTheme">Selected Theme</param>
         private void OnThemeChanged(string selectedTheme) {
-            // App.xaml opts into ApplyStylesOnApplication.  In that mode the
-            // application-level API is the single source of truth: mixing it
-            // with SetTheme(window, ...) leaves the previous theme's resource
-            // dictionaries behind (notably Dark -> Light).  ApplicationTheme
-            // replaces those dictionaries and updates both current and future
-            // windows in one operation.
-            // Re-registering a palette does not change ThemeName, so the
-            // manager otherwise short-circuits and keeps the old resources.
-            // Clearing the application theme first removes that cached
-            // dictionary; assigning the selected theme then loads the newly
-            // registered palette as well as supporting Dark -> Light.
-            SfSkinManager.ApplicationTheme = null;
-            SfSkinManager.ApplicationTheme = new Theme { ThemeName = selectedTheme };
+            // Keep this identical to iMacro's proven implementation: with
+            // ApplyStylesOnApplication enabled once during startup, apply a
+            // fresh Theme instance to every open root window.  ApplicationTheme
+            // must not be mixed into this path.
+            if (Application.Current is not null) {
+                foreach (Window window in Application.Current.Windows.OfType<Window>().ToArray())
+                    ApplyThemeToWindow(window, selectedTheme);
+            }
 
             UpdateTitleBarBackgroundandForeground(selectedTheme);
             UpdateApplicationPalette(selectedTheme);
@@ -326,6 +326,22 @@ namespace iBarter.ViewModel {
             if (ThemeChanged != null) {
                 ThemeChanged();
             }
+        }
+
+        /// <summary>
+        /// Applies the currently selected theme to a newly created top-level
+        /// window.  Child windows are created after the initial selection and
+        /// therefore cannot rely on the first MainWindow theme application.
+        /// </summary>
+        public void ApplyCurrentThemeToWindow(Window window) {
+            if (window is null || string.IsNullOrWhiteSpace(selectedthemename))
+                return;
+
+            ApplyThemeToWindow(window, selectedthemename);
+        }
+
+        private static void ApplyThemeToWindow(Window window, string themeName) {
+            SfSkinManager.SetTheme(window, new Theme(themeName));
         }
 
         private void UpdateTitleBarBackgroundandForeground(string selectedTheme) {
@@ -571,10 +587,39 @@ namespace iBarter.ViewModel {
         /// <param name="themeType">Type of the theme</param>
         /// <param name="theme">Name of the selected theme</param>
         private void changePalette(string themeType, string paletteType, string theme) {
-            object themeSettings = Activator.CreateInstance(Type.GetType(themeType));
+            if (SelectedPalette is null || string.IsNullOrWhiteSpace(SelectedPalette.Name))
+                return;
 
-            themeSettings.GetType().GetRuntimeProperty("Palette").SetValue(themeSettings, Enum.Parse(Type.GetType(paletteType), SelectedPalette.Name));
-            SfSkinManager.RegisterThemeSettings(theme, (IThemeSetting)themeSettings);
+            string cacheKey = $"{theme}_{SelectedPalette.Name}";
+            if (registeredThemePalettes.TryGetValue(theme, out string? registered)
+                && StringComparer.Ordinal.Equals(registered, cacheKey))
+                return;
+
+            Type? settingsType = Type.GetType(themeType);
+            Type? enumType = Type.GetType(paletteType);
+            if (settingsType is null || enumType is null)
+                throw new InvalidOperationException($"Theme palette types could not be loaded for {theme}.");
+
+            object? themeSettings = Activator.CreateInstance(settingsType);
+            PropertyInfo? paletteProperty = settingsType.GetRuntimeProperty("Palette");
+            if (themeSettings is null || paletteProperty is null)
+                throw new InvalidOperationException($"Theme palette settings are unavailable for {theme}.");
+
+            try {
+                object palette = Enum.Parse(enumType, SelectedPalette.Name);
+                paletteProperty.SetValue(themeSettings, palette);
+                SfSkinManager.RegisterThemeSettings(theme, (IThemeSetting)themeSettings);
+                registeredThemePalettes[theme] = cacheKey;
+            }
+            catch (InvalidOperationException exception)
+                when (exception.Message.Contains("ResourceDictionary", StringComparison.OrdinalIgnoreCase)) {
+                // Syncfusion can report that a dictionary already has a parent
+                // while replacing settings for a theme that is currently live.
+                // iMacro intentionally continues to SetTheme in this case; the
+                // replacement settings have already reached the theme manager.
+                registeredThemePalettes[theme] = cacheKey;
+                System.Diagnostics.Debug.WriteLine(exception);
+            }
         }
 
         /// <summary>
@@ -582,7 +627,11 @@ namespace iBarter.ViewModel {
         /// </summary>
         void PopulatePaletteList() {
             var paletteDetails = new List<Palette>();
-            var xml = File.ReadAllText(@"Model/PaletteList.xml");
+            string palettePath = Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory,
+                "Model",
+                "PaletteList.xml");
+            var xml = File.ReadAllText(palettePath);
             XmlDocument Doc = new XmlDocument();
             Doc.LoadXml(xml);
             XmlNodeList xmlnode = Doc.GetElementsByTagName("Palettes");

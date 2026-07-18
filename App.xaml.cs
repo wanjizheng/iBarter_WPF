@@ -60,9 +60,11 @@ namespace iBarter {
             this.DispatcherUnhandledException += App_DispatcherUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
-            // Let Syncfusion refresh child controls from the active application
-            // theme.  Previously only a few top-level windows received a theme,
-            // so docked controls could remain on the first selected theme.
+            // Match the proven iMacro theme lifecycle: select application-level
+            // resources once at startup, then apply every theme/palette change
+            // with SetTheme on each open window.  Do not mix this with the
+            // ApplicationTheme property; that path retained the first theme in
+            // iBarter and broke Dark -> Light switching.
             SfSkinManager.ApplyStylesOnApplication = true;
 
             // Phase 9 hotfix: install the i18n dictionary FIRST, before

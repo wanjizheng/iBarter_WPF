@@ -124,6 +124,7 @@ namespace iBarter {
             }
             App.myBarterScanner = new BarterScanner();
             App.myBarterScanner.Closed += (_, _) => App.myBarterScanner = null;
+            App.myMainWVM.ApplyCurrentThemeToWindow(App.myBarterScanner);
             App.myBarterScanner.Show();
         }
 
@@ -341,6 +342,7 @@ namespace iBarter {
             }
             App.myStorageManagement = new StorageManagement();
             App.myStorageManagement.Closed += (_, _) => App.myStorageManagement = null;
+            App.myMainWVM.ApplyCurrentThemeToWindow(App.myStorageManagement);
             App.myStorageManagement.Show();
         }
 
