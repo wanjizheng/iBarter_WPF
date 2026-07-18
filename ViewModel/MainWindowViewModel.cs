@@ -310,14 +310,14 @@ namespace iBarter.ViewModel {
         /// Method helps to update the selected <see cref="VisualStyles"/>
         /// </summary>
         /// <param name="selectedTheme">Selected Theme</param>
-        private void OnThemeChanged(string selectedTheme) {
+        private void OnThemeChanged(string selectedTheme, bool forceResourceReload = false) {
             // Keep this identical to iMacro's proven implementation: with
             // ApplyStylesOnApplication enabled once during startup, apply a
             // fresh Theme instance to every open root window.  ApplicationTheme
             // must not be mixed into this path.
             if (Application.Current is not null) {
                 foreach (Window window in Application.Current.Windows.OfType<Window>().ToArray())
-                    ApplyThemeToWindow(window, selectedTheme);
+                    ApplyThemeToWindow(window, selectedTheme, forceResourceReload);
             }
 
             UpdateTitleBarBackgroundandForeground(selectedTheme);
@@ -337,10 +337,26 @@ namespace iBarter.ViewModel {
             if (window is null || string.IsNullOrWhiteSpace(selectedthemename))
                 return;
 
-            ApplyThemeToWindow(window, selectedthemename);
+            ApplyThemeToWindow(window, selectedthemename, forceResourceReload: false);
         }
 
-        private static void ApplyThemeToWindow(Window window, string themeName) {
+        private static void ApplyThemeToWindow(
+            Window window,
+            string themeName,
+            bool forceResourceReload) {
+            // Syncfusion's Theme dependency-property callback compares Theme
+            // instances by ThemeName. RegisterThemeSettings updates the
+            // palette, but assigning another Theme with the same name is then
+            // ignored. Bounce through Default only for a palette change so
+            // the selected theme's resource dictionaries are rebuilt.
+            if (forceResourceReload
+                && string.Equals(
+                    SfSkinManager.GetTheme(window)?.ThemeName,
+                    themeName,
+                    StringComparison.OrdinalIgnoreCase)) {
+                SfSkinManager.SetTheme(window, new Theme("Default"));
+            }
+
             SfSkinManager.SetTheme(window, new Theme(themeName));
         }
 
@@ -367,11 +383,11 @@ namespace iBarter.ViewModel {
             }
         }
 
-        private void ApplySelectedTheme() {
+        private void ApplySelectedTheme(bool forceResourceReload = false) {
             if (selectedthemename != "SystemTheme" && SelectedPalette is not null)
                 RegisterSelectedPalette(selectedthemename);
 
-            OnThemeChanged(selectedthemename);
+            OnThemeChanged(selectedthemename, forceResourceReload);
         }
 
         private static bool IsDarkTheme(string themeName) =>
@@ -503,7 +519,7 @@ namespace iBarter.ViewModel {
                 if (ReferenceEquals(selectedpalette, value)) return;
                 selectedpalette = value;
                 if (!synchronizingThemeSelection && SelectedPalette != null && SelectedPalette.Name != null) {
-                    ApplySelectedTheme();
+                    ApplySelectedTheme(forceResourceReload: true);
                 }
 
                 RaisePropertyChanged("SelectedPalette");
@@ -516,7 +532,7 @@ namespace iBarter.ViewModel {
         /// <param name="ThemeName">Selected Theme</param>
         public void OnPaletteChanged(string ThemeName) {
             RegisterSelectedPalette(ThemeName);
-            OnThemeChanged(ThemeName);
+            OnThemeChanged(ThemeName, forceResourceReload: true);
         }
 
         private void RegisterSelectedPalette(string ThemeName) {
