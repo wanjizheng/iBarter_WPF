@@ -312,6 +312,12 @@ namespace iBarter.ViewModel {
             // dictionaries behind (notably Dark -> Light).  ApplicationTheme
             // replaces those dictionaries and updates both current and future
             // windows in one operation.
+            // Re-registering a palette does not change ThemeName, so the
+            // manager otherwise short-circuits and keeps the old resources.
+            // Clearing the application theme first removes that cached
+            // dictionary; assigning the selected theme then loads the newly
+            // registered palette as well as supporting Dark -> Light.
+            SfSkinManager.ApplicationTheme = null;
             SfSkinManager.ApplicationTheme = new Theme { ThemeName = selectedTheme };
 
             UpdateTitleBarBackgroundandForeground(selectedTheme);
@@ -357,7 +363,7 @@ namespace iBarter.ViewModel {
             || themeName.Contains("Black", StringComparison.OrdinalIgnoreCase)
             || themeName.Equals("Office2019HighContrast", StringComparison.Ordinal);
 
-        private static void UpdateApplicationPalette(string themeName) {
+        private void UpdateApplicationPalette(string themeName) {
             if (Application.Current is null) return;
 
             bool dark = IsDarkTheme(themeName);
@@ -369,8 +375,14 @@ namespace iBarter.ViewModel {
             resources["AppBorderBrush"] = CreateBrush(dark ? "#4A5058" : "#D5DCE5");
             resources["AppCardBrush"] = CreateBrush(dark ? "#252D35" : "#FFFFFF");
             resources["AppCardBorderBrush"] = CreateBrush(dark ? "#5A6672" : "#C3CDD8");
-            resources["AppAccentBrush"] = CreateBrush(dark ? "#60D6E4" : "#176F7F");
-            resources["AppAccentTextBrush"] = CreateBrush(dark ? "#102126" : "#FFFFFF");
+            resources["AppAccentBrush"] = themeName == "SystemTheme"
+                ? SystemColors.HighlightBrush
+                : SelectedPalette?.PrimaryBackground
+                    ?? CreateBrush(dark ? "#60D6E4" : "#176F7F");
+            resources["AppAccentTextBrush"] = themeName == "SystemTheme"
+                ? SystemColors.HighlightTextBrush
+                : SelectedPalette?.PrimaryForeground
+                    ?? CreateBrush(dark ? "#102126" : "#FFFFFF");
         }
 
         private static SolidColorBrush CreateBrush(string color) =>

@@ -52,8 +52,11 @@ namespace iBarter.View {
             if (Application.Current?.Resources["AppSurfaceBrush"] is Brush surface)
                 PropertyGrid_Ship.ViewBackgroundColor = surface;
 
-            PropertyGrid_Ship.InvalidateVisual();
-            PropertyGrid_Ship.UpdateLayout();
+            // Do not call UpdateLayout here.  Syncfusion is in the middle of
+            // replacing its template while ThemeChanged is raised; forcing a
+            // synchronous layout dereferences an internal presenter that has
+            // not been recreated yet.  Setting these properties already
+            // invalidates the necessary visuals safely.
         }
         private bool updatingRouteGuideCheckBox;
 
