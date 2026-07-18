@@ -273,49 +273,59 @@ namespace iBarter {
                 }
                 else {
                     App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Binding.NoProcess"), Brushes.Red);
-                    // 2026-07-10: BDO not found - the previous code path
-                    // fell through to myShipCargo.RefreshData() (which then
-                    // misbehaves / throws) and the splash was never closed.
-                    // Close + shutdown splash here so the user gets a usable
-                    // main window instead of a stuck splash forever.
-                    App.myCFun.Log("[INIT] NoProcess - closing splash + InvokeShutdown", Brushes.Red);
-                    try {
-                        App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
-                        App.mySplashScreen.Dispatcher.InvokeShutdown();
-                    } catch (Exception splashEx) {
-                        App.myCFun.Log("[INIT] splash shutdown fail: " + splashEx.Message, Brushes.Red);
-                    }
+                    // Offline use is supported: Planner, storage, map and
+                    // route planning do not require a live game process.
+                    // The shared finally block closes the splash and restores
+                    // the main window before this method returns.
                     return;
                 }
 
-                App.myCFun.Log("[INIT] 7 before splash close", Brushes.Gray);
-                App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
-                // Shut down the background STA Dispatcher so Dispatcher.Run() exits
-                // and the SplashScreen thread terminates. Without this the thread
-                // stays alive as a "zombie" Dispatcher, holding WPF/DirectWrite
-                // resources that cause 0x80070008 (ERROR_NOT_ENOUGH_MEMORY) during
-                // subsequent DirectWrite calls on the main thread (e.g. during Scan).
-                App.mySplashScreen.Dispatcher.InvokeShutdown();
-                //SfSkinManager.ApplyStylesOnApplication = true;
-                this.WindowState = WindowState.Normal;
-                this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-                double screenWidth = SystemParameters.PrimaryScreenWidth;
-                double screenHeight = SystemParameters.PrimaryScreenHeight;
-                double windowWidth = this.Width;
-                double windowHeight = this.Height;
-                this.Left = (screenWidth / 2) - (windowWidth / 2);
-                this.Top = (screenHeight / 2) - (windowHeight / 2);
+                App.myCFun.Log("[INIT] 7 initialization complete", Brushes.Gray);
                 App.myCFun.DownloadMissingIcon();
             }
             catch (Exception exception) {
                 App.myCFun.Log("[INIT] EXCEPTION: " + exception.Message, Brushes.Red);
-                // 2026-07-10: even on init exception, close splash so the
-                // user is not left looking at a stuck splash.
-                try {
-                    App.mySplashScreen?.Dispatcher.Invoke(new Action(() => App.mySplashScreen?.Close()));
-                    App.mySplashScreen?.Dispatcher.InvokeShutdown();
-                } catch { /* best effort */ }
             }
+            finally {
+                FinishStartupPresentation();
+            }
+        }
+
+        /// <summary>
+        /// Completes startup presentation independently of game binding.
+        /// The window starts minimized while the splash is visible, so every
+        /// exit path (bound, no process, bind failure or exception) must pass
+        /// through here or the application remains an invisible taskbar item.
+        /// </summary>
+        private void FinishStartupPresentation() {
+            try {
+                var splash = App.mySplashScreen;
+                if (splash is not null) {
+                    var dispatcher = splash.Dispatcher;
+                    if (!dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished) {
+                        dispatcher.Invoke(() => {
+                            try { splash.Close(); } catch { }
+                        });
+                        if (!dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished)
+                            dispatcher.InvokeShutdown();
+                    }
+                }
+            }
+            catch (Exception splashException) {
+                App.myCFun?.Log(
+                    "[INIT] splash shutdown fail: " + splashException.Message,
+                    Brushes.Red);
+            }
+
+            WindowState = WindowState.Normal;
+            WindowStartupLocation = WindowStartupLocation.Manual;
+
+            Rect workArea = SystemParameters.WorkArea;
+            double windowWidth = Double.IsNaN(Width) || Width <= 0 ? ActualWidth : Width;
+            double windowHeight = Double.IsNaN(Height) || Height <= 0 ? ActualHeight : Height;
+            Left = workArea.Left + Math.Max(0, (workArea.Width - windowWidth) / 2);
+            Top = workArea.Top + Math.Max(0, (workArea.Height - windowHeight) / 2);
+            Activate();
         }
 
         [StructLayout(LayoutKind.Sequential)]
