@@ -1547,25 +1547,68 @@ namespace iBarter.View {
             var clickedGrid = sender as Grid;
             if (clickedGrid == null || e.ClickCount != 2) return;
 
-            // Bug 3 fix: warehouse / pickup / unload grids must NEVER
-            // complete a barter. Their name suffix ("Warehouse"/"Temp") and
-            // lack of a registered Islands_MouseLeftButtonDown subscription
-            // both protect them at render time, but defense-in-depth here
-            // means a future regression that wires the handler up by
-            // accident still can't mark an unrelated barter done.
-            if (clickedGrid.Name.EndsWith("Warehouse", StringComparison.Ordinal)
-                || clickedGrid.Name.EndsWith("Temp", StringComparison.Ordinal))
-                return;
+            // Bug 3 / Audit 3 (round 2): the primary authorization gate
+            // is the RouteMapNode attached as DataContext or Tag. The
+            // grid's Name suffix is checked only as defense-in-depth
+            // — a regression that wires this handler up to a non-barter
+            // grid can never mark an unrelated barter done, because
+            // RouteMapNode.AuthorizesCompletion returns false for any
+            // Pickup/Unload node regardless of the grid's Name.
+            RouteMapNode? node = clickedGrid.DataContext as RouteMapNode
+                ?? clickedGrid.Tag as RouteMapNode;
+            if (node is null && (clickedGrid.Name.EndsWith("Warehouse", StringComparison.Ordinal)
+                || clickedGrid.Name.EndsWith("Temp", StringComparison.Ordinal)))
+                return;  // legacy name-suffix guard
 
-            string islandId = clickedGrid.Name.Substring(14, clickedGrid.Name.Length - 14);
-            Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(
-                b => b.IsLandName == islandId);
-            if (myBarter == null) return;
-            myBarter.ExchangeDone = true;
+            if (node is null) {
+                // Fallback for legacy grid layouts that don't yet carry a
+                // RouteMapNode. Resolve by island name, but ONLY when the
+                // grid is not a Warehouse/Temp variant.
+                string islandId = clickedGrid.Name.Length > 14
+                    ? clickedGrid.Name.Substring(14, clickedGrid.Name.Length - 14)
+                    : string.Empty;
+                Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(
+                    b => b.IsLandName == islandId);
+                if (myBarter == null) return;
+                myBarter.ExchangeDone = true;
+                CompleteBarterViaPipeline(myBarter);
+                return;
+            }
+
+            if (!node.AuthorizesCompletion) {
+                // Audit round 2 (3): a non-barter node — even one that
+                // was mis-built to carry a RowId — MUST refuse to flip
+                // ExchangeDone. The defense-in-depth defense ensures the
+                // "golden cactus bouquet → artisan shell necklace" unload
+                // bug can never recur.
+                return;
+            }
+
+            // Authoritative path: find the Planner row whose RowId
+            // matches the node's BarterRowId. We do NOT search by
+            // island name; this is the precise-identifier contract
+            // the audit requires.
+            string targetRowId = node.BarterRowId!;
+            Barter? targetBarter = null;
+            int targetIndex = -1;
+            for (int i = 0; i < App.myPVM.BarterCollection.Count; i++) {
+                var b = App.myPVM.BarterCollection[i];
+                string rowId = RoutePlannerRowIdentity.Create(
+                    i, b.IsLandName, b.Item1?.ItemID ?? string.Empty, b.Item2?.ItemID ?? string.Empty);
+                if (StringComparer.Ordinal.Equals(rowId, targetRowId)) {
+                    targetBarter = b;
+                    targetIndex = i;
+                    break;
+                }
+            }
+            if (targetBarter == null) return;
+            targetBarter.ExchangeDone = true;
+            CompleteBarterViaPipeline(targetBarter);
+        }
+
+        private void CompleteBarterViaPipeline(Barter myBarter) {
             App.myfmMain.myPlannerControl.Grouping();
             App.myfmMain.myPlannerControl.SaveData();
-            // Use the unified progress pipeline so the auto-route plan,
-            // parley, cargo and persistence stay consistent.
             string rowId = RoutePlannerRowIdentity.Create(
                 App.myPVM.BarterCollection.IndexOf(myBarter),
                 myBarter.IsLandName,

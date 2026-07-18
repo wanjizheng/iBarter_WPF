@@ -135,28 +135,85 @@ public class RouteParleyCalculatorTests {
     }
 
     [Fact]
-    public void CompletedTimesLookupAppliesPartialCompletion() {
-        // Reserve case: row says ExchangeQuantity=5, the user has manually
-        // ticked 2 of those off (or the planner pre-completed 2). Lookup
-        // table applies that.
-        var rows = new[] {
-            new FakeRow("a", parley: 10_000, qty: 5),
-        };
-        var completed = new Dictionary<string, int> { ["a"] = 2 };
-        long total = RouteParleyCalculator.CalculateRemaining(rows, completed);
-        Assert.Equal(30_000, total);
-    }
-
-    [Fact]
     public void ResultNeverNegative() {
-        // Pathological: completedTimes exceeds ExchangeQuantity.
+        // The pure-derivation formula cannot produce negative values
+        // because ExchangeDone rows are filtered out before accumulation.
         var rows = new[] {
             new FakeRow("a", parley: 10_000, qty: 1, done: true),
             new FakeRow("b", parley: 10_000, qty: 0),
         };
-        var completed = new Dictionary<string, int> { ["a"] = 99 };
-        long total = RouteParleyCalculator.CalculateRemaining(rows, completed);
+        long total = RouteParleyCalculator.CalculateRemaining(rows);
         Assert.True(total >= 0);
         Assert.Equal(0, total);
+    }
+
+    [Fact]
+    public void ExchangeQuantityAlreadyRemaining_DoesNotSubtractAgain() {
+        // Audit round 2: the v1 formula subtracted a "completedTimes"
+        // counter from ExchangeQuantity. That was wrong because
+        // ExchangeQuantity already represents the REMAINING planned
+        // executions (it is clamped by IslandRemaining and overwritten
+        // by Auto Plan). This test pins the contract: ExchangeQuantity=5
+        // means 5 exchanges left, regardless of UI counters.
+        var rows = new[] {
+            new FakeRow("a", parley: 10_000, qty: 5),
+        };
+        long total = RouteParleyCalculator.CalculateRemaining(rows);
+        Assert.Equal(50_000, total);
+    }
+
+    [Fact]
+    public void PlannerAndMapCKProduceSameResult() {
+        // Both entry points (Planner CK and map double-click) end up
+        // calling the same authoritative calculator with the same
+        // Planner state, so they MUST produce the same number.
+        var rowsBefore = new[] {
+            new FakeRow("a", parley: 50_000, qty: 1),
+            new FakeRow("b", parley: 100_000, qty: 1),
+            new FakeRow("c", parley: 150_000, qty: 1),
+        };
+        var rowsAfterPlannerCK = new[] {
+            new FakeRow("a", parley: 50_000, qty: 1, done: true),
+            new FakeRow("b", parley: 100_000, qty: 1),
+            new FakeRow("c", parley: 150_000, qty: 1),
+        };
+        var rowsAfterMapDoubleClick = new[] {
+            new FakeRow("a", parley: 50_000, qty: 1, done: true),
+            new FakeRow("b", parley: 100_000, qty: 1),
+            new FakeRow("c", parley: 150_000, qty: 1),
+        };
+        long plannerResult = RouteParleyCalculator.CalculateRemaining(rowsAfterPlannerCK);
+        long mapResult = RouteParleyCalculator.CalculateRemaining(rowsAfterMapDoubleClick);
+        long before = RouteParleyCalculator.CalculateRemaining(rowsBefore);
+        Assert.Equal(plannerResult, mapResult);
+        // 'a' is done; b (100k) + c (150k) = 250k.
+        Assert.Equal(250_000, plannerResult);
+        // All three: 50k + 100k + 150k = 300k.
+        Assert.Equal(300_000, before);
+    }
+
+    [Fact]
+    public void CompletionPlusUndoDoesNotDrift() {
+        // Bug 4 (drift): a UI counter that did displayedParley -= completedRow.Parley
+        // would fail to recover the original value when the user unticks the row.
+        // The pure formula has no such state.
+        var rowsBefore = new[] {
+            new FakeRow("a", parley: 50_000, qty: 1),
+            new FakeRow("b", parley: 100_000, qty: 1),
+            new FakeRow("c", parley: 150_000, qty: 1),
+        };
+        var rowsAfterCK = new[] {
+            new FakeRow("a", parley: 50_000, qty: 1, done: true),
+            new FakeRow("b", parley: 100_000, qty: 1),
+            new FakeRow("c", parley: 150_000, qty: 1),
+        };
+        long before = RouteParleyCalculator.CalculateRemaining(rowsBefore);
+        long afterCK = RouteParleyCalculator.CalculateRemaining(rowsAfterCK);
+        long afterUndo = RouteParleyCalculator.CalculateRemaining(rowsBefore);
+        Assert.Equal(before, afterUndo);
+        // After ticking 'a': b (100k) + c (150k) = 250k.
+        Assert.Equal(250_000, afterCK);
+        // Round-trip back to before.
+        Assert.Equal(300_000, afterUndo);
     }
 }

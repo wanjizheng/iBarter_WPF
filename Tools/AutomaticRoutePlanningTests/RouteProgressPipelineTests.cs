@@ -273,8 +273,9 @@ public class RouteProgressPipelineTests {
             Barter("a", "800049", 1, "10", 1), // 800045 stays unused
             Unload("Iliya", ("800045", 1), ("10", 1)));
         var plan = new RoutePlan(RoutePlanStatus.Optimal, [route], null, [], "fp");
+        var request = TestRequestFactory.BuildFor(route);
 
-        var normalized = RouteCargoNormalizer.Normalize(plan);
+        var normalized = RouteCargoNormalizer.Normalize(request, plan);
         var pickup = (WarehousePickupStep)normalized.Routes[0].Steps[0];
         Assert.DoesNotContain(pickup.Items, x => x.ItemId == "800045");
     }
@@ -292,10 +293,13 @@ public class RouteProgressPipelineTests {
             MakeBarterAt("b", "Baremi2", "10", 1, "11", 1),
             Unload("Epheria", ("11", 1)));
         var plan = new RoutePlan(RoutePlanStatus.Optimal, [route], null, [], "fp");
+        var request = TestRequestFactory.BuildFor(route);
 
-        var first = ApplyPipeline(plan, new HashSet<string>(StringComparer.Ordinal));
-        var toggled = ApplyPipeline(plan, new HashSet<string>(StringComparer.Ordinal) { "a" });
-        var restored = ApplyPipeline(plan, new HashSet<string>(StringComparer.Ordinal));
+        var first = ApplyPipeline(request, plan, new HashSet<string>(StringComparer.Ordinal));
+        var toggled = ApplyPipeline(request, plan,
+            new HashSet<string>(StringComparer.Ordinal) { "a" });
+        var restored = ApplyPipeline(request, plan,
+            new HashSet<string>(StringComparer.Ordinal));
 
         Assert.Equal(first.Routes.Count, restored.Routes.Count);
         var firstSteps = first.Routes[0].Steps.Select(s => s.GetType().Name).ToArray();
@@ -307,7 +311,8 @@ public class RouteProgressPipelineTests {
         Assert.Equal(3, toggled.Routes[0].Steps.Count);
     }
 
-    private static RoutePlan ApplyPipeline(RoutePlan plan, HashSet<string> completed) {
+    private static RoutePlan ApplyPipeline(
+        AutomaticRoutePlanningRequest request, RoutePlan plan, HashSet<string> completed) {
         var newRoutes = new List<PlannedRoute>();
         foreach (var route in plan.Routes) {
             var remaining = RouteProgressFilter.ExcludeCompletedBarters(
@@ -320,6 +325,42 @@ public class RouteProgressPipelineTests {
         }
         var reconciled = new RoutePlan(plan.Status, newRoutes, plan.Objective,
             plan.Diagnostics, plan.InputFingerprint);
-        return RouteCargoNormalizer.Normalize(reconciled);
+        return RouteCargoNormalizer.Normalize(request, reconciled);
+    }
+}
+
+internal static class TestRequestFactory {
+    public static AutomaticRoutePlanningRequest BuildFor(PlannedRoute route) {
+        var itemIds = new HashSet<string>(StringComparer.Ordinal);
+        var warehouseStocks = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var step in route.Steps) {
+            switch (step) {
+                case WarehousePickupStep pickup:
+                    foreach (var item in pickup.Items)
+                        warehouseStocks[item.ItemId] = Math.Max(
+                            warehouseStocks.GetValueOrDefault(item.ItemId), item.Quantity);
+                    break;
+                case WarehouseUnloadStep unload:
+                    foreach (var item in unload.Items)
+                        warehouseStocks.TryAdd(item.ItemId, 0);
+                    break;
+                case BarterStep barter:
+                    itemIds.Add(barter.Consumed.ItemId);
+                    itemIds.Add(barter.Produced.ItemId);
+                    warehouseStocks.TryAdd(barter.Consumed.ItemId, 0);
+                    warehouseStocks.TryAdd(barter.Produced.ItemId, 0);
+                    break;
+            }
+        }
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal);
+        foreach (var id in itemIds) {
+            items[id] = new RouteItem(id, id, 1, CargoWeightTable.GetWeightForLevel(1));
+        }
+        return new AutomaticRoutePlanningRequest(
+            Array.Empty<RouteBarterTask>(),
+            items,
+            [new RouteWarehouse("Iliya", "Iliya", new RoutePoint(0, 0), warehouseStocks)],
+            extraLT: 0, totalLT: 1_000_000,
+            new RouteSearchLimits(100_000, 1_000), "test-fp");
     }
 }

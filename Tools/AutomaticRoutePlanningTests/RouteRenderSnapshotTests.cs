@@ -205,7 +205,7 @@ public sealed class RouteRenderSnapshotTests {
 
     [Fact]
     public void Planner_row_identity_matches_persisted_route_step_identity() {
-        Assert.Equal("2:Iliya:800001:800002", RoutePlannerRowIdentity.Create(
+        Assert.Equal("Iliya:800001:800002", RoutePlannerRowIdentity.Create(
             2, "Iliya", "800001", "800002"));
     }
 
