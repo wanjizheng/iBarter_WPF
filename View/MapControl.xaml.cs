@@ -2000,20 +2000,18 @@ namespace iBarter.View {
                 return;
             }
 
-            // Authoritative path: find the Planner row whose RowId
-            // matches the node's BarterRowId. We do NOT search by
-            // island name; this is the precise-identifier contract
-            // the audit requires.
+            // Authoritative path: find the Planner row whose
+            // persistent PlannerRowId matches the node's
+            // BarterRowId. We do NOT rebuild a legacy
+            // (Island,Item1,Item2) tuple from the current index —
+            // that would silently re-derive the wrong row whenever
+            // the user had reordered the Planner collection.
             string targetRowId = node.BarterRowId!;
             Barter? targetBarter = null;
-            int targetIndex = -1;
             for (int i = 0; i < App.myPVM.BarterCollection.Count; i++) {
                 var b = App.myPVM.BarterCollection[i];
-                string rowId = RoutePlannerRowIdentity.Create(
-                    i, b.IsLandName, b.Item1?.ItemID ?? string.Empty, b.Item2?.ItemID ?? string.Empty);
-                if (StringComparer.Ordinal.Equals(rowId, targetRowId)) {
+                if (string.Equals(b.PlannerRowId, targetRowId, StringComparison.Ordinal)) {
                     targetBarter = b;
-                    targetIndex = i;
                     break;
                 }
             }
