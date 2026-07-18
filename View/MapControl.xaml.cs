@@ -1262,6 +1262,133 @@ namespace iBarter.View {
                 }
             }
             EnsureAutomaticWarehouseNodes();
+            EnsureRouteIslandLabels();
+        }
+
+        /// <summary>
+        /// Sentinel Tag used by route-only island labels so the next
+        /// refresh can distinguish them from ButtonInitialisation
+        /// containers and warehouse markers. The Tag itself carries
+        /// the canonical island id so test code can introspect it
+        /// without touching the WPF visual tree.
+        /// </summary>
+        internal sealed record RouteIslandLabelTag(string IslandId);
+
+        /// <summary>
+        /// Audit round 4 (regression fix): in AutomaticRoute mode the
+        /// Planner-barter render loop is suppressed (it was reusing
+        /// Planner barters to drive both labels and CK handlers, and
+        /// the side effect was that islands without a Planner
+        /// barter but visited by the actual route — e.g. Baremi,
+        /// Crow in the user's example — lost their name label).
+        /// This method draws a single hit-test-transparent island
+        /// name label for every island the visible routes touch,
+        /// independent of whether a Planner barter exists for it.
+        ///
+        /// <para>The label is added directly to <c>Grid_MapMain</c>
+        /// (NOT to <c>listGrid_Islands</c>), so
+        /// <see cref="IslandsButtonRearrange"/> never touches it.
+        /// Positioning mirrors the same island centre the warehouse
+        /// nodes and route markers use, so the name sits directly
+        /// under the island block — exactly like the legacy Planner
+        /// labels did.</para>
+        ///
+        /// <para>Labels are pure island names. They carry no
+        /// BarterRowId, no StepKind, no handlers, and no
+        /// completion authority. MapControl.Islands_MouseLeftButtonDown
+        /// still gates completion on
+        /// <see cref="RouteMapNode.AuthorizesCompletion"/>, so
+        /// double-clicking an island name can never flip
+        /// <c>ExchangeDone</c>.</para>
+        /// </summary>
+        private void EnsureRouteIslandLabels() {
+            var coordinator = App.myRouteCoordinator;
+            if (coordinator?.Mode != CargoMode.AutomaticRoute) return;
+            if (coordinator.CurrentPlan is not { } plan) return;
+
+            // Audit round 4: the pure decision (which island ids
+            // need a label) lives in RouteIslandLabelPlanner so it
+            // has a unit test. The WPF wiring below only renders.
+            var visibleIslands = iBarter.Routing.RouteIslandLabelPlanner.VisibleIslandIds(
+                plan,
+                coordinator.ShowAllRoutes,
+                coordinator.SelectedRouteNumber);
+            if (visibleIslands.Count == 0) return;
+
+            // Islands that already have a warehouse node label are
+            // skipped so we never stack two text blocks on top of
+            // each other.  Warehouse labels carry a "Warehouse"
+            // suffix on the Label_<island>Warehouse naming scheme.
+            var warehouseIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (UIElement child in Grid_MapMain.Children) {
+                if (child is FrameworkElement fe
+                    && fe.Name is { } name
+                    && name.StartsWith("Label_", StringComparison.Ordinal)
+                    && name.EndsWith("Warehouse", StringComparison.Ordinal)) {
+                    int islandStart = "Label_".Length;
+                    int islandEnd = name.Length - "Warehouse".Length - islandStart;
+                    if (islandEnd > 0)
+                        warehouseIds.Add(name.Substring(islandStart, islandEnd));
+                }
+            }
+            foreach (var islandId in RouteIslandLabelPlanner.ExcludeWarehouseIslands(
+                visibleIslands, warehouseIds)) {
+
+                var island = App.listIslands?.FirstOrDefault(x => x.IslandsName == islandId);
+                if (island is null) continue;
+                if (!TryGetIslandCenter(island, out Grid? host, out Point center)
+                    || host is null) continue;
+
+                // Wrap the label in a Grid so future visual tweaks
+                // (background, border, hit-test area) don't have to
+                // retouch Label itself. IsHitTestVisible=false on
+                // both wrapper and label means double-clicks fall
+                // through to whatever marker (BarterStep / pickup /
+                // unload) sits underneath.
+                var wrapper = new Grid {
+                    IsHitTestVisible = false,
+                    Tag = new RouteIslandLabelTag(islandId),
+                };
+                wrapper.Name = "RouteIslandLabel_" + islandId;
+                wrapper.HorizontalAlignment = HorizontalAlignment.Left;
+                wrapper.VerticalAlignment = VerticalAlignment.Top;
+                Panel.SetZIndex(wrapper, 60); // above route lines (default 0)
+                wrapper.IsHitTestVisible = false;
+
+                var label = new Label {
+                    Name = "RouteIslandLabelText_" + islandId,
+                    Content = island.IslandsNameDisplay,
+                    Foreground = Brushes.Gainsboro,
+                    Background = new SolidColorBrush(Color.FromArgb(110, 0, 0, 0)),
+                    FontWeight = FontWeights.SemiBold,
+                    Padding = new Thickness(4, 1, 4, 1),
+                    IsHitTestVisible = false,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+
+                wrapper.Children.Add(label);
+                // Wrap width/height follow the measured label so the
+                // wrapper's bounds (used by AdjustLabels overlap
+                // avoidance) line up with the visible text.
+                var size = MeasureLabelForPlacement(label);
+                wrapper.Width = size.Width;
+                wrapper.Height = size.Height;
+                label.Width = size.Width;
+                label.Height = size.Height;
+
+                // Place the label centered horizontally on the island
+                // centre, BELOW the island block (matches the legacy
+                // Planner label position from ButtonInitialisation).
+                wrapper.Margin = new Thickness(
+                    center.X - size.Width / 2,
+                    center.Y + 5,
+                    host.ActualWidth - (center.X - size.Width / 2) - size.Width,
+                    host.ActualHeight - (center.Y + 5) - size.Height);
+
+                Grid_MapMain.Children.Add(wrapper);
+                listLabels.Add(label);
+            }
         }
 
         private void ButtonInitialisation(
@@ -1609,11 +1736,10 @@ namespace iBarter.View {
         private void CompleteBarterViaPipeline(Barter myBarter) {
             App.myfmMain.myPlannerControl.Grouping();
             App.myfmMain.myPlannerControl.SaveData();
-            string rowId = RoutePlannerRowIdentity.Create(
-                App.myPVM.BarterCollection.IndexOf(myBarter),
-                myBarter.IsLandName,
-                myBarter.Item1?.ItemID ?? string.Empty,
-                myBarter.Item2?.ItemID ?? string.Empty);
+            // Audit round 3: row identity comes from the persistent
+            // Barter.PlannerRowId; we never re-derive from index or
+            // (Island, Item1, Item2).
+            string rowId = myBarter.PlannerRowId;
             App.myRouteCoordinator?.ApplyBarterCompletionProgress(
                 App.myfmMain.myPlannerControl.BuildCurrentAutomaticRouteRequest(
                     App.myfmMain.myPlannerControl.ResolveSelectedOptimizationProfileSafe()),
