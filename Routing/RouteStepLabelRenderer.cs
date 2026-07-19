@@ -144,4 +144,38 @@ public static class RouteStepLabelRenderer {
     /// </summary>
     public static double ComputeHorizontalStagger(
         RouteStepKind stepKind, int occurrenceOnIsland) => 0.0;
+
+    /// <summary>
+    /// Places a warehouse-operation label after the lowest barter label on
+    /// the same island. When there is not enough room below, the warehouse
+    /// label uses the caller's above-island fallback instead. A null barter
+    /// bottom preserves the legacy placement exactly.
+    /// </summary>
+    public static double ComputeWarehouseLabelTop(
+        double defaultTop,
+        double aboveIslandTop,
+        double? lowestBarterLabelBottom,
+        double warehouseLabelHeight,
+        double hostHeight) {
+        if (lowestBarterLabelBottom is null) return defaultTop;
+
+        const double collisionGap = 4.0;
+        double belowBarterTop = lowestBarterLabelBottom.Value + collisionGap;
+        return belowBarterTop + warehouseLabelHeight <= hostHeight
+            ? belowBarterTop
+            : Math.Max(0, aboveIslandTop);
+    }
+
+    /// <summary>
+    /// Keeps the leading edge of a fixed-size label inside its host. The WPF
+    /// caller then derives the trailing margin from this bounded coordinate,
+    /// avoiding an over-constrained layout after a label is moved.
+    /// </summary>
+    public static double ClampLabelPosition(
+        double desiredPosition,
+        double labelExtent,
+        double hostExtent) => Math.Clamp(
+            desiredPosition,
+            0,
+            Math.Max(0, hostExtent - labelExtent));
 }

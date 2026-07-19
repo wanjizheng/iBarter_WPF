@@ -17,7 +17,10 @@
                              MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
                              ResizeBorderThickness="0"
                              RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
-                             Title="{loc:Localize str.Menu.StorageManager}" Height="450" Width="800">
+                             Title="{loc:Localize str.Menu.StorageManager}" Height="450" Width="800"
+                             FontFamily="{StaticResource AppFontFamily}"
+                             TextOptions.TextFormattingMode="Display"
+                             TextOptions.TextRenderingMode="ClearType">
     <Syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

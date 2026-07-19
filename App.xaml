@@ -5,6 +5,7 @@
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
     <Application.Resources>
         <ResourceDictionary>
+            <FontFamily x:Key="AppFontFamily">Microsoft YaHei UI</FontFamily>
             <!--
                 Application-owned colours used by the few custom controls that
                 intentionally draw their own surfaces.  They are DynamicResource

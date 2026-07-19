@@ -18,7 +18,10 @@
                              MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
                              ResizeBorderThickness="0"
                              RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
-                             Title="{loc:Localize str.Menu.BarterScanner}" Height="350" Width="750">
+                             Title="{loc:Localize str.Menu.BarterScanner}" Height="350" Width="750"
+                             FontFamily="{StaticResource AppFontFamily}"
+                             TextOptions.TextFormattingMode="Display"
+                             TextOptions.TextRenderingMode="ClearType">
     <syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

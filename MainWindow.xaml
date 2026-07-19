@@ -31,7 +31,10 @@
     Visibility="Visible"
     Title="{loc:Localize str.MainWindow.Title}" Height="868" Width="1254" Loaded="Window_Loaded"
     Background="{DynamicResource AppSurfaceBrush}"
-    Foreground="{DynamicResource AppTextBrush}">
+    Foreground="{DynamicResource AppTextBrush}"
+    FontFamily="{StaticResource AppFontFamily}"
+    TextOptions.TextFormattingMode="Display"
+    TextOptions.TextRenderingMode="ClearType">
     <syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

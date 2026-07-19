@@ -24,7 +24,7 @@
         <Setter Property="Margin" Value="2" />
         <Setter Property="MinWidth" Value="54" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FontFamily" Value="Microsoft YaHei UI" />
+        <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type controls:FluentIconButton}">

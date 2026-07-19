@@ -25,6 +25,10 @@ namespace iBarter.View {
         // Highest barter item LV to render on the map. 7 keeps every catalog tier visible
         // after the LV6/LV7 extension; lower this if you want to hide high-tier pins.
         private const int MAX_MAP_LV = 7;
+        private static readonly FontFamily MapLabelFontFamily =
+            new("Microsoft YaHei UI");
+        private static readonly FontWeight MapLabelFontWeight = FontWeights.Medium;
+        private static readonly FontWeight HighlightedMapLabelFontWeight = FontWeights.SemiBold;
         private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
 
         public List<Grid> listGrid_Islands = new List<Grid>();
@@ -404,7 +408,7 @@ namespace iBarter.View {
                         myIslands.IslandsName);
                     if (routeHighlight) {
                         Brush highlightBrush = ResolveHighlightBrush(renderSnapshot, myIslands.IslandsName);
-                        myLabel.FontWeight = FontWeights.ExtraBold;
+                        myLabel.FontWeight = HighlightedMapLabelFontWeight;
                         myLabel.FontSize = GetMapLabelFontSize(true);
                         myLabel.BorderBrush = highlightBrush;
                         myLabel.BorderThickness = new Thickness(2);
@@ -451,30 +455,7 @@ namespace iBarter.View {
                         host.ActualWidth - center.X - 5,
                         host.ActualHeight - center.Y - 5);
 
-                    // Place the label BELOW the island block by default,
-                    // but flip it ABOVE when the island sits too close
-                    // to the map's bottom edge - otherwise the label gets
-                    // clipped below the map (IslandsThickness.Bottom is
-                    // the gap from the island bottom to the map bottom;
-                    // a small value means the label would overflow).
-                    double labelTop;
-                    if (host.ActualHeight - center.Y < Math.Max(40, host.ActualHeight * 0.08)) {
-                        // flip: position label above the island block
-                        // (label baseline = top - label height)
-                        labelTop = Grid_Image.Margin.Top - labelSize.Height;
-                    }
-                    else {
-                        // default: position label below the island block
-                        labelTop = Grid_Image.Margin.Top + Grid_Image.ActualHeight;
-                    }
-                    myLabel.Margin = new Thickness(
-                        Grid_Image.Margin.Left - labelSize.Width / 2,
-                        labelTop,
-                        Grid_Image.Margin.Right - labelSize.Width,
-                        Grid_Image.Margin.Bottom - labelSize.Height);
-
-
-                    NewMargin(myLabel, host);
+                    PositionIslandLabel(visual, host, center, labelSize);
                     if (myLabel.Content != "") {
                         listLabels.Add(myLabel);
                         //AdjustLabels(listLabels);
@@ -522,6 +503,75 @@ namespace iBarter.View {
             // child list (e.g. after a map middle-click). Lines are
             // lightweight enough that 10-20 of them per tick is free.
             DrawRouteOverlay();
+        }
+
+        private void PositionIslandLabel(
+            IslandVisual visual,
+            Grid host,
+            Point center,
+            Size labelSize) {
+            Grid image = visual.ImageGrid;
+            Label label = visual.Label;
+            double imageHeight = image.ActualHeight > 0 ? image.ActualHeight : image.Height;
+            double belowIslandTop = image.Margin.Top + imageHeight;
+            double aboveIslandTop = image.Margin.Top - labelSize.Height;
+
+            // Preserve the existing bottom-edge flip for ordinary labels.
+            double labelTop = host.ActualHeight - center.Y
+                    < Math.Max(40, host.ActualHeight * 0.08)
+                ? aboveIslandTop
+                : belowIslandTop;
+
+            if (visual.IsWarehouse) {
+                // Barter labels live in a separate route-step overlay. They
+                // are not part of legacy AdjustLabels(), so use their actual
+                // rendered bottom edge to place pickup/unload text in the next
+                // free vertical slot. This covers the final barter + unload
+                // on the same island without guessing from label text.
+                double? lowestBarterBottom = FindLowestBarterLabelBottom(
+                    host, visual.Islands.IslandsName);
+                labelTop = iBarter.Routing.RouteStepLabelRenderer.ComputeWarehouseLabelTop(
+                    labelTop,
+                    aboveIslandTop,
+                    lowestBarterBottom,
+                    labelSize.Height,
+                    host.ActualHeight);
+            }
+
+            double labelLeft = iBarter.Routing.RouteStepLabelRenderer.ClampLabelPosition(
+                image.Margin.Left - labelSize.Width / 2,
+                labelSize.Width,
+                host.ActualWidth);
+            labelTop = iBarter.Routing.RouteStepLabelRenderer.ClampLabelPosition(
+                labelTop,
+                labelSize.Height,
+                host.ActualHeight);
+            label.Margin = new Thickness(
+                labelLeft,
+                labelTop,
+                Math.Max(0, host.ActualWidth - labelLeft - labelSize.Width),
+                Math.Max(0, host.ActualHeight - labelTop - labelSize.Height));
+        }
+
+        private static double? FindLowestBarterLabelBottom(Grid host, string islandId) {
+            double? lowest = null;
+            foreach (FrameworkElement element in host.Children.OfType<FrameworkElement>()) {
+                if (element.Visibility != Visibility.Visible
+                    || element.Tag is not RouteStepMapLabel {
+                        StepKind: RouteStepKind.Barter,
+                    } stepLabel
+                    || !StringComparer.Ordinal.Equals(stepLabel.IslandId, islandId)) {
+                    continue;
+                }
+
+                double height = element.ActualHeight > 0
+                    ? element.ActualHeight
+                    : element.Height;
+                if (Double.IsNaN(height) || height <= 0) continue;
+                double bottom = element.Margin.Top + height;
+                lowest = lowest is null ? bottom : Math.Max(lowest.Value, bottom);
+            }
+            return lowest;
         }
 
         // ----- Route overlay (dashed lines between islands in route order) -----
@@ -1292,6 +1342,30 @@ namespace iBarter.View {
             // the freshly-added wrappers to be positioned before
             // the call returns.
             RepositionRouteStepLabels();
+            // Warehouse labels use a different visual pipeline from barter
+            // labels. Re-run their placement now that the barter wrappers
+            // have measured bounds, so the first rendered frame is already
+            // collision-free (the timer also maintains it afterward).
+            RepositionAutomaticWarehouseLabels();
+        }
+
+        private void RepositionAutomaticWarehouseLabels() {
+            foreach (IslandVisual visual in listGrid_Islands
+                .Select(grid => grid.Tag as IslandVisual)
+                .Where(visual => visual is { IsWarehouse: true }
+                    && visual.Label.Visibility == Visibility.Visible)!) {
+                if (!TryGetIslandCenter(visual.Islands, out Grid? host, out Point center)
+                    || host is null) {
+                    continue;
+                }
+                visual.Host = host;
+                Size labelSize = visual.LabelPlacementSize.Width > 0
+                    && visual.LabelPlacementSize.Height > 0
+                    ? visual.LabelPlacementSize
+                    : MeasureLabelForPlacement(visual.Label);
+                visual.LabelPlacementSize = labelSize;
+                PositionIslandLabel(visual, host, center, labelSize);
+            }
         }
 
         /// <summary>
@@ -1640,10 +1714,15 @@ namespace iBarter.View {
             var textBlock = new TextBlock {
                 Text = label.DisplayText,
                 Foreground = labelForeground,
+                FontFamily = MapLabelFontFamily,
                 FontSize = GetMapLabelFontSize(highlighted),
-                FontWeight = highlighted ? FontWeights.ExtraBold : FontWeights.SemiBold,
+                FontWeight = highlighted
+                    ? HighlightedMapLabelFontWeight
+                    : MapLabelFontWeight,
                 TextWrapping = TextWrapping.NoWrap,
             };
+            TextOptions.SetTextFormattingMode(textBlock, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(textBlock, TextRenderingMode.ClearType);
             var border = new Border {
                 Background = labelBackground,
                 BorderBrush = labelForeground,
@@ -1690,7 +1769,9 @@ namespace iBarter.View {
 
             bool highlighted = CurrentRenderSnapshot().HighlightedIslandIds.Contains(label.IslandId);
             double fontSize = GetMapLabelFontSize(highlighted);
-            FontWeight fontWeight = highlighted ? FontWeights.ExtraBold : FontWeights.SemiBold;
+            FontWeight fontWeight = highlighted
+                ? HighlightedMapLabelFontWeight
+                : MapLabelFontWeight;
             if (Math.Abs(textBlock.FontSize - fontSize) <= 0.01
                 && textBlock.FontWeight == fontWeight) return;
 
@@ -1800,6 +1881,10 @@ namespace iBarter.View {
             }
 
             Label myLabel = new Label();
+            myLabel.FontFamily = MapLabelFontFamily;
+            myLabel.FontWeight = MapLabelFontWeight;
+            TextOptions.SetTextFormattingMode(myLabel, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(myLabel, TextRenderingMode.ClearType);
             if (!isTemp && !isWarehouse) {
                 myLabel.Name = "Label_" + _barter.IsLand.IslandsName;
             }

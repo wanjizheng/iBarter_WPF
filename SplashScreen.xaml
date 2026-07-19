@@ -11,7 +11,10 @@
         WindowStartupLocation="CenterScreen"
         AllowsTransparency="True"
         Background="{x:Null}"
-        Title="SplashScreen" Height="450" Width="750" Topmost="True">
+        Title="SplashScreen" Height="450" Width="750" Topmost="True"
+        FontFamily="{StaticResource AppFontFamily}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType">
     <materialDesign:Card UniformCornerRadius="15" Background="White" materialDesign:ElevationAssist.Elevation="Dp4"
                          Margin="25">
         <Grid>

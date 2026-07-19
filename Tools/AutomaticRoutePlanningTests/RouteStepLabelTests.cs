@@ -367,6 +367,58 @@ public class RouteStepLabelTests {
     }
 
     [Fact]
+    public void WarehouseLabel_WithBarterOnSameIsland_IsPlacedBelowBarter() {
+        double top = RouteStepLabelRenderer.ComputeWarehouseLabelTop(
+            defaultTop: 5,
+            aboveIslandTop: -20,
+            lowestBarterLabelBottom: 26,
+            warehouseLabelHeight: 20,
+            hostHeight: 100);
+
+        Assert.Equal(30, top);
+    }
+
+    [Fact]
+    public void WarehouseLabel_WhenStackWouldOverflow_IsPlacedAboveIsland() {
+        double top = RouteStepLabelRenderer.ComputeWarehouseLabelTop(
+            defaultTop: 65,
+            aboveIslandTop: 35,
+            lowestBarterLabelBottom: 78,
+            warehouseLabelHeight: 20,
+            hostHeight: 90);
+
+        Assert.Equal(35, top);
+    }
+
+    [Fact]
+    public void WarehouseLabel_WithoutBarter_PreservesDefaultPosition() {
+        double top = RouteStepLabelRenderer.ComputeWarehouseLabelTop(
+            defaultTop: 5,
+            aboveIslandTop: -20,
+            lowestBarterLabelBottom: null,
+            warehouseLabelHeight: 20,
+            hostHeight: 100);
+
+        Assert.Equal(5, top);
+    }
+
+    [Fact]
+    public void MovedWarehouseLabel_IsClampedInsideHost() {
+        Assert.Equal(30, RouteStepLabelRenderer.ClampLabelPosition(
+            desiredPosition: 30,
+            labelExtent: 20,
+            hostExtent: 100));
+        Assert.Equal(80, RouteStepLabelRenderer.ClampLabelPosition(
+            desiredPosition: 95,
+            labelExtent: 20,
+            hostExtent: 100));
+        Assert.Equal(0, RouteStepLabelRenderer.ClampLabelPosition(
+            desiredPosition: -5,
+            labelExtent: 20,
+            hostExtent: 100));
+    }
+
+    [Fact]
     public void Reconcile_Deferred_ReturnsDeferred_AndPreservesExisting() {
         // Host size 0: first call after IslandsButtonInitialisation
         // (audit round 5). Reconcile returns Deferred; existing

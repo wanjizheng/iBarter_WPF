@@ -119,6 +119,9 @@
         </syncfusion:ToolBarAdv>
         <Grid Grid.Row="1">
             <syncfusion:SfDataGrid x:Name="DataGrid_Planner" Height="NaN" Width="NaN"
+                                   FontFamily="{StaticResource AppFontFamily}"
+                                   TextOptions.TextFormattingMode="Display"
+                                   TextOptions.TextRenderingMode="ClearType"
                                    AutoGenerateColumns="False"
                                    AllowEditing="True"
                                    ColumnSizer="AutoWithLastColumnFill"
