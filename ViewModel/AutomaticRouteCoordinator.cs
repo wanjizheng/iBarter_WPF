@@ -154,6 +154,19 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         var publishable = finalVerification.Success && finalVerification.VerifiedPlan is not null
             ? finalVerification.VerifiedPlan
             : verification.VerifiedPlan;
+
+        // Round #3: defense-in-depth against the 800061-style cross-route
+        // cargo leak. If the normalizer could not strip the
+        // pickup-x-no-barter-unload-x-at-same-warehouse round-trip from
+        // every route, refuse to publish rather than write a known-bad
+        // plan to automatic-route-plan.json.
+        if (RoutePlanVerifier.TryDetectRouteRedundantCargoRoundTrip(publishable!, out var leakDetail)) {
+            App.myCFun?.Log(
+                $"[AutoRoute] refused to publish: {leakDetail}",
+                System.Windows.Media.Brushes.OrangeRed);
+            return false;
+        }
+
         Publish(publishable, preferredShowRouteGuides: showRouteGuides);
         SaveCurrentPlan();
         return true;

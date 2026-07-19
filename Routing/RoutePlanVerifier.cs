@@ -47,6 +47,13 @@ public static class RoutePlanVerifier {
             if (plan.Objective is null || verified.Objective is null ||
                 plan.Objective.Value.CompareTo(verified.Objective.Value) != 0)
                 return Mismatch("objective");
+
+            // The cross-route leak check (route-redundant-cargo-roundtrip) is
+            // intentionally NOT inlined here so the planner's internal
+            // VerificationResult.Success can stay a pure simulator-replay
+            // signal. The publish path runs the leak detector after this
+            // call to gate persistence; see
+            // AutomaticRouteCoordinator.PublishGeneratedPlan.
             return new RouteVerificationResult(true, null, verified);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException) {
@@ -94,6 +101,67 @@ public static class RoutePlanVerifier {
 
     private static RouteVerificationResult Mismatch(string detail) =>
         new(false, new RouteDiagnostic("verification-mismatch", Detail: detail), null);
+
+    /// <summary>
+    /// Round #3 invariant: within a single <see cref="PlannedRoute"/>,
+    /// if a <see cref="WarehousePickupStep"/> at warehouse <c>W</c> carries
+    /// an item <c>X</c> that no <see cref="BarterStep"/> in the same route
+    /// consumes (and that no other barter produces either), AND the route
+    /// unloads <c>X</c> at the same <c>W</c>, then <c>X</c> is a pure
+    /// zero-value round-trip — 1000 LT per unit, several thousand in the
+    /// user's 800061 case. Report it so the normalizer can fix it OR the
+    /// caller can refuse to persist.
+    /// <para>
+    /// Output detail format (single-line, greppable):
+    /// <c>route=&lt;N&gt; warehouse=&lt;W&gt; item=&lt;X&gt; picked=&lt;N&gt;
+    /// routeLocalConsumed=&lt;N&gt; sameWarehouseReturned=&lt;N&gt;</c>.
+    /// </para>
+    /// </summary>
+    public static bool TryDetectRouteRedundantCargoRoundTrip(RoutePlan plan, out string detail) {
+        foreach (var route in plan.Routes) {
+            var pickedAt = new Dictionary<(string Wh, string ItemId), int>(/* relaxed comparer ok */);
+            var consumedByBarter = new Dictionary<string, int>(StringComparer.Ordinal);
+            var producedByBarter = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var step in route.Steps) {
+                switch (step) {
+                    case WarehousePickupStep pickup:
+                        foreach (var it in pickup.Items) {
+                            var key = (pickup.WarehouseId, it.ItemId);
+                            pickedAt[key] = pickedAt.GetValueOrDefault(key) + it.Quantity;
+                        }
+                        break;
+                    case BarterStep b:
+                        consumedByBarter[b.Consumed.ItemId] =
+                            consumedByBarter.GetValueOrDefault(b.Consumed.ItemId) + b.Consumed.Quantity;
+                        producedByBarter[b.Produced.ItemId] =
+                            producedByBarter.GetValueOrDefault(b.Produced.ItemId) + b.Produced.Quantity;
+                        break;
+                }
+            }
+            foreach (var step in route.Steps) {
+                if (step is not WarehouseUnloadStep unload) continue;
+                foreach (var it in unload.Items) {
+                    var key = (unload.WarehouseId, it.ItemId);
+                    if (!pickedAt.TryGetValue(key, out int pickedQty)) continue;
+                    int consumed = consumedByBarter.GetValueOrDefault(it.ItemId);
+                    int produced = producedByBarter.GetValueOrDefault(it.ItemId);
+                    // A round-trip exists iff: we picked X at W, no barter
+                    // in the route consumes X (and no other barter produces
+                    // X either, otherwise the on-board X count could be
+                    // higher than what was picked), and we unload X at the
+                    // SAME W.
+                    if (pickedQty > 0 && it.Quantity > 0 && consumed == 0 && produced == 0) {
+                        detail = $"route={route.Number} warehouse={unload.WarehouseId} " +
+                                 $"item={it.ItemId} picked={pickedQty} " +
+                                 $"routeLocalConsumed={consumed} sameWarehouseReturned={it.Quantity}";
+                        return true;
+                    }
+                }
+            }
+        }
+        detail = "";
+        return false;
+    }
 }
 
 internal static class RoutePlanFactory {
