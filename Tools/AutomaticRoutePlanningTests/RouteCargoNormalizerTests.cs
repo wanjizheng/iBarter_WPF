@@ -349,4 +349,52 @@ public class RouteCargoNormalizerTests {
         var result = RoutePlanVerifier.Verify(request, plan);
         Assert.False(result.Success);
     }
+
+    [Fact]
+    public void Normalize_InitialOnBoardAppliesOnlyToFirstRoute() {
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["X"] = new("X", "X", 1, 100),
+            ["A"] = new("A", "A", 1, 100),
+            ["B"] = new("B", "B", 1, 100),
+        };
+        var request = new AutomaticRoutePlanningRequest(
+            [
+                new RouteBarterTask("use-initial", "I1", new RoutePoint(1, 0), "X", 5, "A", 1),
+                new RouteBarterTask("use-pickup", "I2", new RoutePoint(2, 0), "X", 5, "B", 1),
+            ],
+            items,
+            [new RouteWarehouse("W", "W", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) { ["X"] = 5 })],
+            0,
+            10_000,
+            new RouteSearchLimits(100, 10),
+            "initial-onboard-two-routes",
+            new Dictionary<string, int>(StringComparer.Ordinal) { ["X"] = 5 });
+        var raw = new RoutePlan(
+            RoutePlanStatus.Optimal,
+            [
+                new PlannedRoute(1, "W", "W", [
+                    new BarterStep("use-initial", "I1", new("X", 5), new("A", 1), new(0, 0, 0)),
+                    new WarehouseUnloadStep("W", "W", [new("A", 1)], new(0, 0, 0)),
+                ], 0, 0, 0, 0),
+                new PlannedRoute(2, "W", "W", [
+                    new WarehousePickupStep("W", "W", [new("X", 5)], new(0, 0, 0)),
+                    new BarterStep("use-pickup", "I2", new("X", 5), new("B", 1), new(0, 0, 0)),
+                    new WarehouseUnloadStep("W", "W", [new("B", 1)], new(0, 0, 0)),
+                ], 0, 0, 0, 0),
+            ],
+            null,
+            [],
+            RoutePlanFingerprint.Compute(request));
+        var replayed = RouteReplay.ReplayPlan(request, raw);
+        Assert.True(replayed.Success, RouteReplay.FormatFailureDetail(replayed.Failure));
+
+        var normalized = RouteCargoNormalizer.Normalize(request, replayed.Plan!);
+
+        Assert.True(normalized.Success, normalized.Failure?.Detail);
+        Assert.False(normalized.Changed);
+        var secondPickup = normalized.Plan!.Routes[1].Steps.OfType<WarehousePickupStep>().Single();
+        Assert.Contains(secondPickup.Items, item => item.ItemId == "X" && item.Quantity == 5);
+        Assert.True(RoutePlanVerifier.Verify(request, normalized.Plan).Success);
+    }
 }

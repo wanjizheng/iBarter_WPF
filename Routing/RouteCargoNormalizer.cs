@@ -50,7 +50,14 @@ public static class RouteCargoNormalizer {
         var changes = new List<CargoNormalizationChange>();
         bool changed = false;
         foreach (var route in plan.Routes) {
-            var rewrite = RewriteRoute(request, route);
+            // InitialOnBoard belongs to the beginning of the whole plan, not
+            // the beginning of every route. A finished route unloads all
+            // remaining cargo, so later routes must justify their pickups
+            // from an empty ship.
+            var routeStartOnBoard = candidateRoutes.Count == 0
+                ? request.InitialOnBoard
+                : EmptyOnBoard;
+            var rewrite = RewriteRoute(routeStartOnBoard, route);
             candidateRoutes.Add(rewrite.Route);
             changes.AddRange(rewrite.Changes);
             changed |= rewrite.Changed;
@@ -277,6 +284,9 @@ public static class RouteCargoNormalizer {
         if (quantity == 0) quantities.Remove(itemId);
         else quantities[itemId] = quantity;
     }
+
+    private static readonly IReadOnlyDictionary<string, int> EmptyOnBoard =
+        new Dictionary<string, int>(StringComparer.Ordinal);
 }
 
 internal sealed record RouteCargoRewriteResult(

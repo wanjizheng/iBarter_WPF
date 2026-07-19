@@ -131,8 +131,11 @@ public static class RoutePlanVerifier {
         RoutePlan plan,
         IReadOnlyDictionary<string, int> initialOnBoard,
         out string detail) {
+        bool firstRoute = true;
         foreach (var route in plan.Routes) {
-            var rewrite = RouteCargoNormalizer.RewriteRoute(initialOnBoard, route);
+            var routeStartOnBoard = firstRoute ? initialOnBoard : EmptyOnBoard;
+            firstRoute = false;
+            var rewrite = RouteCargoNormalizer.RewriteRoute(routeStartOnBoard, route);
             foreach (var change in rewrite.Changes) {
                 if (change.RedundantQuantity <= 0
                     || change.ReturnedToSameWarehouseQuantity <= 0)
@@ -150,6 +153,9 @@ public static class RoutePlanVerifier {
         detail = "";
         return false;
     }
+
+    private static readonly IReadOnlyDictionary<string, int> EmptyOnBoard =
+        new Dictionary<string, int>(StringComparer.Ordinal);
 }
 
 internal static class RoutePlanFactory {
