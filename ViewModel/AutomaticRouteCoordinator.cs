@@ -20,6 +20,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private CargoMode mode = CargoMode.Manual;
     private RouteOptimizationMode selectedOptimizationMode = RouteOptimizationMode.Balanced;
     private RoutePlan? currentPlan;
+    private AutomaticRoutePlanningRequest? currentPublicationRequest;
     // Mode that the currently published plan was generated under. Tracked
     // separately from `selectedOptimizationMode` (which mirrors the live
     // ComboBox) so that subsequent interactive saves do not silently change
@@ -97,16 +98,6 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 return new RoutePlan(RoutePlanStatus.Cancelled, [], null, [], fingerprint);
         }
 
-        if (plan.Status is RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit) {
-            var verification = RoutePlanVerifier.Verify(request, plan);
-            if (!verification.Success) {
-                plan = new RoutePlan(RoutePlanStatus.InvalidInput, [], null,
-                    [verification.Diagnostic!], fingerprint);
-            }
-            else {
-                plan = verification.VerifiedPlan!;
-            }
-        }
         return plan;
     }
 
@@ -133,41 +124,16 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         RouteOptimizationMode generationMode) {
         if (plan.Status is not (RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit))
             return false;
-        if (!StringComparer.Ordinal.Equals(plan.InputFingerprint, RoutePlanFingerprint.Compute(request)))
-            return false;
-        var verification = RoutePlanVerifier.Verify(request, plan);
-        if (!verification.Success || verification.VerifiedPlan is null) return false;
-        currentPlanMode = generationMode;
-
-        // Bug 2 fix (round 2): even a verifier-approved plan can carry a
-        // phantom pickup that no remaining BarterStep actually consumes.
-        // Re-run the normalization pass before publishing so the user
-        // never sees the "pickup-then-unload the same item at the same
-        // warehouse" round trip that the bug report called out. The
-        // normalizer now requires the request and recomputes LT through
-        // RouteReplay; we then re-verify the normalized plan and refuse
-        // to publish if the post-normalize plan fails verification
-        // (defensive — the original plan already passed, but LT changes
-        // could in principle introduce a regression).
-        var normalized = RouteCargoNormalizer.Normalize(request, verification.VerifiedPlan);
-        var finalVerification = RoutePlanVerifier.Verify(request, normalized);
-        var publishable = finalVerification.Success && finalVerification.VerifiedPlan is not null
-            ? finalVerification.VerifiedPlan
-            : verification.VerifiedPlan;
-
-        // Round #3: defense-in-depth against the 800061-style cross-route
-        // cargo leak. If the normalizer could not strip the
-        // pickup-x-no-barter-unload-x-at-same-warehouse round-trip from
-        // every route, refuse to publish rather than write a known-bad
-        // plan to automatic-route-plan.json.
-        if (RoutePlanVerifier.TryDetectRouteRedundantCargoRoundTrip(publishable!, out var leakDetail)) {
-            App.myCFun?.Log(
-                $"[AutoRoute] refused to publish: {leakDetail}",
-                System.Windows.Media.Brushes.OrangeRed);
+        var prepared = RoutePlanPublication.PreparePlanForPublication(
+            request, plan, RoutePlanPublicationSource.FreshGeneration);
+        if (!prepared.Success || prepared.Plan is null) {
+            LogPublicationFailure(prepared.Failure);
             return false;
         }
 
-        Publish(publishable, preferredShowRouteGuides: showRouteGuides);
+        currentPlanMode = generationMode;
+        currentPublicationRequest = request;
+        Publish(prepared.Plan, preferredShowRouteGuides: showRouteGuides);
         SaveCurrentPlan();
         return true;
     }
@@ -182,13 +148,23 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         string fingerprint = RoutePlanFingerprint.Compute(request);
         var exact = RoutePlanPersistence.TryLoad(PersistencePath, fingerprint);
         if (exact.Status == RoutePlanLoadStatus.Loaded && exact.Snapshot is not null) {
-            var verification = RoutePlanVerifier.Verify(request, exact.Snapshot.Plan);
-            if (!verification.Success || verification.VerifiedPlan is null) {
+            var prepared = RoutePlanPublication.PreparePlanForPublication(
+                request,
+                exact.Snapshot.Plan,
+                RoutePlanPublicationSource.PersistedRestore);
+            if (!prepared.Success || prepared.Plan is null) {
+                LogPublicationFailure(prepared.Failure);
                 return exact with { Status = RoutePlanLoadStatus.FingerprintMismatch };
             }
             currentPlanMode = exact.SavedOptimizationMode ?? RouteOptimizationMode.Balanced;
+            currentPublicationRequest = request;
+            if (prepared.Changed) {
+                if (!SavePreparedSnapshot(exact.Snapshot, prepared.Plan))
+                    return exact with { Status = RoutePlanLoadStatus.FingerprintMismatch };
+                LogNormalizationRepairs(prepared.Changes);
+            }
             Publish(
-                verification.VerifiedPlan,
+                prepared.Plan,
                 exact.Snapshot.SelectedRouteNumber,
                 exact.Snapshot.ShowAll,
                 exact.Snapshot.SelectedBarterRowId,
@@ -202,16 +178,28 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         if (RoutePlanPersistence.TryLoadAfterProgress(
                 PersistencePath, request, completedBarterRowIds, out var progressed)
             && progressed is not null) {
-            currentPlanMode = exact.SavedOptimizationMode ?? currentPlanMode;
-            Publish(
+            var prepared = RoutePlanPublication.PreparePlanForPublication(
+                request,
                 progressed.Plan,
+                RoutePlanPublicationSource.ProgressRestore,
+                completedBarterRowIds);
+            if (!prepared.Success || prepared.Plan is null) {
+                LogPublicationFailure(prepared.Failure);
+                return exact;
+            }
+            currentPlanMode = exact.SavedOptimizationMode ?? currentPlanMode;
+            currentPublicationRequest = request;
+            if (!SavePreparedSnapshot(progressed, prepared.Plan)) return exact;
+            if (prepared.Changed) LogNormalizationRepairs(prepared.Changes);
+            Publish(
+                prepared.Plan,
                 progressed.SelectedRouteNumber,
                 progressed.ShowAll,
                 progressed.SelectedBarterRowId,
                 progressed.ShowRouteGuides);
             return exact with {
                 Status = RoutePlanLoadStatus.Loaded,
-                Snapshot = progressed,
+                Snapshot = progressed with { Plan = prepared.Plan },
             };
         }
         return exact;
@@ -325,13 +313,32 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             return false;
         }
 
-        // Step 3: keep the originally verified plan immutable and project
-        // execution progress through completedBarterRowIds.  A CK is not a
-        // new route-planning request: rebuilding a smaller plan and passing
-        // it to the full verifier uses a different task set/fingerprint and
-        // incorrectly rejects valid execution progress.  The render, cargo
-        // list and restart-compatibility paths already consume this same
-        // completed-row overlay.
+        var publicationRequest = request ?? currentPublicationRequest;
+        if (publicationRequest is null) {
+            App.myCFun?.Log(
+                "[AutoRoute] 路线进度验证失败：缺少当前规划输入，未发布、未保存。",
+                System.Windows.Media.Brushes.OrangeRed);
+            return true;
+        }
+
+        var prepared = RoutePlanPublication.PreparePlanForPublication(
+            publicationRequest,
+            currentPlan,
+            RoutePlanPublicationSource.CompletionProgress,
+            completedBarterRowIds);
+        if (!prepared.Success || prepared.Plan is null) {
+            LogPublicationFailure(prepared.Failure);
+            return true;
+        }
+        // The prepared projection proves that the new CK state is safe. Keep
+        // the normalized base plan immutable so unchecking a row can restore
+        // it; rendering and persistence apply the completed-row overlay.
+        currentPublicationRequest = publicationRequest;
+
+        // Step 3: keep the originally prepared base plan immutable and project
+        // execution progress through completedBarterRowIds. The publication
+        // contract above has already normalized, replayed and fully verified
+        // the remaining-plan projection against the current request.
         var remainingRoutes = currentPlan.Routes
             .Where(route => route.Steps.OfType<BarterStep>()
                 .Any(step => !completedBarterRowIds.Contains(step.RowId)))
@@ -372,6 +379,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             activeFingerprint = null;
         }
         currentPlan = null;
+        currentPublicationRequest = null;
         currentPlanMode = RouteOptimizationMode.Balanced;
         selectedRouteNumber = null;
         showAllRoutes = false;
@@ -537,6 +545,43 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private static string ResolveIslandDisplayName(string islandId) =>
         App.listIslands?.FirstOrDefault(x => x.IslandsName == islandId)?.IslandsNameDisplay
         ?? islandId;
+
+    private bool SavePreparedSnapshot(PersistedRoutePlan snapshot, RoutePlan plan) {
+        try {
+            RoutePlanPersistence.Save(
+                PersistencePath,
+                plan,
+                snapshot.SelectedRouteNumber,
+                snapshot.ShowAll,
+                snapshot.SelectedBarterRowId,
+                currentPlanMode,
+                showRouteGuides: snapshot.ShowRouteGuides);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            App.myCFun?.Log(
+                $"[AutoRoute] 修复后的路线保存失败，旧文件与备份均已保留：{ex.Message}",
+                System.Windows.Media.Brushes.OrangeRed);
+            return false;
+        }
+    }
+
+    private static void LogNormalizationRepairs(
+        IReadOnlyList<CargoNormalizationChange> changes) {
+        foreach (var change in changes.Where(change => change.RedundantQuantity > 0)) {
+            App.myCFun?.Log(
+                $"[AutoRoute] 已修复保存路线中的冗余货物：路线 {change.RouteNumber}，" +
+                $"{ResolveItemDisplayName(change.ItemId)} ×{change.RedundantQuantity}。",
+                System.Windows.Media.Brushes.DarkOliveGreen);
+        }
+    }
+
+    private static void LogPublicationFailure(RoutePlanPublicationFailure? failure) {
+        App.myCFun?.Log(
+            $"[AutoRoute] 路线验证失败，未发布、未保存：" +
+            $"{failure?.Code ?? "unknown"} {failure?.Detail ?? ""}",
+            System.Windows.Media.Brushes.OrangeRed);
+    }
 
     /// <summary>
     /// Flushes the currently active plan to disk. Called from any user

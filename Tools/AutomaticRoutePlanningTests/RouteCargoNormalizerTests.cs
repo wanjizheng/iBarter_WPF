@@ -81,7 +81,7 @@ public class RouteCargoNormalizerTests {
             Barter("Crow:800049:10", "Crow", "800049", 1, "10", 163),
             Unload("Iliya", ("800045", 1), ("10", 163)));
 
-        var (normalized, changed) = RouteCargoNormalizer.NormalizeRoute(request, route);
+        var (normalized, changed, _, _) = RouteCargoNormalizer.NormalizeRoute(request, route);
 
         Assert.True(changed);
         var pickup = (WarehousePickupStep)normalized.Steps[0];
@@ -109,7 +109,7 @@ public class RouteCargoNormalizerTests {
             Barter("Crow:800049:10", "Crow", "800049", 5, "10", 815),
             Unload("Iliya", ("10", 815)));
 
-        var (normalized, _) = RouteCargoNormalizer.NormalizeRoute(request, route);
+        var (normalized, _, _, _) = RouteCargoNormalizer.NormalizeRoute(request, route);
 
         var unload = (WarehouseUnloadStep)normalized.Steps[2];
         Assert.Single(unload.Items);
@@ -126,7 +126,7 @@ public class RouteCargoNormalizerTests {
             Barter("Crow:800049:10", "Crow", "800049", 3, "10", 489),
             Unload("Iliya", ("10", 489), ("800049", 2)));
 
-        var (normalized, changed) = RouteCargoNormalizer.NormalizeRoute(request, route);
+        var (normalized, changed, _, _) = RouteCargoNormalizer.NormalizeRoute(request, route);
 
         Assert.True(changed);
         var pickup = (WarehousePickupStep)normalized.Steps[0];
@@ -148,7 +148,7 @@ public class RouteCargoNormalizerTests {
             Barter("Crow:800049:10", "Crow", "800049", 5, "10", 815),
             Unload("Iliya", ("10", 815)));
 
-        var (normalized, changed) = RouteCargoNormalizer.NormalizeRoute(request, route);
+        var (normalized, changed, _, _) = RouteCargoNormalizer.NormalizeRoute(request, route);
 
         Assert.False(changed);
         Assert.Same(route, normalized);
@@ -156,16 +156,28 @@ public class RouteCargoNormalizerTests {
 
     [Fact]
     public void Normalize_DropsUnloadItemsWithNoProvenance() {
+        // Round 4: unload items that have no on-board provenance (held=0)
+        // are dropped rather than carried through, because the simulator
+        // would reject the unload step with "missing-unload-cargo" anyway.
         var request = BuildRequest(("800049", 1), ("10", 1), ("800099", 2));
         var route = BuildRoute("Iliya",
             Pickup("Iliya", ("800049", 5)),
             Barter("Crow:800049:10", "Crow", "800049", 5, "10", 815),
-            Unload("Iliya", ("800099", 99))); // 800099 was never picked up nor produced.
+            Unload("Iliya", ("800099", 99))); // 800099 was never on board.
 
-        var (normalized, _) = RouteCargoNormalizer.NormalizeRoute(request, route);
+        var (normalized, changed, _, _) = RouteCargoNormalizer.NormalizeRoute(request, route);
 
-        var unload = (WarehouseUnloadStep)normalized.Steps[2];
-        Assert.Contains(unload.Items, x => x.ItemId == "800099");
+        Assert.True(changed);
+        // The unload carried only the phantom 800099; after normalization
+        // the unload step is dropped entirely because it has no cargo to
+        // carry. The route now has only the surviving pickup + barter.
+        var unload = normalized.Steps.OfType<WarehouseUnloadStep>().FirstOrDefault();
+        if (unload is not null) {
+            Assert.DoesNotContain(unload.Items, x => x.ItemId == "800099");
+        }
+        // The simulator replay rebuilds the route through the live
+        // on-board state; the surviving pickup/barter still need to match.
+        Assert.Contains(normalized.Steps, s => s is WarehousePickupStep);
     }
 
     [Fact]
@@ -173,16 +185,19 @@ public class RouteCargoNormalizerTests {
         var request = BuildRequest(("800045", 4), ("800049", 1), ("10", 1));
         // Pickup contains ONLY the unused 800045; after normalize the
         // pickup is empty AND replay cannot succeed (the barter needs
-        // 800049 which was never on board). The normalizer must refuse
-        // to publish the half-truth route and keep the original.
+        // 800049 which was never on board). Round 4: the normalizer
+        // MUST surface the replay failure via replayFailed=true, never
+        // silently keep the original broken route.
         var route = BuildRoute("Iliya",
             Pickup("Iliya", ("800045", 1)), // unused
             Barter("Crow:800049:10", "Crow", "800049", 1, "10", 163),
             Unload("Iliya", ("10", 163)));
 
-        var (normalized, changed) = RouteCargoNormalizer.NormalizeRoute(request, route);
-        Assert.False(changed);
-        Assert.Same(route, normalized);
+        var (_, changed, replayFailed, diag) = RouteCargoNormalizer.NormalizeRoute(request, route);
+        Assert.True(changed);
+        Assert.True(replayFailed);
+        Assert.NotNull(diag);
+        Assert.Contains("replay", diag!.Code);
     }
 
     [Fact]
@@ -194,11 +209,12 @@ public class RouteCargoNormalizerTests {
             Unload("Iliya", ("10", 163)));
         var plan = new RoutePlan(RoutePlanStatus.Optimal, [route], null, [], "fp");
         var normalized = RouteCargoNormalizer.Normalize(request, plan);
+        Assert.True(normalized.Success);
 
         string tempPath = Path.Combine(Path.GetTempPath(),
             $"autoroute-normalize-{Guid.NewGuid():N}.json");
         try {
-            RoutePlanPersistence.Save(tempPath, normalized, 1, false);
+            RoutePlanPersistence.Save(tempPath, normalized.Plan!, 1, false);
             var loaded = RoutePlanPersistence.TryLoad(tempPath, "fp");
             Assert.Equal(RoutePlanLoadStatus.Loaded, loaded.Status);
             var reloaded = loaded.Snapshot!.Plan;
@@ -224,11 +240,13 @@ public class RouteCargoNormalizerTests {
         var plan = new RoutePlan(RoutePlanStatus.Optimal, [route], null, [], "fp");
 
         var first = RouteCargoNormalizer.Normalize(request, plan);
-        var second = RouteCargoNormalizer.Normalize(request, first);
+        Assert.True(first.Success);
+        var second = RouteCargoNormalizer.Normalize(request, first.Plan!);
+        Assert.True(second.Success);
 
-        Assert.Equal(first.InputFingerprint, second.InputFingerprint);
-        var firstPickup = (WarehousePickupStep)first.Routes[0].Steps[0];
-        var secondPickup = (WarehousePickupStep)second.Routes[0].Steps[0];
+        Assert.Equal(first.Plan!.InputFingerprint, second.Plan!.InputFingerprint);
+        var firstPickup = (WarehousePickupStep)first.Plan.Routes[0].Steps[0];
+        var secondPickup = (WarehousePickupStep)second.Plan.Routes[0].Steps[0];
         Assert.Equal(firstPickup.Items.Count, secondPickup.Items.Count);
         Assert.Equal(firstPickup.Items[0].ItemId, secondPickup.Items[0].ItemId);
         Assert.Equal(firstPickup.Items[0].Quantity, secondPickup.Items[0].Quantity);
@@ -251,7 +269,7 @@ public class RouteCargoNormalizerTests {
         int preNormPeak = (1 * W_800045) + (1 * W_800049); // 1100
         Assert.Equal(1100, preNormPeak);
 
-        var (normalized, _) = RouteCargoNormalizer.NormalizeRoute(request, route);
+        var (normalized, _, _, _) = RouteCargoNormalizer.NormalizeRoute(request, route);
         // After normalization the pickup holds only 800049 = 100.
         Assert.Equal(100, normalized.Steps[0].Load.CargoLT);
         // PeakLT now reflects the post-prune peak (which is whatever the
@@ -263,8 +281,8 @@ public class RouteCargoNormalizerTests {
     [Fact]
     public void Normalize_RejectsPlanThatCantBeReplayed() {
         // Hand-craft a plan whose pickup exceeds warehouse stock so the
-        // replay must fail. The normalizer MUST refuse to publish the
-        // half-truth route and fall back to the original.
+        // replay must fail. The normalizer MUST return an explicit failure;
+        // no caller may publish the input route as an "unchanged" fallback.
         var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
             ["800049"] = new("800049", "800049", 1, 100),
         };
@@ -279,9 +297,13 @@ public class RouteCargoNormalizerTests {
 
         var route = BuildRoute("Iliya",
             Pickup("Iliya", ("800049", 999))); // warehouse only has 1
-        var (normalized, changed) = RouteCargoNormalizer.NormalizeRoute(request, route);
-        Assert.False(changed);
-        Assert.Same(route, normalized); // unchanged because replay would fail
+        var (normalized, changed, replayFailed, diagnostic) =
+            RouteCargoNormalizer.NormalizeRoute(request, route);
+        Assert.True(changed);
+        Assert.True(replayFailed);
+        Assert.NotNull(diagnostic);
+        Assert.NotSame(route, normalized);
+        Assert.Equal("replay-empty-route", diagnostic!.Code);
     }
 
     [Fact]
@@ -297,7 +319,7 @@ public class RouteCargoNormalizerTests {
             Pickup("Iliya", ("800045", 1), ("800049", 1)),
             Barter("Crow:800049:10", "Crow", "800049", 1, "10", 163),
             Unload("Iliya", ("800045", 1), ("10", 163)));
-        var (normalized, _) = RouteCargoNormalizer.NormalizeRoute(request, route);
+        var (normalized, _, _, _) = RouteCargoNormalizer.NormalizeRoute(request, route);
 
         Assert.Equal(100, normalized.Steps[0].Load.CargoLT);  // pickup
         var barter = (BarterStep)normalized.Steps[1];

@@ -1,5 +1,6 @@
 using iBarter.Routing;
 using Xunit;
+#pragma warning disable CS8019  // unused using directive (false positive)
 
 namespace AutomaticRoutePlanningTests;
 
@@ -21,9 +22,10 @@ public class RouteReplayTests {
         }, distance: 0, initialLT: 0, currentLT: 0, peakLT: 0);
 
         var replayed = RouteReplay.ReplayRoute(request, route);
-        Assert.NotNull(replayed);
-        Assert.Equal(100, replayed!.Steps[0].Load.CargoLT);  // 800049 × 1
-        var barter = (BarterStep)replayed.Steps[1];
+        Assert.True(replayed.Success);
+        Assert.NotNull(replayed.Route);
+        Assert.Equal(100, replayed.Route!.Steps[0].Load.CargoLT);  // 800049 × 1
+        var barter = (BarterStep)replayed.Route.Steps[1];
         Assert.Equal(16_300, barter.Load.CargoLT);            // 10 × 163
     }
 
@@ -59,9 +61,10 @@ public class RouteReplayTests {
                 new RouteLoadSnapshot(0, 0, 0)),
         }, distance: 0, initialLT: 0, currentLT: 0, peakLT: 0);
 
-        var (normalized, changed) = RouteCargoNormalizer.NormalizeRoute(request, original);
+        var (normalized, changed, replayFailed, _) = RouteCargoNormalizer.NormalizeRoute(request, original);
         // The normalizer should detect 800045 was unused and prune it.
         Assert.True(changed);
+        Assert.False(replayFailed);
         // And the replayed pickup's LT should be 100 (just 800049 × 1).
         Assert.Equal(100, normalized.Steps[0].Load.CargoLT);
         Assert.DoesNotContain(((WarehousePickupStep)normalized.Steps[0]).Items,

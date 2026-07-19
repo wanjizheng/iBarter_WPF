@@ -63,10 +63,19 @@ public static class RoutePlanPersistence {
         string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
         string temp = path + ".tmp";
+        string backup = path + ".bak";
         var dto = ToDto(plan, selectedRouteNumber, showAll, selectedBarterRowId,
             optimizationMode, savedAtUtc ?? DateTimeOffset.UtcNow, showRouteGuides);
-        File.WriteAllText(temp, JsonSerializer.Serialize(dto, JsonOptions));
-        File.Move(temp, path, overwrite: true);
+        try {
+            File.WriteAllText(temp, JsonSerializer.Serialize(dto, JsonOptions));
+            if (File.Exists(path))
+                File.Replace(temp, path, backup, ignoreMetadataErrors: true);
+            else
+                File.Move(temp, path);
+        }
+        finally {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
     }
 
     public static RoutePlanLoadResult TryLoad(
@@ -183,10 +192,11 @@ public static class RoutePlanPersistence {
                 snapshot = null;
                 return false;
             }
-            // Re-host the snapshot on the migrated plan so callers
-            // see the new RowIds; also save back to disk so the
-            // next reload doesn't re-migrate.
-            string migratedSelected = identity.MigratedSelectedBarterRowId
+            // Re-host the snapshot on the migrated plan so callers see the
+            // new RowIds. The caller owns the single publication preparation
+            // contract and saves only after normalize/replay/full verification;
+            // this loader must never write a merely migrated candidate.
+            string? migratedSelected = identity.MigratedSelectedBarterRowId
                 ?? snapshot.SelectedBarterRowId;
             snapshot = new PersistedRoutePlan(
                 identity.MappedPlan,
@@ -194,18 +204,6 @@ public static class RoutePlanPersistence {
                 snapshot.ShowAll,
                 migratedSelected,
                 snapshot.ShowRouteGuides);
-            try {
-                Save(path, identity.MappedPlan,
-                    snapshot.SelectedRouteNumber, snapshot.ShowAll,
-                    migratedSelected,
-                    showRouteGuides: snapshot.ShowRouteGuides);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-                // The restore itself succeeded; the save-back is
-                // best-effort.  Log so the user can save manually.
-                System.Diagnostics.Debug.WriteLine(
-                    $"[RoutePlan] identity migration save-back failed: {ex.GetType().Name}: {ex.Message}");
-            }
             return true;
         }
         // Log the precise mismatch so the user knows what to fix.

@@ -1,204 +1,285 @@
 namespace iBarter.Routing;
 
+public sealed record CargoNormalizationChange(
+    int RouteNumber,
+    int StepIndex,
+    string WarehouseId,
+    string ItemId,
+    int PickedQuantity,
+    int RequiredQuantity,
+    int RedundantQuantity,
+    int ReturnedToSameWarehouseQuantity);
+
+public sealed record CargoNormalizationDiagnostic(
+    int RouteNumber,
+    string StepKind,
+    int? StepIndex,
+    string ItemId,
+    string Code,
+    string Detail);
+
 /// <summary>
-/// Trims pickup/unload cargo so a route never carries items that no later
-/// BarterStep actually consumes (and, symmetrically, never unloads items that
-/// no upstream BarterStep actually produced).
-///
-/// <para>Bug 2 root cause: the demand bundle generator enumerates greedy
-/// subsets of pending tasks; intermediate <c>required</c> dictionaries are
-/// emitted as bundles even when only a subset of the supporting tasks end up
-/// in the final route. The matching <c>WarehouseUnloadPlanner</c> then
-/// unconditionally dumps every item still on board at end-of-route, so
-/// unconsumed pickups are trucked out and dropped back at the source
-/// warehouse — a zero-value round trip that still costs load and LT.</para>
-///
-/// <para>Audit round 2 (1): the v1 normalizer rewrote Items on pickup/unload
-/// steps but kept the original <c>Load.CargoLT</c>/<c>TotalWithExtraLT</c>/
-/// <c>PeakTotalLT</c> from the plan it was given. After pruning the
-/// 五彩线团 round-trip the items disappeared from disk but every step's LT
-/// stayed pinned to the old higher value, so PeakLT no longer reflected
-/// reality. The v2 normalizer now requires the request and replays every
-/// route through <see cref="RouteReplay"/> after items change, so each
-/// <see cref="RouteStep.Load"/> matches the live on-board state and the
-/// resulting <see cref="PlannedRoute.InitialLT"/>/
-/// <see cref="PlannedRoute.CurrentLT"/>/<see cref="PlannedRoute.PeakLT"/>
-/// are recomputed from scratch.</para>
-///
-/// <para>The fix is purely a post-pass over a finalized <see cref="RoutePlan"/>:
-/// simulate on-board inventory forward through every step, drop any pickup
-/// item that no remaining BarterStep consumes, drop any unload item that no
-/// upstream BarterStep actually produced. Initial-on-board items and barter
-/// outputs are never pruned.</para>
+/// A failed result deliberately carries no plan. Callers must never recover
+/// from a normalization failure by publishing the input candidate.
+/// </summary>
+public sealed record CargoNormalizationResult(
+    bool Success,
+    RoutePlan? Plan,
+    bool Changed,
+    IReadOnlyList<CargoNormalizationChange> Changes,
+    CargoNormalizationDiagnostic? Failure);
+
+/// <summary>
+/// Removes warehouse cargo that is not required by the route-local ordered
+/// barter chain. The calculation is prefix-aware: initial cargo and barter
+/// outputs are available only after their actual step, and a later pickup does
+/// not satisfy an earlier deficit.
 /// </summary>
 public static class RouteCargoNormalizer {
-    /// <summary>
-    /// Returns a new <see cref="RoutePlan"/> with the same routes after
-    /// pruning unused pickup/unload cargo and recomputing every step's LT
-    /// snapshot via <see cref="RouteReplay"/>. Returns <paramref name="plan"/>
-    /// unchanged if no route needed normalization AND every replay returned
-    /// the original route (defense against silent state drift).
-    /// </summary>
-    public static RoutePlan Normalize(AutomaticRoutePlanningRequest request, RoutePlan plan) {
-        if (plan is null) return plan!;
-        if (plan.Routes.Count == 0) return plan;
-
-        var newRoutes = new List<PlannedRoute>(plan.Routes.Count);
-        bool anyChange = false;
-        foreach (var route in plan.Routes) {
-            var (normalized, changed) = NormalizeRoute(request, route);
-            newRoutes.Add(normalized);
-            anyChange |= changed;
+    public static CargoNormalizationResult Normalize(
+        AutomaticRoutePlanningRequest request,
+        RoutePlan plan) {
+        if (request is null || plan is null) {
+            return Failed(0, "input", null, "", "normalization-bad-input",
+                "request or plan is null", changed: false, []);
         }
-        if (!anyChange) return plan;
-        return new RoutePlan(plan.Status, newRoutes, plan.Objective, plan.Diagnostics,
+        if (plan.Routes.Count == 0)
+            return new CargoNormalizationResult(true, plan, false, [], null);
+
+        var candidateRoutes = new List<PlannedRoute>(plan.Routes.Count);
+        var changes = new List<CargoNormalizationChange>();
+        bool changed = false;
+        foreach (var route in plan.Routes) {
+            var rewrite = RewriteRoute(request, route);
+            candidateRoutes.Add(rewrite.Route);
+            changes.AddRange(rewrite.Changes);
+            changed |= rewrite.Changed;
+        }
+
+        if (!changed)
+            return new CargoNormalizationResult(true, plan, false, [], null);
+
+        var candidate = new RoutePlan(
+            plan.Status,
+            candidateRoutes,
+            plan.Objective,
+            plan.Diagnostics,
             plan.InputFingerprint);
+        var replay = RouteReplay.ReplayPlan(request, candidate);
+        if (!replay.Success || replay.Plan is null) {
+            var failure = replay.Failure;
+            return Failed(
+                failure?.RouteNumber ?? 0,
+                failure?.FailureStepKind ?? "replay",
+                failure?.FailureStepIndex,
+                failure?.RequestedItemId ?? "",
+                failure?.FailureCode ?? "replay-failure",
+                RouteReplay.FormatFailureDetail(failure),
+                changed,
+                changes);
+        }
+
+        var normalizedPlan = new RoutePlan(
+            replay.Plan.Status,
+            replay.Plan.Routes,
+            replay.Plan.Objective,
+            replay.Plan.Diagnostics,
+            plan.InputFingerprint);
+        return new CargoNormalizationResult(true, normalizedPlan, true, changes, null);
     }
 
-    /// <summary>
-    /// Per-route normalization. Returns the route (possibly rebuilt) and a
-    /// flag indicating whether any change was made.
-    /// </summary>
-    public static (PlannedRoute route, bool changed) NormalizeRoute(
-        AutomaticRoutePlanningRequest request, PlannedRoute route) {
-        // 1. Forward-simulate on-board inventory tracking which items were
-        //    actually consumed/produced by BarterStep.
-        var consumedTotals = new Dictionary<string, int>(StringComparer.Ordinal);
-        var producedTotals = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var step in route.Steps) {
-            if (step is BarterStep barter) {
-                consumedTotals[barter.Consumed.ItemId] =
-                    consumedTotals.GetValueOrDefault(barter.Consumed.ItemId) + barter.Consumed.Quantity;
-                producedTotals[barter.Produced.ItemId] =
-                    producedTotals.GetValueOrDefault(barter.Produced.ItemId) + barter.Produced.Quantity;
-            }
+    public static (PlannedRoute route, bool changed, bool replayFailed,
+        CargoNormalizationDiagnostic? replayDiagnostic)
+        NormalizeRoute(AutomaticRoutePlanningRequest request, PlannedRoute route) {
+        var rewrite = RewriteRoute(request, route);
+        if (!rewrite.Changed) return (route, false, false, null);
+
+        var replay = RouteReplay.ReplayRoute(request, rewrite.Route);
+        if (!replay.Success || replay.Route is null) {
+            return (rewrite.Route, true, true, new CargoNormalizationDiagnostic(
+                route.Number,
+                replay.FailureStepKind ?? "replay",
+                replay.FailureStepIndex,
+                replay.RequestedItemId ?? "",
+                replay.FailureCode ?? "replay-failure",
+                RouteReplay.FormatFailureDetail(replay)));
         }
+        return (replay.Route, true, false, null);
+    }
 
-        // 2. Track which pickup items survive (with their kept quantity)
-        //    and which were dropped entirely, so we can prune the matching
-        //    unload entries symmetrically.
-        var keptPickupQty = new Dictionary<string, int>(StringComparer.Ordinal);
-        var droppedPickupItems = new HashSet<string>(StringComparer.Ordinal);
+    internal static RouteCargoRewriteResult RewriteRoute(
+        AutomaticRoutePlanningRequest request,
+        PlannedRoute route) => RewriteRoute(request.InitialOnBoard, route);
 
-        var onboard = new Dictionary<string, int>(StringComparer.Ordinal);
-        var candidateSteps = new List<RouteStep>(route.Steps.Count);
-        bool itemsChanged = false;
-        bool pickupHasContent = false;
-        bool unloadHasContent = false;
-        foreach (var step in route.Steps) {
+    internal static RouteCargoRewriteResult RewriteRoute(
+        IReadOnlyDictionary<string, int> initialOnBoard,
+        PlannedRoute route) {
+        var onboard = initialOnBoard.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value,
+            StringComparer.Ordinal);
+        var rewritten = new List<RouteStep>(route.Steps.Count);
+        var changes = new List<CargoNormalizationChange>();
+        bool changed = false;
+
+        for (int stepIndex = 0; stepIndex < route.Steps.Count; stepIndex++) {
+            var step = route.Steps[stepIndex];
             switch (step) {
                 case WarehousePickupStep pickup: {
-                    var newItems = new List<RouteItemQuantity>(pickup.Items.Count);
+                    var kept = new List<RouteItemQuantity>(pickup.Items.Count);
                     foreach (var item in pickup.Items) {
-                        int remainingNeeded = consumedTotals.GetValueOrDefault(item.ItemId)
-                            - onboard.GetValueOrDefault(item.ItemId);
-                        if (remainingNeeded <= 0) {
-                            itemsChanged = true;
-                            droppedPickupItems.Add(item.ItemId);
-                            continue;
+                        int before = onboard.GetValueOrDefault(item.ItemId);
+                        int requiredBeforeNextPickup = RequiredOnBoardUntilNextPickup(
+                            route.Steps, stepIndex + 1, item.ItemId);
+                        int requiredFromThisPickup = Math.Max(
+                            0, requiredBeforeNextPickup - before);
+                        int keptQuantity = Math.Min(item.Quantity, requiredFromThisPickup);
+                        int redundant = item.Quantity - keptQuantity;
+                        if (keptQuantity > 0) {
+                            kept.Add(new RouteItemQuantity(item.ItemId, keptQuantity));
+                            SetQuantity(onboard, item.ItemId, before + keptQuantity);
                         }
-                        int newQty = Math.Min(item.Quantity, remainingNeeded);
-                        if (newQty < item.Quantity) itemsChanged = true;
-                        if (newQty > 0) {
-                            newItems.Add(new RouteItemQuantity(item.ItemId, newQty));
-                            onboard[item.ItemId] = onboard.GetValueOrDefault(item.ItemId) + newQty;
-                            keptPickupQty[item.ItemId] = newQty;
-                            pickupHasContent = true;
-                        }
-                        else {
-                            itemsChanged = true;
-                            droppedPickupItems.Add(item.ItemId);
+                        if (redundant > 0) {
+                            changed = true;
+                            int returned = route.Steps
+                                .Skip(stepIndex + 1)
+                                .OfType<WarehouseUnloadStep>()
+                                .Where(unload => StringComparer.Ordinal.Equals(
+                                    unload.WarehouseId, pickup.WarehouseId))
+                                .SelectMany(unload => unload.Items)
+                                .Where(unloaded => StringComparer.Ordinal.Equals(
+                                    unloaded.ItemId, item.ItemId))
+                                .Sum(unloaded => unloaded.Quantity);
+                            changes.Add(new CargoNormalizationChange(
+                                route.Number,
+                                stepIndex,
+                                pickup.WarehouseId,
+                                item.ItemId,
+                                item.Quantity,
+                                keptQuantity,
+                                redundant,
+                                Math.Min(redundant, returned)));
                         }
                     }
-                    if (pickupHasContent) {
-                        // Drop pickups that became entirely empty: the
-                        // simulator would reject an empty pickup with
-                        // "insufficient-stock", and an empty pickup at
-                        // an already-visited warehouse has no value.
-                        candidateSteps.Add(new WarehousePickupStep(
-                            pickup.WarehouseId, pickup.IslandId, newItems,
-                            new RouteLoadSnapshot(0, 0, 0)));
+                    if (kept.Count > 0) {
+                        rewritten.Add(new WarehousePickupStep(
+                            pickup.WarehouseId,
+                            pickup.IslandId,
+                            kept,
+                            pickup.Load));
                     }
                     else if (pickup.Items.Count > 0) {
-                        itemsChanged = true;
+                        changed = true;
                     }
                     break;
                 }
-                case BarterStep barter: {
-                    int consumeAvailable = onboard.GetValueOrDefault(barter.Consumed.ItemId);
-                    int consume = Math.Min(consumeAvailable, barter.Consumed.Quantity);
-                    int consumeShortage = barter.Consumed.Quantity - consume;
-                    if (consumeShortage > 0) {
-                        onboard[barter.Consumed.ItemId] = consumeAvailable + consumeShortage;
-                    }
-                    else {
-                        int after = consumeAvailable - consume;
-                        if (after == 0) onboard.Remove(barter.Consumed.ItemId);
-                        else onboard[barter.Consumed.ItemId] = after;
-                    }
-                    onboard[barter.Produced.ItemId] =
-                        onboard.GetValueOrDefault(barter.Produced.ItemId) + barter.Produced.Quantity;
-                    candidateSteps.Add(barter);
+
+                case BarterStep barter:
+                    SetQuantity(
+                        onboard,
+                        barter.Consumed.ItemId,
+                        onboard.GetValueOrDefault(barter.Consumed.ItemId)
+                            - barter.Consumed.Quantity);
+                    SetQuantity(
+                        onboard,
+                        barter.Produced.ItemId,
+                        onboard.GetValueOrDefault(barter.Produced.ItemId)
+                            + barter.Produced.Quantity);
+                    rewritten.Add(barter);
                     break;
-                }
+
                 case WarehouseUnloadStep unload: {
-                    var newUnloadItems = new List<RouteItemQuantity>(unload.Items.Count);
+                    var kept = new List<RouteItemQuantity>(unload.Items.Count);
                     foreach (var item in unload.Items) {
-                        bool wasProduced = producedTotals.GetValueOrDefault(item.ItemId) > 0;
-                        bool wasPickupKept = keptPickupQty.ContainsKey(item.ItemId);
-                        bool wasPickupDropped = droppedPickupItems.Contains(item.ItemId);
-                        if (wasPickupDropped && !wasProduced) {
-                            itemsChanged = true;
-                            continue;
+                        int held = Math.Max(0, onboard.GetValueOrDefault(item.ItemId));
+                        int requiredAfterUnload = RequiredOnBoardUntilNextPickup(
+                            route.Steps, stepIndex + 1, item.ItemId);
+                        int canUnload = Math.Max(0, held - requiredAfterUnload);
+                        int keptQuantity = Math.Min(item.Quantity, canUnload);
+                        if (keptQuantity > 0) {
+                            kept.Add(new RouteItemQuantity(item.ItemId, keptQuantity));
+                            SetQuantity(onboard, item.ItemId, held - keptQuantity);
                         }
-                        if (!wasProduced && !wasPickupKept && !wasPickupDropped) {
-                            newUnloadItems.Add(item);
-                            unloadHasContent = true;
-                            continue;
-                        }
-                        if (wasProduced) {
-                            newUnloadItems.Add(item);
-                            onboard[item.ItemId] = Math.Max(0,
-                                onboard.GetValueOrDefault(item.ItemId) - item.Quantity);
-                            unloadHasContent = true;
-                            continue;
-                        }
-                        int held = onboard.GetValueOrDefault(item.ItemId);
-                        if (held <= 0) {
-                            itemsChanged = true;
-                            continue;
-                        }
-                        newUnloadItems.Add(item);
-                        unloadHasContent = true;
-                        onboard[item.ItemId] = Math.Max(0, held - item.Quantity);
+                        if (keptQuantity != item.Quantity) changed = true;
                     }
-                    if (newUnloadItems.Count != unload.Items.Count) itemsChanged = true;
-                    if (unloadHasContent || unload.Items.Count == 0) {
-                        // Keep the unload only if it actually carries
-                        // something we still hold. The verifier replays
-                        // an unload-by-items list; an empty Items array
-                        // matches "no remaining cargo to put back".
-                        candidateSteps.Add(new WarehouseUnloadStep(
-                            unload.WarehouseId, unload.IslandId, newUnloadItems,
-                            new RouteLoadSnapshot(0, 0, 0)));
-                    }
+                    // Empty unload is a valid terminal step for zero-weight rewards
+                    // and retains the route's explicit destination.
+                    rewritten.Add(new WarehouseUnloadStep(
+                        unload.WarehouseId,
+                        unload.IslandId,
+                        kept,
+                        unload.Load));
                     break;
                 }
             }
         }
-        if (!itemsChanged) return (route, false);
 
-        // 3. Items changed — replay the candidate route through the
-        //    simulator so every step's Load, InitialLT, CurrentLT and
-        //    PeakLT are recomputed from the live on-board state.
-        if (candidateSteps.Count == 0) return (route, false);
-        var candidateRoute = new PlannedRoute(
-            route.Number, route.StartWarehouseId, route.EndWarehouseId,
-            candidateSteps, route.Distance,
-            initialLT: 0, currentLT: 0, peakLT: 0);
-        PlannedRoute? replayed = RouteReplay.ReplayRoute(request, candidateRoute);
-        if (replayed is null) return (route, false);
-        if (replayed.Steps.Count == 0) return (route, false);
-        return (replayed, true);
+        var candidate = changed
+            ? new PlannedRoute(
+                route.Number,
+                route.StartWarehouseId,
+                route.EndWarehouseId,
+                rewritten,
+                route.Distance,
+                0,
+                0,
+                0)
+            : route;
+        return new RouteCargoRewriteResult(candidate, changed, changes);
+    }
+
+    /// <summary>
+    /// Minimum quantity that must already be on board at the current point to
+    /// survive every ordered consumption until another pickup of the same item
+    /// can supply it. Barter production is credited only after its step.
+    /// </summary>
+    internal static int RequiredOnBoardUntilNextPickup(
+        IReadOnlyList<RouteStep> steps,
+        int startIndex,
+        string itemId) {
+        int balance = 0;
+        int minimum = 0;
+        for (int index = startIndex; index < steps.Count; index++) {
+            switch (steps[index]) {
+                case WarehousePickupStep pickup
+                    when pickup.Items.Any(item => StringComparer.Ordinal.Equals(
+                        item.ItemId, itemId)):
+                    return -minimum;
+                case BarterStep barter:
+                    if (StringComparer.Ordinal.Equals(barter.Consumed.ItemId, itemId))
+                        balance -= barter.Consumed.Quantity;
+                    if (StringComparer.Ordinal.Equals(barter.Produced.ItemId, itemId))
+                        balance += barter.Produced.Quantity;
+                    minimum = Math.Min(minimum, balance);
+                    break;
+            }
+        }
+        return -minimum;
+    }
+
+    private static CargoNormalizationResult Failed(
+        int routeNumber,
+        string stepKind,
+        int? stepIndex,
+        string itemId,
+        string code,
+        string detail,
+        bool changed,
+        IReadOnlyList<CargoNormalizationChange> changes) =>
+        new(false, null, changed, changes,
+            new CargoNormalizationDiagnostic(
+                routeNumber, stepKind, stepIndex, itemId, code, detail));
+
+    private static void SetQuantity(
+        Dictionary<string, int> quantities,
+        string itemId,
+        int quantity) {
+        if (quantity == 0) quantities.Remove(itemId);
+        else quantities[itemId] = quantity;
     }
 }
+
+internal sealed record RouteCargoRewriteResult(
+    PlannedRoute Route,
+    bool Changed,
+    IReadOnlyList<CargoNormalizationChange> Changes);

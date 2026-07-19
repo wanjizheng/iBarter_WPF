@@ -276,7 +276,8 @@ public class RouteProgressPipelineTests {
         var request = TestRequestFactory.BuildFor(route);
 
         var normalized = RouteCargoNormalizer.Normalize(request, plan);
-        var pickup = (WarehousePickupStep)normalized.Routes[0].Steps[0];
+        Assert.True(normalized.Success);
+        var pickup = (WarehousePickupStep)normalized.Plan!.Routes[0].Steps[0];
         Assert.DoesNotContain(pickup.Items, x => x.ItemId == "800045");
     }
 
@@ -325,7 +326,8 @@ public class RouteProgressPipelineTests {
         }
         var reconciled = new RoutePlan(plan.Status, newRoutes, plan.Objective,
             plan.Diagnostics, plan.InputFingerprint);
-        return RouteCargoNormalizer.Normalize(request, reconciled);
+        var norm = RouteCargoNormalizer.Normalize(request, reconciled);
+        return norm.Success ? norm.Plan! : reconciled;
     }
 }
 

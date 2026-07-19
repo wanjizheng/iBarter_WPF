@@ -17,4 +17,7 @@
     <Compile Include="..\..\Navigation\RouteStepMarkerLayout.cs" Link="Navigation\RouteStepMarkerLayout.cs" />
     <Compile Include="..\..\View\ShipCargoScrollBehavior.cs" Link="View\ShipCargoScrollBehavior.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="TestData\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
