@@ -11,6 +11,7 @@ public readonly record struct ExtremeRouteResources(int WorkerCount, int MemoryL
 /// </summary>
 public static class ExtremeRouteResourcePolicy {
     private const long BytesPerMegabyte = 1024L * 1024L;
+    private const int MinimumMemoryPerWorkerMb = 1536;
 
     public static ExtremeRouteResources Detect() {
         int logicalProcessors = Math.Max(1, Environment.ProcessorCount);
@@ -33,7 +34,7 @@ public static class ExtremeRouteResourcePolicy {
         // Keep roughly one quarter of the logical processors available for
         // WPF, OCR, Windows and other foreground applications.
         int reservedProcessors = Math.Max(1, (logicalProcessors + 3) / 4);
-        int workers = Math.Max(1, logicalProcessors - reservedProcessors);
+        int cpuBoundWorkers = Math.Max(1, logicalProcessors - reservedProcessors);
 
         // Use the tighter of half the installed RAM and two thirds of the RAM
         // that is free when planning starts. This shrinks under memory pressure.
@@ -41,6 +42,13 @@ public static class ExtremeRouteResourcePolicy {
         long availableBoundMb = availableMemoryMb * 2 / 3;
         long memoryLimitMb = Math.Max(512, Math.Min(installedBoundMb, availableBoundMb));
         memoryLimitMb = Math.Min(memoryLimitMb, int.MaxValue);
+
+        // Parallel CP-SAT portfolios duplicate substantial search state. Tie
+        // concurrency to the memory admitted for this run so a temporarily
+        // low free-memory reading does not combine many workers with a tight
+        // Windows job limit and force the native runtime to abort.
+        int memoryBoundWorkers = Math.Max(1, (int)(memoryLimitMb / MinimumMemoryPerWorkerMb));
+        int workers = Math.Min(cpuBoundWorkers, memoryBoundWorkers);
 
         return new ExtremeRouteResources(workers, (int)memoryLimitMb);
     }

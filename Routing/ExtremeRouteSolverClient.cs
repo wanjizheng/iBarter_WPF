@@ -19,6 +19,7 @@ public sealed record ExtremeRouteSolverRunResult(
     long Branches,
     int WorkerCount,
     int MemoryLimitMb,
+    int AttemptCount,
     string? Failure);
 
 public static class ExtremeRouteSolverClient {
@@ -33,6 +34,52 @@ public static class ExtremeRouteSolverClient {
         ExtremeRouteResources resources,
         CancellationToken cancellationToken,
         string? solverPath = null) {
+        var overall = Stopwatch.StartNew();
+        var failures = new List<string>();
+        ExtremeRouteResources attemptResources = resources;
+        int attempts = 0;
+
+        while (true) {
+            cancellationToken.ThrowIfCancellationRequested();
+            TimeSpan remaining = timeLimit - overall.Elapsed;
+            if (remaining <= TimeSpan.Zero) {
+                string failure = failures.Count == 0
+                    ? "solver-time-budget"
+                    : $"solver-time-budget after {string.Join(" | ", failures)}";
+                return new ExtremeRouteSolverRunResult(
+                    null, "Unavailable", 0, false, 0, 1, overall.Elapsed, 0, 0,
+                    attemptResources.WorkerCount, attemptResources.MemoryLimitMb,
+                    attempts, failure);
+            }
+
+            attempts++;
+            ExtremeRouteSolverRunResult result = SolveOnce(
+                request, incumbent, remaining, attemptResources, cancellationToken, solverPath);
+            if (result.Plan is not null || !IsNativeExit(result.Failure)
+                || attemptResources.WorkerCount <= 1) {
+                string? failure = result.Failure;
+                if (failure is not null && failures.Count > 0)
+                    failure = $"{string.Join(" | ", failures)} | final={failure}";
+                return result with {
+                    Elapsed = overall.Elapsed,
+                    AttemptCount = attempts,
+                    Failure = failure,
+                };
+            }
+
+            failures.Add($"workers={attemptResources.WorkerCount}:{result.Failure}");
+            int reducedWorkers = Math.Max(1, attemptResources.WorkerCount / 2);
+            attemptResources = attemptResources with { WorkerCount = reducedWorkers };
+        }
+    }
+
+    private static ExtremeRouteSolverRunResult SolveOnce(
+        AutomaticRoutePlanningRequest request,
+        RoutePlan? incumbent,
+        TimeSpan timeLimit,
+        ExtremeRouteResources resources,
+        CancellationToken cancellationToken,
+        string? solverPath) {
         var watch = Stopwatch.StartNew();
         if (request.Tasks.Count > ExtremeRouteSolverProtocol.MaximumTasks)
             return Failure($"task-limit:{request.Tasks.Count}");
@@ -114,6 +161,7 @@ public static class ExtremeRouteSolverClient {
                 output.Branches,
                 output.WorkerCount,
                 output.MemoryLimitMb,
+                1,
                 replayFailure ?? (output.Error is null ? null : SingleLine(output.Error)));
         }
         catch (OperationCanceledException) {
@@ -128,8 +176,11 @@ public static class ExtremeRouteSolverClient {
 
         ExtremeRouteSolverRunResult Failure(string detail) => new(
             null, "Unavailable", 0, false, 0, 1, watch.Elapsed, 0, 0,
-            resources.WorkerCount, resources.MemoryLimitMb, detail);
+            resources.WorkerCount, resources.MemoryLimitMb, 1, detail);
     }
+
+    private static bool IsNativeExit(string? failure) =>
+        failure?.StartsWith("solver-exit:", StringComparison.Ordinal) == true;
 
     private static ExtremeSolverInputDto BuildInput(
         AutomaticRoutePlanningRequest request,

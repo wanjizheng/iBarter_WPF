@@ -33,6 +33,17 @@ public sealed class ExtremeRouteResourcePolicyTests {
     }
 
     [Fact]
+    public void Worker_budget_shrinks_when_available_memory_is_tight() {
+        ExtremeRouteResources constrained = ExtremeRouteResourcePolicy.ForMachine(
+            28, 65_536, 12_288);
+        ExtremeRouteResources comfortable = ExtremeRouteResourcePolicy.ForMachine(
+            28, 65_536, 40_000);
+
+        Assert.True(constrained.WorkerCount < comfortable.WorkerCount);
+        Assert.True(constrained.MemoryLimitMb < comfortable.MemoryLimitMb);
+    }
+
+    [Fact]
     public void Live_detection_returns_a_usable_budget() {
         ExtremeRouteResources resources = ExtremeRouteResourcePolicy.Detect();
 

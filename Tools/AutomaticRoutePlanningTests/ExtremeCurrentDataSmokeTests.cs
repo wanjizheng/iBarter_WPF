@@ -41,7 +41,8 @@ public sealed class ExtremeCurrentDataSmokeTests {
             $"routeLimit={result.RouteLimit} status={result.SolverStatus} " +
             $"elapsed={watch.Elapsed.TotalSeconds:F1}s distance={result.Plan?.Objective?.TotalDistance:F1} " +
             $"bound={result.BestBound:F1} gap={result.RelativeGap:P2} " +
-            $"workers={result.WorkerCount} memory={result.MemoryLimitMb}MB failure={result.Failure}");
+            $"workers={result.WorkerCount} memory={result.MemoryLimitMb}MB " +
+            $"attempts={result.AttemptCount} failure={result.Failure}");
         Assert.InRange(request.Tasks.Count, 1, ExtremeRouteSolverProtocol.MaximumTasks);
         Assert.NotNull(result.Plan);
         Assert.True(RoutePlanVerifier.Verify(request, result.Plan!).Success);

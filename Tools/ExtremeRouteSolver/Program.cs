@@ -96,11 +96,15 @@ internal sealed class ExtremeCpSatEngine {
         var solver = new CpSolver {
             StringParameters = string.Join(" ", parameters),
         };
-        var callback = new BestSolutionWriter(
+        var writer = new FinalSolutionWriter(
             input, outputPath, jsonOptions, taskAt, slotUsed, startChoice, endChoice,
             routeUsed, hasPickup, pickup, totalDistance, warehouseIndex);
-        CpSolverStatus status = solver.Solve(model, callback);
-        callback.WriteFinal(solver, status);
+        // The Windows x64 helper showed nondeterministic native fatal exits
+        // while the managed callback walked thousands of variables. This is a
+        // bounded optimization run, so CP-SAT returns its best feasible result
+        // at the time limit and the intermediate callback is unnecessary.
+        CpSolverStatus status = solver.Solve(model);
+        writer.WriteFinal(solver, status);
         return status is CpSolverStatus.Optimal or CpSolverStatus.Feasible ? 0 : 3;
     }
 
@@ -423,7 +427,7 @@ internal sealed class ExtremeCpSatEngine {
     }
 }
 
-internal sealed class BestSolutionWriter : CpSolverSolutionCallback {
+internal sealed class FinalSolutionWriter {
     private readonly ExtremeSolverInputDto input;
     private readonly string outputPath;
     private readonly JsonSerializerOptions jsonOptions;
@@ -436,10 +440,7 @@ internal sealed class BestSolutionWriter : CpSolverSolutionCallback {
     private readonly IntVar[,,] pickup;
     private readonly IntVar totalDistance;
     private readonly Dictionary<string, int> warehouseIndex;
-    private readonly object writeGate = new();
-    private ExtremeSolverOutputDto? latest;
-
-    public BestSolutionWriter(
+    public FinalSolutionWriter(
         ExtremeSolverInputDto input,
         string outputPath,
         JsonSerializerOptions jsonOptions,
@@ -466,11 +467,6 @@ internal sealed class BestSolutionWriter : CpSolverSolutionCallback {
         this.warehouseIndex = warehouseIndex;
     }
 
-    public override void OnSolutionCallback() {
-        latest = Capture("Feasible", BestObjectiveBound(), WallTime(), NumConflicts(), NumBranches());
-        Write(latest);
-    }
-
     public void WriteFinal(CpSolver solver, CpSolverStatus status) {
         string statusText = status switch {
             CpSolverStatus.Optimal => "Optimal",
@@ -480,10 +476,9 @@ internal sealed class BestSolutionWriter : CpSolverSolutionCallback {
             _ => "Unknown",
         };
         if (status is CpSolverStatus.Optimal or CpSolverStatus.Feasible) {
-            latest = Capture(statusText, solver.BestObjectiveBound, solver.WallTime(),
-                solver.NumConflicts(), solver.NumBranches());
-            Write(latest);
-        } else if (latest is null) {
+            Write(Capture(solver, statusText, solver.BestObjectiveBound, solver.WallTime(),
+                solver.NumConflicts(), solver.NumBranches()));
+        } else {
             string? solutionInfo = solver.Response?.SolutionInfo;
             string? solveLog = solver.Response?.SolveLog;
             if (!string.IsNullOrWhiteSpace(solveLog)) {
@@ -509,35 +504,40 @@ internal sealed class BestSolutionWriter : CpSolverSolutionCallback {
     }
 
     private ExtremeSolverOutputDto Capture(
-        string status, double bestBound, double wallTime, long conflicts, long branches) {
+        CpSolver solver,
+        string status,
+        double bestBound,
+        double wallTime,
+        long conflicts,
+        long branches) {
         var routes = new List<ExtremeSolverRouteDto>();
-        for (int r = 0; r < routeUsed.Length && Value(routeUsed[r]) != 0; r++) {
+        for (int r = 0; r < routeUsed.Length && solver.Value(routeUsed[r]) != 0; r++) {
             string? start = null;
-            if (Value(hasPickup[r]) != 0) {
+            if (solver.Value(hasPickup[r]) != 0) {
                 for (int w = 0; w < input.Warehouses.Count; w++)
-                    if (Value(startChoice[r, w]) != 0) { start = input.Warehouses[w].WarehouseId; break; }
+                    if (solver.Value(startChoice[r, w]) != 0) { start = input.Warehouses[w].WarehouseId; break; }
             }
             string end = input.Warehouses[0].WarehouseId;
             for (int w = 0; w < input.Warehouses.Count; w++)
-                if (Value(endChoice[r, w]) != 0) { end = input.Warehouses[w].WarehouseId; break; }
+                if (solver.Value(endChoice[r, w]) != 0) { end = input.Warehouses[w].WarehouseId; break; }
 
             var picked = new List<ExtremeSolverPickupDto>();
             if (start is not null) {
                 int w = warehouseIndex[start];
                 for (int item = 0; item < input.Items.Count; item++) {
-                    long quantity = Value(pickup[r, w, item]);
+                    long quantity = solver.Value(pickup[r, w, item]);
                     if (quantity > 0)
                         picked.Add(new ExtremeSolverPickupDto(input.Items[item].ItemId, checked((int)quantity)));
                 }
             }
             var tasks = new List<int>();
-            for (int p = 0; p < input.Tasks.Count && Value(slotUsed[r, p]) != 0; p++)
+            for (int p = 0; p < input.Tasks.Count && solver.Value(slotUsed[r, p]) != 0; p++)
                 for (int t = 0; t < input.Tasks.Count; t++)
-                    if (Value(taskAt[r, p, t]) != 0) { tasks.Add(t); break; }
+                    if (solver.Value(taskAt[r, p, t]) != 0) { tasks.Add(t); break; }
             routes.Add(new ExtremeSolverRouteDto(r + 1, start, end, picked, tasks));
         }
 
-        long distance = Value(totalDistance);
+        long distance = solver.Value(totalDistance);
         long bound = Math.Max(0, (long)Math.Floor(bestBound));
         double gap = distance <= 0 ? 0 : Math.Max(0, (distance - Math.Min(distance, bound)) / (double)distance);
         return new ExtremeSolverOutputDto(
@@ -546,10 +546,8 @@ internal sealed class BestSolutionWriter : CpSolverSolutionCallback {
     }
 
     private void Write(ExtremeSolverOutputDto value) {
-        lock (writeGate) {
-            string temporary = outputPath + ".tmp";
-            File.WriteAllText(temporary, JsonSerializer.Serialize(value, jsonOptions));
-            File.Move(temporary, outputPath, true);
-        }
+        string temporary = outputPath + ".tmp";
+        File.WriteAllText(temporary, JsonSerializer.Serialize(value, jsonOptions));
+        File.Move(temporary, outputPath, true);
     }
 }
