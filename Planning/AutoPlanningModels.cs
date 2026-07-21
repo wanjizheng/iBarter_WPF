@@ -18,6 +18,12 @@ public sealed record AutoPlanningRoute(
     // decide which routes participate in the Crow Coin phase, so the UI does
     // not need to set the ProducesCrowCoin flag.
     public const string CrowCoinItemId = "10";
+
+    // These five level-5 Great Ocean rewards are vendor cash-outs. They are
+    // deliberately terminal: the game never asks for them as barter inputs,
+    // so Restock First must not spend cargo/parley replenishing them.
+    public static bool IsVendorOnlyOceanReward(string itemId) => itemId is
+        "800071" or "800072" or "800073" or "800074" or "800075";
 }
 
 public sealed record AutoPlanningRequest(

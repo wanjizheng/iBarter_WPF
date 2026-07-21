@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>iBarter.ExtremeRouteSolver</AssemblyName>
+    <RootNamespace>iBarter.ExtremeRouteSolver</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Google.OrTools" Version="9.15.6755" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Routing\ExtremeRouteSolverProtocol.cs" Link="Routing\ExtremeRouteSolverProtocol.cs" />
+  </ItemGroup>
+</Project>

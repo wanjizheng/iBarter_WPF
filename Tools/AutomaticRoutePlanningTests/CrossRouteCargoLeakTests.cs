@@ -97,6 +97,100 @@ public sealed class CrossRouteCargoLeakTests {
     }
 
     [Fact]
+    public void CompletionProgressCarriesCompletedPrefixOutputIntoNewFirstBarter() {
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["800046"] = new("800046", "input", 1, 1_000),
+            ["800064"] = new("800064", "handoff", 2, 1_000),
+            ["800224"] = new("800224", "output", 3, 1_000),
+        };
+        var request = new AutomaticRoutePlanningRequest(
+            [new RouteBarterTask(
+                "next", "Dallae", new RoutePoint(2, 0),
+                "800064", 5, "800224", 5)],
+            items,
+            [new RouteWarehouse(
+                "Iliya", "Iliya", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) {
+                    ["800046"] = 5,
+                })],
+            2_411, 24_110, new RouteSearchLimits(100, 10), "progress-handoff");
+        var candidate = new RoutePlan(
+            RoutePlanStatus.Optimal,
+            [new PlannedRoute(1, "Iliya", "Iliya", [
+                new WarehousePickupStep("Iliya", "Iliya",
+                    [new RouteItemQuantity("800046", 5)], new(0, 0, 0)),
+                new BarterStep("done", "Pilava",
+                    new("800046", 5), new("800064", 5), new(0, 0, 0)),
+                new BarterStep("next", "Dallae",
+                    new("800064", 5), new("800224", 5), new(0, 0, 0)),
+                new WarehouseUnloadStep("Iliya", "Iliya",
+                    [new RouteItemQuantity("800224", 5)], new(0, 0, 0)),
+            ], 0, 0, 0, 0)],
+            null, [], "old-plan-fingerprint");
+
+        var prepared = RoutePlanPublication.PreparePlanForPublication(
+            request,
+            candidate,
+            RoutePlanPublicationSource.CompletionProgress,
+            new HashSet<string>(StringComparer.Ordinal) { "done" });
+
+        Assert.True(prepared.Success, prepared.Failure?.Detail);
+        var route = Assert.Single(prepared.Plan!.Routes);
+        Assert.Collection(route.Steps,
+            step => Assert.Equal("next", Assert.IsType<BarterStep>(step).RowId),
+            step => Assert.IsType<WarehouseUnloadStep>(step));
+        Assert.Equal(7_411, route.Steps[0].Load.TotalWithExtraLT);
+    }
+
+    [Fact]
+    public void ProgressProjectionRetainsFullBaselineSoUncheckedTaskCanReturn() {
+        var fullRequest = RouteTestData.TwoItemRequest(reverseDictionaryOrder: false);
+        var fullPlan = new AutomaticRoutePlanner().Plan(fullRequest, CancellationToken.None);
+        Assert.Equal(2, fullPlan.Routes.SelectMany(route => route.Steps)
+            .OfType<BarterStep>().Count());
+
+        var remainingRequest = new AutomaticRoutePlanningRequest(
+            fullRequest.Tasks.Where(task => task.RowId != "r1").ToArray(),
+            fullRequest.Items,
+            fullRequest.Warehouses,
+            fullRequest.ExtraLT,
+            fullRequest.TotalLT,
+            fullRequest.Limits,
+            fullRequest.ConfigurationVersion);
+        var progressed = RoutePlanPublication.PreparePlanForPublication(
+            remainingRequest,
+            fullPlan,
+            RoutePlanPublicationSource.ProgressRestore,
+            new HashSet<string>(["r1"], StringComparer.Ordinal));
+
+        Assert.True(progressed.Success, progressed.Failure?.Detail);
+        Assert.Single(progressed.Plan!.Routes.SelectMany(route => route.Steps)
+            .OfType<BarterStep>());
+        Assert.Same(fullPlan, progressed.RetainedPlan);
+
+        // Cancelling CK rebuilds the full request. It succeeds only when the
+        // retained baseline still contains r1; using progressed.Plan here
+        // reproduces verification-mismatch/incomplete.
+        var restored = RoutePlanPublication.PreparePlanForPublication(
+            fullRequest,
+            progressed.RetainedPlan!,
+            RoutePlanPublicationSource.CompletionProgress,
+            new HashSet<string>(StringComparer.Ordinal));
+        Assert.True(restored.Success, restored.Failure?.Detail);
+        Assert.Equal(2, restored.Plan!.Routes.SelectMany(route => route.Steps)
+            .OfType<BarterStep>().Count());
+
+        var truncated = RoutePlanPublication.PreparePlanForPublication(
+            fullRequest,
+            progressed.Plan,
+            RoutePlanPublicationSource.CompletionProgress,
+            new HashSet<string>(StringComparer.Ordinal));
+        Assert.False(truncated.Success);
+        Assert.Equal("verification-mismatch", truncated.Failure?.Code);
+        Assert.Equal("incomplete", truncated.Failure?.Detail);
+    }
+
+    [Fact]
     public void ReplayFailureReportsExactTransitionContextInsteadOfNull() {
         var (request, badPlan) = LoadFixture();
         var route = badPlan.Routes[0];

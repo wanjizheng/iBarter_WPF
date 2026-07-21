@@ -4,6 +4,37 @@ using Xunit;
 namespace PlannerAutoPlannerTests;
 
 public sealed class PlannerAutoPlannerTests {
+    [Theory]
+    [InlineData("800071")]
+    [InlineData("800072")]
+    [InlineData("800073")]
+    [InlineData("800074")]
+    [InlineData("800075")]
+    public void Restock_first_ignores_vendor_only_ocean_rewards(string rewardItemId) {
+        var vendorReward = Route("vendor", 1, "A", 4, 1,
+            rewardItemId, 5, 1, 1_000, 4);
+        var normalStock = Route("normal", 1, "B", 4, 1,
+            "NORMAL_LV5", 5, 1, 1_000, 4);
+        var request = new AutoPlanningRequest(
+            [vendorReward, normalStock],
+            new Dictionary<string, int> {
+                ["A"] = 10,
+                ["B"] = 10,
+                [rewardItemId] = 0,
+                ["NORMAL_LV5"] = 0,
+            },
+            AutoPlanningStrategy.RestockFirst,
+            Lv5Target: 1,
+            Lv6Target: 0,
+            ParleyBudget: 100_000);
+
+        var result = new PlannerAutoPlanner().Plan(request);
+
+        Assert.True(result.Success);
+        Assert.Equal(0, result.Multipliers["vendor"]);
+        Assert.Equal(1, result.Multipliers["normal"]);
+    }
+
     [Fact]
     public void Request_rejects_duplicate_row_ids() {
         var route = Route("r1", 1, "A", 4, 1, "B", 5, 1, 10_000, 5);

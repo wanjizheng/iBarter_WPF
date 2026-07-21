@@ -6,6 +6,7 @@ public enum RouteOptimizationMode {
     Quick,
     Balanced,
     Deep,
+    Extreme,
 }
 
 public enum BeamStopReason {
@@ -47,12 +48,20 @@ public sealed record RouteOptimizationProfile(
             BeamWidth: 384),
         RouteOptimizationMode.Deep => new(
             Mode: RouteOptimizationMode.Deep,
-            TotalTarget: TimeSpan.FromSeconds(30),
-            FinalizationReserve: TimeSpan.FromSeconds(2),
+            TotalTarget: TimeSpan.FromSeconds(60),
+            FinalizationReserve: TimeSpan.FromSeconds(3),
             MaxBeamParents: 100_000,
             MaxSuccessors: 4_000_000,
             MaxLocalEvaluations: 2_000,
-            BeamWidth: 384),
+            BeamWidth: 1_024),
+        RouteOptimizationMode.Extreme => new(
+            Mode: RouteOptimizationMode.Extreme,
+            TotalTarget: TimeSpan.FromSeconds(ExtremeRouteSolverProtocol.DefaultTimeLimitSeconds),
+            FinalizationReserve: TimeSpan.Zero,
+            MaxBeamParents: 100_000,
+            MaxSuccessors: 4_000_000,
+            MaxLocalEvaluations: 2_000,
+            BeamWidth: 1_024),
         _ => For(RouteOptimizationMode.Balanced),
     };
 }
@@ -132,11 +141,13 @@ public sealed class RouteSearchBudget {
         // additionally cap by task count so the frontier stays manageable
         // for very large plans. Tests can pass taskCount=0 to disable the
         // task-count cap.
-        int taskCap = taskCount switch {
-            >= 20 => 128,
-            >= 17 => 256,
-            _ => int.MaxValue,
-        };
+        int taskCap = profile.Mode is RouteOptimizationMode.Deep or RouteOptimizationMode.Extreme
+            ? int.MaxValue
+            : taskCount switch {
+                >= 20 => 128,
+                >= 17 => 256,
+                _ => int.MaxValue,
+            };
         EffectiveBeamWidth = Math.Min(profile.BeamWidth, taskCap);
         PlanStartTimestamp = planStartTimestamp ?? this.clock();
         long freq = Stopwatch.Frequency;

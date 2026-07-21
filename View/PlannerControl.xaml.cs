@@ -97,6 +97,8 @@ namespace iBarter.View {
             //DataGrid_Planner.SortColumnDescriptions.Add(new SortColumnDescription() { ColumnName = "x:Column_LV", SortDirection = ListSortDirection.Ascending });
             SetupDataGridStyle();
             LoadSavedComboBoxValue();
+            ApplyTypography();
+            Loaded += (_, _) => ApplyTypography();
 
             // Phase 2 (i18n): one-shot apply + subscribe for live re-render.
             ApplyLocalization();
@@ -156,6 +158,7 @@ namespace iBarter.View {
                         RouteOptimizationMode.Quick,
                         RouteOptimizationMode.Balanced,
                         RouteOptimizationMode.Deep,
+                        RouteOptimizationMode.Extreme,
                     };
                 }
 
@@ -287,12 +290,48 @@ namespace iBarter.View {
             RouteOptimizationMode.Quick => "str.Planner.AutoPlan.OptimQuick",
             RouteOptimizationMode.Balanced => "str.Planner.AutoPlan.OptimBalanced",
             RouteOptimizationMode.Deep => "str.Planner.AutoPlan.OptimDeep",
+            RouteOptimizationMode.Extreme => "str.Planner.AutoPlan.OptimExtreme",
             _ => "str.Planner.AutoPlan.OptimBalanced",
         };
 
+        private static string FormatRouteDiagnostic(
+            RouteDiagnostic? diagnostic,
+            AutomaticRoutePlanningRequest request,
+            LanguageService language) {
+            if (diagnostic is null) return "";
+
+            if (diagnostic.Code == "task-overweight") {
+                var task = request.Tasks.FirstOrDefault(candidate =>
+                    StringComparer.Ordinal.Equals(candidate.RowId, diagnostic.RowId));
+                string island = task?.IslandId ?? diagnostic.RowId;
+                string itemName = request.Items.TryGetValue(diagnostic.ItemId, out var item)
+                    ? item.DisplayName
+                    : diagnostic.ItemId;
+                return language.Localize(
+                    "str.Log.AutoRoute.TaskOverweight",
+                    island,
+                    itemName,
+                    diagnostic.Detail,
+                    request.TotalLT);
+            }
+
+            if (!string.IsNullOrWhiteSpace(diagnostic.Detail))
+                return $"{diagnostic.Code}: {diagnostic.Detail}";
+            if (!string.IsNullOrWhiteSpace(diagnostic.ItemId))
+                return $"{diagnostic.Code}: {diagnostic.ItemId}";
+            if (!string.IsNullOrWhiteSpace(diagnostic.RowId))
+                return $"{diagnostic.Code}: {diagnostic.RowId}";
+            return diagnostic.Code;
+        }
+
         private void ApplyLocalization() {
+            ApplyTypography();
             ApplyLocalizedHeaders();
             RefreshLocalizedDisplay();
+        }
+
+        private void ApplyTypography() {
+            SfDataGridTypography.Apply(DataGrid_Planner);
         }
 
         private void ApplyLocalizedHeaders() {
@@ -716,6 +755,10 @@ namespace iBarter.View {
                 try {
                     using (var file = File.Open(strPath_Setting, FileMode.Open)) {
                         DataGrid_Planner.Deserialize(file);
+                        // Deserialize restores the user's column layout, but it
+                        // also restores legacy 24px row heights and can replace
+                        // column styles. Reassert current typography afterwards.
+                        ApplyTypography();
                         loadedSetting = true;
                     }
                 }
@@ -1443,8 +1486,13 @@ namespace iBarter.View {
             int lv6Target = ComboBox_LV6Max != null && ComboBox_LV6Max.SelectedIndex >= 0
                 ? ComboBox_LV6Max.SelectedIndex : 0;
 
+            int extraLT = Convert.ToInt32(Math.Round(
+                App.myCargoProperty.ExtraLT, MidpointRounding.AwayFromZero));
+            int totalLT = Convert.ToInt32(Math.Round(
+                App.myCargoProperty.TotalLT, MidpointRounding.AwayFromZero));
             var adapter = new PlannerAutoPlanningAdapter();
-            var calculation = adapter.Calculate(snapshots, inventory, strategy, lv5Target, lv6Target, 1_000_000);
+            var calculation = adapter.Calculate(
+                snapshots, inventory, strategy, lv5Target, lv6Target, 1_000_000);
 
             if (calculation.ApplySet is null) {
                 var diag = calculation.Diagnostics.FirstOrDefault();
@@ -1494,9 +1542,7 @@ namespace iBarter.View {
                     island.IslandsName,
                     new RoutePoint(island.NavigationX!.Value, island.NavigationY!.Value)))
                 .ToArray();
-            var cargo = new CargoCapacitySnapshot(
-                Convert.ToInt32(Math.Round(App.myCargoProperty.ExtraLT, MidpointRounding.AwayFromZero)),
-                Convert.ToInt32(Math.Round(App.myCargoProperty.TotalLT, MidpointRounding.AwayFromZero)));
+            var cargo = new CargoCapacitySnapshot(extraLT, totalLT);
             var profile = ResolveSelectedOptimizationProfile();
             var request = AutomaticRoutePlanningAdapter.BuildRequest(
                 routeRows, storageRows, islandRows, cargo,
@@ -1508,7 +1554,7 @@ namespace iBarter.View {
                 switch (routePlan.Status) {
                     case RoutePlanStatus.Infeasible:
                         App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Infeasible",
-                            routePlan.Diagnostics.FirstOrDefault()?.Detail ?? ""), Brushes.Red);
+                            FormatRouteDiagnostic(routePlan.Diagnostics.FirstOrDefault(), request, svc)), Brushes.Red);
                         break;
                     case RoutePlanStatus.NoFeasibleSolutionWithinLimit:
                         App.myCFun.Log(svc.Localize("str.Log.AutoRoute.NoFeasibleWithinLimit"), Brushes.OrangeRed);
@@ -1518,7 +1564,7 @@ namespace iBarter.View {
                         break;
                     default:
                         App.myCFun.Log(svc.Localize("str.Log.AutoRoute.InvalidInput",
-                            routePlan.Diagnostics.FirstOrDefault()?.Detail ?? ""), Brushes.Red);
+                            FormatRouteDiagnostic(routePlan.Diagnostics.FirstOrDefault(), request, svc)), Brushes.Red);
                         break;
                 }
                 return;
@@ -1556,7 +1602,7 @@ namespace iBarter.View {
             int selectedRoutes = liveRows.Select((row, index) => new {
                     Row = row,
                     Multiplier = calculation.ApplySet.Multipliers.GetValueOrDefault(
-                        index.ToString(CultureInfo.InvariantCulture)),
+                        row.PlannerRowId),
                 })
                 .Count(item => !item.Row.ExchangeDone && item.Multiplier > 0);
             string strategyDisplay = svc.Localize(strategy switch {

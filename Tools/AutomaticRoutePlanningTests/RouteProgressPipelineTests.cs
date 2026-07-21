@@ -108,6 +108,37 @@ public class RouteProgressPipelineTests {
     }
 
     [Fact]
+    public void RemainingMapSteps_LastBarterCompleted_RemovesUnloadShell() {
+        var steps = new RouteStep[] {
+            Pickup("Iliya", ("800049", 1)),
+            MakeBarterAt("only", "SameIsland", "800049", 1, "10", 1),
+            new WarehouseUnloadStep(
+                "Iliya", "SameIsland", [new RouteItemQuantity("10", 1)], ZeroLoad),
+        };
+
+        var remaining = RouteProgressFilter.RemainingMapSteps(
+            steps,
+            new HashSet<string>(StringComparer.Ordinal) { "only" });
+
+        Assert.Empty(remaining);
+    }
+
+    [Fact]
+    public void RemainingRoutes_RemovesCompletedRoute_WithoutRenumberingOthers() {
+        var routes = new[] {
+            BuildRoute(1, Barter("route-1", "800049", 1, "10", 1)),
+            BuildRoute(2, Barter("route-2", "800049", 1, "11", 1)),
+            BuildRoute(3, Barter("route-3", "800049", 1, "12", 1)),
+        };
+
+        var remaining = RouteProgressFilter.RemainingRoutes(
+            routes,
+            new HashSet<string>(StringComparer.Ordinal) { "route-2" });
+
+        Assert.Equal([1, 3], remaining.Select(route => route.Number));
+    }
+
+    [Fact]
     public void FindVisibleBarterRowForSegment_OnlyRemainingBarters() {
         // 'a' is at Baremi; 'b' is at a separate island Baremi2.
         // When 'a' is completed, the visible map trace is [b, unload] and

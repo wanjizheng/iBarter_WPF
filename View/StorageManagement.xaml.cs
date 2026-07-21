@@ -2,6 +2,7 @@
 using Syncfusion.UI.Xaml.Grid;
 using Syncfusion.Windows.Shared;
 using System.ComponentModel;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace iBarter.View {
@@ -9,6 +10,12 @@ namespace iBarter.View {
     /// Interaction logic for StorageManagement.xaml
     /// </summary>
     public partial class StorageManagement : ChromelessWindow {
+        private const double ZoomStep = 0.1;
+        private const double MinZoom = 0.5;
+        private const double MaxZoom = 2.0;
+
+        private double zoomFactor = 1.0;
+
         private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
 
         // Phase 2 (i18n): SfDataGrid GridTextColumn.MappingName -> resource key.
@@ -32,14 +39,21 @@ namespace iBarter.View {
             DataContext = App.myStorageVM;
             DataGrid_Storage.ItemsSource = App.myStorageVM.StorageCollection;
             RefreshData();
+            ApplyTypography();
+            Loaded += (_, _) => ApplyTypography();
 
             ApplyLocalization();
             LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalization();
         }
 
         private void ApplyLocalization() {
+            ApplyTypography();
             ApplyLocalizedHeaders();
             RefreshLocalizedDisplay();
+        }
+
+        private void ApplyTypography() {
+            SfDataGridTypography.Apply(DataGrid_Storage);
         }
 
         private void ApplyLocalizedHeaders() {
@@ -88,6 +102,17 @@ namespace iBarter.View {
 
         private void DataGrid_Storage_CurrentCellEndEdit(object sender, Syncfusion.UI.Xaml.Grid.CurrentCellEndEditEventArgs e) {
             App.myStorageVM.SaveData();
+        }
+
+        private void DataGrid_Storage_PreviewMouseWheel(object sender, MouseWheelEventArgs e) {
+            if (!Keyboard.IsKeyDown(Key.LeftCtrl) && !Keyboard.IsKeyDown(Key.RightCtrl)) {
+                return;
+            }
+
+            zoomFactor += e.Delta > 0 ? ZoomStep : -ZoomStep;
+            zoomFactor = Math.Clamp(zoomFactor, MinZoom, MaxZoom);
+            DataGrid_Storage.LayoutTransform = new ScaleTransform(zoomFactor, zoomFactor);
+            e.Handled = true;
         }
 
         private void PinWindow_Click(object sender, System.Windows.RoutedEventArgs e) {

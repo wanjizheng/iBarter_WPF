@@ -197,6 +197,7 @@ public sealed class PlannerAutoPlanner {
         AutoPlanningRequest request,
         IReadOnlyDictionary<string, int> committed) {
         if (r.Item2Id == AutoPlanningRoute.CrowCoinItemId) return false;
+        if (AutoPlanningRoute.IsVendorOnlyOceanReward(r.Item2Id)) return false;
         if (r.Item2Level != 5 && r.Item2Level != 6) return false;
         int target = r.Item2Level == 5 ? request.Lv5Target : request.Lv6Target;
         if (target <= 0) return false;

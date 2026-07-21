@@ -185,10 +185,13 @@ public readonly record struct RoutePlanObjective(
     int MaxPeakLT,
     string StableTieBreak) : IComparable<RoutePlanObjective> {
     public int CompareTo(RoutePlanObjective other) {
-        int result = RouteCount.CompareTo(other.RouteCount);
+        // The user-facing optimization contract is global sailing distance:
+        // compare the sum of every route first. Route count is only a tie-break;
+        // a shorter multi-trip plan must beat a longer single-trip plan.
+        int result = TotalDistance.CompareTo(other.TotalDistance);
         if (result != 0) return result;
 
-        result = TotalDistance.CompareTo(other.TotalDistance);
+        result = RouteCount.CompareTo(other.RouteCount);
         if (result != 0) return result;
 
         result = PickupStopCount.CompareTo(other.PickupStopCount);

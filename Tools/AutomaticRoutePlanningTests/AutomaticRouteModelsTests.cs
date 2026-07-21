@@ -26,10 +26,24 @@ public sealed class AutomaticRouteModelsTests {
     }
 
     [Fact]
+    public void Split_task_identity_round_trips_to_the_planner_row() {
+        string plannerRowId = "br-a490ae5f24824cc6814a0d0be3bef792";
+        string first = RouteTaskIdentity.CreateSegmentId(plannerRowId, 0, 2);
+        string second = RouteTaskIdentity.CreateSegmentId(plannerRowId, 1, 2);
+
+        Assert.NotEqual(first, second);
+        Assert.Equal(plannerRowId, RouteTaskIdentity.PlannerRowId(first));
+        Assert.Equal(plannerRowId, RouteTaskIdentity.PlannerRowId(second));
+        Assert.Equal(plannerRowId, RouteTaskIdentity.CreateSegmentId(plannerRowId, 0, 1));
+    }
+
+    [Fact]
     public void Objective_is_strictly_lexicographic() {
         var baseline = new RoutePlanObjective(2, 100, 3, 1_000, "b");
 
-        Assert.True(new RoutePlanObjective(1, 999_999, 99, 99_999, "z").CompareTo(baseline) < 0);
+        Assert.True(new RoutePlanObjective(99, 99, 99, 99_999, "z").CompareTo(baseline) < 0);
+        Assert.True(new RoutePlanObjective(1, 101, 0, 0, "a").CompareTo(baseline) > 0);
+        Assert.True(new RoutePlanObjective(1, 100, 99, 99_999, "z").CompareTo(baseline) < 0);
         Assert.True(new RoutePlanObjective(2, 99, 99, 99_999, "z").CompareTo(baseline) < 0);
         Assert.True(new RoutePlanObjective(2, 100, 2, 99_999, "z").CompareTo(baseline) < 0);
         Assert.True(new RoutePlanObjective(2, 100, 3, 999, "z").CompareTo(baseline) < 0);

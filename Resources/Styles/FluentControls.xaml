@@ -25,6 +25,8 @@
         <Setter Property="MinWidth" Value="54" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="Normal" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type controls:FluentIconButton}">
@@ -36,7 +38,8 @@
                             <Viewbox Width="22" Height="22" Stretch="Uniform">
                                 <Path Data="{TemplateBinding IconData}" Fill="{TemplateBinding Foreground}" />
                             </Viewbox>
-                            <TextBlock Margin="0,2,0,0" FontSize="11" Text="{TemplateBinding Label}"
+                            <TextBlock Margin="0,2,0,0" FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="{TemplateBinding FontWeight}" Text="{TemplateBinding Label}"
                                        Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" />
                         </StackPanel>
                     </Border>

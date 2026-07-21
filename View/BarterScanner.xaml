@@ -5,6 +5,7 @@
                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                              xmlns:local="clr-namespace:iBarter"
+                             xmlns:view="clr-namespace:iBarter.View"
                              xmlns:controls="clr-namespace:iBarter.Controls"
              xmlns:loc="clr-namespace:iBarter.Localization"
                              xmlns:collections="clr-namespace:System.Collections;assembly=System.Runtime"
@@ -19,9 +20,12 @@
                              ResizeBorderThickness="0"
                              RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
                              Title="{loc:Localize str.Menu.BarterScanner}" Height="350" Width="750"
-                             FontFamily="{StaticResource AppFontFamily}"
-                             TextOptions.TextFormattingMode="Display"
-                             TextOptions.TextRenderingMode="ClearType">
+                             FontFamily="{DynamicResource AppFontFamily}"
+                             FontSize="13"
+                             FontWeight="Normal"
+                             TextOptions.TextFormattingMode="{DynamicResource AppTextFormattingMode}"
+                             TextOptions.TextRenderingMode="{DynamicResource AppTextRenderingMode}"
+                             TextOptions.TextHintingMode="{DynamicResource AppTextHintingMode}">
     <syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -66,15 +70,23 @@
             </syncfusion:ToolBarAdv>
 
             <syncfusion:SfDataGrid x:Name="BarterScanResults" Height="NaN" Width="NaN" AutoGenerateColumns="False"
+                                   FontSize="14"
+                                   FontWeight="Normal"
+                                   CellStyle="{StaticResource ReadableSfDataGridCellStyle}"
+                                   HeaderStyle="{StaticResource ReadableSfDataGridHeaderStyle}"
+                                   RowHeight="30"
+                                   HeaderRowHeight="32"
                                    AllowEditing="True"
                                    ColumnSizer="AutoWithLastColumnFill"
                                    RowSelectionBrush="DarkBlue"
-                                   SelectionForegroundBrush="Bisque"
+                                   SelectionForegroundBrush="White"
                                    AllowDraggingRows="False"
                                    ShowRowHeader="True"
                                    AllowDrop="True" LiveDataUpdateMode="AllowDataShaping"
                                    CurrentCellEndEdit="BarterScanResults_CurrentCellEndEdit"
-                                   CurrentCellDropDownSelectionChanged="BarterScanResults_CurrentCellDropDownSelectionChanged">
+                                   CurrentCellDropDownSelectionChanged="BarterScanResults_CurrentCellDropDownSelectionChanged"
+                                   PreviewMouseWheel="BarterScanResults_PreviewMouseWheel"
+                                   view:SfDataGridSelectionHoverGuard.IsEnabled="True">
                 <syncfusion:SfDataGrid.Columns>
                     <!-- <syncfusion:GridTextColumn HeaderText="Island1" MappingName="IsLandName" UseBindingValue="True" -->
                     <!--                            AllowResizing="True" AllowEditing="True"> -->

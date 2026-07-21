@@ -102,14 +102,18 @@ public static class AutomaticRoutePlanningAdapter {
                 pair => checked((int)pair.Quantity),
                 StringComparer.Ordinal);
 
-        var tasks = activeRows.Select(row => new RouteBarterTask(
-            row.RowId,
-            row.IslandId,
-            points.GetValueOrDefault(row.IslandId, new RoutePoint(double.NaN, double.NaN)),
-            row.Item1Id,
-            checked(row.ExchangeQuantity * row.Item1Number),
-            row.Item2Id,
-            checked(row.ExchangeQuantity * row.Item2Number))).ToArray();
+        // Preserve every exchange selected by the automatic strategy. When all
+        // repetitions of one Planner row cannot fit as one atomic cargo task,
+        // split them into deterministic capacity-safe segments. The route
+        // solver is then free to place those segments on different trips and
+        // optimize their combined distance instead of silently dropping work.
+        var tasks = activeRows
+            .SelectMany(row => SplitByCargoCapacity(
+                row,
+                cargo,
+                points.GetValueOrDefault(row.IslandId,
+                    new RoutePoint(double.NaN, double.NaN))))
+            .ToArray();
 
         var warehouses = WarehouseMap.Select((mapping, index) => {
             var inventory = storageItems.ToDictionary(
@@ -130,7 +134,7 @@ public static class AutomaticRoutePlanningAdapter {
 
         return new AutomaticRoutePlanningRequest(
             tasks, items, warehouses, cargo.ExtraLT, cargo.TotalLT, limits,
-            "automatic-route-v3-inventory-aware", initialOnBoard);
+            "automatic-route-v4-capacity-split-distance-first", initialOnBoard);
     }
 
     // Convenience for callers that just need the profile's local-moves cap.
@@ -142,5 +146,55 @@ public static class AutomaticRoutePlanningAdapter {
     private static void AddBalance(Dictionary<string, long> balance, string itemId, long delta) {
         if (string.IsNullOrWhiteSpace(itemId) || delta == 0) return;
         balance[itemId] = checked(balance.GetValueOrDefault(itemId) + delta);
+    }
+
+    private static IReadOnlyList<RouteBarterTask> SplitByCargoCapacity(
+        PlannerRouteSnapshot row,
+        CargoCapacitySnapshot cargo,
+        RoutePoint point) {
+        int maxPerSegment = MaxExchangesPerSegment(row, cargo);
+        // A single exchange that exceeds capacity must still reach preflight,
+        // where it produces the normal task-overweight diagnostic.
+        if (maxPerSegment <= 0) maxPerSegment = 1;
+
+        int segmentCount = checked((row.ExchangeQuantity - 1) / maxPerSegment + 1);
+        var result = new List<RouteBarterTask>(segmentCount);
+        int remaining = row.ExchangeQuantity;
+        for (int index = 0; index < segmentCount; index++) {
+            int exchanges = Math.Min(maxPerSegment, remaining);
+            result.Add(new RouteBarterTask(
+                RouteTaskIdentity.CreateSegmentId(row.RowId, index, segmentCount),
+                row.IslandId,
+                point,
+                row.Item1Id,
+                checked(exchanges * row.Item1Number),
+                row.Item2Id,
+                checked(exchanges * row.Item2Number)));
+            remaining -= exchanges;
+        }
+        return result;
+    }
+
+    private static int MaxExchangesPerSegment(
+        PlannerRouteSnapshot row,
+        CargoCapacitySnapshot cargo) {
+        long availableLT = (long)cargo.TotalLT - cargo.ExtraLT;
+        if (availableLT < 0) return 0;
+        int input = LimitForSide(
+            availableLT,
+            CargoWeightTable.GetWeightForLevel(row.Item1Level),
+            row.Item1Number);
+        int output = LimitForSide(
+            availableLT,
+            CargoWeightTable.GetWeightForLevel(row.Item2Level),
+            row.Item2Number);
+        return Math.Min(input, output);
+    }
+
+    private static int LimitForSide(long availableLT, int unitWeight, int quantity) {
+        if (unitWeight <= 0 || quantity <= 0) return Int32.MaxValue;
+        long perExchange = checked((long)unitWeight * quantity);
+        long limit = availableLT / perExchange;
+        return limit >= Int32.MaxValue ? Int32.MaxValue : (int)Math.Max(0, limit);
     }
 }

@@ -59,7 +59,7 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <TextBlock Text="{Binding LoadText}" Margin="0,3,0,0" FontFamily="Consolas" Foreground="{DynamicResource AppMutedTextBrush}" />
+                    <TextBlock Text="{Binding LoadText}" Margin="0,3,0,0" FontFamily="{DynamicResource AppFontFamily}" Foreground="{DynamicResource AppMutedTextBrush}" />
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -107,7 +107,7 @@
                         <TextBlock Text="{Binding Detail}" Margin="6,0" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource AppTextBrush}" />
                         <Image Source="{Binding Item2Icon}" Width="24" Height="24" />
                     </StackPanel>
-                    <TextBlock Text="{Binding LoadText}" Margin="0,3,0,0" FontFamily="Consolas" Foreground="{DynamicResource AppMutedTextBrush}" />
+                    <TextBlock Text="{Binding LoadText}" Margin="0,3,0,0" FontFamily="{DynamicResource AppFontFamily}" Foreground="{DynamicResource AppMutedTextBrush}" />
                 </StackPanel>
             </Border>
         </DataTemplate>

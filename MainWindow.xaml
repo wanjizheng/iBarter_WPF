@@ -32,9 +32,12 @@
     Title="{loc:Localize str.MainWindow.Title}" Height="868" Width="1254" Loaded="Window_Loaded"
     Background="{DynamicResource AppSurfaceBrush}"
     Foreground="{DynamicResource AppTextBrush}"
-    FontFamily="{StaticResource AppFontFamily}"
-    TextOptions.TextFormattingMode="Display"
-    TextOptions.TextRenderingMode="ClearType">
+    FontFamily="{DynamicResource AppFontFamily}"
+    FontSize="14"
+    FontWeight="Normal"
+    TextOptions.TextFormattingMode="{DynamicResource AppTextFormattingMode}"
+    TextOptions.TextRenderingMode="{DynamicResource AppTextRenderingMode}"
+    TextOptions.TextHintingMode="{DynamicResource AppTextHintingMode}">
     <syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

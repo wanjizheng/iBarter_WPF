@@ -15,6 +15,9 @@ public sealed class AutomaticRoutePlanner {
         AutomaticRoutePlanningRequest request,
         RouteOptimizationProfile profile,
         CancellationToken cancellationToken = default) {
+        if (profile.Mode == RouteOptimizationMode.Extreme)
+            return PlanExtreme(request, profile, cancellationToken);
+
         string fingerprint = RoutePlanFingerprint.Compute(request);
         var budget = new RouteSearchBudget(profile, taskCount: request.Tasks.Count);
         long planStart = budget.PlanStartTimestamp;
@@ -205,6 +208,118 @@ public sealed class AutomaticRoutePlanner {
         }
     }
 
+    private RoutePlan PlanExtreme(
+        AutomaticRoutePlanningRequest request,
+        RouteOptimizationProfile profile,
+        CancellationToken cancellationToken) {
+        string fingerprint = RoutePlanFingerprint.Compute(request);
+        var watch = Stopwatch.StartNew();
+        try {
+            cancellationToken.ThrowIfCancellationRequested();
+            // Give CP-SAT a strong, fully verified warm start without spending
+            // the whole Extreme budget in the beam phase.
+            var deep = RouteOptimizationProfile.For(RouteOptimizationMode.Deep);
+            var seedProfile = deep with {
+                TotalTarget = TimeSpan.FromSeconds(30),
+                FinalizationReserve = TimeSpan.FromSeconds(2),
+            };
+            RoutePlan seed = Plan(request, seedProfile, cancellationToken);
+            RoutePlan? incumbent = seed.Status is RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit
+                ? seed
+                : null;
+            if (seed.Status == RoutePlanStatus.Optimal)
+                return WithExtremeDiagnostic(
+                    seed, "seed-already-optimal", seed.Objective?.TotalDistance ?? 0,
+                    0, watch.Elapsed, 0, 0, null);
+
+            TimeSpan remaining = profile.TotalTarget - watch.Elapsed - TimeSpan.FromSeconds(15);
+            if (remaining <= TimeSpan.Zero)
+                return WithExtremeDiagnostic(incumbent ?? seed, "seed-time-budget", 0, 1, watch.Elapsed, 0, 0, null);
+
+            ExtremeRouteSolverRunResult exact = ExtremeRouteSolverClient.Solve(
+                request,
+                incumbent,
+                remaining,
+                ExtremeRouteSolverProtocol.DefaultMemoryLimitMb,
+                cancellationToken);
+
+            RoutePlan? chosen = incumbent;
+            if (exact.Plan?.Objective is { } exactObjective
+                && (chosen?.Objective is null || exactObjective.CompareTo(chosen.Objective.Value) < 0))
+                chosen = exact.Plan;
+
+            if (chosen is null)
+                return new RoutePlan(
+                    seed.Status,
+                    seed.Routes,
+                    seed.Objective,
+                    [new RouteDiagnostic("extreme-cp-sat", Detail: ExtremeDetail(exact))],
+                    fingerprint);
+
+            bool provenDistanceOptimal = exact.Plan is not null
+                && StringComparer.OrdinalIgnoreCase.Equals(exact.SolverStatus, "Optimal")
+                && exact.FullRouteSpace
+                && exact.Plan.Objective is { } solvedObjective
+                && solvedObjective.TotalDistance <= chosen.Objective!.Value.TotalDistance
+                    + 1d / ExtremeRouteSolverProtocol.DistanceScale;
+            var status = provenDistanceOptimal
+                ? RoutePlanStatus.Optimal
+                : RoutePlanStatus.BestKnownWithinLimit;
+            return new RoutePlan(
+                status,
+                chosen.Routes,
+                chosen.Objective,
+                [new RouteDiagnostic("extreme-cp-sat", Detail: ExtremeDetail(exact))],
+                fingerprint);
+        }
+        catch (OperationCanceledException) {
+            return new RoutePlan(RoutePlanStatus.Cancelled, [], null, [], fingerprint);
+        }
+    }
+
+    private static RoutePlan WithExtremeDiagnostic(
+        RoutePlan plan,
+        string solverStatus,
+        double bound,
+        double gap,
+        TimeSpan elapsed,
+        long conflicts,
+        long branches,
+        string? failure) => new(
+            plan.Status is RoutePlanStatus.Optimal ? RoutePlanStatus.Optimal : RoutePlanStatus.BestKnownWithinLimit,
+            plan.Routes,
+            plan.Objective,
+            [new RouteDiagnostic("extreme-cp-sat", Detail:
+                ExtremeDetail(solverStatus, bound, gap, elapsed, conflicts, branches, failure))],
+            plan.InputFingerprint);
+
+    private static string ExtremeDetail(ExtremeRouteSolverRunResult result) =>
+        ExtremeDetail(
+            result.SolverStatus,
+            result.BestBound,
+            result.RelativeGap,
+            result.Elapsed,
+            result.Conflicts,
+            result.Branches,
+            result.Failure)
+        + FormattableString.Invariant(
+            $" routeLimit={result.RouteLimit} fullRouteSpace={result.FullRouteSpace}");
+
+    private static string ExtremeDetail(
+        string status,
+        double bound,
+        double gap,
+        TimeSpan elapsed,
+        long conflicts,
+        long branches,
+        string? failure) => string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            "solver=CP-SAT status={0} elapsed={1:F1}s bound={2:F1} gap={3:P2} " +
+            "conflicts={4} branches={5} memoryLimit={6}MB{7}",
+            status, elapsed.TotalSeconds, bound, gap, conflicts, branches,
+            ExtremeRouteSolverProtocol.DefaultMemoryLimitMb,
+            string.IsNullOrWhiteSpace(failure) ? "" : $" failure={failure}");
+
     private static RouteDiagnostic AnytimeDiagnostic(
         RouteOptimizationMode mode, BeamStopReason reason, int taskCount,
         int effectiveBeamWidth, bool localEvalExhausted) {
@@ -267,7 +382,7 @@ public sealed class AutomaticRoutePlanner {
         long sequence) {
         var bound = LowerBound(state, request);
         return new SearchPriority(
-            bound.RouteCount, bound.TotalDistance, bound.PickupStopCount, bound.MaxPeakLT, sequence);
+            bound.TotalDistance, bound.RouteCount, bound.PickupStopCount, bound.MaxPeakLT, sequence);
     }
 
     private static SearchCost Cost(RouteSimulationState state) => new(
@@ -304,11 +419,11 @@ public sealed class AutomaticRoutePlanner {
         new(status, plan.Routes, plan.Objective, plan.Diagnostics, plan.InputFingerprint);
 
     private readonly record struct SearchPriority(
-        int Routes, double Distance, int Pickups, int Peak, long Sequence) : IComparable<SearchPriority> {
+        double Distance, int Routes, int Pickups, int Peak, long Sequence) : IComparable<SearchPriority> {
         public int CompareTo(SearchPriority other) {
-            int result = Routes.CompareTo(other.Routes);
+            int result = Distance.CompareTo(other.Distance);
             if (result != 0) return result;
-            result = Distance.CompareTo(other.Distance);
+            result = Routes.CompareTo(other.Routes);
             if (result != 0) return result;
             result = Pickups.CompareTo(other.Pickups);
             if (result != 0) return result;

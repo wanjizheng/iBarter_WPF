@@ -25,8 +25,6 @@ namespace iBarter.View {
         // Highest barter item LV to render on the map. 7 keeps every catalog tier visible
         // after the LV6/LV7 extension; lower this if you want to hide high-tier pins.
         private const int MAX_MAP_LV = 7;
-        private static readonly FontFamily MapLabelFontFamily =
-            new("Microsoft YaHei UI");
         private static readonly FontWeight MapLabelFontWeight = FontWeights.Medium;
         private static readonly FontWeight HighlightedMapLabelFontWeight = FontWeights.SemiBold;
         private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
@@ -1714,13 +1712,13 @@ namespace iBarter.View {
             var textBlock = new TextBlock {
                 Text = label.DisplayText,
                 Foreground = labelForeground,
-                FontFamily = MapLabelFontFamily,
                 FontSize = GetMapLabelFontSize(highlighted),
                 FontWeight = highlighted
                     ? HighlightedMapLabelFontWeight
                     : MapLabelFontWeight,
                 TextWrapping = TextWrapping.NoWrap,
             };
+            textBlock.SetResourceReference(TextBlock.FontFamilyProperty, "AppFontFamily");
             TextOptions.SetTextFormattingMode(textBlock, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(textBlock, TextRenderingMode.ClearType);
             var border = new Border {
@@ -1881,7 +1879,7 @@ namespace iBarter.View {
             }
 
             Label myLabel = new Label();
-            myLabel.FontFamily = MapLabelFontFamily;
+            myLabel.SetResourceReference(Control.FontFamilyProperty, "AppFontFamily");
             myLabel.FontWeight = MapLabelFontWeight;
             TextOptions.SetTextFormattingMode(myLabel, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(myLabel, TextRenderingMode.ClearType);
@@ -2155,7 +2153,7 @@ namespace iBarter.View {
             // (Island,Item1,Item2) tuple from the current index —
             // that would silently re-derive the wrong row whenever
             // the user had reordered the Planner collection.
-            string targetRowId = node.BarterRowId!;
+            string targetRowId = RouteTaskIdentity.PlannerRowId(node.BarterRowId!);
             Barter? targetBarter = null;
             for (int i = 0; i < App.myPVM.BarterCollection.Count; i++) {
                 var b = App.myPVM.BarterCollection[i];
@@ -2206,7 +2204,7 @@ namespace iBarter.View {
                     myBarter = App.myPVM.BarterCollection.FirstOrDefault(b =>
                         string.Equals(
                             b.PlannerRowId,
-                            node.BarterRowId,
+                            RouteTaskIdentity.PlannerRowId(node.BarterRowId),
                             StringComparison.Ordinal));
                 }
                 else {

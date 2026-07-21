@@ -12,9 +12,10 @@
         AllowsTransparency="True"
         Background="{x:Null}"
         Title="SplashScreen" Height="450" Width="750" Topmost="True"
-        FontFamily="{StaticResource AppFontFamily}"
-        TextOptions.TextFormattingMode="Display"
-        TextOptions.TextRenderingMode="ClearType">
+        FontFamily="{DynamicResource AppFontFamily}"
+        TextOptions.TextFormattingMode="{DynamicResource AppTextFormattingMode}"
+        TextOptions.TextRenderingMode="{DynamicResource AppTextRenderingMode}"
+        TextOptions.TextHintingMode="{DynamicResource AppTextHintingMode}">
     <materialDesign:Card UniformCornerRadius="15" Background="White" materialDesign:ElevationAssist.Elevation="Dp4"
                          Margin="25">
         <Grid>

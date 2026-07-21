@@ -80,7 +80,8 @@ public static class RouteStepLabelPlanner {
                 if (step is WarehousePickupStep or WarehouseUnloadStep)
                     continue;
                 if (step is BarterStep completedBarter
-                    && completedBarterRowIds?.Contains(completedBarter.RowId) == true)
+                    && completedBarterRowIds is not null
+                    && RouteTaskIdentity.IsCompleted(completedBarter.RowId, completedBarterRowIds))
                     continue;
                 var label = Build(
                     route.Number,
@@ -134,7 +135,8 @@ public static class RouteStepLabelPlanner {
                     barter.Produced.Quantity),
                 IsWarehouseOperation: false,
                 BarterGroup: barterGroupsByRowId is not null
-                    && barterGroupsByRowId.TryGetValue(barter.RowId, out int group)
+                    && barterGroupsByRowId.TryGetValue(
+                        RouteTaskIdentity.PlannerRowId(barter.RowId), out int group)
                         ? group
                         : null),
             _ => null, // unknown step kind — caller skips.

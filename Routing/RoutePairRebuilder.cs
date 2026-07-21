@@ -4,8 +4,10 @@ using System.Numerics;
 
 /// <summary>
 /// Bounded pairwise destroy/rebuild pass. Two existing routes are pooled and
-/// rebuilt as one route; the entire remaining plan is replayed before a
-/// candidate may replace the incumbent.
+/// repartitioned into as many capacity-safe routes as necessary; the entire
+/// remaining plan is replayed before a candidate may replace the incumbent.
+/// This lets a remote stop move onto another remote route while a nearer stop
+/// moves back out, even when merging every task into one trip would be overweight.
 /// </summary>
 public static class RoutePairRebuilder {
     // Original 3-arg entry: unchanged from baseline so existing tests see the
@@ -108,7 +110,7 @@ public static class RoutePairRebuilder {
         var state = RouteSimulationState.CreateInitial(request);
         for (int routeIndex = 0; routeIndex < routes.Count; routeIndex++) {
             if (routeIndex == left) {
-                var rebuilt = BuildCombinedRoute(request, state, pooledIndexes);
+                var rebuilt = BuildPooledRoutes(request, state, pooledIndexes);
                 if (rebuilt is null) return null;
                 state = rebuilt;
                 continue;
@@ -121,13 +123,13 @@ public static class RoutePairRebuilder {
         return state;
     }
 
-    private static RouteSimulationState? BuildCombinedRoute(
+    private static RouteSimulationState? BuildPooledRoutes(
         AutomaticRoutePlanningRequest request,
         RouteSimulationState start,
         IReadOnlyList<int> taskIndexes) {
         ulong poolMask = taskIndexes.Aggregate(0UL, (mask, index) => mask | 1UL << index);
         var state = start;
-        int guard = Math.Max(100, taskIndexes.Count * request.Warehouses.Count * 20);
+        int guard = Math.Max(100, taskIndexes.Count * request.Warehouses.Count * 40);
 
         while ((state.CompletedMask & poolMask) != poolMask && guard-- > 0) {
             ulong remaining = poolMask & ~state.CompletedMask;
@@ -167,13 +169,25 @@ public static class RoutePairRebuilder {
                 .ThenBy(x => x.WarehouseId, StringComparer.Ordinal)
                 .ThenBy(x => x.StableKey, StringComparer.Ordinal)
                 .FirstOrDefault();
-            if (pickup.Result is null) return null;
-            state = pickup.Result.State;
+            if (pickup.Result is not null) {
+                state = pickup.Result.State;
+                continue;
+            }
+
+            // The pooled tasks do not fit in the current trip. Finish this
+            // capacity-safe route and continue rebuilding the same pair from a
+            // fresh ship. The old implementation returned null here, so it could
+            // merge two light routes but could never repartition two full routes.
+            if (!state.CurrentRouteSteps.OfType<BarterStep>().Any()) return null;
+            var unload = WarehouseUnloadPlanner.TryCompleteRoute(request, state);
+            if (!unload.Success) return null;
+            state = unload.State;
         }
 
         if ((state.CompletedMask & poolMask) != poolMask) return null;
-        var unload = WarehouseUnloadPlanner.TryCompleteRoute(request, state);
-        return unload.Success ? unload.State : null;
+        if (state.CurrentRouteSteps.Count == 0) return state;
+        var finalUnload = WarehouseUnloadPlanner.TryCompleteRoute(request, state);
+        return finalUnload.Success ? finalUnload.State : null;
     }
 
     private static RouteSimulationState? ReplayRoute(

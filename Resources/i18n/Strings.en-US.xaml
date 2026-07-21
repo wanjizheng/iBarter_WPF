@@ -76,7 +76,8 @@
     <sys:String x:Key="str.Planner.AutoPlan.OptimMode">Search mode</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.OptimQuick">Quick (≈3s)</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.OptimBalanced">Balanced (≈10s)</sys:String>
-    <sys:String x:Key="str.Planner.AutoPlan.OptimDeep">Deep (≈30s)</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimDeep">Deep (≈60s)</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimExtreme">Extreme (up to 10 min / 8 GB)</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.ManualSelection">Manual Selection</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlan">Auto Plan</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlanTip">Automatic strategies fill exchange counts; Manual Selection only optimizes the route for the current counts</sys:String>
@@ -292,6 +293,7 @@
     <sys:String x:Key="str.Log.AutoRoute.StopDepthLimit">depth limit reached</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.StopFrontierExhausted">no more feasible candidates</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Infeasible">No feasible automatic route. {0}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.TaskOverweight">Cargo overweight: {0}, {1}, requires {2} LT, limit {3} LT</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.NoFeasibleWithinLimit">No feasible route was found before the search limit.</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Cancelled">Automatic route search cancelled.</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.InvalidInput">Automatic route input is invalid: {0}</sys:String>

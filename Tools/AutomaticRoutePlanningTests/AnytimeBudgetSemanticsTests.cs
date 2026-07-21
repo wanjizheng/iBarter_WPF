@@ -412,6 +412,12 @@ public sealed class AnytimeBudgetSemanticsTests {
         // 10 tasks: profile 384, task cap unrestricted -> 384.
         var budget10 = new RouteSearchBudget(profile, taskCount: 10);
         Assert.Equal(384, budget10.EffectiveBeamWidth);
+
+        // Deep is the deliberate quality-first mode: it keeps the requested
+        // wider frontier even for large plans instead of applying the
+        // responsiveness cap used by Quick/Balanced.
+        var deep = RouteOptimizationProfile.For(RouteOptimizationMode.Deep);
+        Assert.Equal(1_024, new RouteSearchBudget(deep, taskCount: 25).EffectiveBeamWidth);
     }
 
     [Fact]

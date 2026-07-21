@@ -29,6 +29,44 @@ public sealed class RoutePairRebuilderTests {
         Assert.True(RoutePlanVerifier.Verify(request, plan).Success);
     }
 
+    [Fact]
+    public void Pair_rebuild_repartitions_two_full_routes_to_group_distant_stops() {
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["I0"] = new("I0", "I0", 1, 100),
+            ["I1"] = new("I1", "I1", 1, 100),
+            ["I2"] = new("I2", "I2", 1, 100),
+            ["I3"] = new("I3", "I3", 1, 100),
+            ["REWARD"] = new("REWARD", "Reward", -1, 0),
+        };
+        var request = new AutomaticRoutePlanningRequest(
+            [
+                new("near-1", "Near1", new RoutePoint(1, 0), "I0", 1, "REWARD", 1),
+                new("near-2", "Near2", new RoutePoint(2, 0), "I1", 1, "REWARD", 1),
+                new("far-1", "Far1", new RoutePoint(100, 0), "I2", 1, "REWARD", 1),
+                new("far-2", "Far2", new RoutePoint(101, 0), "I3", 1, "REWARD", 1),
+            ],
+            items,
+            [new RouteWarehouse("W", "W", new RoutePoint(0, 0),
+                new Dictionary<string, int> { ["I0"] = 1, ["I1"] = 1, ["I2"] = 1, ["I3"] = 1 })],
+            0, 200, new RouteSearchLimits(10_000, 100), "pair-repartition");
+        var state = RouteSimulationState.CreateInitial(request);
+        state = ExecuteRoute(request, state, [0, 2]);
+        state = ExecuteRoute(request, state, [1, 3]);
+        double crossedDistance = state.TotalDistance;
+
+        var improved = RoutePairRebuilder.Improve(request, state, CancellationToken.None);
+        var plan = RoutePlanFactory.FromState(request, improved,
+            RoutePlanStatus.BestKnownWithinLimit, []);
+
+        Assert.Equal(2, plan.Routes.Count);
+        Assert.True(plan.Objective!.Value.TotalDistance < crossedDistance * 0.7,
+            $"before={crossedDistance}, after={plan.Objective.Value.TotalDistance}");
+        Assert.Contains(plan.Routes, route => route.Steps.OfType<BarterStep>()
+            .Select(step => step.RowId).ToHashSet(StringComparer.Ordinal)
+            .SetEquals(["far-1", "far-2"]));
+        Assert.True(RoutePlanVerifier.Verify(request, plan).Success);
+    }
+
     private static RouteSimulationState ExecuteRoute(
         AutomaticRoutePlanningRequest request,
         RouteSimulationState state,

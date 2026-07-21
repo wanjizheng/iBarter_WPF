@@ -37,6 +37,87 @@ public sealed class RouteRenderSnapshotTests {
     }
 
     [Fact]
+    public void Adapter_splits_all_selected_exchanges_across_capacity_safe_tasks() {
+        const string plannerRowId = "br-pujara";
+        var rows = new[] {
+            new PlannerRouteSnapshot(
+                plannerRowId, false, 4, "Pujara",
+                "800044", "Stolen Pirate Dagger", 4, 7,
+                "10", "Crow Coin", -1, 55),
+        };
+        var storage = new[] {
+            new StorageItemSnapshot("800044", 4, 28, 0, 0, 0),
+        };
+        var islands = new[] {
+            new IslandRouteSnapshot("Pujara", new RoutePoint(10, 0)),
+            new IslandRouteSnapshot("Velia", new RoutePoint(0, 0)),
+            new IslandRouteSnapshot("Iliya", new RoutePoint(0, 20)),
+            new IslandRouteSnapshot("Epheria", new RoutePoint(0, 30)),
+            new IslandRouteSnapshot("Sausan", new RoutePoint(0, 40)),
+        };
+
+        var request = AutomaticRoutePlanningAdapter.BuildRequest(
+            rows, storage, islands,
+            new CargoCapacitySnapshot(2_411, 24_110),
+            new RouteSearchLimits(100_000, 1_000));
+
+        Assert.Equal(2, request.Tasks.Count);
+        Assert.Equal([21, 7], request.Tasks.Select(task => task.InputQuantity).ToArray());
+        Assert.Equal([165, 55], request.Tasks.Select(task => task.OutputQuantity).ToArray());
+        Assert.All(request.Tasks, task =>
+            Assert.Equal(plannerRowId, RouteTaskIdentity.PlannerRowId(task.RowId)));
+        Assert.DoesNotContain(
+            AutomaticRoutePreflight.Validate(request).Diagnostics,
+            diagnostic => diagnostic.Code == "task-overweight");
+
+        var plan = new AutomaticRoutePlanner().Plan(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(RoutePlanStatus.Optimal, plan.Status);
+        Assert.Equal(2, plan.Routes.Count);
+        Assert.Equal(28, plan.Routes.SelectMany(route => route.Steps)
+            .OfType<BarterStep>().Sum(step => step.Consumed.Quantity));
+        Assert.Equal(220, plan.Routes.SelectMany(route => route.Steps)
+            .OfType<BarterStep>().Sum(step => step.Produced.Quantity));
+
+        var freshPublication = RoutePlanPublication.PreparePlanForPublication(
+            request, plan, RoutePlanPublicationSource.FreshGeneration);
+        Assert.True(freshPublication.Success, freshPublication.Failure?.Code);
+
+        var completedRequest = AutomaticRoutePlanningAdapter.BuildRequest(
+            [rows[0] with { ExchangeDone = true }], storage, islands,
+            new CargoCapacitySnapshot(2_411, 24_110),
+            new RouteSearchLimits(100_000, 1_000));
+        var progressPublication = RoutePlanPublication.PreparePlanForPublication(
+            completedRequest,
+            plan,
+            RoutePlanPublicationSource.CompletionProgress,
+            new HashSet<string>([plannerRowId], StringComparer.Ordinal));
+        Assert.True(progressPublication.Success, progressPublication.Failure?.Code);
+        Assert.Empty(progressPublication.Plan!.Routes);
+    }
+
+    [Fact]
+    public void Completing_one_planner_row_hides_all_of_its_capacity_segments() {
+        const string plannerRowId = "br-pujara";
+        var load = new RouteLoadSnapshot(0, 2_411, 23_411);
+        var steps = new RouteStep[] {
+            new BarterStep(
+                RouteTaskIdentity.CreateSegmentId(plannerRowId, 0, 2),
+                "Pujara", new RouteItemQuantity("800044", 21),
+                new RouteItemQuantity("10", 165), load),
+            new BarterStep(
+                RouteTaskIdentity.CreateSegmentId(plannerRowId, 1, 2),
+                "Pujara", new RouteItemQuantity("800044", 7),
+                new RouteItemQuantity("10", 55), load),
+        };
+        var route = new PlannedRoute(1, "Velia", "Velia", steps, 100, 0, 0, 23_411);
+        var completed = new HashSet<string>([plannerRowId], StringComparer.Ordinal);
+
+        Assert.Empty(RouteProgressFilter.RemainingRoutes([route], completed));
+        Assert.Empty(RouteProgressFilter.RemainingMapSteps(steps, completed));
+    }
+
+    [Fact]
     public void Completed_exchange_output_is_carried_onto_the_next_automatic_route() {
         var rows = new[] {
             new PlannerRouteSnapshot("producer", true, 6, "DoneIsland", "SEED", "Seed", 4, 1, "CARRY", "Carry", 5, 1),
@@ -141,10 +222,38 @@ public sealed class RouteRenderSnapshotTests {
             plan, selectedRouteNumber: 2, showAll: false,
             completedBarterRowIds: new HashSet<string>(["rC"], StringComparer.Ordinal));
 
-        Assert.Equal(["Velia"], snapshot.Paths.Single().IslandIds);
+        Assert.Empty(snapshot.Paths);
         Assert.Empty(snapshot.BarterIslandIds);
+        Assert.Empty(snapshot.WarehouseIslandIds);
         Assert.DoesNotContain("C", snapshot.HighlightedIslandIds);
         Assert.DoesNotContain("Iliya", snapshot.HighlightedIslandIds);
+    }
+
+    [Fact]
+    public void Completed_only_barter_with_same_island_unload_clears_entire_route() {
+        var load = new RouteLoadSnapshot(0, 0, 0);
+        var route = new PlannedRoute(1, "Iliya", "Iliya", [
+            new WarehousePickupStep("Iliya", "Iliya", [new("X", 1)], load),
+            new BarterStep("only", "SameIsland", new("X", 1), new("Y", 1), load),
+            new WarehouseUnloadStep("Iliya", "SameIsland", [new("Y", 1)], load),
+        ], 1, 0, 0, 0);
+        var plan = new RoutePlan(
+            RoutePlanStatus.Optimal,
+            [route],
+            new RoutePlanObjective(1, 1, 1, 0, ""),
+            [],
+            "f");
+
+        var snapshot = RouteRenderSnapshotFactory.CreateAutomatic(
+            plan,
+            selectedRouteNumber: 1,
+            showAll: true,
+            completedBarterRowIds: new HashSet<string>(["only"], StringComparer.Ordinal));
+
+        Assert.Empty(snapshot.Paths);
+        Assert.Empty(snapshot.BarterIslandIds);
+        Assert.Empty(snapshot.WarehouseIslandIds);
+        Assert.Empty(snapshot.HighlightedIslandIds);
     }
 
     [Fact]

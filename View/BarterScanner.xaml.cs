@@ -4,6 +4,7 @@ using Syncfusion.Windows.Shared;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using Syncfusion.UI.Xaml.ScrollAxis;
 
@@ -12,6 +13,12 @@ namespace iBarter.View {
     /// Interaction logic for MainWindow.xaml
     /// </summary>
     public partial class BarterScanner : ChromelessWindow {
+        private const double ZoomStep = 0.1;
+        private const double MinZoom = 0.5;
+        private const double MaxZoom = 2.0;
+
+        private double zoomFactor = 1.0;
+
         private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
 
         // Phase 2 (i18n): MappingName -> resource key for direct GridTextColumns,
@@ -61,6 +68,8 @@ namespace iBarter.View {
             GridMultiColumnDropDownList_Islands.ItemsSource = App.mySVM.IslandsCollection;
 
             InitializeScannerState();
+            ApplyTypography();
+            Loaded += (_, _) => ApplyTypography();
             ApplyLocalization();
             LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalization();
         }
@@ -83,8 +92,13 @@ namespace iBarter.View {
         }
 
         private void ApplyLocalization() {
+            ApplyTypography();
             ApplyLocalizedHeaders();
             RefreshLocalizedDisplay();
+        }
+
+        private void ApplyTypography() {
+            SfDataGridTypography.Apply(BarterScanResults);
         }
 
         private void ApplyLocalizedHeaders() {
@@ -314,6 +328,17 @@ namespace iBarter.View {
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);
             }
+        }
+
+        private void BarterScanResults_PreviewMouseWheel(object sender, MouseWheelEventArgs e) {
+            if (!Keyboard.IsKeyDown(Key.LeftCtrl) && !Keyboard.IsKeyDown(Key.RightCtrl)) {
+                return;
+            }
+
+            zoomFactor += e.Delta > 0 ? ZoomStep : -ZoomStep;
+            zoomFactor = Math.Clamp(zoomFactor, MinZoom, MaxZoom);
+            BarterScanResults.LayoutTransform = new ScaleTransform(zoomFactor, zoomFactor);
+            e.Handled = true;
         }
 
         private void PinWindow_Click(object sender, RoutedEventArgs e) {

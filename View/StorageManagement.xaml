@@ -18,9 +18,12 @@
                              ResizeBorderThickness="0"
                              RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
                              Title="{loc:Localize str.Menu.StorageManager}" Height="450" Width="800"
-                             FontFamily="{StaticResource AppFontFamily}"
-                             TextOptions.TextFormattingMode="Display"
-                             TextOptions.TextRenderingMode="ClearType">
+                             FontFamily="{DynamicResource AppFontFamily}"
+                             FontSize="13"
+                             FontWeight="Normal"
+                             TextOptions.TextFormattingMode="{DynamicResource AppTextFormattingMode}"
+                             TextOptions.TextRenderingMode="{DynamicResource AppTextRenderingMode}"
+                             TextOptions.TextHintingMode="{DynamicResource AppTextHintingMode}">
     <Syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -81,15 +84,24 @@
             </Syncfusion:ComboBoxAdv>
         </Syncfusion:ToolBarAdv>
         <Syncfusion:SfDataGrid x:Name="DataGrid_Storage" Height="NaN" Width="NaN" AutoGenerateColumns="False"
+                               FontSize="14"
+                               FontWeight="Normal"
+                               CellStyle="{StaticResource ReadableSfDataGridCellStyle}"
+                               HeaderStyle="{StaticResource ReadableSfDataGridHeaderStyle}"
+                               RowHeight="30"
+                               HeaderRowHeight="32"
                                AllowEditing="True"
                                ColumnSizer="AutoWithLastColumnFill"
                                RowSelectionBrush="DarkBlue"
-                               SelectionForegroundBrush="Bisque"
+                               SelectionForegroundBrush="White"
                                AllowDraggingRows="True"
                                ShowRowHeader="True"
                                AlternatingRowStyle="{StaticResource alternatingRowStyle}"
                                RowStyle="{StaticResource rowStyle}"
-                               AllowDrop="False" LiveDataUpdateMode="AllowChildViewUpdate" AllowSorting="False" CurrentCellEndEdit="DataGrid_Storage_CurrentCellEndEdit" Grid.Row="1">
+                               AllowDrop="False" LiveDataUpdateMode="AllowChildViewUpdate" AllowSorting="False"
+                               CurrentCellEndEdit="DataGrid_Storage_CurrentCellEndEdit"
+                               PreviewMouseWheel="DataGrid_Storage_PreviewMouseWheel"
+                               local:SfDataGridSelectionHoverGuard.IsEnabled="True" Grid.Row="1">
             <Syncfusion:SfDataGrid.Columns>
                 <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Inventory}" MappingName="ItemNameDisplay" AllowResizing="True"
                                    AllowEditing="False" ColumnSizer="Auto"/>

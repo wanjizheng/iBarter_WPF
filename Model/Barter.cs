@@ -230,7 +230,18 @@ public Barter() {
                     value = 0;
                 }
 
+                if (exchangeQuantity == value) {
+                    return;
+                }
+
                 exchangeQuantity = value;
+                // Automatic planning updates this property in code rather than
+                // through the grid editor.  Without a change notification the
+                // persisted value and generated route are correct, but an already
+                // materialized SfDataGrid cell keeps displaying its old value.
+                RaisePropertyChanged(nameof(ExchangeQuantity));
+                RaisePropertyChanged(nameof(TotalItem1ExchangeQuantity));
+                RaisePropertyChanged(nameof(TotalItem2ExchangeQuantity));
                 // if (Item1 != null && Item2 != null) {
                 //     Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.BarterGroup == this.BarterGroup && b.Item1Name.Equals(Item2Name));
                 //     if (myBarter != null) {

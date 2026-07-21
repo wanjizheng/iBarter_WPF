@@ -50,7 +50,9 @@ public static class RouteRenderSnapshotFactory {
             .Select(route => new {
                 Route = route,
                 Steps = RouteProgressFilter.RemainingMapSteps(route.Steps, completed),
-            }).ToArray();
+            })
+            .Where(route => route.Steps.OfType<BarterStep>().Any())
+            .ToArray();
         var paths = routes.OrderBy(x => x.Route.Number).Select(route => new RouteRenderPath(
             route.Route.Number,
             Math.Max(0, route.Route.Number - 1),

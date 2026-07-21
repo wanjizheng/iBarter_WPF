@@ -10,6 +10,11 @@ if (islandResolver.IslandEnum("Velia") != EnumLists.Island.Velia) {
     Console.Error.WriteLine("Expected the canonical Velia catalog row to resolve to Velia.");
     return 1;
 }
+if (islandResolver.IslandEnumSmart("一、流浪商人的船") != EnumLists.Island.Wandering) {
+    Console.Error.WriteLine(
+        "Expected the observed Wandering ship OCR text, including its row prefix, to resolve to Wandering.");
+    return 1;
+}
 
 string startupSource = File.ReadAllText(Path.Combine(FindIBarterRepoRoot(), "MainWindow.xaml.cs"));
 int cargoLoadIndex = startupSource.IndexOf("myShipCargo.RefreshData();", StringComparison.Ordinal);

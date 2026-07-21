@@ -64,7 +64,8 @@
     <sys:String x:Key="str.Planner.AutoPlan.OptimMode">搜尋模式</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.OptimQuick">快速（約 3 秒）</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.OptimBalanced">平衡（約 10 秒）</sys:String>
-    <sys:String x:Key="str.Planner.AutoPlan.OptimDeep">深度（約 30 秒）</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimDeep">深度（約 60 秒）</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimExtreme">极深（最多 10 分钟 / 8 GB）</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.ManualSelection">手动选择</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlan">自動規劃</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlanTip">自动策略会填写交换次数；手动选择策略只使用当前交换次数计算最优路线</sys:String>
@@ -88,7 +89,7 @@
     <sys:String x:Key="str.Grid.Planner.Col.Group">群组</sys:String>
     <sys:String x:Key="str.Grid.Planner.Col.LV">等级</sys:String>
     <sys:String x:Key="str.Grid.Planner.Col.CK">航海等级</sys:String>
-    <sys:String x:Key="str.Grid.Planner.Col.Eq">倍率</sys:String>
+    <sys:String x:Key="str.Grid.Planner.Col.Eq">交换次数</sys:String>
     <sys:String x:Key="str.Grid.Planner.Col.No">编号</sys:String>
     <sys:String x:Key="str.Grid.Planner.Col.Location">地点</sys:String>
     <sys:String x:Key="str.Grid.Planner.Col.Islands">岛屿</sys:String>
@@ -256,6 +257,7 @@
     <sys:String x:Key="str.Log.AutoRoute.StopDepthLimit">达到搜索深度上限</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.StopFrontierExhausted">没有更多可行候选</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Infeasible">没有可行的自动路线。{0}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.TaskOverweight">船舱超重：{0}，{1}，需要 {2} LT，上限 {3} LT</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.NoFeasibleWithinLimit">达到搜索限制前尚未找到可行路线。</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Cancelled">自动路线搜索已取消。</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.InvalidInput">自动路线输入无效：{0}</sys:String>

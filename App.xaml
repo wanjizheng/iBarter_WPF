@@ -2,10 +2,77 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:syncfusion="http://schemas.syncfusion.com/wpf" xmlns:self="clr-namespace:iBarter"
+             xmlns:sfGrid="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
+             xmlns:media="clr-namespace:System.Windows.Media;assembly=PresentationCore"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
     <Application.Resources>
         <ResourceDictionary>
-            <FontFamily x:Key="AppFontFamily">Microsoft YaHei UI</FontFamily>
+            <!-- App.xaml.cs swaps this resource when the UI language changes:
+                 the user-supplied pearl.ttf for Chinese, Segoe UI for English.
+                 Consumers use a DynamicResource so open windows update in place. -->
+            <FontFamily x:Key="AppFontFamily">Segoe UI</FontFamily>
+            <media:TextFormattingMode x:Key="AppTextFormattingMode">Display</media:TextFormattingMode>
+            <media:TextRenderingMode x:Key="AppTextRenderingMode">ClearType</media:TextRenderingMode>
+            <media:TextHintingMode x:Key="AppTextHintingMode">Fixed</media:TextHintingMode>
+            <!-- Syncfusion themes frequently set their own control fonts, so
+                 inheriting FontFamily from MainWindow is not sufficient for
+                 every text presenter.  These exact WPF text types cover the
+                 normal UI surface; SfDataGrid cells are reinforced separately
+                 by SfDataGridTypography after theme/state restoration. -->
+            <Style TargetType="{x:Type TextBlock}">
+                <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="Normal" />
+                <Setter Property="TextOptions.TextFormattingMode" Value="{DynamicResource AppTextFormattingMode}" />
+                <Setter Property="TextOptions.TextRenderingMode" Value="{DynamicResource AppTextRenderingMode}" />
+                <Setter Property="TextOptions.TextHintingMode" Value="{DynamicResource AppTextHintingMode}" />
+            </Style>
+            <Style TargetType="{x:Type Label}">
+                <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="Normal" />
+                <Setter Property="TextOptions.TextFormattingMode" Value="{DynamicResource AppTextFormattingMode}" />
+                <Setter Property="TextOptions.TextRenderingMode" Value="{DynamicResource AppTextRenderingMode}" />
+                <Setter Property="TextOptions.TextHintingMode" Value="{DynamicResource AppTextHintingMode}" />
+            </Style>
+            <Style TargetType="{x:Type TextBox}">
+                <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="Normal" />
+                <Setter Property="TextOptions.TextFormattingMode" Value="{DynamicResource AppTextFormattingMode}" />
+                <Setter Property="TextOptions.TextRenderingMode" Value="{DynamicResource AppTextRenderingMode}" />
+                <Setter Property="TextOptions.TextHintingMode" Value="{DynamicResource AppTextHintingMode}" />
+            </Style>
+            <Style TargetType="{x:Type RichTextBox}">
+                <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="Normal" />
+                <Setter Property="TextOptions.TextFormattingMode" Value="{DynamicResource AppTextFormattingMode}" />
+                <Setter Property="TextOptions.TextRenderingMode" Value="{DynamicResource AppTextRenderingMode}" />
+                <Setter Property="TextOptions.TextHintingMode" Value="{DynamicResource AppTextHintingMode}" />
+            </Style>
+            <Style x:Key="ReadableSfDataGridCellStyle" TargetType="{x:Type sfGrid:GridCell}">
+                <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="Normal" />
+                <Setter Property="TextOptions.TextFormattingMode" Value="{DynamicResource AppTextFormattingMode}" />
+                <Setter Property="TextOptions.TextRenderingMode" Value="{DynamicResource AppTextRenderingMode}" />
+                <Setter Property="TextOptions.TextHintingMode" Value="{DynamicResource AppTextHintingMode}" />
+                <!-- Keep the cell-level selection brush explicit.  Syncfusion's
+                     hover state is evaluated by the cell template and can
+                     otherwise fall back to the normal (black) foreground. -->
+                <Setter Property="SelectionForegroundBrush" Value="White" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
+            <Style x:Key="ReadableSfDataGridHeaderStyle" TargetType="{x:Type sfGrid:GridHeaderCellControl}">
+                <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="Normal" />
+                <Setter Property="TextOptions.TextFormattingMode" Value="{DynamicResource AppTextFormattingMode}" />
+                <Setter Property="TextOptions.TextRenderingMode" Value="{DynamicResource AppTextRenderingMode}" />
+                <Setter Property="TextOptions.TextHintingMode" Value="{DynamicResource AppTextHintingMode}" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
             <!--
                 Application-owned colours used by the few custom controls that
                 intentionally draw their own surfaces.  They are DynamicResource

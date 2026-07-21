@@ -163,9 +163,9 @@ public static class AutomaticRouteBeamSearch {
         IEnumerable<RouteSimulationState> candidates, int beamWidth) =>
         candidates
             .OrderByDescending(state => BitOperations.PopCount(state.CompletedMask))
+            .ThenBy(state => state.TotalDistance)
             .ThenBy(state => state.FinishedRoutes.Count)
             .ThenByDescending(state => state.CurrentRouteSteps.OfType<BarterStep>().Count())
-            .ThenBy(state => state.TotalDistance)
             .ThenBy(state => state.PickupStopCount)
             .ThenBy(state => StableKey(state), StringComparer.Ordinal)
             .Take(beamWidth);
@@ -231,10 +231,10 @@ public static class AutomaticRouteBeamSearch {
     }
 
     private static bool IsBetter(RouteSimulationState candidate, RouteSimulationState existing) {
-        int routes = candidate.FinishedRoutes.Count.CompareTo(existing.FinishedRoutes.Count);
-        if (routes != 0) return routes < 0;
         int distance = candidate.TotalDistance.CompareTo(existing.TotalDistance);
         if (distance != 0) return distance < 0;
+        int routes = candidate.FinishedRoutes.Count.CompareTo(existing.FinishedRoutes.Count);
+        if (routes != 0) return routes < 0;
         int pickups = candidate.PickupStopCount.CompareTo(existing.PickupStopCount);
         if (pickups != 0) return pickups < 0;
         return StringComparer.Ordinal.Compare(StableKey(candidate), StableKey(existing)) < 0;

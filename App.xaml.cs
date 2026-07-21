@@ -5,7 +5,9 @@ using iBarter.ViewModel;
 using iBarter.Routing;
 using Syncfusion.Licensing;
 using Syncfusion.SfSkinManager;
+using System.IO;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Navigation;
 
 namespace iBarter {
@@ -22,6 +24,10 @@ namespace iBarter {
     /// </summary>
     public partial class App : Application {
         public const string DisplayVersion = "Beta6.0";
+        private static readonly string PackagedPearlFontPath = Path.Combine(
+            AppContext.BaseDirectory, "Resources", "Fonts", "pearl.ttf");
+        private const string LegacyPearlFontPath = @"D:\Games\BDOLanguage\Font\pearl.ttf";
+        private const string PearlFontFamilyName = "Bauhaus ITC";
 
         public static global::PureDM.DmAutomation myPureDM = null!;
         public static CFunctions myCFun = null!;
@@ -101,8 +107,68 @@ namespace iBarter {
             myMainWVM = new MainWindowViewModel();
         }
 
+        private static void ApplyLocalizedTypography() {
+            if (Current == null) {
+                return;
+            }
+
+            bool isChinese = LanguageService.Instance.Current == AppLanguage.TraditionalChinese;
+            Current.Resources["AppFontFamily"] = isChinese
+                ? CreateChineseFontFamily()
+                : new FontFamily("Segoe UI");
+
+            // pearl.ttf was built for the game renderer and has only partial
+            // TrueType hinting data. Display/ClearType grid-fitting at 14px
+            // snaps nominally equal strokes to different pixel widths. Use
+            // outline-faithful grayscale rendering for Chinese only; retain
+            // Windows' normal Segoe UI rendering in English.
+            Current.Resources["AppTextFormattingMode"] = isChinese
+                ? TextFormattingMode.Ideal
+                : TextFormattingMode.Display;
+            Current.Resources["AppTextRenderingMode"] = isChinese
+                ? TextRenderingMode.Grayscale
+                : TextRenderingMode.ClearType;
+            Current.Resources["AppTextHintingMode"] = isChinese
+                ? TextHintingMode.Animated
+                : TextHintingMode.Fixed;
+        }
+
+        private static FontFamily CreateChineseFontFamily() {
+            try {
+                string? pearlFontPath = File.Exists(PackagedPearlFontPath)
+                    ? PackagedPearlFontPath
+                    : File.Exists(LegacyPearlFontPath)
+                        ? LegacyPearlFontPath
+                        : null;
+                if (pearlFontPath != null) {
+                    string directory = Path.GetDirectoryName(pearlFontPath)!;
+                    var baseUri = new Uri(directory + Path.DirectorySeparatorChar, UriKind.Absolute);
+                    string familyReference = $"./{Path.GetFileName(pearlFontPath)}#{PearlFontFamilyName}";
+                    return new FontFamily(baseUri, familyReference);
+                }
+            }
+            catch (Exception exception) {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Typography] Unable to load pearl.ttf: {exception.Message}");
+            }
+
+            // Keep Chinese text readable when the user-provided font is moved
+            // or unavailable; the application must still be able to start.
+            return new FontFamily("Microsoft JhengHei UI");
+        }
+
         protected override void OnStartup(StartupEventArgs e) {
             base.OnStartup(e);
+
+            // App.xaml resources are loaded by generated Main() after App's
+            // constructor returns. Applying the language font in the
+            // constructor is therefore too early: App.xaml subsequently
+            // overwrites AppFontFamily with its Segoe UI design-time default.
+            // Set it here, after resources exist and before any window parses
+            // its DynamicResource reference.
+            ApplyLocalizedTypography();
+            LanguageService.Instance.LanguageChanged += (_, _) =>
+                ApplyLocalizedTypography();
 
             // App.xaml is initialized before OnStartup runs. MainWindow and its
             // nested controls use Fluent icon resources merged by App.xaml, so

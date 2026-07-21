@@ -351,8 +351,9 @@ public static class RoutePlanRestoreCompatibility {
 
         var currentByRow = currentTasks.ToDictionary(task => task.RowId, StringComparer.Ordinal);
         if (savedBarters.Any(step => !currentByRow.ContainsKey(step.RowId)
-                && !completedBarterRowIds.Contains(step.RowId))
-            || !savedBarters.Any(step => completedBarterRowIds.Contains(step.RowId)))
+                && !RouteTaskIdentity.IsCompleted(step.RowId, completedBarterRowIds))
+            || !savedBarters.Any(step =>
+                RouteTaskIdentity.IsCompleted(step.RowId, completedBarterRowIds)))
             return false;
 
         return IsCompatibleBody(currentRequest, persistedPlan, currentByRow, completedBarterRowIds,
@@ -374,11 +375,11 @@ public static class RoutePlanRestoreCompatibility {
             if (!savedToCurrent.TryGetValue(saved.RowId, out var mapped))
                 return false;
             if (!currentByRow.ContainsKey(mapped)
-                && !completedBarterRowIds.Contains(mapped))
+                && !RouteTaskIdentity.IsCompleted(mapped, completedBarterRowIds))
                 return false;
         }
-        if (!savedBarters.Any(step => completedBarterRowIds.Contains(
-                savedToCurrent.GetValueOrDefault(step.RowId, ""))))
+        if (!savedBarters.Any(step => RouteTaskIdentity.IsCompleted(
+                savedToCurrent.GetValueOrDefault(step.RowId, ""), completedBarterRowIds)))
             return false;
         return IsCompatibleBody(currentRequest, persistedPlan, currentByRow, completedBarterRowIds,
             savedToCurrent);
@@ -450,9 +451,10 @@ public static class RoutePlanRestoreCompatibility {
                     case BarterStep barter: {
                         var stepKey = identity(barter);
                         var mappedKey = savedToCurrent?.GetValueOrDefault(stepKey, stepKey) ?? stepKey;
-                        if (currentByRow.ContainsKey(mappedKey))
+                        if (currentByRow.ContainsKey(mappedKey)
+                            && !RouteTaskIdentity.IsCompleted(mappedKey, completedBarterRowIds))
                             return onboard.GetValueOrDefault(barter.Consumed.ItemId) >= barter.Consumed.Quantity;
-                        if (completedBarterRowIds.Contains(mappedKey)) {
+                        if (RouteTaskIdentity.IsCompleted(mappedKey, completedBarterRowIds)) {
                             int available = onboard.GetValueOrDefault(barter.Consumed.ItemId);
                             if (available < barter.Consumed.Quantity) return false;
                             int afterConsume = available - barter.Consumed.Quantity;

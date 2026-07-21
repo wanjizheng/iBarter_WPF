@@ -3,11 +3,18 @@ namespace iBarter.Routing;
 public sealed record RouteFocusSegment(string FromIslandId, string ToIslandId);
 
 public static class RouteProgressFilter {
+    public static IReadOnlyList<PlannedRoute> RemainingRoutes(
+        IEnumerable<PlannedRoute> routes,
+        IReadOnlySet<string> completedBarterRowIds) => routes
+        .Where(route => route.Steps.OfType<BarterStep>()
+            .Any(step => !RouteTaskIdentity.IsCompleted(step.RowId, completedBarterRowIds)))
+        .ToArray();
+
     public static IReadOnlyList<RouteStep> ExcludeCompletedBarters(
         IEnumerable<RouteStep> steps,
         IReadOnlySet<string> completedBarterRowIds) => steps
         .Where(step => step is not BarterStep barter
-            || !completedBarterRowIds.Contains(barter.RowId))
+            || !RouteTaskIdentity.IsCompleted(barter.RowId, completedBarterRowIds))
         .ToArray();
 
     public static IReadOnlyList<RouteStep> RemainingMapSteps(
@@ -17,13 +24,19 @@ public static class RouteProgressFilter {
         int completedPrefixEnd = -1;
         for (int index = 0; index < route.Length; index++) {
             if (route[index] is not BarterStep barter) continue;
-            if (!completedBarterRowIds.Contains(barter.RowId)) break;
+            if (!RouteTaskIdentity.IsCompleted(barter.RowId, completedBarterRowIds)) break;
             completedPrefixEnd = index;
         }
 
-        return ExcludeCompletedBarters(
+        var remaining = ExcludeCompletedBarters(
             completedPrefixEnd < 0 ? route : route.Skip(completedPrefixEnd + 1),
             completedBarterRowIds);
+        // A pickup/unload shell is not a remaining route. Once every barter
+        // has been completed, hide the entire route so a final unload on the
+        // same island cannot leave a ghost marker, label, or cargo card.
+        return remaining.OfType<BarterStep>().Any()
+            ? remaining
+            : Array.Empty<RouteStep>();
     }
 
     public static RouteFocusSegment? FindVisibleBarterSegment(

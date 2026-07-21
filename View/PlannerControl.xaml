@@ -4,12 +4,19 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:iBarter"
+             xmlns:view="clr-namespace:iBarter.View"
              xmlns:loc="clr-namespace:iBarter.Localization"
              xmlns:vm="clr-namespace:iBarter.ViewModel"
              xmlns:controls="clr-namespace:iBarter.Controls"
              xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
              mc:Ignorable="d"
-             d:DesignHeight="450" d:DesignWidth="800">
+             d:DesignHeight="450" d:DesignWidth="800"
+             FontFamily="{DynamicResource AppFontFamily}"
+             FontSize="13"
+             FontWeight="Normal"
+             TextOptions.TextFormattingMode="{DynamicResource AppTextFormattingMode}"
+             TextOptions.TextRenderingMode="{DynamicResource AppTextRenderingMode}"
+             TextOptions.TextHintingMode="{DynamicResource AppTextHintingMode}">
     <UserControl.Resources>
         <local:ColorConverter x:Key="converter" />
 
@@ -52,11 +59,12 @@
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.ManualSelection}" Tag="ManualSelection" />
             </syncfusion:ComboBoxAdv>
             <Label Content="{loc:Localize str.Planner.AutoPlan.OptimMode}" VerticalAlignment="Center" />
-            <syncfusion:ComboBoxAdv x:Name="ComboBoxAdv_OptimMode" SelectedIndex="1" Width="120"
+            <syncfusion:ComboBoxAdv x:Name="ComboBoxAdv_OptimMode" SelectedIndex="1" Width="205"
                                     SelectionChanged="ComboBoxAdv_OptimMode_SelectionChanged">
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.OptimQuick}" Tag="Quick" />
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.OptimBalanced}" Tag="Balanced" />
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.OptimDeep}" Tag="Deep" />
+                <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.OptimExtreme}" Tag="Extreme" />
             </syncfusion:ComboBoxAdv>
             <controls:FluentIconButton x:Name="ButtonAdv_AutoPlan" IconData="{StaticResource FluentIcon.VehicleShip}"
                 Label="{loc:Localize str.Planner.Btn.AutoPlan}" ToolTip="{loc:Localize str.Planner.Btn.AutoPlanTip}" Click="ButtonAdv_AutoPlan_Click" />
@@ -119,14 +127,21 @@
         </syncfusion:ToolBarAdv>
         <Grid Grid.Row="1">
             <syncfusion:SfDataGrid x:Name="DataGrid_Planner" Height="NaN" Width="NaN"
-                                   FontFamily="{StaticResource AppFontFamily}"
-                                   TextOptions.TextFormattingMode="Display"
-                                   TextOptions.TextRenderingMode="ClearType"
+                                   FontFamily="{DynamicResource AppFontFamily}"
+                                   FontSize="14"
+                                   FontWeight="Normal"
+                                   CellStyle="{StaticResource ReadableSfDataGridCellStyle}"
+                                   HeaderStyle="{StaticResource ReadableSfDataGridHeaderStyle}"
+                                   RowHeight="30"
+                                   HeaderRowHeight="32"
+                                   TextOptions.TextFormattingMode="{DynamicResource AppTextFormattingMode}"
+                                   TextOptions.TextRenderingMode="{DynamicResource AppTextRenderingMode}"
+                                   TextOptions.TextHintingMode="{DynamicResource AppTextHintingMode}"
                                    AutoGenerateColumns="False"
                                    AllowEditing="True"
                                    ColumnSizer="AutoWithLastColumnFill"
                                    RowSelectionBrush="DarkBlue"
-                                   SelectionForegroundBrush="Bisque"
+                                   SelectionForegroundBrush="White"
                                    AllowDraggingRows="False"
                                    ShowRowHeader="True"
                                    ScrollMode="Async"
@@ -134,7 +149,8 @@
                                    AllowDrop="False" LiveDataUpdateMode="AllowDataShaping"
                                    CurrentCellEndEdit="DataGrid_Planner_CurrentCellEndEdit"
                                    CurrentCellValueChanged="DataGrid_Planner_CurrentCellValueChanged" PreviewMouseWheel="DataGrid_Planner_PreviewMouseWheel"
-                                   PreviewMouseRightButtonDown="DataGrid_Planner_PreviewMouseRightButtonDown">
+                                   PreviewMouseRightButtonDown="DataGrid_Planner_PreviewMouseRightButtonDown"
+                                   view:SfDataGridSelectionHoverGuard.IsEnabled="True">
 
                 <!-- <syncfusion:SfDataGrid.SortColumnDescriptions> -->
                 <!--     <syncfusion:SortColumnDescription ColumnName="Item1LV" SortDirection="Ascending" /> -->

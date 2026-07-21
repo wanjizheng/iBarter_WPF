@@ -5259,6 +5259,11 @@ namespace iBarter {
                 AddZhTwIslandAlias(zhTw, zhTwAliases, "酷斯海賊團", EnumLists.Island.Cox_Pirate);
                 AddZhTwIslandAlias(zhTw, zhTwAliases, "柯魯之巢", EnumLists.Island.Crows_Nest);
                 AddZhTwIslandAlias(zhTw, zhTwAliases, "西奧尼爾", EnumLists.Island.Theonil);
+                // The canonical in-game name is also kept as an explicit
+                // alias so OCR still works if an older deployed sidecar is
+                // present. OCR may capture a leading row glyph such as
+                // "一、"; containment safely absorbs that prefix.
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "流浪商人的船", EnumLists.Island.Wandering);
 
                 _englishIslandMatcher = new iBarter.StringSimilarityMatcher(new System.Collections.ArrayList(english), ignoreCase: true, removeDiacritics: true);
                 _zhTwIslandMatcher = new iBarter.StringSimilarityMatcher(new System.Collections.ArrayList(zhTw), ignoreCase: true, removeDiacritics: true);

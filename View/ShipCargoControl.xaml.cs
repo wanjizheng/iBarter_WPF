@@ -455,6 +455,11 @@ namespace iBarter.View {
         }
 
         private static Barter? ResolveAutomaticBarter(string rowId) {
+            string plannerRowId = RouteTaskIdentity.PlannerRowId(rowId);
+            var current = App.myPVM.BarterCollection.FirstOrDefault(barter =>
+                StringComparer.Ordinal.Equals(barter.PlannerRowId, plannerRowId));
+            if (current is not null) return current;
+
             int separator = rowId.IndexOf(':');
             if (separator <= 0 || !int.TryParse(rowId[..separator], out int index)) return null;
             return index >= 0 && index < App.myPVM.BarterCollection.Count

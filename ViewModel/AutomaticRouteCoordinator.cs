@@ -189,24 +189,30 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             }
             currentPlanMode = exact.SavedOptimizationMode ?? currentPlanMode;
             currentPublicationRequest = request;
-            if (!SavePreparedSnapshot(progressed, prepared.Plan)) return exact;
-            if (prepared.Changed) LogNormalizationRepairs(prepared.Changes);
+            // The verified Plan is a remaining-work projection. Retain the
+            // complete persisted baseline so cancelling CK can restore a
+            // previously completed barter. Saving/publishing the projection
+            // here permanently discarded those steps and caused verifier
+            // detail "incomplete" on the first unchecked row.
+            var retainedPlan = prepared.RetainedPlan ?? progressed.Plan;
             Publish(
-                prepared.Plan,
+                retainedPlan,
                 progressed.SelectedRouteNumber,
                 progressed.ShowAll,
                 progressed.SelectedBarterRowId,
                 progressed.ShowRouteGuides);
             return exact with {
                 Status = RoutePlanLoadStatus.Loaded,
-                Snapshot = progressed with { Plan = prepared.Plan },
+                Snapshot = progressed with { Plan = retainedPlan },
             };
         }
         return exact;
     }
 
     public void SelectRoute(int routeNumber) {
-        if (currentPlan?.Routes.All(x => x.Number != routeNumber) != false) return;
+        if (currentPlan is null
+            || RouteProgressFilter.RemainingRoutes(currentPlan.Routes, completedBarterRowIds)
+                .All(route => route.Number != routeNumber)) return;
         mode = CargoMode.AutomaticRoute;
         selectedRouteNumber = routeNumber;
         showAllRoutes = false;
@@ -217,7 +223,9 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     }
 
     public void SelectAll() {
-        if (currentPlan?.Routes.Count > 0 != true) return;
+        if (currentPlan is null
+            || RouteProgressFilter.RemainingRoutes(currentPlan.Routes, completedBarterRowIds).Count == 0)
+            return;
         mode = CargoMode.AutomaticRoute;
         showAllRoutes = true;
         RaisePropertyChanged(nameof(ShowAllRoutes));
@@ -235,7 +243,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
 
     public void RefreshLocalization() {
         if (currentPlan is null) return;
-        routeOptions = BuildRouteOptions(currentPlan);
+        routeOptions = BuildRouteOptions(
+            RouteProgressFilter.RemainingRoutes(currentPlan.Routes, completedBarterRowIds));
         UpdateVisibleRoute();
         RaisePropertyChanged(nameof(RouteOptions));
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
@@ -261,8 +270,10 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         if (completedBarterRowIds.SetEquals(refreshed)) return;
 
         completedBarterRowIds = refreshed;
+        RefreshRouteOptionsAndSelection();
         UpdateVisibleRoute();
         SelectPreferredOrFirstBarter(selectedRouteNumber, selectedBarterRowId);
+        RaisePropertyChanged(nameof(RouteOptions));
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -334,30 +345,26 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         // the normalized base plan immutable so unchecking a row can restore
         // it; rendering and persistence apply the completed-row overlay.
         currentPublicationRequest = publicationRequest;
+        currentPlan = prepared.RetainedPlan ?? currentPlan;
 
         // Step 3: keep the originally prepared base plan immutable and project
         // execution progress through completedBarterRowIds. The publication
         // contract above has already normalized, replayed and fully verified
         // the remaining-plan projection against the current request.
-        var remainingRoutes = currentPlan.Routes
-            .Where(route => route.Steps.OfType<BarterStep>()
-                .Any(step => !completedBarterRowIds.Contains(step.RowId)))
-            .ToArray();
-        if (!showAllRoutes
-            && (selectedRouteNumber is null
-                || !remainingRoutes.Any(route => route.Number == selectedRouteNumber))) {
-            selectedRouteNumber = remainingRoutes.FirstOrDefault()?.Number;
-        }
+        var remainingRoutes = RouteProgressFilter.RemainingRoutes(
+            currentPlan.Routes, completedBarterRowIds);
+        RefreshRouteOptionsAndSelection(remainingRoutes);
 
         UpdateVisibleRoute();
         SelectPreferredOrFirstBarter(selectedRouteNumber, selectedBarterRowId);
+        RaisePropertyChanged(nameof(RouteOptions));
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
         // Persist the known-good base plan. Planner CK state is stored in
         // myPlan_Data.json; TryLoadAfterProgress combines the two on restart.
         SaveCurrentPlan();
 
         if (completed) {
-            if (remainingRoutes.Length == 0) {
+            if (remainingRoutes.Count == 0) {
                 App.myCFun?.Log(
                     "[AutoRoute] 所有自动路线均已完成。",
                     System.Windows.Media.Brushes.DarkOliveGreen);
@@ -365,11 +372,11 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             else {
                 App.myCFun?.Log(
                     "[AutoRoute] 已应用路线进度：完成 1 个交换，剩余 " +
-                    remainingRoutes.Length + " 条路线。",
+                    remainingRoutes.Count + " 条路线。",
                     System.Windows.Media.Brushes.DarkOliveGreen);
             }
         }
-        return remainingRoutes.Length > 0;
+        return remainingRoutes.Count > 0;
     }
 
     public void Invalidate(string reason) {
@@ -468,36 +475,52 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         currentPlan = plan;
         ClearFocus();
         showRouteGuides = preferredShowRouteGuides;
-        bool hasUsableRoutes = plan.Status is RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit
+        bool hasUsablePlan = plan.Status is RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit
             && plan.Routes.Count > 0;
-        mode = hasUsableRoutes ? CargoMode.AutomaticRoute : CargoMode.Manual;
-        showAllRoutes = hasUsableRoutes && preferredShowAll;
-        routeOptions = hasUsableRoutes ? BuildRouteOptions(plan) : [];
-        selectedRouteNumber = hasUsableRoutes
-            ? plan.Routes.Any(x => x.Number == preferredRouteNumber)
+        var remainingRoutes = hasUsablePlan
+            ? RouteProgressFilter.RemainingRoutes(plan.Routes, completedBarterRowIds)
+            : [];
+        mode = hasUsablePlan ? CargoMode.AutomaticRoute : CargoMode.Manual;
+        showAllRoutes = remainingRoutes.Count > 0 && preferredShowAll;
+        routeOptions = BuildRouteOptions(remainingRoutes);
+        selectedRouteNumber = remainingRoutes.Count > 0
+            ? remainingRoutes.Any(x => x.Number == preferredRouteNumber)
                 ? preferredRouteNumber
-                : plan.Routes[0].Number
+                : remainingRoutes[0].Number
             : null;
         UpdateVisibleRoute();
         SelectPreferredOrFirstBarter(selectedRouteNumber, preferredBarterRowId);
         NotifyAll();
     }
 
-    private static IReadOnlyList<RouteSelectionOption> BuildRouteOptions(RoutePlan plan) =>
-        plan.Routes.Count == 0
+    private static IReadOnlyList<RouteSelectionOption> BuildRouteOptions(
+        IReadOnlyList<PlannedRoute> routes) =>
+        routes.Count == 0
             ? []
             : new[] { new RouteSelectionOption(null,
                     Localization.LanguageService.Instance.Localize("str.ShipCargo.AutoRoute.All"), true) }
-                .Concat(plan.Routes.Select(x => new RouteSelectionOption(
+                .Concat(routes.Select(x => new RouteSelectionOption(
                     x.Number,
                     Localization.LanguageService.Instance.Localize("str.ShipCargo.AutoRoute.RouteFormat", x.Number),
                     false))).ToArray();
+
+    private void RefreshRouteOptionsAndSelection(
+        IReadOnlyList<PlannedRoute>? remainingRoutes = null) {
+        remainingRoutes ??= currentPlan is null
+            ? []
+            : RouteProgressFilter.RemainingRoutes(currentPlan.Routes, completedBarterRowIds);
+        routeOptions = BuildRouteOptions(remainingRoutes);
+        if (selectedRouteNumber is null
+            || !remainingRoutes.Any(route => route.Number == selectedRouteNumber))
+            selectedRouteNumber = remainingRoutes.FirstOrDefault()?.Number;
+        if (remainingRoutes.Count == 0) showAllRoutes = false;
+    }
 
     private void UpdateVisibleRoute() {
         var route = currentPlan?.Routes.FirstOrDefault(x => x.Number == selectedRouteNumber);
         visibleAutomaticSteps = route is null
             ? []
-            : RouteProgressFilter.ExcludeCompletedBarters(route.Steps, completedBarterRowIds)
+            : RouteProgressFilter.RemainingMapSteps(route.Steps, completedBarterRowIds)
                 .Where(step => step is not WarehouseUnloadStep { Items.Count: 0 })
                 .Select(ToViewModel)
                 .ToArray();

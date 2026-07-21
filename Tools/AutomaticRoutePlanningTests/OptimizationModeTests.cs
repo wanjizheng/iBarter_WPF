@@ -31,6 +31,7 @@ public sealed class OptimizationModeTests {
         var quick = RouteOptimizationProfile.For(RouteOptimizationMode.Quick);
         var balanced = RouteOptimizationProfile.For(RouteOptimizationMode.Balanced);
         var deep = RouteOptimizationProfile.For(RouteOptimizationMode.Deep);
+        var extreme = RouteOptimizationProfile.For(RouteOptimizationMode.Extreme);
 
         Assert.Equal(3_000, quick.TotalTarget.TotalMilliseconds);
         Assert.Equal(500, quick.FinalizationReserve.TotalMilliseconds);
@@ -42,9 +43,11 @@ public sealed class OptimizationModeTests {
         Assert.Equal(25_000, balanced.MaxBeamParents);
         Assert.Equal(500, balanced.MaxLocalEvaluations);
 
-        Assert.Equal(30_000, deep.TotalTarget.TotalMilliseconds);
-        Assert.Equal(2_000, deep.FinalizationReserve.TotalMilliseconds);
+        Assert.Equal(60_000, deep.TotalTarget.TotalMilliseconds);
+        Assert.Equal(3_000, deep.FinalizationReserve.TotalMilliseconds);
         Assert.Equal(100_000, deep.MaxBeamParents);
+        Assert.Equal(600_000, extreme.TotalTarget.TotalMilliseconds);
+        Assert.Equal(2_000, extreme.MaxLocalEvaluations);
         Assert.Equal(2_000, deep.MaxLocalEvaluations);
 
         // No single fixed 5 s wall-clock cap is shared across modes.
