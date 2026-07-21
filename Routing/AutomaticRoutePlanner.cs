@@ -214,6 +214,7 @@ public sealed class AutomaticRoutePlanner {
         CancellationToken cancellationToken) {
         string fingerprint = RoutePlanFingerprint.Compute(request);
         var watch = Stopwatch.StartNew();
+        ExtremeRouteResources resources = ExtremeRouteResourcePolicy.Detect();
         try {
             cancellationToken.ThrowIfCancellationRequested();
             // Give CP-SAT a strong, fully verified warm start without spending
@@ -230,17 +231,18 @@ public sealed class AutomaticRoutePlanner {
             if (seed.Status == RoutePlanStatus.Optimal)
                 return WithExtremeDiagnostic(
                     seed, "seed-already-optimal", seed.Objective?.TotalDistance ?? 0,
-                    0, watch.Elapsed, 0, 0, null);
+                    0, watch.Elapsed, 0, 0, resources, null);
 
             TimeSpan remaining = profile.TotalTarget - watch.Elapsed - TimeSpan.FromSeconds(15);
             if (remaining <= TimeSpan.Zero)
-                return WithExtremeDiagnostic(incumbent ?? seed, "seed-time-budget", 0, 1, watch.Elapsed, 0, 0, null);
+                return WithExtremeDiagnostic(incumbent ?? seed, "seed-time-budget", 0, 1,
+                    watch.Elapsed, 0, 0, resources, null);
 
             ExtremeRouteSolverRunResult exact = ExtremeRouteSolverClient.Solve(
                 request,
                 incumbent,
                 remaining,
-                ExtremeRouteSolverProtocol.DefaultMemoryLimitMb,
+                resources,
                 cancellationToken);
 
             RoutePlan? chosen = incumbent;
@@ -285,12 +287,14 @@ public sealed class AutomaticRoutePlanner {
         TimeSpan elapsed,
         long conflicts,
         long branches,
+        ExtremeRouteResources resources,
         string? failure) => new(
             plan.Status is RoutePlanStatus.Optimal ? RoutePlanStatus.Optimal : RoutePlanStatus.BestKnownWithinLimit,
             plan.Routes,
             plan.Objective,
             [new RouteDiagnostic("extreme-cp-sat", Detail:
-                ExtremeDetail(solverStatus, bound, gap, elapsed, conflicts, branches, failure))],
+                ExtremeDetail(solverStatus, bound, gap, elapsed, conflicts, branches,
+                    resources.WorkerCount, resources.MemoryLimitMb, failure))],
             plan.InputFingerprint);
 
     private static string ExtremeDetail(ExtremeRouteSolverRunResult result) =>
@@ -301,6 +305,8 @@ public sealed class AutomaticRoutePlanner {
             result.Elapsed,
             result.Conflicts,
             result.Branches,
+            result.WorkerCount,
+            result.MemoryLimitMb,
             result.Failure)
         + FormattableString.Invariant(
             $" routeLimit={result.RouteLimit} fullRouteSpace={result.FullRouteSpace}");
@@ -312,12 +318,14 @@ public sealed class AutomaticRoutePlanner {
         TimeSpan elapsed,
         long conflicts,
         long branches,
+        int workerCount,
+        int memoryLimitMb,
         string? failure) => string.Format(
             System.Globalization.CultureInfo.InvariantCulture,
             "solver=CP-SAT status={0} elapsed={1:F1}s bound={2:F1} gap={3:P2} " +
-            "conflicts={4} branches={5} memoryLimit={6}MB{7}",
+            "conflicts={4} branches={5} workers={6} memoryLimit={7}MB{8}",
             status, elapsed.TotalSeconds, bound, gap, conflicts, branches,
-            ExtremeRouteSolverProtocol.DefaultMemoryLimitMb,
+            workerCount, memoryLimitMb,
             string.IsNullOrWhiteSpace(failure) ? "" : $" failure={failure}");
 
     private static RouteDiagnostic AnytimeDiagnostic(

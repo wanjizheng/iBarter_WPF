@@ -19,6 +19,7 @@ catch (Exception ex) {
     try {
         var failure = new ExtremeSolverOutputDto(
             ExtremeRouteSolverProtocol.Version, "Error", 0, 0, 0, 1, 0, 0, 0, [],
+            0, 0,
             $"{ex.GetType().Name}: {ex.Message}");
         await WriteAtomicAsync(args[1], JsonSerializer.Serialize(failure));
     }
@@ -53,7 +54,6 @@ internal sealed class ExtremeCpSatEngine {
     private BoolVar[] hasPickup = null!;
     private IntVar[,,] pickup = null!;
     private IntVar totalDistance = null!;
-    private long distanceWeight;
 
     public ExtremeCpSatEngine(
         ExtremeSolverInputDto input,
@@ -79,19 +79,26 @@ internal sealed class ExtremeCpSatEngine {
         if (!string.IsNullOrWhiteSpace(validationError))
             throw new InvalidDataException($"CP-SAT model validation failed: {validationError}");
 
+        var parameters = new List<string> {
+            $"max_time_in_seconds:{input.TimeLimitSeconds}",
+            $"max_memory_in_mb:{input.MemoryLimitMb}",
+            $"num_workers:{input.WorkerCount}",
+            "log_search_progress:false",
+            "cp_model_presolve:true",
+            "use_optimization_hints:true",
+        };
+        if (Environment.GetEnvironmentVariable("IBARTER_EXTREME_DIAGNOSTICS") == "1") {
+            parameters.Remove("log_search_progress:false");
+            parameters.Add("log_search_progress:true");
+            parameters.Add("log_to_response:true");
+            parameters.Add("log_to_stdout:false");
+        }
         var solver = new CpSolver {
-            StringParameters = string.Join(" ", new[] {
-                $"max_time_in_seconds:{input.TimeLimitSeconds}",
-                $"max_memory_in_mb:{input.MemoryLimitMb}",
-                $"num_search_workers:{input.WorkerCount}",
-                "log_search_progress:false",
-                "cp_model_presolve:false",
-                "use_optimization_hints:true",
-            }),
+            StringParameters = string.Join(" ", parameters),
         };
         var callback = new BestSolutionWriter(
             input, outputPath, jsonOptions, taskAt, slotUsed, startChoice, endChoice,
-            routeUsed, hasPickup, pickup, totalDistance, distanceWeight, warehouseIndex);
+            routeUsed, hasPickup, pickup, totalDistance, warehouseIndex);
         CpSolverStatus status = solver.Solve(model, callback);
         callback.WriteFinal(solver, status);
         return status is CpSolverStatus.Optimal or CpSolverStatus.Feasible ? 0 : 3;
@@ -392,20 +399,12 @@ internal sealed class ExtremeCpSatEngine {
         long maxDistance = checked(maxLeg * (long)(n * n + n * 3));
         totalDistance = model.NewIntVar(0, maxDistance, "total_distance");
         model.Add(totalDistance == LinearExpr.Sum(distanceParts));
-
-        LinearExpr totalPicked = LinearExpr.Constant(0);
-        long maximumPicked = 0;
-        for (int item = 0; item < itemCount; item++)
-            maximumPicked = checked(maximumPicked + input.Items[item].QuantityUpperBound * n);
-        for (int r = 0; r < input.MaxRoutes; r++)
-            for (int w = 0; w < wCount; w++)
-                for (int item = 0; item < itemCount; item++)
-                    totalPicked += pickup[r, w, item];
-        long routeWeight = checked(maximumPicked + 1L);
-        distanceWeight = checked((n + 1L) * routeWeight);
-        model.Minimize(totalDistance * distanceWeight
-            + LinearExpr.Sum(routeUsed) * routeWeight
-            + totalPicked);
+        // The user-facing contract is the sum of sailing distance across all
+        // routes. Keeping route count and pickup quantity inside one weighted
+        // integer objective caused post-presolve coefficient overflow on real
+        // 25+ task data. Secondary preferences are applied after replay when
+        // two plans have the same distance.
+        model.Minimize(totalDistance);
     }
 
     private void AddAllowed(IEnumerable<LinearExpr> expressions, long[,] tuples) {
@@ -436,7 +435,6 @@ internal sealed class BestSolutionWriter : CpSolverSolutionCallback {
     private readonly BoolVar[] hasPickup;
     private readonly IntVar[,,] pickup;
     private readonly IntVar totalDistance;
-    private readonly long distanceWeight;
     private readonly Dictionary<string, int> warehouseIndex;
     private readonly object writeGate = new();
     private ExtremeSolverOutputDto? latest;
@@ -453,7 +451,6 @@ internal sealed class BestSolutionWriter : CpSolverSolutionCallback {
         BoolVar[] hasPickup,
         IntVar[,,] pickup,
         IntVar totalDistance,
-        long distanceWeight,
         Dictionary<string, int> warehouseIndex) {
         this.input = input;
         this.outputPath = outputPath;
@@ -466,7 +463,6 @@ internal sealed class BestSolutionWriter : CpSolverSolutionCallback {
         this.hasPickup = hasPickup;
         this.pickup = pickup;
         this.totalDistance = totalDistance;
-        this.distanceWeight = distanceWeight;
         this.warehouseIndex = warehouseIndex;
     }
 
@@ -488,11 +484,27 @@ internal sealed class BestSolutionWriter : CpSolverSolutionCallback {
                 solver.NumConflicts(), solver.NumBranches());
             Write(latest);
         } else if (latest is null) {
+            string? solutionInfo = solver.Response?.SolutionInfo;
+            string? solveLog = solver.Response?.SolveLog;
+            if (!string.IsNullOrWhiteSpace(solveLog)) {
+                string? keyLine = solveLog.Split('\n')
+                    .FirstOrDefault(line => line.Contains("invalid", StringComparison.OrdinalIgnoreCase)
+                        || line.Contains("overflow", StringComparison.OrdinalIgnoreCase));
+                if (keyLine?.Length > 2_000) keyLine = keyLine[..2_000];
+                string tail = solveLog.Length > 4_000 ? solveLog[^4_000..] : solveLog;
+                solveLog = string.IsNullOrWhiteSpace(keyLine) ? tail : $"{keyLine}\n...\n{tail}";
+            }
+            string failureDetail = string.IsNullOrWhiteSpace(solutionInfo)
+                ? solver.ResponseStats()
+                : $"{solutionInfo} | {solver.ResponseStats()}";
+            if (!string.IsNullOrWhiteSpace(solveLog))
+                failureDetail += $" | log={solveLog}";
             Write(new ExtremeSolverOutputDto(
                 ExtremeRouteSolverProtocol.Version, statusText, input.MaxRoutes, 0,
                 (long)Math.Round(solver.BestObjectiveBound), 1, solver.WallTime(),
                 solver.NumConflicts(), solver.NumBranches(), [],
-                solver.ResponseStats()));
+                input.WorkerCount, input.MemoryLimitMb,
+                failureDetail));
         }
     }
 
@@ -526,11 +538,11 @@ internal sealed class BestSolutionWriter : CpSolverSolutionCallback {
         }
 
         long distance = Value(totalDistance);
-        long bound = Math.Max(0, (long)Math.Floor(bestBound / distanceWeight));
+        long bound = Math.Max(0, (long)Math.Floor(bestBound));
         double gap = distance <= 0 ? 0 : Math.Max(0, (distance - Math.Min(distance, bound)) / (double)distance);
         return new ExtremeSolverOutputDto(
             ExtremeRouteSolverProtocol.Version, status, input.MaxRoutes, distance, bound, gap,
-            wallTime, conflicts, branches, routes);
+            wallTime, conflicts, branches, routes, input.WorkerCount, input.MemoryLimitMb);
     }
 
     private void Write(ExtremeSolverOutputDto value) {

@@ -1,5 +1,7 @@
 using Syncfusion.UI.Xaml.Grid;
+using Syncfusion.UI.Xaml.Grid.Cells;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 
 namespace iBarter.View {
@@ -37,6 +39,7 @@ namespace iBarter.View {
             grid.HeaderRowHeight = GridHeaderRowHeight;
             if (cellStyle != null) grid.CellStyle = cellStyle;
             if (headerStyle != null) grid.HeaderStyle = headerStyle;
+            EnsureReadableTextEditor(grid);
 
             foreach (GridColumn column in grid.Columns) {
                 ApplyColumnStyles(column, cellStyle, headerStyle);
@@ -54,12 +57,45 @@ namespace iBarter.View {
             grid.InvalidateVisual();
         }
 
+        private static void EnsureReadableTextEditor(SfDataGrid grid) {
+            const string rendererName = "TextBox";
+            if (grid.CellRenderers.ContainsKey(rendererName)
+                && grid.CellRenderers[rendererName] is ReadableGridCellTextBoxRenderer) {
+                return;
+            }
+
+            grid.CellRenderers.Remove(rendererName);
+            grid.CellRenderers.Add(rendererName, new ReadableGridCellTextBoxRenderer());
+        }
+
         private static void ApplyColumnStyles(
             GridColumn column,
             Style? cellStyle,
             Style? headerStyle) {
             if (cellStyle != null) column.CellStyle = cellStyle;
             if (headerStyle != null) column.HeaderStyle = headerStyle;
+        }
+    }
+
+    /// <summary>
+    /// Syncfusion's default text editor starts at the cell's clipping edge.
+    /// Some glyphs in the Chinese UI font extend into that edge, which makes
+    /// the first typed digit appear hidden. Give the live editor its own safe
+    /// inset; this renderer is shared by Planner, Scanner and StorageManager.
+    /// </summary>
+    internal sealed class ReadableGridCellTextBoxRenderer : GridCellTextBoxRenderer {
+        public override void OnInitializeEditElement(
+            DataColumnBase dataColumn,
+            TextBox uiElement,
+            object dataContext) {
+            base.OnInitializeEditElement(dataColumn, uiElement, dataContext);
+
+            uiElement.Padding = new Thickness(4, 0, 3, 0);
+            uiElement.VerticalContentAlignment = VerticalAlignment.Center;
+            uiElement.FontWeight = FontWeights.Normal;
+            if (Application.Current?.Resources["AppFontFamily"] is FontFamily fontFamily)
+                uiElement.FontFamily = fontFamily;
+            uiElement.FontSize = SfDataGridTypography.GridFontSize;
         }
     }
 }

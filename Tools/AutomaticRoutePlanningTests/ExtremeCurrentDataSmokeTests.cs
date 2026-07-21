@@ -32,7 +32,7 @@ public sealed class ExtremeCurrentDataSmokeTests {
         var watch = Stopwatch.StartNew();
         ExtremeRouteSolverRunResult result = ExtremeRouteSolverClient.Solve(
             request, seed, TimeSpan.FromSeconds(seconds),
-            ExtremeRouteSolverProtocol.DefaultMemoryLimitMb,
+            ExtremeRouteResourcePolicy.Detect(),
             TestContext.Current.CancellationToken, solver);
         watch.Stop();
 
@@ -40,10 +40,15 @@ public sealed class ExtremeCurrentDataSmokeTests {
             $"{seed?.Objective?.TotalDistance:F1} " +
             $"routeLimit={result.RouteLimit} status={result.SolverStatus} " +
             $"elapsed={watch.Elapsed.TotalSeconds:F1}s distance={result.Plan?.Objective?.TotalDistance:F1} " +
-            $"bound={result.BestBound:F1} gap={result.RelativeGap:P2} failure={result.Failure}");
-        Assert.True(request.Tasks.Count == 26, $"Expected the current 26-task snapshot, got {request.Tasks.Count}.");
+            $"bound={result.BestBound:F1} gap={result.RelativeGap:P2} " +
+            $"workers={result.WorkerCount} memory={result.MemoryLimitMb}MB failure={result.Failure}");
+        Assert.InRange(request.Tasks.Count, 1, ExtremeRouteSolverProtocol.MaximumTasks);
         Assert.NotNull(result.Plan);
         Assert.True(RoutePlanVerifier.Verify(request, result.Plan!).Success);
+        if (seed?.Objective is { } seedObjective) {
+            Assert.True(result.Plan!.Objective?.TotalDistance <= seedObjective.TotalDistance,
+                $"CP-SAT distance {result.Plan.Objective?.TotalDistance:F1} must not exceed seed {seedObjective.TotalDistance:F1}.");
+        }
     }
 
     private static AutomaticRoutePlanningRequest BuildRequest(

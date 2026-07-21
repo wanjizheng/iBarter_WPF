@@ -77,7 +77,7 @@
     <sys:String x:Key="str.Planner.AutoPlan.OptimQuick">Quick (≈3s)</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.OptimBalanced">Balanced (≈10s)</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.OptimDeep">Deep (≈60s)</sys:String>
-    <sys:String x:Key="str.Planner.AutoPlan.OptimExtreme">Extreme (up to 10 min / 8 GB)</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimExtreme">Extreme (up to 10 min / adaptive resources)</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.ManualSelection">Manual Selection</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlan">Auto Plan</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlanTip">Automatic strategies fill exchange counts; Manual Selection only optimizes the route for the current counts</sys:String>

@@ -65,7 +65,7 @@
     <sys:String x:Key="str.Planner.AutoPlan.OptimQuick">快速（約 3 秒）</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.OptimBalanced">平衡（約 10 秒）</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.OptimDeep">深度（約 60 秒）</sys:String>
-    <sys:String x:Key="str.Planner.AutoPlan.OptimExtreme">极深（最多 10 分钟 / 8 GB）</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimExtreme">极深（最多 10 分钟 / 自动资源）</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.ManualSelection">手动选择</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlan">自動規劃</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlanTip">自动策略会填写交换次数；手动选择策略只使用当前交换次数计算最优路线</sys:String>

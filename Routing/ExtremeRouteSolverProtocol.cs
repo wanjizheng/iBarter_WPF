@@ -4,7 +4,6 @@ public static class ExtremeRouteSolverProtocol {
     public const int Version = 1;
     public const long DistanceScale = 1_000;
     public const int DefaultTimeLimitSeconds = 600;
-    public const int DefaultMemoryLimitMb = 8_192;
     public const int MaximumTasks = 32;
 }
 
@@ -64,4 +63,6 @@ public sealed record ExtremeSolverOutputDto(
     long Conflicts,
     long Branches,
     IReadOnlyList<ExtremeSolverRouteDto> Routes,
+    int WorkerCount,
+    int MemoryLimitMb,
     string? Error = null);

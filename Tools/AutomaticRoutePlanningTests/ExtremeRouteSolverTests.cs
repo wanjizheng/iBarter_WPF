@@ -28,7 +28,7 @@ public sealed class ExtremeRouteSolverTests {
             "extreme-test-v1");
 
         ExtremeRouteSolverRunResult result = ExtremeRouteSolverClient.Solve(
-            request, incumbent: null, TimeSpan.FromSeconds(10), memoryLimitMb: 1_024,
+            request, incumbent: null, TimeSpan.FromSeconds(10), new ExtremeRouteResources(2, 1_024),
             TestContext.Current.CancellationToken, solver);
 
         Assert.Null(result.Failure);
@@ -60,7 +60,7 @@ public sealed class ExtremeRouteSolverTests {
             "extreme-test-v2");
 
         ExtremeRouteSolverRunResult result = ExtremeRouteSolverClient.Solve(
-            request, incumbent: null, TimeSpan.FromSeconds(10), memoryLimitMb: 1_024,
+            request, incumbent: null, TimeSpan.FromSeconds(10), new ExtremeRouteResources(2, 1_024),
             TestContext.Current.CancellationToken, solver);
 
         Assert.Null(result.Failure);

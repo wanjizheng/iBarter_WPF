@@ -17,6 +17,8 @@ public sealed record ExtremeRouteSolverRunResult(
     TimeSpan Elapsed,
     long Conflicts,
     long Branches,
+    int WorkerCount,
+    int MemoryLimitMb,
     string? Failure);
 
 public static class ExtremeRouteSolverClient {
@@ -28,7 +30,7 @@ public static class ExtremeRouteSolverClient {
         AutomaticRoutePlanningRequest request,
         RoutePlan? incumbent,
         TimeSpan timeLimit,
-        int memoryLimitMb,
+        ExtremeRouteResources resources,
         CancellationToken cancellationToken,
         string? solverPath = null) {
         var watch = Stopwatch.StartNew();
@@ -45,7 +47,7 @@ public static class ExtremeRouteSolverClient {
         string inputPath = Path.Combine(work, "input.json");
         string outputPath = Path.Combine(work, "best.json");
         try {
-            var dto = BuildInput(request, incumbent, timeLimit, memoryLimitMb);
+            var dto = BuildInput(request, incumbent, timeLimit, resources);
             File.WriteAllText(inputPath, JsonSerializer.Serialize(dto, JsonOptions));
 
             using var process = new Process {
@@ -62,7 +64,7 @@ public static class ExtremeRouteSolverClient {
             process.StartInfo.ArgumentList.Add(outputPath);
             if (!process.Start()) return Failure("solver-start-failed");
 
-            using var job = WindowsProcessMemoryJob.TryCreate(process, memoryLimitMb);
+            using var job = WindowsProcessMemoryJob.TryCreate(process, resources.MemoryLimitMb);
             using var cancelRegistration = cancellationToken.Register(() => Kill(process));
             TimeSpan hardLimit = timeLimit + TimeSpan.FromSeconds(15);
             while (!process.WaitForExit(250)) {
@@ -110,6 +112,8 @@ public static class ExtremeRouteSolverClient {
                 TimeSpan.FromSeconds(Math.Max(output.WallTimeSeconds, watch.Elapsed.TotalSeconds)),
                 output.Conflicts,
                 output.Branches,
+                output.WorkerCount,
+                output.MemoryLimitMb,
                 replayFailure ?? (output.Error is null ? null : SingleLine(output.Error)));
         }
         catch (OperationCanceledException) {
@@ -123,14 +127,15 @@ public static class ExtremeRouteSolverClient {
         }
 
         ExtremeRouteSolverRunResult Failure(string detail) => new(
-            null, "Unavailable", 0, false, 0, 1, watch.Elapsed, 0, 0, detail);
+            null, "Unavailable", 0, false, 0, 1, watch.Elapsed, 0, 0,
+            resources.WorkerCount, resources.MemoryLimitMb, detail);
     }
 
     private static ExtremeSolverInputDto BuildInput(
         AutomaticRoutePlanningRequest request,
         RoutePlan? incumbent,
         TimeSpan timeLimit,
-        int memoryLimitMb) {
+        ExtremeRouteResources resources) {
         string[] relevantIds = request.Tasks
             .SelectMany(task => new[] { task.Item1Id, task.Item2Id })
             .Concat(request.InitialOnBoard.Keys)
@@ -162,8 +167,8 @@ public static class ExtremeRouteSolverClient {
         return new ExtremeSolverInputDto(
             ExtremeRouteSolverProtocol.Version,
             Math.Max(1, (int)Math.Ceiling(timeLimit.TotalSeconds)),
-            Math.Max(256, memoryLimitMb),
-            Math.Clamp(Environment.ProcessorCount - 1, 1, 8),
+            Math.Max(256, resources.MemoryLimitMb),
+            Math.Clamp(resources.WorkerCount, 1, Math.Max(1, Environment.ProcessorCount)),
             routeLimit,
             checked(request.TotalLT - request.ExtraLT),
             items,
