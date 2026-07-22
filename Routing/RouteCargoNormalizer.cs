@@ -74,16 +74,12 @@ public static class RouteCargoNormalizer {
             plan.InputFingerprint);
         var replay = RouteReplay.ReplayPlan(request, candidate);
         if (!replay.Success || replay.Plan is null) {
-            var failure = replay.Failure;
-            return Failed(
-                failure?.RouteNumber ?? 0,
-                failure?.FailureStepKind ?? "replay",
-                failure?.FailureStepIndex,
-                failure?.RequestedItemId ?? "",
-                failure?.FailureCode ?? "replay-failure",
-                RouteReplay.FormatFailureDetail(failure),
-                changed,
-                changes);
+            // A route-local cleanup can remove cargo that is deliberately
+            // transferred into a warehouse for a later route.  Retry each
+            // route/item cleanup independently against the complete plan so
+            // only changes that preserve all cross-route inventory flows are
+            // accepted.
+            return NormalizeConservatively(request, plan, changes, replay.Failure);
         }
 
         var normalizedPlan = new RoutePlan(
@@ -120,7 +116,12 @@ public static class RouteCargoNormalizer {
 
     internal static RouteCargoRewriteResult RewriteRoute(
         IReadOnlyDictionary<string, int> initialOnBoard,
-        PlannedRoute route) {
+        PlannedRoute route) => RewriteRoute(initialOnBoard, route, null);
+
+    private static RouteCargoRewriteResult RewriteRoute(
+        IReadOnlyDictionary<string, int> initialOnBoard,
+        PlannedRoute route,
+        IReadOnlySet<string>? targetItemIds) {
         var onboard = initialOnBoard.ToDictionary(
             pair => pair.Key,
             pair => pair.Value,
@@ -136,6 +137,12 @@ public static class RouteCargoNormalizer {
                     var kept = new List<RouteItemQuantity>(pickup.Items.Count);
                     foreach (var item in pickup.Items) {
                         int before = onboard.GetValueOrDefault(item.ItemId);
+                        if (targetItemIds is not null
+                            && !targetItemIds.Contains(item.ItemId)) {
+                            kept.Add(item);
+                            SetQuantity(onboard, item.ItemId, before + item.Quantity);
+                            continue;
+                        }
                         int requiredBeforeNextPickup = RequiredOnBoardUntilNextPickup(
                             route.Steps, stepIndex + 1, item.ItemId);
                         int requiredFromThisPickup = Math.Max(
@@ -199,6 +206,12 @@ public static class RouteCargoNormalizer {
                     var kept = new List<RouteItemQuantity>(unload.Items.Count);
                     foreach (var item in unload.Items) {
                         int held = Math.Max(0, onboard.GetValueOrDefault(item.ItemId));
+                        if (targetItemIds is not null
+                            && !targetItemIds.Contains(item.ItemId)) {
+                            kept.Add(item);
+                            SetQuantity(onboard, item.ItemId, held - item.Quantity);
+                            continue;
+                        }
                         int requiredAfterUnload = RequiredOnBoardUntilNextPickup(
                             route.Steps, stepIndex + 1, item.ItemId);
                         int canUnload = Math.Max(0, held - requiredAfterUnload);
@@ -233,6 +246,85 @@ public static class RouteCargoNormalizer {
                 0)
             : route;
         return new RouteCargoRewriteResult(candidate, changed, changes);
+    }
+
+    private static CargoNormalizationResult NormalizeConservatively(
+        AutomaticRoutePlanningRequest request,
+        RoutePlan plan,
+        IReadOnlyList<CargoNormalizationChange> attemptedChanges,
+        RouteReplayResult? originalFailure) {
+        RoutePlan candidate = plan;
+        var acceptedChanges = new List<CargoNormalizationChange>();
+        bool changed = false;
+
+        for (int routeIndex = 0; routeIndex < candidate.Routes.Count; routeIndex++) {
+            var route = candidate.Routes[routeIndex];
+            var routeStartOnBoard = routeIndex == 0
+                ? request.InitialOnBoard
+                : EmptyOnBoard;
+            string[] itemIds = RewriteRoute(routeStartOnBoard, route).Changes
+                .Select(change => change.ItemId)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(itemId => itemId, StringComparer.Ordinal)
+                .ToArray();
+
+            foreach (string itemId in itemIds) {
+                route = candidate.Routes[routeIndex];
+                var rewrite = RewriteRoute(
+                    routeStartOnBoard,
+                    route,
+                    new HashSet<string>([itemId], StringComparer.Ordinal));
+                if (!rewrite.Changed) continue;
+
+                var routes = candidate.Routes.ToArray();
+                routes[routeIndex] = rewrite.Route;
+                var trial = new RoutePlan(
+                    candidate.Status,
+                    routes,
+                    candidate.Objective,
+                    candidate.Diagnostics,
+                    candidate.InputFingerprint);
+                var trialReplay = RouteReplay.ReplayPlan(request, trial);
+                if (!trialReplay.Success || trialReplay.Plan is null)
+                    continue;
+
+                candidate = new RoutePlan(
+                    trialReplay.Plan.Status,
+                    trialReplay.Plan.Routes,
+                    trialReplay.Plan.Objective,
+                    plan.Diagnostics,
+                    plan.InputFingerprint);
+                acceptedChanges.AddRange(rewrite.Changes);
+                changed = true;
+            }
+        }
+
+        var replay = RouteReplay.ReplayPlan(request, candidate);
+        if (!replay.Success || replay.Plan is null) {
+            var failure = originalFailure ?? replay.Failure;
+            return Failed(
+                failure?.RouteNumber ?? 0,
+                failure?.FailureStepKind ?? "replay",
+                failure?.FailureStepIndex,
+                failure?.RequestedItemId ?? "",
+                failure?.FailureCode ?? "replay-failure",
+                RouteReplay.FormatFailureDetail(failure),
+                changed || attemptedChanges.Count > 0,
+                changed ? acceptedChanges : attemptedChanges);
+        }
+
+        var normalizedPlan = new RoutePlan(
+            replay.Plan.Status,
+            replay.Plan.Routes,
+            replay.Plan.Objective,
+            plan.Diagnostics,
+            plan.InputFingerprint);
+        return new CargoNormalizationResult(
+            true,
+            normalizedPlan,
+            changed,
+            acceptedChanges,
+            null);
     }
 
     /// <summary>

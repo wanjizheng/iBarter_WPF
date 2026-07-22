@@ -354,6 +354,77 @@ public sealed class CrossRouteCargoLeakTests {
         }
     }
 
+    [Fact]
+    public void NormalizationPreservesCargoTransferredForLaterRouteWarehouseStock() {
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["A"] = new("A", "staged input", 1, 1_000),
+            ["X"] = new("X", "route one input", 1, 1_000),
+            ["Y"] = new("Y", "route one output", 2, 1_000),
+            ["C"] = new("C", "zero weight reward", 5, 0),
+        };
+        var warehouses = new[] {
+            new RouteWarehouse("Velia", "Velia", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) {
+                    ["A"] = 1,
+                    ["X"] = 1,
+                }),
+            new RouteWarehouse("Epheria", "Epheria", new RoutePoint(10, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) {
+                    ["A"] = 4,
+                }),
+        };
+        var tasks = new[] {
+            new RouteBarterTask("r1", "Island1", new RoutePoint(5, 0),
+                "X", 1, "Y", 1),
+            new RouteBarterTask("r2", "Island2", new RoutePoint(15, 0),
+                "A", 5, "C", 1),
+        };
+        var request = new AutomaticRoutePlanningRequest(
+            tasks, items, warehouses, 2_411, 24_110,
+            new RouteSearchLimits(100, 10), "cross-route-staging");
+        string fingerprint = RoutePlanFingerprint.Compute(request);
+        var candidate = new RoutePlan(
+            RoutePlanStatus.BestKnownWithinLimit,
+            [
+                new PlannedRoute(1, "Velia", "Epheria", [
+                    new WarehousePickupStep("Velia", "Velia",
+                        [new("A", 1), new("X", 1)], new(0, 0, 0)),
+                    new BarterStep("r1", "Island1", new("X", 1), new("Y", 1),
+                        new(0, 0, 0)),
+                    new WarehouseUnloadStep("Epheria", "Epheria",
+                        [new("A", 1), new("Y", 1)], new(0, 0, 0)),
+                ], 0, 0, 0, 0),
+                new PlannedRoute(2, "Epheria", "Epheria", [
+                    new WarehousePickupStep("Epheria", "Epheria",
+                        [new("A", 5)], new(0, 0, 0)),
+                    new BarterStep("r2", "Island2", new("A", 5), new("C", 1),
+                        new(0, 0, 0)),
+                    new WarehouseUnloadStep("Epheria", "Epheria", [],
+                        new(0, 0, 0)),
+                ], 0, 0, 0, 0),
+            ],
+            null,
+            [],
+            fingerprint);
+
+        Assert.True(RouteReplay.ReplayPlan(request, candidate).Success);
+
+        var normalized = RouteCargoNormalizer.Normalize(request, candidate);
+
+        Assert.True(normalized.Success, normalized.Failure?.Detail);
+        var route1 = normalized.Plan!.Routes[0];
+        Assert.Contains(route1.Steps.OfType<WarehousePickupStep>()
+            .SelectMany(step => step.Items), item => item == new RouteItemQuantity("A", 1));
+        Assert.Contains(route1.Steps.OfType<WarehouseUnloadStep>()
+            .SelectMany(step => step.Items), item => item == new RouteItemQuantity("A", 1));
+        Assert.Equal(5, normalized.Plan.Routes[1].Steps.OfType<WarehousePickupStep>()
+            .Single().Items.Single(item => item.ItemId == "A").Quantity);
+
+        var published = RoutePlanPublication.PreparePlanForPublication(
+            request, candidate, RoutePlanPublicationSource.FreshGeneration);
+        Assert.True(published.Success, published.Failure?.Detail);
+    }
+
     internal static (AutomaticRoutePlanningRequest Request, RoutePlan Plan) LoadFixture() {
         string path = Path.Combine(
             AppContext.BaseDirectory, "TestData", "cross-route-cargo-leak-plan.json");
