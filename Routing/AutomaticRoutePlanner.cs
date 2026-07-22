@@ -309,7 +309,11 @@ public sealed class AutomaticRoutePlanner {
             result.MemoryLimitMb,
             result.Failure)
         + FormattableString.Invariant(
-            $" attempts={result.AttemptCount} routeLimit={result.RouteLimit} fullRouteSpace={result.FullRouteSpace}");
+            $" attempts={result.AttemptCount} routeLimit={result.RouteLimit} fullRouteSpace={result.FullRouteSpace}")
+        + (result.Plan?.Objective is { } candidateObjective
+            ? FormattableString.Invariant(
+                $" candidateRoutes={result.Plan.Routes.Count} candidateDistance={candidateObjective.TotalDistance:F1}")
+            : " candidateDistance=n/a");
 
     private static string ExtremeDetail(
         string status,

@@ -137,14 +137,9 @@ public static class ExtremeRouteSolverClient {
             if (output.Routes.Count > 0) {
                 candidate = Replay(request, output, out replayFailure);
                 if (candidate is not null) {
-                    var verification = RoutePlanVerifier.Verify(request, candidate);
-                    candidate = verification.Success ? verification.VerifiedPlan : null;
-                    replayFailure ??= verification.Diagnostic?.Detail;
-                }
-                if (candidate is not null && RoutePlanVerifier.TryDetectRouteRedundantCargoRoundTrip(
-                        request, candidate, out string redundant)) {
-                    candidate = null;
-                    replayFailure = $"route-redundant-cargo-roundtrip:{redundant}";
+                    candidate = PrepareCandidateForAcceptance(
+                        request, candidate, out string? preparationFailure);
+                    replayFailure ??= preparationFailure;
                 }
             }
 
@@ -181,6 +176,32 @@ public static class ExtremeRouteSolverClient {
 
     private static bool IsNativeExit(string? failure) =>
         failure?.StartsWith("solver-exit:", StringComparison.Ordinal) == true;
+
+    /// <summary>
+    /// CP-SAT minimizes sailing distance, so pickup quantities that do not
+    /// affect distance may contain harmless surplus cargo. Run the same
+    /// normalization/replay/full-verification contract used at publication
+    /// before deciding whether the exact candidate can compete with the
+    /// incumbent. This also preserves cargo that is staged for later routes.
+    /// </summary>
+    internal static RoutePlan? PrepareCandidateForAcceptance(
+        AutomaticRoutePlanningRequest request,
+        RoutePlan candidate,
+        out string? failure) {
+        var prepared = RoutePlanPublication.PreparePlanForPublication(
+            request,
+            candidate,
+            RoutePlanPublicationSource.FreshGeneration);
+        if (prepared.Success && prepared.Plan is not null) {
+            failure = null;
+            return prepared.Plan;
+        }
+
+        failure = prepared.Failure is null
+            ? "candidate-preparation-failed"
+            : $"{prepared.Failure.Code}:{prepared.Failure.Detail}";
+        return null;
+    }
 
     private static ExtremeSolverInputDto BuildInput(
         AutomaticRoutePlanningRequest request,

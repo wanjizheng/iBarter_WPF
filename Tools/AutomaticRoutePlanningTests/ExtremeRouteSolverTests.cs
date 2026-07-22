@@ -69,6 +69,49 @@ public sealed class ExtremeRouteSolverTests {
         Assert.True(RoutePlanVerifier.Verify(request, result.Plan).Success);
     }
 
+    [Fact]
+    public void Cp_sat_candidate_is_normalized_before_redundant_cargo_can_reject_it() {
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["raw"] = new("raw", "Raw", 1, 100),
+            ["coin"] = new("coin", "Coin", 0, 0),
+        };
+        var request = new AutomaticRoutePlanningRequest(
+            [new RouteBarterTask("barter", "A", new RoutePoint(100, 0),
+                "raw", 1, "coin", 10)],
+            items,
+            [new RouteWarehouse("Iliya", "Iliya", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) { ["raw"] = 2 })],
+            extraLT: 0,
+            totalLT: 1_000,
+            new RouteSearchLimits(10_000, 100),
+            "extreme-redundant-cargo");
+
+        var state = RouteSimulationState.CreateInitial(request);
+        state = RouteStateTransition.TryPickup(
+            request, state, "Iliya", [new RouteItemQuantity("raw", 2)]).State;
+        state = RouteStateTransition.TryBarter(request, state, 0).State;
+        state = RouteStateTransition.TryUnload(
+            request, state, "Iliya", [new RouteItemQuantity("raw", 1)],
+            finishRoute: true).State;
+        var candidate = RoutePlanFactory.FromState(
+            request, state, RoutePlanStatus.BestKnownWithinLimit, []);
+        Assert.True(RoutePlanVerifier.TryDetectRouteRedundantCargoRoundTrip(
+            request, candidate, out _));
+
+        RoutePlan? accepted = ExtremeRouteSolverClient.PrepareCandidateForAcceptance(
+            request, candidate, out string? failure);
+
+        Assert.Null(failure);
+        Assert.NotNull(accepted);
+        var route = Assert.Single(accepted!.Routes);
+        Assert.Equal(1, Assert.Single(route.Steps.OfType<WarehousePickupStep>())
+            .Items.Single(item => item.ItemId == "raw").Quantity);
+        Assert.Empty(Assert.Single(route.Steps.OfType<WarehouseUnloadStep>()).Items);
+        Assert.False(RoutePlanVerifier.TryDetectRouteRedundantCargoRoundTrip(
+            request, accepted, out _));
+        Assert.True(RoutePlanVerifier.Verify(request, accepted).Success);
+    }
+
     private static string SolverPath() {
         DirectoryInfo directory = new(AppContext.BaseDirectory);
         for (int i = 0; i < 5; i++) directory = directory.Parent!;
