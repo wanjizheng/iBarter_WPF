@@ -42,6 +42,29 @@ public sealed class ExtremeSearchResumePolicyTests {
             "same"));
     }
 
+    [Fact]
+    public void Restored_extreme_plan_still_offers_prompt_before_a_fresh_request_is_built() {
+        Assert.True(ExtremeSearchResumePolicy.CanOfferPrompt(
+            restoredFromDisk: true,
+            RouteOptimizationMode.Extreme,
+            Plan("saved")));
+    }
+
+    [Fact]
+    public void Prompt_eligibility_does_not_depend_on_a_recalculated_request_fingerprint() {
+        var plan = Plan("saved");
+
+        Assert.True(ExtremeSearchResumePolicy.CanOfferPrompt(
+            restoredFromDisk: true,
+            RouteOptimizationMode.Extreme,
+            plan));
+        Assert.False(ExtremeSearchResumePolicy.CanOfferContinuation(
+            restoredFromDisk: true,
+            RouteOptimizationMode.Extreme,
+            plan,
+            "fresh-recalculation"));
+    }
+
     [Theory]
     [InlineData(false, RouteOptimizationMode.Extreme, "same")]
     [InlineData(true, RouteOptimizationMode.Balanced, "same")]

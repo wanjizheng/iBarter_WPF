@@ -125,6 +125,26 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         }
     }
 
+    public AutomaticRoutePlanningRequest? GetRestoredExtremeContinuationRequest() {
+        lock (gate) {
+            if (!ExtremeSearchResumePolicy.CanOfferPrompt(
+                    currentPlanRestoredFromDisk,
+                    currentPlanMode,
+                    currentPlan)
+                || currentPublicationRequest is null)
+                return null;
+
+            string fingerprint = RoutePlanFingerprint.Compute(currentPublicationRequest);
+            return ExtremeSearchResumePolicy.CanOfferContinuation(
+                currentPlanRestoredFromDisk,
+                currentPlanMode,
+                currentPlan,
+                fingerprint)
+                ? currentPublicationRequest
+                : null;
+        }
+    }
+
     public void SetOptimizationMode(RouteOptimizationMode mode) {
         if (mode == selectedOptimizationMode) return;
         selectedOptimizationMode = mode;

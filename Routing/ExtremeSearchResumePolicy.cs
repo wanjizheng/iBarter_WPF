@@ -6,14 +6,20 @@ namespace iBarter.Routing;
 /// different Planner, warehouse, cargo, or search inputs from becoming a seed.
 /// </summary>
 public static class ExtremeSearchResumePolicy {
+    public static bool CanOfferPrompt(
+        bool restoredFromDisk,
+        RouteOptimizationMode currentPlanMode,
+        RoutePlan? currentPlan) =>
+        restoredFromDisk
+        && currentPlanMode is RouteOptimizationMode.Deep or RouteOptimizationMode.Extreme
+        && currentPlan?.Status is RoutePlanStatus.Optimal
+            or RoutePlanStatus.BestKnownWithinLimit;
+
     public static bool CanOfferContinuation(
         bool restoredFromDisk,
         RouteOptimizationMode currentPlanMode,
         RoutePlan? currentPlan,
         string requestFingerprint) =>
-        restoredFromDisk
-        && currentPlanMode is RouteOptimizationMode.Deep or RouteOptimizationMode.Extreme
-        && currentPlan?.Status is RoutePlanStatus.Optimal
-            or RoutePlanStatus.BestKnownWithinLimit
-        && StringComparer.Ordinal.Equals(currentPlan.InputFingerprint, requestFingerprint);
+        CanOfferPrompt(restoredFromDisk, currentPlanMode, currentPlan)
+        && StringComparer.Ordinal.Equals(currentPlan?.InputFingerprint, requestFingerprint);
 }

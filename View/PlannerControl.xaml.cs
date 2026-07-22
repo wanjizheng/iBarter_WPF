@@ -1490,9 +1490,41 @@ namespace iBarter.View {
                 App.myCargoProperty.ExtraLT, MidpointRounding.AwayFromZero));
             int totalLT = Convert.ToInt32(Math.Round(
                 App.myCargoProperty.TotalLT, MidpointRounding.AwayFromZero));
-            var adapter = new PlannerAutoPlanningAdapter();
-            var calculation = adapter.Calculate(
-                snapshots, inventory, strategy, lv5Target, lv6Target, 1_000_000);
+            var profile = ResolveSelectedOptimizationProfile();
+            AutomaticRoutePlanningRequest? restoredContinuationRequest = null;
+            bool continuingRestoredSearch = false;
+            bool useCurrentPlanAsIncumbent = true;
+            if (profile.Mode == RouteOptimizationMode.Extreme
+                && (restoredContinuationRequest = App.myRouteCoordinator
+                    .GetRestoredExtremeContinuationRequest()) is not null) {
+                MessageBoxResult resumeChoice = MessageBox.Show(
+                    svc.Localize("str.Msg.Planner.AutoPlan.ExtremeResumePrompt"),
+                    svc.Localize("str.Msg.Planner.AutoPlan.ExtremeResumeTitle"),
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Question);
+                if (resumeChoice == MessageBoxResult.Cancel) return;
+                continuingRestoredSearch = resumeChoice == MessageBoxResult.Yes;
+                useCurrentPlanAsIncumbent = continuingRestoredSearch;
+            }
+
+            PlannerCalculation calculation;
+            if (continuingRestoredSearch) {
+                var preservedMultipliers = snapshots.ToDictionary(
+                    row => row.RowId,
+                    row => row.ExistingMultiplier,
+                    StringComparer.Ordinal);
+                int preservedParley = checked(snapshots.Sum(row =>
+                    row.ExistingMultiplier * row.Route.Parley));
+                calculation = new PlannerCalculation(
+                    new PlannerApplySet(preservedMultipliers),
+                    [],
+                    preservedParley);
+            }
+            else {
+                var adapter = new PlannerAutoPlanningAdapter();
+                calculation = adapter.Calculate(
+                    snapshots, inventory, strategy, lv5Target, lv6Target, 1_000_000);
+            }
 
             if (calculation.ApplySet is null) {
                 var diag = calculation.Diagnostics.FirstOrDefault();
@@ -1543,21 +1575,11 @@ namespace iBarter.View {
                     new RoutePoint(island.NavigationX!.Value, island.NavigationY!.Value)))
                 .ToArray();
             var cargo = new CargoCapacitySnapshot(extraLT, totalLT);
-            var profile = ResolveSelectedOptimizationProfile();
-            var request = AutomaticRoutePlanningAdapter.BuildRequest(
-                routeRows, storageRows, islandRows, cargo,
-                new RouteSearchLimits(250_000, profile.MaxLocalEvaluations), profile);
-            bool useCurrentPlanAsIncumbent = true;
-            if (profile.Mode == RouteOptimizationMode.Extreme
-                && App.myRouteCoordinator.CanContinueRestoredExtremeSearch(request)) {
-                MessageBoxResult resumeChoice = MessageBox.Show(
-                    svc.Localize("str.Msg.Planner.AutoPlan.ExtremeResumePrompt"),
-                    svc.Localize("str.Msg.Planner.AutoPlan.ExtremeResumeTitle"),
-                    MessageBoxButton.YesNoCancel,
-                    MessageBoxImage.Question);
-                if (resumeChoice == MessageBoxResult.Cancel) return;
-                useCurrentPlanAsIncumbent = resumeChoice == MessageBoxResult.Yes;
-            }
+            var request = continuingRestoredSearch
+                ? restoredContinuationRequest!
+                : AutomaticRoutePlanningAdapter.BuildRequest(
+                    routeRows, storageRows, islandRows, cargo,
+                    new RouteSearchLimits(250_000, profile.MaxLocalEvaluations), profile);
             App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Solving",
                 svc.Localize(OptimModeLocalizationKey(profile.Mode))), Brushes.SteelBlue);
             var routePlan = await App.myRouteCoordinator.CalculateAsync(
@@ -1585,7 +1607,7 @@ namespace iBarter.View {
             // Commit the Planner multipliers only after route calculation and replay
             // verification succeeded. A failed new attempt therefore leaves the last
             // saved Planner + automatic route pair intact and restorable.
-            if (!manualSelection) {
+            if (!manualSelection && !continuingRestoredSearch) {
                 DataGrid_Planner.BeginInit();
                 try {
                     // Audit round 3: the planner's Multipliers dictionary
