@@ -367,12 +367,18 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         else refreshed.Remove(rowId);
         completedBarterRowIds = refreshed;
 
+        // Completion is already authoritative in the Planner at this point.
+        // Project that overlay to the map and ship-cargo UI immediately,
+        // before the safety pipeline attempts to normalize/replay/persist the
+        // remaining route.  Previously the notification lived after
+        // PreparePlanForPublication; if publication failed, Planner showed CK
+        // while both route views kept rendering their stale pre-click lists.
+        RefreshCompletionDisplay();
+
         // Step 2: re-project the in-memory plan against the new completed
         // set.  If no plan exists yet, the user just hasn't generated one —
         // nothing else to do.
         if (currentPlan is null) {
-            UpdateVisibleRoute();
-            RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
             return false;
         }
 
@@ -405,12 +411,6 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         // the remaining-plan projection against the current request.
         var remainingRoutes = RouteProgressFilter.RemainingRoutes(
             currentPlan.Routes, completedBarterRowIds);
-        RefreshRouteOptionsAndSelection(remainingRoutes);
-
-        UpdateVisibleRoute();
-        SelectPreferredOrFirstBarter(selectedRouteNumber, selectedBarterRowId);
-        RaisePropertyChanged(nameof(RouteOptions));
-        RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
         // Persist the known-good base plan. Planner CK state is stored in
         // myPlan_Data.json; TryLoadAfterProgress combines the two on restart.
         SaveCurrentPlan();
@@ -429,6 +429,14 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             }
         }
         return remainingRoutes.Count > 0;
+    }
+
+    private void RefreshCompletionDisplay() {
+        RefreshRouteOptionsAndSelection();
+        UpdateVisibleRoute();
+        SelectPreferredOrFirstBarter(selectedRouteNumber, selectedBarterRowId);
+        RaisePropertyChanged(nameof(RouteOptions));
+        RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void Invalidate(string reason) {

@@ -2219,8 +2219,6 @@ namespace iBarter.View {
         }
 
         private void CompleteBarterViaPipeline(Barter myBarter) {
-            App.myfmMain.myPlannerControl.Grouping();
-            App.myfmMain.myPlannerControl.SaveData();
             // Audit round 3: row identity comes from the persistent
             // Barter.PlannerRowId; we never re-derive from index or
             // (Island, Item1, Item2).
@@ -2231,11 +2229,23 @@ namespace iBarter.View {
                 App.myPVM.BarterCollection,
                 rowId,
                 completed: true);
+
+            // Grouping performs the synchronous map rebuild. Do it only after
+            // the coordinator has accepted the CK overlay; the old order
+            // rebuilt from the stale completed-id set and then relied solely
+            // on an asynchronous event to repair both route views.
+            App.myfmMain.myPlannerControl.Grouping();
+            App.myfmMain.myPlannerControl.SaveData();
             if (App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName) != null) {
                 App.myCVM.CargoDetails.Remove(App.myCVM.CargoDetails.FirstOrDefault(b => b.IsLandName == myBarter.IsLandName));
                 App.myfmMain.myShipCargo.UpdateCurrentLV();
                 App.myfmMain.myShipCargo.SaveData();
             }
+            // Automatic mode deliberately makes UpdateCurrentLV a no-op. Force
+            // its route ItemsSource to re-read VisibleAutomaticSteps so the
+            // completed card disappears even if the control missed an earlier
+            // RouteDisplayChanged subscription while docking/loading.
+            App.myfmMain.myShipCargo.RefreshAfterRouteProgress();
         }
 
         private void Islands_MouseRightButtonDown(object sender, MouseButtonEventArgs e) {

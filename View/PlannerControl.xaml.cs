@@ -972,6 +972,8 @@ namespace iBarter.View {
                     App.myfmMain.myShipCargo.SaveData();
                 }
 
+                App.myfmMain.myShipCargo.RefreshAfterRouteProgress();
+
                 SaveData();
                 UpdateParley();
                 UpdateMapControl();

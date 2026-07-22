@@ -113,6 +113,16 @@ namespace iBarter.View {
             Dispatcher.BeginInvoke(FocusSelectedAutomaticStep, System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
+        public void RefreshAfterRouteProgress() {
+            if (!Dispatcher.CheckAccess()) {
+                Dispatcher.BeginInvoke(
+                    new Action(RefreshRouteMode),
+                    System.Windows.Threading.DispatcherPriority.Render);
+                return;
+            }
+            RefreshRouteMode();
+        }
+
         private void ComboBoxAdv_RouteSelector_SelectionChanged(object sender, SelectionChangedEventArgs e) {
             if (updatingRouteSelector || ComboBoxAdv_RouteSelector.SelectedItem is not RouteSelectionOption option)
                 return;
