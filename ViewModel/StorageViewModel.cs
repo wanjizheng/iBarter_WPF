@@ -457,6 +457,16 @@ namespace iBarter.ViewModel {
             listItems.Add("Golden Flour Sack");
             listItems.Add("Omar Lava Powder");
             listItems.Add("Artisan Seashell Necklace");
+            // Newly-added LV7 terminal outputs must also exist in the storage
+            // ledger. Planner Done nets every selected exchange atomically;
+            // without these zero-quantity seed rows, a valid plan that
+            // produces one of them fails with MISSING_STORAGE_ITEM and the
+            // Planner is intentionally left uncleared.
+            listItems.Add("Traditional Balenos Decorative Anchor");
+            listItems.Add("Calpheonian Artisan Pearl Necklace");
+            listItems.Add("Tarif Magic Pot");
+            listItems.Add("Balenos Whale Sculpture");
+            listItems.Add("Rainbow Sea Crystal Piece");
 
             for (int i = 0; i < listItems.Count; i++) {
                 string strName = listItems[i].Replace("'", "").Replace("(", "").Replace(")", "");
