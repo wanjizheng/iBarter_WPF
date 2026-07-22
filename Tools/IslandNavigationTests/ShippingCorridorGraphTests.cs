@@ -46,13 +46,19 @@ public sealed class ShippingCorridorGraphTests {
     }
 
     [Fact]
-    public void Display_leg_stays_direct_while_distance_uses_right_corridor() {
-        var distancePath = ShippingCorridorGraph.BuildPath("Halmad", Halmad, "Hakoven", Hakoven);
+    public void Sausan_to_arehaza_draws_direct_but_costs_the_right_corridor() {
+        var sausan = new NavigationPoint(255_291, 142_486);
+        var arehaza = new NavigationPoint(1_267_170, 177_948);
 
-        var displayPath = RouteDisplayGeometry.BuildDirectLeg(Halmad, Hakoven);
+        var distancePath = ShippingCorridorGraph.BuildPath(
+            "Sausan", sausan, "Arehaza", arehaza);
+        var displayPath = RouteDisplayGeometry.BuildDirectLeg(sausan, arehaza);
 
-        Assert.True(distancePath.Count > 2);
-        Assert.Equal([Halmad, Hakoven], displayPath);
+        Assert.Equal([sausan, arehaza], displayPath);
+        Assert.True(distancePath.Count > 10);
+        Assert.Contains(distancePath, point => IslandNavigationGeometry.Distance(point, Halmad) < 1);
+        Assert.True(ShippingCorridorGraph.PathDistance(distancePath)
+                    > IslandNavigationGeometry.Distance(sausan, arehaza));
     }
 
     [Fact]

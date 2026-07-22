@@ -26,6 +26,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     // ComboBox) so that subsequent interactive saves do not silently change
     // to whatever the user most recently picked in the dropdown.
     private RouteOptimizationMode currentPlanMode = RouteOptimizationMode.Balanced;
+    private volatile bool currentPlanRestoredFromDisk;
     private int? selectedRouteNumber;
     private bool showAllRoutes;
     private bool showRouteGuides = true;
@@ -72,13 +73,15 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
 
     public async Task<RoutePlan> CalculateAsync(
         AutomaticRoutePlanningRequest request,
-        RouteOptimizationProfile profile) {
+        RouteOptimizationProfile profile,
+        bool useCurrentPlanAsIncumbent = true) {
         CancellationTokenSource ownCancellation;
         long ownRequestId;
         string fingerprint = RoutePlanFingerprint.Compute(request);
         RoutePlan? preferredIncumbent = null;
         lock (gate) {
-            if (profile.Mode == RouteOptimizationMode.Extreme
+            if (useCurrentPlanAsIncumbent
+                && profile.Mode == RouteOptimizationMode.Extreme
                 && currentPlanMode is RouteOptimizationMode.Deep
                     or RouteOptimizationMode.Extreme
                 && StringComparer.Ordinal.Equals(
@@ -109,6 +112,17 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         }
 
         return plan;
+    }
+
+    public bool CanContinueRestoredExtremeSearch(AutomaticRoutePlanningRequest request) {
+        string fingerprint = RoutePlanFingerprint.Compute(request);
+        lock (gate) {
+            return ExtremeSearchResumePolicy.CanOfferContinuation(
+                currentPlanRestoredFromDisk,
+                currentPlanMode,
+                currentPlan,
+                fingerprint);
+        }
     }
 
     public void SetOptimizationMode(RouteOptimizationMode mode) {
@@ -147,6 +161,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         }
 
         currentPlanMode = generationMode;
+        currentPlanRestoredFromDisk = false;
         currentPublicationRequest = request;
         Publish(prepared.Plan, preferredShowRouteGuides: showRouteGuides);
         SaveCurrentPlan();
@@ -172,6 +187,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 return exact with { Status = RoutePlanLoadStatus.FingerprintMismatch };
             }
             currentPlanMode = exact.SavedOptimizationMode ?? RouteOptimizationMode.Balanced;
+            currentPlanRestoredFromDisk = true;
             currentPublicationRequest = request;
             if (prepared.Changed) {
                 if (!SavePreparedSnapshot(exact.Snapshot, prepared.Plan))
@@ -203,6 +219,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 return exact;
             }
             currentPlanMode = exact.SavedOptimizationMode ?? currentPlanMode;
+            currentPlanRestoredFromDisk = true;
             currentPublicationRequest = request;
             // The verified Plan is a remaining-work projection. Retain the
             // complete persisted baseline so cancelling CK can restore a
@@ -401,6 +418,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             activeFingerprint = null;
         }
         currentPlan = null;
+        currentPlanRestoredFromDisk = false;
         currentPublicationRequest = null;
         currentPlanMode = RouteOptimizationMode.Balanced;
         selectedRouteNumber = null;

@@ -536,10 +536,11 @@ namespace iBarter.View {
                     host.ActualHeight);
             }
 
+            double visibleWidth = GetUnobscuredMapWidth(host);
             double labelLeft = iBarter.Routing.RouteStepLabelRenderer.ClampLabelPosition(
                 image.Margin.Left - labelSize.Width / 2,
                 labelSize.Width,
-                host.ActualWidth);
+                visibleWidth);
             labelTop = iBarter.Routing.RouteStepLabelRenderer.ClampLabelPosition(
                 labelTop,
                 labelSize.Height,
@@ -547,8 +548,28 @@ namespace iBarter.View {
             label.Margin = new Thickness(
                 labelLeft,
                 labelTop,
-                Math.Max(0, host.ActualWidth - labelLeft - labelSize.Width),
+                Math.Max(0, visibleWidth - labelLeft - labelSize.Width),
                 Math.Max(0, host.ActualHeight - labelTop - labelSize.Height));
+        }
+
+        private double GetUnobscuredMapWidth(Grid host) {
+            double hostWidth = host.ActualWidth;
+            try {
+                FrameworkElement? rightDock = App.myfmMain?.dockRight_ShipCargo;
+                if (rightDock is null || !rightDock.IsVisible || rightDock.ActualWidth <= 0)
+                    return hostWidth;
+                Point dockLeft = rightDock.TranslatePoint(new Point(0, 0), host);
+                return iBarter.Routing.RouteStepLabelRenderer.VisibleExtentBeforeOccluder(
+                    hostWidth,
+                    dockLeft.X,
+                    occluderVisible: true);
+            }
+            catch (InvalidOperationException) {
+                // The dock and map can briefly be in different visual trees
+                // while Syncfusion rearranges documents. The next layout pass
+                // retries with the current tree.
+                return hostWidth;
+            }
         }
 
         private static double? FindLowestBarterLabelBottom(Grid host, string islandId) {
@@ -736,8 +757,7 @@ namespace iBarter.View {
                     || fromHost is null
                     || !ReferenceEquals(fromHost, toHost))
                     continue;
-                var displayPath = RouteDisplayGeometry.BuildDirectLeg(
-                    from, to);
+                var displayPath = RouteDisplayGeometry.BuildDirectLeg(from, to);
                 bool focused = App.myRouteCoordinator?.IsFocusedSegment(
                     routeNumber, fromIsland.IslandsName, toIsland.IslandsName) == true;
                 for (int segment = 0; segment < displayPath.Count - 1; segment++)
@@ -1560,16 +1580,46 @@ namespace iBarter.View {
             updated++;
         }
 
-        private static void PositionRouteStepLabel(
+        private void PositionRouteStepLabel(
             FrameworkElement wrapper, Grid host, Point center, double verticalOffset) {
             // Centre horizontally on the island block; stack
             // vertically by occurrence offset (so pickup + barter +
             // unload on the same island don't overlap).
-            wrapper.Margin = new Thickness(
+            double visibleWidth = GetUnobscuredMapWidth(host);
+            FitRouteStepLabelInsideHost(wrapper, visibleWidth);
+            double left = iBarter.Routing.RouteStepLabelRenderer.ClampLabelPosition(
                 center.X - wrapper.Width / 2,
+                wrapper.Width,
+                visibleWidth);
+            double top = iBarter.Routing.RouteStepLabelRenderer.ClampLabelPosition(
                 center.Y + verticalOffset,
-                host.ActualWidth - (center.X - wrapper.Width / 2) - wrapper.Width,
-                host.ActualHeight - (center.Y + verticalOffset) - wrapper.Height);
+                wrapper.Height,
+                host.ActualHeight);
+            wrapper.Margin = new Thickness(
+                left,
+                top,
+                Math.Max(0, visibleWidth - left - wrapper.Width),
+                Math.Max(0, host.ActualHeight - top - wrapper.Height));
+        }
+
+        private static void FitRouteStepLabelInsideHost(
+            FrameworkElement wrapper, double hostWidth) {
+            if (wrapper is not Grid grid
+                || grid.Children.OfType<Border>().FirstOrDefault() is not { } border
+                || border.Child is not TextBlock textBlock)
+                return;
+            border.MaxWidth = Double.PositiveInfinity;
+            textBlock.TextWrapping = TextWrapping.NoWrap;
+            double naturalWidth = MeasureElementForPlacement(border).Width;
+            double width = iBarter.Routing.RouteStepLabelRenderer.ConstrainLabelExtent(
+                naturalWidth, hostWidth);
+            border.MaxWidth = width;
+            textBlock.TextWrapping = naturalWidth > width
+                ? TextWrapping.Wrap
+                : TextWrapping.NoWrap;
+            border.Measure(new Size(width, Double.PositiveInfinity));
+            wrapper.Width = Math.Min(width, border.DesiredSize.Width);
+            wrapper.Height = border.DesiredSize.Height;
         }
 
         private HashSet<string> CollectExistingRouteStepLabelIdentities() {

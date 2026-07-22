@@ -419,6 +419,28 @@ public class RouteStepLabelTests {
     }
 
     [Fact]
+    public void OversizedMapLabel_IsConstrainedToTheVisibleHostWidth() {
+        Assert.Equal(192, RouteStepLabelRenderer.ConstrainLabelExtent(
+            desiredExtent: 260,
+            hostExtent: 200));
+        Assert.Equal(120, RouteStepLabelRenderer.ConstrainLabelExtent(
+            desiredExtent: 120,
+            hostExtent: 200));
+    }
+
+    [Fact]
+    public void DockedRightPanel_ReducesTheUsableMapWidthForLabelPlacement() {
+        Assert.Equal(760, RouteStepLabelRenderer.VisibleExtentBeforeOccluder(
+            hostExtent: 1_060,
+            occluderLeadingEdge: 760,
+            occluderVisible: true));
+        Assert.Equal(1_060, RouteStepLabelRenderer.VisibleExtentBeforeOccluder(
+            hostExtent: 1_060,
+            occluderLeadingEdge: 760,
+            occluderVisible: false));
+    }
+
+    [Fact]
     public void Reconcile_Deferred_ReturnsDeferred_AndPreservesExisting() {
         // Host size 0: first call after IslandsButtonInitialisation
         // (audit round 5). Reconcile returns Deferred; existing

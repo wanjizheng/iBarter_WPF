@@ -89,6 +89,8 @@
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveNoProducer">Auto Plan: no producer in the same BarterGroup for {0}.</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveBudgetExceeded">Auto Plan: parley budget exhausted before reaching the LV5/LV6 reserve target ({0}).</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveUnreachable">Auto Plan: cannot satisfy the LV5/LV6 reserve target for {0}.</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ExtremeResumeTitle">Extreme search</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ExtremeResumePrompt">A saved route matches the current data.&#10;&#10;Yes: continue searching from the saved best result&#10;No: ignore it and search from scratch&#10;Cancel: do not start</sys:String>
     <sys:String x:Key="str.ShipCargo.CurrentSelection">Selected</sys:String>
 
     <!-- PlannerControl.xaml toolbar labels -->

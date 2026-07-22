@@ -77,6 +77,8 @@
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveNoProducer">自動規劃:同一商團內沒有 {0} 的上游生產路線。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveBudgetExceeded">自動規劃:貢獻度預算不足,無法達成 LV5/LV6 庫存目標 ({0})。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveUnreachable">自動規劃:無法滿足 LV5/LV6 庫存目標 ({0})。</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ExtremeResumeTitle">极深搜索</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ExtremeResumePrompt">检测到与当前数据匹配的已保存路线。&#10;&#10;是：从已保存的最佳结果继续向下搜索&#10;否：忽略旧结果，重新搜索&#10;取消：不开始搜索</sys:String>
     <sys:String x:Key="str.ShipCargo.CurrentSelection">当前选择</sys:String>
 
     <sys:String x:Key="str.Planner.TotalBarters">交换总数：</sys:String>

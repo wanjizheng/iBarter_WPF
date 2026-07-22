@@ -178,4 +178,22 @@ public static class RouteStepLabelRenderer {
             desiredPosition,
             0,
             Math.Max(0, hostExtent - labelExtent));
+
+    public static double ConstrainLabelExtent(
+        double desiredExtent,
+        double hostExtent,
+        double edgePadding = 4) => Math.Min(
+            Math.Max(0, desiredExtent),
+            Math.Max(0, hostExtent - edgePadding * 2));
+
+    public static double VisibleExtentBeforeOccluder(
+        double hostExtent,
+        double occluderLeadingEdge,
+        bool occluderVisible) =>
+        occluderVisible
+        && double.IsFinite(occluderLeadingEdge)
+        && occluderLeadingEdge > 0
+        && occluderLeadingEdge < hostExtent
+            ? occluderLeadingEdge
+            : hostExtent;
 }

@@ -1547,9 +1547,21 @@ namespace iBarter.View {
             var request = AutomaticRoutePlanningAdapter.BuildRequest(
                 routeRows, storageRows, islandRows, cargo,
                 new RouteSearchLimits(250_000, profile.MaxLocalEvaluations), profile);
+            bool useCurrentPlanAsIncumbent = true;
+            if (profile.Mode == RouteOptimizationMode.Extreme
+                && App.myRouteCoordinator.CanContinueRestoredExtremeSearch(request)) {
+                MessageBoxResult resumeChoice = MessageBox.Show(
+                    svc.Localize("str.Msg.Planner.AutoPlan.ExtremeResumePrompt"),
+                    svc.Localize("str.Msg.Planner.AutoPlan.ExtremeResumeTitle"),
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Question);
+                if (resumeChoice == MessageBoxResult.Cancel) return;
+                useCurrentPlanAsIncumbent = resumeChoice == MessageBoxResult.Yes;
+            }
             App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Solving",
                 svc.Localize(OptimModeLocalizationKey(profile.Mode))), Brushes.SteelBlue);
-            var routePlan = await App.myRouteCoordinator.CalculateAsync(request, profile);
+            var routePlan = await App.myRouteCoordinator.CalculateAsync(
+                request, profile, useCurrentPlanAsIncumbent);
             if (routePlan.Status is not (RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit)) {
                 switch (routePlan.Status) {
                     case RoutePlanStatus.Infeasible:
