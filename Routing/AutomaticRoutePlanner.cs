@@ -14,9 +14,16 @@ public sealed class AutomaticRoutePlanner {
     public RoutePlan Plan(
         AutomaticRoutePlanningRequest request,
         RouteOptimizationProfile profile,
+        CancellationToken cancellationToken = default) =>
+        Plan(request, profile, preferredIncumbent: null, cancellationToken);
+
+    public RoutePlan Plan(
+        AutomaticRoutePlanningRequest request,
+        RouteOptimizationProfile profile,
+        RoutePlan? preferredIncumbent,
         CancellationToken cancellationToken = default) {
         if (profile.Mode == RouteOptimizationMode.Extreme)
-            return PlanExtreme(request, profile, cancellationToken);
+            return PlanExtreme(request, profile, preferredIncumbent, cancellationToken);
 
         string fingerprint = RoutePlanFingerprint.Compute(request);
         var budget = new RouteSearchBudget(profile, taskCount: request.Tasks.Count);
@@ -211,23 +218,32 @@ public sealed class AutomaticRoutePlanner {
     private RoutePlan PlanExtreme(
         AutomaticRoutePlanningRequest request,
         RouteOptimizationProfile profile,
+        RoutePlan? preferredIncumbent,
         CancellationToken cancellationToken) {
         string fingerprint = RoutePlanFingerprint.Compute(request);
         var watch = Stopwatch.StartNew();
         ExtremeRouteResources resources = ExtremeRouteResourcePolicy.Detect();
         try {
             cancellationToken.ThrowIfCancellationRequested();
-            // Give CP-SAT a strong, fully verified warm start without spending
-            // the whole Extreme budget in the beam phase.
-            var deep = RouteOptimizationProfile.For(RouteOptimizationMode.Deep);
-            var seedProfile = deep with {
-                TotalTarget = TimeSpan.FromSeconds(30),
-                FinalizationReserve = TimeSpan.FromSeconds(2),
-            };
-            RoutePlan seed = Plan(request, seedProfile, cancellationToken);
-            RoutePlan? incumbent = seed.Status is RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit
-                ? seed
-                : null;
+            RoutePlan? incumbent = VerifyPreferredIncumbent(request, preferredIncumbent);
+            RoutePlan seed;
+            if (incumbent is not null) {
+                seed = incumbent;
+            }
+            else {
+                // Give the first CP-SAT run a strong, fully verified warm start
+                // without spending the whole Extreme budget in the beam phase.
+                var deep = RouteOptimizationProfile.For(RouteOptimizationMode.Deep);
+                var seedProfile = deep with {
+                    TotalTarget = TimeSpan.FromSeconds(30),
+                    FinalizationReserve = TimeSpan.FromSeconds(2),
+                };
+                seed = Plan(request, seedProfile, cancellationToken);
+                incumbent = seed.Status is RoutePlanStatus.Optimal
+                        or RoutePlanStatus.BestKnownWithinLimit
+                    ? seed
+                    : null;
+            }
             if (seed.Status == RoutePlanStatus.Optimal)
                 return WithExtremeDiagnostic(
                     seed, "seed-already-optimal", seed.Objective?.TotalDistance ?? 0,
@@ -277,6 +293,19 @@ public sealed class AutomaticRoutePlanner {
         catch (OperationCanceledException) {
             return new RoutePlan(RoutePlanStatus.Cancelled, [], null, [], fingerprint);
         }
+    }
+
+    private static RoutePlan? VerifyPreferredIncumbent(
+        AutomaticRoutePlanningRequest request,
+        RoutePlan? candidate) {
+        if (candidate?.Status is not (RoutePlanStatus.Optimal
+                or RoutePlanStatus.BestKnownWithinLimit)
+            || !StringComparer.Ordinal.Equals(
+                candidate.InputFingerprint, RoutePlanFingerprint.Compute(request)))
+            return null;
+        var prepared = RoutePlanPublication.PreparePlanForPublication(
+            request, candidate, RoutePlanPublicationSource.FreshGeneration);
+        return prepared.Success ? prepared.Plan : null;
     }
 
     private static RoutePlan WithExtremeDiagnostic(

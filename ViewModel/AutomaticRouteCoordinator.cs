@@ -76,7 +76,15 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         CancellationTokenSource ownCancellation;
         long ownRequestId;
         string fingerprint = RoutePlanFingerprint.Compute(request);
+        RoutePlan? preferredIncumbent = null;
         lock (gate) {
+            if (profile.Mode == RouteOptimizationMode.Extreme
+                && currentPlanMode is RouteOptimizationMode.Deep
+                    or RouteOptimizationMode.Extreme
+                && StringComparer.Ordinal.Equals(
+                    currentPlan?.InputFingerprint, fingerprint)) {
+                preferredIncumbent = currentPlan;
+            }
             cancellation?.Cancel();
             cancellation?.Dispose();
             cancellation = ownCancellation = new CancellationTokenSource();
@@ -85,7 +93,9 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         }
 
         RoutePlan plan = await Task.Run(
-            () => planner.Plan(request, profile, ownCancellation.Token), ownCancellation.Token)
+            () => planner.Plan(
+                request, profile, preferredIncumbent, ownCancellation.Token),
+            ownCancellation.Token)
             .ContinueWith(task => task.IsCanceled
                     ? new RoutePlan(RoutePlanStatus.Cancelled, [], null, [], fingerprint)
                     : task.GetAwaiter().GetResult(),
@@ -104,7 +114,12 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     public void SetOptimizationMode(RouteOptimizationMode mode) {
         if (mode == selectedOptimizationMode) return;
         selectedOptimizationMode = mode;
-        Invalidate("optimization-mode");
+        lock (gate) {
+            cancellation?.Cancel();
+            requestId++;
+            activeFingerprint = null;
+        }
+        RaisePropertyChanged(nameof(SelectedOptimizationMode));
     }
 
     public async Task<RoutePlan> GenerateAsync(AutomaticRoutePlanningRequest request) {

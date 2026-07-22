@@ -112,6 +112,44 @@ public sealed class ExtremeRouteSolverTests {
         Assert.True(RoutePlanVerifier.Verify(request, accepted).Success);
     }
 
+    [Fact]
+    public void Extreme_reuses_a_verified_incumbent_instead_of_rebuilding_its_seed() {
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["raw"] = new("raw", "Raw", 1, 100),
+            ["coin"] = new("coin", "Coin", 0, 0),
+        };
+        var request = new AutomaticRoutePlanningRequest(
+            [new RouteBarterTask("barter", "A", new RoutePoint(100, 0),
+                "raw", 1, "coin", 10)],
+            items,
+            [new RouteWarehouse("W", "W", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) { ["raw"] = 1 })],
+            extraLT: 0,
+            totalLT: 1_000,
+            new RouteSearchLimits(10_000, 100),
+            "extreme-reuse-seed");
+        var planner = new AutomaticRoutePlanner();
+        RoutePlan optimal = planner.Plan(
+            request, RouteOptimizationProfile.For(RouteOptimizationMode.Balanced),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(RoutePlanStatus.Optimal, optimal.Status);
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        RoutePlan result = planner.Plan(
+            request,
+            RouteOptimizationProfile.For(RouteOptimizationMode.Extreme),
+            optimal,
+            TestContext.Current.CancellationToken);
+        watch.Stop();
+
+        Assert.Equal(RoutePlanStatus.Optimal, result.Status);
+        Assert.Equal(optimal.Objective, result.Objective);
+        Assert.Contains(result.Diagnostics,
+            diagnostic => diagnostic.Detail?.Contains("seed-already-optimal") == true);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2),
+            $"Reused optimal seed should return immediately, elapsed={watch.Elapsed}.");
+    }
+
     private static string SolverPath() {
         DirectoryInfo directory = new(AppContext.BaseDirectory);
         for (int i = 0; i < 5; i++) directory = directory.Parent!;

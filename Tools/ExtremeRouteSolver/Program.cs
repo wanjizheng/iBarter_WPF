@@ -87,6 +87,11 @@ internal sealed class ExtremeCpSatEngine {
             "cp_model_presolve:true",
             "use_optimization_hints:true",
         };
+        // Extreme is an anytime "best route within ten minutes" mode. Once a
+        // verified seed exists, dedicate the CP-SAT portfolio to large-neighborhood
+        // improvement instead of spending most workers proving a very weak bound.
+        if (input.InitialRoutes.Count > 0)
+            parameters.Add("use_lns_only:true");
         if (Environment.GetEnvironmentVariable("IBARTER_EXTREME_DIAGNOSTICS") == "1") {
             parameters.Remove("log_search_progress:false");
             parameters.Add("log_search_progress:true");

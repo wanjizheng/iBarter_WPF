@@ -7,6 +7,10 @@ using Xunit;
 namespace AutomaticRoutePlanningTests;
 
 public sealed class ExtremeCurrentDataSmokeTests {
+    private readonly ITestOutputHelper output;
+
+    public ExtremeCurrentDataSmokeTests(ITestOutputHelper output) => this.output = output;
+
     [Fact]
     public void Smoke_current_deployed_data_with_bounded_cp_sat_worker() {
         if (Environment.GetEnvironmentVariable("EXTREME_CURRENT_DATA") is null) return;
@@ -36,7 +40,8 @@ public sealed class ExtremeCurrentDataSmokeTests {
             TestContext.Current.CancellationToken, solver);
         watch.Stop();
 
-        Console.WriteLine($"[EXTREME-SMOKE] tasks={request.Tasks.Count} seed={load.Status}/{seed?.Routes.Count}/" +
+        output.WriteLine(
+            $"[EXTREME-SMOKE] tasks={request.Tasks.Count} seed={load.Status}/{seed?.Routes.Count}/" +
             $"{seed?.Objective?.TotalDistance:F1} " +
             $"routeLimit={result.RouteLimit} status={result.SolverStatus} " +
             $"elapsed={watch.Elapsed.TotalSeconds:F1}s distance={result.Plan?.Objective?.TotalDistance:F1} " +
