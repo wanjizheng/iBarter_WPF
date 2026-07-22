@@ -4,6 +4,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PlatformTarget>x64</PlatformTarget>
+    <!-- The x86 WPF host may run on machines without a system-wide x64 .NET
+         runtime. Always stage the helper with its own x64 runtime. -->
+    <SelfContained>true</SelfContained>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>iBarter.ExtremeRouteSolver</AssemblyName>
