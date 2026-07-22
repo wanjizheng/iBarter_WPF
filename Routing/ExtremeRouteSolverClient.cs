@@ -364,11 +364,20 @@ internal sealed class WindowsProcessMemoryJob : IDisposable {
         if (!OperatingSystem.IsWindows()) return null;
         SafeFileHandle job = Native.CreateJobObject(IntPtr.Zero, null);
         if (job.IsInvalid) { job.Dispose(); return null; }
+        long requestedBytes = checked((long)memoryLimitMb * 1024L * 1024L);
+        bool applyHardMemoryLimit = CanApplyHardMemoryLimit(
+            memoryLimitMb, Environment.Is64BitProcess);
+        uint limitFlags = Native.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        nuint processMemoryLimit = 0;
+        if (applyHardMemoryLimit) {
+            limitFlags |= Native.JOB_OBJECT_LIMIT_PROCESS_MEMORY;
+            processMemoryLimit = checked((nuint)requestedBytes);
+        }
         var limits = new Native.JOBOBJECT_EXTENDED_LIMIT_INFORMATION {
             BasicLimitInformation = new Native.JOBOBJECT_BASIC_LIMIT_INFORMATION {
-                LimitFlags = Native.JOB_OBJECT_LIMIT_PROCESS_MEMORY | Native.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+                LimitFlags = limitFlags,
             },
-            ProcessMemoryLimit = (nuint)checked((long)memoryLimitMb * 1024L * 1024L),
+            ProcessMemoryLimit = processMemoryLimit,
         };
         int size = Marshal.SizeOf<Native.JOBOBJECT_EXTENDED_LIMIT_INFORMATION>();
         IntPtr pointer = Marshal.AllocHGlobal(size);
@@ -384,6 +393,16 @@ internal sealed class WindowsProcessMemoryJob : IDisposable {
         finally {
             Marshal.FreeHGlobal(pointer);
         }
+    }
+
+    internal static bool CanApplyHardMemoryLimit(int memoryLimitMb, bool is64BitProcess) {
+        long requestedBytes = checked((long)memoryLimitMb * 1024L * 1024L);
+        // JOBOBJECT_EXTENDED_LIMIT_INFORMATION uses SIZE_T. An x86 caller
+        // cannot represent a limit above 4 GiB even when the job's target is
+        // the x64 solver. Truncating it silently turns (for example) 21 GiB
+        // into a sub-1-GiB limit, so omit the job memory flag and let the x64
+        // CP-SAT max_memory_in_mb parameter enforce the requested ceiling.
+        return is64BitProcess || requestedBytes <= uint.MaxValue;
     }
 
     public void Dispose() => handle.Dispose();

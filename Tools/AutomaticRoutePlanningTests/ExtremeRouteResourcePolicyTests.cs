@@ -50,4 +50,16 @@ public sealed class ExtremeRouteResourcePolicyTests {
         Assert.InRange(resources.WorkerCount, 1, Math.Max(1, Environment.ProcessorCount));
         Assert.True(resources.MemoryLimitMb >= 512);
     }
+
+    [Theory]
+    [InlineData(2_048, false, true)]
+    [InlineData(21_359, false, false)]
+    [InlineData(21_359, true, true)]
+    public void Job_memory_limit_is_only_applied_when_the_caller_can_represent_it(
+        int memoryLimitMb,
+        bool is64BitProcess,
+        bool expected) {
+        Assert.Equal(expected,
+            WindowsProcessMemoryJob.CanApplyHardMemoryLimit(memoryLimitMb, is64BitProcess));
+    }
 }

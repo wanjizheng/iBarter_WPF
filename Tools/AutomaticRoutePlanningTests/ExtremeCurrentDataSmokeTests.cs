@@ -103,6 +103,8 @@ public sealed class ExtremeCurrentDataSmokeTests {
     }
 
     private static string ExtremeRouteSolverTestsPath() {
+        string? configured = Environment.GetEnvironmentVariable("EXTREME_TEST_SOLVER_PATH");
+        if (!string.IsNullOrWhiteSpace(configured)) return configured;
         DirectoryInfo directory = new(AppContext.BaseDirectory);
         for (int i = 0; i < 5; i++) directory = directory.Parent!;
         return Path.Combine(directory.FullName, "Tools", "ExtremeRouteSolver", "bin", "Release",
