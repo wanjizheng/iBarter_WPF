@@ -2246,6 +2246,7 @@ namespace iBarter.View {
             // completed card disappears even if the control missed an earlier
             // RouteDisplayChanged subscription while docking/loading.
             App.myfmMain.myShipCargo.RefreshAfterRouteProgress();
+            App.myfmMain.myPlannerControl.RefreshParleyAfterExternalChange();
         }
 
         private void Islands_MouseRightButtonDown(object sender, MouseButtonEventArgs e) {

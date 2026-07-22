@@ -98,7 +98,10 @@ namespace iBarter.View {
             SetupDataGridStyle();
             LoadSavedComboBoxValue();
             ApplyTypography();
-            Loaded += (_, _) => ApplyTypography();
+            Loaded += (_, _) => {
+                ApplyTypography();
+                UpdateParley();
+            };
 
             // Phase 2 (i18n): one-shot apply + subscribe for live re-render.
             ApplyLocalization();
@@ -466,6 +469,17 @@ namespace iBarter.View {
                         "AppTextBrush");
                 }
             }
+        }
+
+        public void RefreshParleyAfterExternalChange() {
+            // Map completion changes the Planner model while this docking tab
+            // can be hidden. Recalculate now, then once more after pending
+            // binding/grouping work has drained. The calculation is a pure
+            // derivation, so the second pass cannot double-subtract.
+            UpdateParley();
+            Dispatcher.BeginInvoke(
+                new Action(UpdateParley),
+                DispatcherPriority.ContextIdle);
         }
 
         /// <summary>
