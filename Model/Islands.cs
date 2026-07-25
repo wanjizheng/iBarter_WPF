@@ -105,8 +105,15 @@ namespace iBarter {
         // routes need the coastal barterer. Keep the original node coordinate
         // only as an internal calibration pair; persisted plans continue to
         // expose NavigationX/Y as the actual sailing destination.
+        //
+        // MapAnchorSource tracks where MapAnchorX/Y came from so the BDF
+        // catalog can decide whether this island may participate in the
+        // trusted-source affine calibration pool (e.g. anchors whose
+        // MapAnchorSource starts with "bdo-world-" are trusted; barterer
+        // destinations with "bdocodex-barterer-" are not).
         internal double? MapAnchorX { get; set; }
         internal double? MapAnchorY { get; set; }
+        internal string MapAnchorSource { get; set; } = string.Empty;
 
         public bool HasNavigationCoordinates =>
             NavigationX.HasValue && NavigationY.HasValue &&

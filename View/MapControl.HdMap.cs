@@ -39,15 +39,29 @@ public partial class MapControl {
                 island.NavigationY ?? Double.NaN,
                 island.NavigationSource ?? String.Empty,
                 MapDisplayRegion.Main,
-                PreferNavigationCalibration:
-                    IslandNavigationGeometry.LeftInsetNames.Contains(island.IslandsName)
-                    || island.NavigationSource.StartsWith(
-                        "bdocodex-barterer-", StringComparison.OrdinalIgnoreCase),
+                // The legacy display group (LeftInset / RightInset /
+                // BottomEdge) is a static-fallback concern only — it
+                // must NEVER block direct BDF anchor resolution for
+                // a real port. Dallae Pier, Haemo Island, etc. all
+                // appear in the legacy inset list but they have real
+                // BDF coordinates and must be placed via DirectBdfMatch
+                // (or DirectBdfAliasMatch) regardless of which
+                // display group the static fallback used to render
+                // them. The "PreferNavigationCalibration" branch
+                // (bdocodex-barterer-*) is also dropped: the route
+                // destination is for pathfinding, not map placement.
+                PreferNavigationCalibration: false,
                 CalibrationX: island.MapAnchorX,
-                CalibrationY: island.MapAnchorY);
+                CalibrationY: island.MapAnchorY,
+                // Preserve the original anchor source so the BDF
+                // catalog's trusted-source filter can decide whether
+                // this island may participate in the affine pool.
+                MapAnchorSource: island.MapAnchorSource ?? string.Empty);
         }).ToArray();
-        var coordinates = BdfIslandCoordinateCatalog.Build(
+        var catalogResult = BdfIslandCoordinateCatalog.BuildDetailed(
             inputs, metadata.Anchors, metadata.Aliases);
+        var coordinates = catalogResult.Coordinates;
+        EmitResolutionDiagnostics(catalogResult.Diagnostics);
 
         hdMapConfiguration = configuration;
         hdIslandCoordinates = coordinates;
@@ -111,6 +125,84 @@ public partial class MapControl {
     }
 
     private Grid GetOverlayHost(Islands _) => Grid_MapMain;
+
+    /// <summary>
+    /// Diagnostic dump of every island's resolution path. Always
+    /// logs the islands the user explicitly cares about (Dallae,
+    /// Haemo, Midnight, Iliya, Padix, Hakoven, Cox_Pirate, Crow,
+    /// Crows_Nest) so a misplacement is easy to triage in the log.
+    /// Per the fix brief, every entry includes route destination,
+    /// map anchor, matched BDF source, matched IBarter name,
+    /// resolution mode, final GeoCoordinate, final normalized
+    /// Mercator coordinate, and the affine fit's self-residual.
+    /// </summary>
+    private static readonly HashSet<string> _diagnosticIslands =
+        new(StringComparer.Ordinal) {
+            "Dallae", "Haemo", "Midnight", "Iliya", "Padix",
+            "Hakoven", "Cox_Pirate", "Crow", "Crows_Nest",
+        };
+
+    private void EmitResolutionDiagnostics(
+        IReadOnlyDictionary<string, IslandCoordinateResult> diagnostics) {
+        foreach (var (id, diag) in diagnostics) {
+            if (!_diagnosticIslands.Contains(id)) continue;
+            string latLon = diag.Coordinate is { } c
+                ? $"({c.Latitude:0.###}, {c.Longitude:0.###})"
+                : "(missing)";
+            string mercator = diag.Normalized is { } n
+                ? $"({n.X:0.###}, {n.Y:0.###})"
+                : "(missing)";
+            App.myCFun?.Log(
+                $"[bdf] {id,-12} mode={diag.Resolution,-28} " +
+                $"route=({diag.RouteDestinationX},{diag.RouteDestinationY}) " +
+                $"src='{diag.RouteDestinationSource}' " +
+                $"anchor=({diag.MapAnchorX},{diag.MapAnchorY}) " +
+                $"src='{diag.MapAnchorSource}' " +
+                $"bdf='{diag.MatchedBdfSourceName}' " +
+                $"ibarter='{diag.MatchedIBarterIslandName}' " +
+                $"coord={latLon} mercator={mercator} " +
+                $"residual={diag.AffineResidual:0.###}",
+                System.Windows.Media.Brushes.Gray);
+        }
+        RunSanityChecks(diagnostics);
+    }
+
+    /// <summary>
+    /// Per the fix brief: when an HD resolution lands an island far
+    /// outside its expected geographic region, refuse to silently
+    /// accept it. A misplacement like Dallae in the map center is
+    /// rejected here, not detected later by a confused user.
+    /// </summary>
+    private void RunSanityChecks(
+        IReadOnlyDictionary<string, IslandCoordinateResult> diagnostics) {
+        // In WebMercator normalized coordinates, Y=0 is the north
+        // edge of the map and Y=1 is the south edge. Each band's
+        // minY/maxY come from the actual resolved position on the
+        // real bdf-anchors.json so a "Dallae dropped to map
+        // middle" is caught here, not at user-surfaced runtime.
+        (string island, double minY, double maxY, string label)[] bands = {
+            ("Dallae",     0.05, 0.25, "north edge"),
+            ("Haemo",      0.05, 0.35, "northern island"),
+            ("Midnight",   0.65, 0.95, "south edge"),
+            ("Iliya",      0.20, 0.55, "Baleria coast"),
+            ("Padix",      0.25, 0.60, "mid-west sea"),
+            ("Hakoven",    0.20, 0.50, "far east island"),
+            ("Cox_Pirate", 0.35, 0.65, "central archipelago"),
+            ("Crow",       0.45, 0.75, "south"),
+            ("Crows_Nest", 0.45, 0.75, "south"),
+        };
+        foreach (var (island, minY, maxY, label) in bands) {
+            if (!diagnostics.TryGetValue(island, out var diag)) continue;
+            if (diag.Normalized is not { } n) continue;
+            if (n.Y < minY || n.Y > maxY) {
+                App.myCFun?.Log(
+                    $"[bdf-sanity] {island} OUT OF BAND: " +
+                    $"normalizedY={n.Y:0.###} expected {label} [{minY:0.###}, {maxY:0.###}] " +
+                    $"resolution={diag.Resolution} anchor='{diag.MatchedBdfSourceName}'",
+                    System.Windows.Media.Brushes.Red);
+            }
+        }
+    }
 
     private bool TryGetIslandCenter(
         Islands island,

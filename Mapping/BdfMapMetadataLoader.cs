@@ -18,6 +18,11 @@ public static class BdfMapMetadataLoader {
             // localized display name and exchange point are Olvia Coast. Without
             // this explicit alias, normalized matching selects Olvia village.
             ["Olvia"] = "Olvia Coast",
+            // Forward-declared: BDF has no "Crow's Nest" anchor today;
+            // the alias keeps the iBarter → BDF mapping explicit so a
+            // future source added to bdf-anchors.json is matched
+            // without re-deriving the lookup.
+            ["Crows_Nest"] = "Crow's Nest",
         };
 
     public static bool TryLoad(string root, out BdfMapMetadata? metadata) {

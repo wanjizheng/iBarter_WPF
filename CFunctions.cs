@@ -849,6 +849,13 @@ namespace iBarter {
 
                 island.MapAnchorX = island.NavigationX;
                 island.MapAnchorY = island.NavigationY;
+                // The original anchor source from the Islands catalog
+                // (e.g. "Resources/Islands.csv") is the trusted world-
+                // coordinate system; preserve it so the BDF catalog's
+                // affine pool can include this island.
+                if (string.IsNullOrEmpty(island.MapAnchorSource)) {
+                    island.MapAnchorSource = "Resources/Islands.csv";
+                }
                 island.NavigationX = barterX;
                 island.NavigationY = barterY;
                 island.NavigationSource = $"bdocodex-barterer-npc-{npcId}";
