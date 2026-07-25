@@ -122,9 +122,19 @@ public partial class MapControl {
 
         if (!hdMapEnabled) {
             var normalized = GetDisplayCenterNormalized(island);
-            center = new Point(
-                normalized.X * host.ActualWidth,
-                normalized.Y * host.ActualHeight);
+            // The resize-fix pipeline owns this math: the static-map
+            // path here is the single production caller of
+            // MapProjectionHelper.ProjectNormalized so the unit
+            // test pins the value the user actually sees when
+            // resizing a non-HD window. Do NOT inline
+            // `normalized.X * host.ActualWidth` again — if a
+            // future regression is observed, the test will catch it.
+            var staticProjected = MapProjectionHelper.ProjectNormalized(
+                normalized.X,
+                normalized.Y,
+                host.ActualWidth,
+                host.ActualHeight);
+            center = new Point(staticProjected.X, staticProjected.Y);
             return host.ActualWidth > 0 && host.ActualHeight > 0;
         }
 

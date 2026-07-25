@@ -372,12 +372,13 @@ namespace iBarter.View {
             var renderSnapshot = CurrentRenderSnapshot();
 
             // Resize fix: extract the stale-visual cleanup into a pure helper
-            // so the decision logic can be unit-tested. The pure
-            // helper returns indices to remove; we then perform the
-            // WPF-only detach step inline (since MapIslandVisualCleanup
-            // itself does not need to know about Grid/Panel to pin
-            // the rule). Walk is backward so removing an item never
-            // shifts a still-pending index.
+            // so the decision logic + the actual list mutation can
+            // both be unit-tested. The helper returns strictly
+            // descending indices, and RemoveAtDescendingIndices
+            // walks them in that order — there is NO additional
+            // reverse in this caller. The beforeRemove callback
+            // detaches the grid from its parent Panel BEFORE the
+            // list mutation shifts later indices.
             var staleIndices = MapIslandVisualCleanup.CollectStaleIndices<Grid>(
                 listGrid_Islands,
                 grid => BuildCleanupSnapshot(grid, renderSnapshot),
@@ -387,17 +388,14 @@ namespace iBarter.View {
                         b.ExchangeQuantity > 0 &&
                         b.IsLandName == snap.IslandId)
                     && !renderSnapshot.WarehouseIslandIds.Contains(snap.IslandId));
-            // Detach in reverse order so the indices stay valid as
-            // we remove. Then drop each from the visual tree so the
-            // stale marker doesn't linger on screen after its
-            // barter disappears.
-            for (int i = staleIndices.Count - 1; i >= 0; i--) {
-                Grid grid = listGrid_Islands[staleIndices[i]];
-                if (grid.Parent is Panel parent) {
-                    parent.Children.Remove(grid);
-                }
-                listGrid_Islands.RemoveAt(staleIndices[i]);
-            }
+            MapIslandVisualCleanup.RemoveAtDescendingIndices<Grid>(
+                listGrid_Islands,
+                staleIndices,
+                beforeRemove: grid => {
+                    if (grid.Parent is Panel parent) {
+                        parent.Children.Remove(grid);
+                    }
+                });
 
             foreach (Grid grid in listGrid_Islands) {
                 // Use the IslandVisual stashed on Tag at construction time

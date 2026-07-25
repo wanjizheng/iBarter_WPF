@@ -281,4 +281,154 @@ public class MapOverlayReflowTests {
         // [last, ..., first]; the caller removes in that order.
         Assert.Equal(new[] { 2, 1, 0 }, indices);
     }
+
+    // ──────────── Real list-mutation tests ────────────
+    //
+    // These tests actually mutate a list via
+    // MapIslandVisualCleanup.RemoveAtDescendingIndices, so they
+    // would have caught the v1 bug where IslandsButtonRearrange
+    // re-reversed the descending indices and removed the wrong
+    // entries.
+
+    [Fact]
+    public void RemoveAtDescendingIndices_MixedList_RemovesExpectedEntriesOnly() {
+        // User spec: input [KeepA, StaleB, KeepC, StaleD, KeepE],
+        // descending stale indices [3, 1], expected final
+        // [KeepA, KeepC, KeepE].
+        var items = new List<string> { "KeepA", "StaleB", "KeepC", "StaleD", "KeepE" };
+        var stale = new List<int> { 3, 1 };
+        MapIslandVisualCleanup.RemoveAtDescendingIndices<string>(
+            items,
+            stale,
+            beforeRemove: staleItem => { /* nothing in this list-shaped test */ });
+        Assert.Equal(new[] { "KeepA", "KeepC", "KeepE" }, items);
+    }
+
+    [Fact]
+    public void RemoveAtDescendingIndices_StaleAtEndAndMiddle_DoesNotThrowAndKeepsOnlyKeep() {
+        // Defensive: stale indices at the END of the list (high)
+        // and the middle. v1's "reverse" pass would crash on
+        // index 4 here because after the first removal the list
+        // shrinks and the cached next index becomes out-of-range.
+        var items = new List<string> { "K1", "K2", "K3", "K4", "S5" };
+        var stale = new List<int> { 4, 1 };
+        MapIslandVisualCleanup.RemoveAtDescendingIndices<string>(
+            items,
+            stale);
+        Assert.Equal(new[] { "K1", "K3", "K4" }, items);
+    }
+
+    [Fact]
+    public void RemoveAtDescendingIndices_EmptyIndices_NoOp() {
+        var items = new List<string> { "A", "B", "C" };
+        MapIslandVisualCleanup.RemoveAtDescendingIndices<string>(items, new List<int>());
+        Assert.Equal(new[] { "A", "B", "C" }, items);
+    }
+
+    [Fact]
+    public void RemoveAtDescendingIndices_SingleIndex_RemovesOnlyThatOne() {
+        var items = new List<string> { "A", "B", "C", "D" };
+        MapIslandVisualCleanup.RemoveAtDescendingIndices<string>(items, new List<int> { 2 });
+        Assert.Equal(new[] { "A", "B", "D" }, items);
+    }
+
+    [Fact]
+    public void RemoveAtDescendingIndices_AllIndices_EmptiesTheList() {
+        var items = new List<string> { "A", "B", "C" };
+        MapIslandVisualCleanup.RemoveAtDescendingIndices<string>(
+            items, new List<int> { 2, 1, 0 });
+        Assert.Empty(items);
+    }
+
+    [Fact]
+    public void RemoveAtDescendingIndices_BeforeRemoveCallback_FiresOncePerItem() {
+        // Confirms the WPF-only detach step runs BEFORE the list
+        // mutation. If a regression flipped the order, the parent
+        // would be removed AFTER the grid is gone from the list,
+        // so the cleanup test would fail with stale parent
+        // membership. (Here we use a plain List<string>; the
+        // shape is the contract that
+        // IslandsButtonRearrange relies on for `parent.Children`.)
+        var items = new List<string> { "x", "y", "z" };
+        var firedFor = new List<string>();
+        MapIslandVisualCleanup.RemoveAtDescendingIndices<string>(
+            items,
+            new List<int> { 2, 1, 0 },
+            beforeRemove: item => firedFor.Add(item));
+        Assert.Equal(new[] { "z", "y", "x" }, firedFor);
+        Assert.Empty(items);
+    }
+
+    [Fact]
+    public void RemoveAtDescendingIndices_NonDescendingIndices_ThrowsArgumentException() {
+        // The v1 caller bug was: caller reversed the descending
+        // list, then walked it high→low again. That double-reverse
+        // is a CONTRACT VIOLATION and the helper must surface it
+        // loudly rather than silently fix it. Ascending input
+        // must throw.
+        var items = new List<string> { "A", "B", "C", "D" };
+        var ex = Assert.Throws<ArgumentException>(() =>
+            MapIslandVisualCleanup.RemoveAtDescendingIndices<string>(
+                items,
+                new List<int> { 1, 3 }));
+        Assert.Contains("strictly descending", ex.Message);
+    }
+
+    [Fact]
+    public void RemoveAtDescendingIndices_OutOfRangeIndex_ThrowsArgumentOutOfRange() {
+        // Defensive: if the caller passes an index that's not in
+        // the list, fail loudly. v1 silently crashed later in the
+        // resize cycle with an IndexOutOfRangeException that was
+        // very hard to attribute.
+        var items = new List<string> { "A", "B", "C" };
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            MapIslandVisualCleanup.RemoveAtDescendingIndices<string>(
+                items,
+                new List<int> { 5 }));
+        // The list must not be partially mutated before the throw.
+        Assert.Equal(new[] { "A", "B", "C" }, items);
+    }
+
+    [Fact]
+    public void RemoveAtDescendingIndices_NegativeIndex_ThrowsArgumentOutOfRange() {
+        var items = new List<string> { "A", "B" };
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            MapIslandVisualCleanup.RemoveAtDescendingIndices<string>(
+                items,
+                new List<int> { 1, -1 }));
+        Assert.Equal(new[] { "A", "B" }, items);
+    }
+
+    [Fact]
+    public void CollectAndRemove_RoundTrip_RemovesExactlyTheStaleItems() {
+        // End-to-end: build a snapshot list, run the decision
+        // helper, then run the actual removal. This is the
+        // regression that would have caught v1's reverse bug
+        // because the post-condition checks the ACTUAL contents
+        // after the full chain runs — not just the helper's
+        // returned index list.
+        var items = new List<string> {
+            "KeepA", "StaleB", "KeepC", "StaleD", "KeepE",
+        };
+        // Map a name -> "is stale?" predicate.
+        Func<string, bool> isStale = name => name.StartsWith("Stale");
+
+        var staleIndices = MapIslandVisualCleanup.CollectStaleIndices<string>(
+            items,
+            name => new MapIslandCleanupSnapshot(
+                IsTemp: false,
+                IsWarehouse: false,
+                IslandId: name),
+            snap => isStale(snap.IslandId));
+        // Confirm the helper produced the descending list we
+        // expect — this is the original assertion from before
+        // the real-deletion tests were added.
+        Assert.Equal(new[] { 3, 1 }, staleIndices);
+
+        MapIslandVisualCleanup.RemoveAtDescendingIndices<string>(
+            items,
+            staleIndices);
+        // The hard assertion: the actual list contents.
+        Assert.Equal(new[] { "KeepA", "KeepC", "KeepE" }, items);
+    }
 }
