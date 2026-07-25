@@ -110,56 +110,16 @@ public partial class MapControl {
 
     private Grid GetOverlayHost(Islands _) => Grid_MapMain;
 
-    private static readonly HashSet<string> _diagnosticIslands =
-        new(StringComparer.Ordinal) {
-            "Dallae", "Haemo", "Midnight", "Iliya", "Padix",
-            "Hakoven", "Cox_Pirate", "Crow", "Crows_Nest",
-        };
-
     private void EmitResolutionDiagnostics(
         IReadOnlyDictionary<string, IslandCoordinateResult> diagnostics) {
-        foreach (var (id, diag) in diagnostics) {
-            if (!_diagnosticIslands.Contains(id)) continue;
-            string latLon = diag.Coordinate is { } c
-                ? $"({c.Latitude:0.###}, {c.Longitude:0.###})"
-                : "(missing)";
-            string mercator = diag.Normalized is { } n
-                ? $"({n.X:0.###}, {n.Y:0.###})"
-                : "(missing)";
-            App.myCFun?.Log(
-                $"[bdf] {id,-12} mode={diag.Resolution,-28} " +
-                $"route=({diag.RouteDestinationX},{diag.RouteDestinationY}) " +
-                $"src='{diag.RouteDestinationSource}' " +
-                $"anchor=({diag.MapAnchorX},{diag.MapAnchorY}) " +
-                $"src='{diag.MapAnchorSource}' " +
-                $"bdf='{diag.MatchedBdfSourceName}' " +
-                $"ibarter='{diag.MatchedIBarterIslandName}' " +
-                $"coord={latLon} mercator={mercator} " +
-                $"residual={diag.AffineResidual:0.###}",
-                System.Windows.Media.Brushes.Gray);
-        }
+        // Coordinate provenance is useful during development, but emitting it
+        // for every map initialization floods the normal application log.
+        // Keep only actionable out-of-range warnings below.
         ReportSanityWarnings(diagnostics);
     }
 
     private void ReportRouteDestinationProvenance() {
         if (App.listIslands is null) return;
-
-        string[] allFallbacks = App.listIslands
-            .Where(island => island.HasNavigationCoordinates
-                && island.UsesCatalogFallbackDestination)
-            .Select(island => island.IslandsName)
-            .OrderBy(name => name, StringComparer.Ordinal)
-            .ToArray();
-
-        // The complete catalog gap is useful diagnostics, not an application
-        // error. Keep it neutral and reserve the warning colour for fallbacks
-        // that are actually present in the user's active route.
-        if (allFallbacks.Length > 0) {
-            App.myCFun?.Log(
-                $"[route-coordinate] {allFallbacks.Length} locations use catalog fallback " +
-                $"coordinates rather than an explicit barter NPC: {String.Join(", ", allFallbacks)}",
-                System.Windows.Media.Brushes.Gray);
-        }
 
         var activeIds = App.myPVM?.BarterCollection
             .Where(barter => !barter.ExchangeDone && barter.ExchangeQuantity > 0)

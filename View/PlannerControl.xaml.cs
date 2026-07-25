@@ -629,8 +629,14 @@ namespace iBarter.View {
                 }
             }
 
-            // 初始化分组/排序 —— 必须包在 BeginInit/EndInit 之间
-            DataGrid_Planner.View.BeginInit();
+            // The Planner tab can still be hidden/unloaded when a barter is
+            // completed from the map. SfDataGrid does not create View until
+            // its visual tree is loaded, but the sort/group descriptions can
+            // already be configured and will be applied when View is created.
+            // Capture the current view so BeginInit/EndInit stay paired even
+            // if the grid creates its view while these descriptions change.
+            var plannerView = DataGrid_Planner.View;
+            plannerView?.BeginInit();
             try {
                 DataGrid_Planner.SortColumnDescriptions.Clear();
                 DataGrid_Planner.GroupColumnDescriptions.Clear();
@@ -646,16 +652,16 @@ namespace iBarter.View {
                 });
             }
             finally {
-                DataGrid_Planner.View.EndInit();
+                plannerView?.EndInit();
             }
 
             // 让分组自动展开（可选；开了它一般就不需要手动 ExpandAllGroup）
             DataGrid_Planner.AutoExpandGroups = true;
 
             // 若你坚持手动展开，请务必在 EndInit 之后，并做空值保护；或者丢到 Dispatcher
-            if (DataGrid_Planner.View?.TopLevelGroup != null &&
+            if (plannerView?.TopLevelGroup != null &&
                 DataGrid_Planner.GroupColumnDescriptions.Count > 0 &&
-                DataGrid_Planner.View.Records.Count > 0) {
+                plannerView.Records.Count > 0) {
                 DataGrid_Planner.ExpandAllGroup();
             }
 
