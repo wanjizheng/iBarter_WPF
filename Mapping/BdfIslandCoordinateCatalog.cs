@@ -150,7 +150,7 @@ public static class BdfIslandCoordinateCatalog {
         var pairs = new List<CalibrationPair>();
         foreach (MapIslandCoordinateInput island in islands) {
             if (!directCoordinates.TryGetValue(island.IslandId, out GeoCoordinate coordinate)
-                || !IsTrustedSource(island.MapAnchorSource)
+                || !IsTrustedSource(EffectiveMapAnchorSource(island))
                 || !TryGetMapWorldPoint(island, out double mapX, out double mapY)) {
                 continue;
             }
@@ -171,6 +171,11 @@ public static class BdfIslandCoordinateCatalog {
         y = island.CalibrationY ?? island.NavigationY;
         return double.IsFinite(x) && double.IsFinite(y);
     }
+
+    private static string EffectiveMapAnchorSource(MapIslandCoordinateInput island) =>
+        !string.IsNullOrWhiteSpace(island.MapAnchorSource)
+            ? island.MapAnchorSource
+            : island.NavigationSource;
 
     private static bool IsTrustedSource(string source) {
         if (string.IsNullOrWhiteSpace(source)) return false;
