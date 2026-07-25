@@ -46,7 +46,12 @@ namespace iBarter.View {
         // island - Temp or not - on every resize without re-deriving names
         // from Grid.Name substrings/suffixes, which was fragile and is what
         // previously left Temp placeholders "stuck" after a window resize.
-        private class IslandVisual {
+        // Was private before the resize-reflow fix. Made internal so the
+        // pure helpers extracted into View/MapControl.Reflow.cs can
+        // carry IslandVisual in their signatures (and so the test
+        // project under Tools/AutomaticRoutePlanningTests can pin the
+        // cleanup helper against a real IslandVisual instance).
+        internal class IslandVisual {
             public Islands Islands;
             public bool IsTemp;
             public bool IsWarehouse;
@@ -98,42 +103,26 @@ namespace iBarter.View {
                 // once Grid_MapMain has ActualWidth/ActualHeight > 0.
                 Dispatcher.BeginInvoke(new Action(EnsureRouteIslandLabels),
                     DispatcherPriority.Render);
+                // Geometry refresh on tab activation — the timer was
+                // stopped in Unloaded, so this catches the first
+                // paint after the user shows the map tab again.
+                ScheduleMapOverlayReflow();
             };
             this.Unloaded += (_, _) => {
                 if (myTimer != null && myTimer.IsEnabled) myTimer.Stop();
             };
-            // Also re-trigger on Grid_MapMain.SizeChanged. Defer via
-            // Dispatcher.BeginInvoke at Render priority so the new layout
-            // pass completes first - ActualWidth/Height are still stale at
-            // the SizeChanged callback point and would otherwise position
-            // islands at 0,0 (i.e. top-left = centre of a tiny map). The
-            // timer keeps running as a fallback.
-            Grid_MapMain.SizeChanged += (_, _) =>
-                Dispatcher.BeginInvoke(new Action(() => {
-                    IslandsButtonRearrange();
-                    EnsureRouteIslandLabels();
-                }), DispatcherPriority.Render);
+            // Pure-geometry changes funnel through the single
+            // ScheduleMapOverlayReflow() pipeline. Both the inner
+            // Grid_MapMain and the outer MapViewport fire
+            // SizeChanged when the user resizes the window or the
+            // dock layout changes; the pipeline coalesces a burst
+            // of events into one deferred pass that reads the
+            // latest ActualWidth/ActualHeight after layout.
+            Grid_MapMain.SizeChanged += (_, _) => ScheduleMapOverlayReflow();
             MapViewport.SizeChanged += (_, _) => {
                 if (hdMapEnabled) RefreshHdMap();
                 CenterFocusedSegmentIfNeeded();
-                // Audit round 6: also re-trigger the island-marker
-                // rearrange on MapViewport resize, not just on
-                // Grid_MapMain.SizeChanged. In some docking layout
-                // modes (ChromelessWindow ResizeBorderThickness < 8,
-                // docked-vs-document split changes) the inner grid's
-                // SizeChanged either doesn't fire or fires with
-                // stale ActualWidth/Height, leaving the barter item
-                // markers stuck at their previous coordinates. The
-                // outer Border (MapViewport) DOES fire reliably, so
-                // using it as a second anchor guarantees the markers
-                // track the new map size. Deferred to Render so the
-                // layout pass that delivered the new ActualWidth/
-                // ActualHeight completes first - same reasoning as
-                // the Grid_MapMain.SizeChanged handler above.
-                Dispatcher.BeginInvoke(new Action(() => {
-                    IslandsButtonRearrange();
-                    EnsureRouteIslandLabels();
-                }), DispatcherPriority.Render);
+                ScheduleMapOverlayReflow();
             };
             myTimer.Start();
         }
@@ -148,7 +137,12 @@ namespace iBarter.View {
         private void TimerOnTick(object? sender, EventArgs e) {
             if (!hdMapEnabled && !hdMapInitializationAttempted)
                 TryInitializeHdMap();
-            IslandsButtonRearrange();
+            // Timer is the safety net for events that don't fire
+            // SizeChanged (e.g. docking-tab unload-then-show, or a
+            // font/theme change that only invalidates measured
+            // bounds). Route through the same coalescing pipeline
+            // so a burst of timer ticks collapses to one reflow.
+            ScheduleMapOverlayReflow();
             InvalidateVisual();
         }
 
@@ -250,22 +244,22 @@ namespace iBarter.View {
                 MapScaleTransform.ScaleY = 1;
                 MapTranslateTransform.X = 0;
                 MapTranslateTransform.Y = 0;
+                // RefreshHdMap is now SOLELY responsible for camera
+                // constraint + tile refresh; overlay reflow is the
+                // pipeline's job (it knows about route-step labels
+                // too, which RefreshHdMap never did).
                 RefreshHdMap();
-                // Audit round 6: HD camera moves also need route
-                // step labels repositioned.
-                RepositionRouteStepLabels();
+                ScheduleMapOverlayReflow();
                 return;
             }
             MapScaleTransform.ScaleX = viewportState.Scale;
             MapScaleTransform.ScaleY = viewportState.Scale;
             MapTranslateTransform.X = viewportState.OffsetX;
             MapTranslateTransform.Y = viewportState.OffsetY;
-            // Audit round 6: every viewport change (zoom / pan)
-            // must reposition existing route-step labels so the
-            // labels track the projected island centres.  Identity
-            // is preserved (no re-create), so the BarterStep text
-            // stays attached to its wrapper.
-            RepositionRouteStepLabels();
+            // Audit round 6 + reflow fix: zoom/pan must trigger the
+            // full overlay reflow so route-step labels and warehouse
+            // labels both follow the new projected centre.
+            ScheduleMapOverlayReflow();
         }
 
         private double GetLabelScreenFontSize(bool highlighted) {
@@ -377,25 +371,32 @@ namespace iBarter.View {
             listLines = new List<Line>();
             var renderSnapshot = CurrentRenderSnapshot();
 
-            for (int i = listGrid_Islands.Count - 1; i >= 0; i--) {
-                Grid grid = listGrid_Islands[i];
-                IslandVisual visual = grid.Tag as IslandVisual;
-                // Where(...) returns a non-null IEnumerable, so the legacy check
-                // never fired and stale pins accumulated. Use Any() instead.
-                bool hasActiveBarter = visual != null && App.myPVM.BarterCollection.Any(b =>
-                    b.ExchangeDone == false &&
-                    b.ExchangeQuantity > 0 &&
-                    b.IsLandName == visual.Islands.IslandsName);
-                bool isVisibleWarehouse = visual != null
-                    && renderSnapshot.WarehouseIslandIds.Contains(visual.Islands.IslandsName);
-                if (!hasActiveBarter && !isVisibleWarehouse) {
-                    // Skip temp placeholders - they live on the map
-                    // permanently as position markers and must stay in
-                    // listGrid_Islands so the rearrange loop repositions
-                    // them on every map resize.
-                    if (visual != null && visual.IsTemp) continue;
-                    listGrid_Islands.Remove(grid);
+            // Resize fix: extract the stale-visual cleanup into a pure helper
+            // so the decision logic can be unit-tested. The pure
+            // helper returns indices to remove; we then perform the
+            // WPF-only detach step inline (since MapIslandVisualCleanup
+            // itself does not need to know about Grid/Panel to pin
+            // the rule). Walk is backward so removing an item never
+            // shifts a still-pending index.
+            var staleIndices = MapIslandVisualCleanup.CollectStaleIndices<Grid>(
+                listGrid_Islands,
+                grid => BuildCleanupSnapshot(grid, renderSnapshot),
+                snap => !snap.IsTemp
+                    && !App.myPVM.BarterCollection.Any(b =>
+                        b.ExchangeDone == false &&
+                        b.ExchangeQuantity > 0 &&
+                        b.IsLandName == snap.IslandId)
+                    && !renderSnapshot.WarehouseIslandIds.Contains(snap.IslandId));
+            // Detach in reverse order so the indices stay valid as
+            // we remove. Then drop each from the visual tree so the
+            // stale marker doesn't linger on screen after its
+            // barter disappears.
+            for (int i = staleIndices.Count - 1; i >= 0; i--) {
+                Grid grid = listGrid_Islands[staleIndices[i]];
+                if (grid.Parent is Panel parent) {
+                    parent.Children.Remove(grid);
                 }
+                listGrid_Islands.RemoveAt(staleIndices[i]);
             }
 
             foreach (Grid grid in listGrid_Islands) {

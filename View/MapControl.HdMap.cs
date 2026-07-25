@@ -88,7 +88,13 @@ public partial class MapControl {
         if (!hdMapEnabled) return;
         ConstrainHdMapCamera();
         MainTileLayer.RefreshTiles();
-        IslandsButtonRearrange();
+        // Resize fix: overlay reposition is the unified pipeline's
+        // job now. RefreshHdMap owns ONLY camera + tile concerns;
+        // calling IslandsButtonRearrange here used to cause a
+        // double-pass on every HD-mode resize (the pipeline also
+        // ran, but with stale ActualWidth from the inner
+        // Grid_MapMain, so the HD pass won the race and then the
+        // pipeline pass overwrote it — leaving a visible flicker).
     }
 
     private void ConstrainHdMapCamera() {

@@ -16,5 +16,14 @@
     <Compile Include="..\..\Navigation\RouteDisplayGeometry.cs" Link="Navigation\RouteDisplayGeometry.cs" />
     <Compile Include="..\..\Navigation\ShippingCorridorGraph.cs" Link="Navigation\ShippingCorridorGraph.cs" />
     <Compile Include="..\..\View\RouteStepMarkerFactory.cs" Link="View\RouteStepMarkerFactory.cs" />
+    <!-- Resize-reflow fix: RouteRenderSnapshot depends on RoutePlan
+         and other types; pulling the whole Routing folder is
+         the safest mirror of AutomaticRoutePlanningTests' setup. -->
+    <Compile Include="..\..\Routing\*.cs" Link="Routing\%(Filename)%(Extension)" />
+    <!-- Resize-reflow fix: pure reflow pipeline + projection helper.
+         MapIslandVisualCleanup uses Grid/Panel so this test project
+         (which targets net10.0-windows with UseWPF) is the only
+         one with WPF references reachable. -->
+    <Compile Include="..\..\View\MapControl.Reflow.cs" Link="View\MapControl.Reflow.cs" Condition="Exists('..\..\View\MapControl.Reflow.cs')" />
   </ItemGroup>
 </Project>
