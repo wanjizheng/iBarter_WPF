@@ -10,6 +10,9 @@ namespace iBarter {
         private int intParley = 0;
         private int intRemaining;
         private Thickness myThickness;
+        private double? navigationX;
+        private double? navigationY;
+        private string navigationSource = string.Empty;
 
         // Phase 5 (i18n): Traditional Chinese name loaded from
         // Resources/Islands.zh-TW.csv at AppStartup.  Empty when the
@@ -97,9 +100,46 @@ namespace iBarter {
             }
         }
 
-        public double? NavigationX { get; set; }
-        public double? NavigationY { get; set; }
-        public string NavigationSource { get; set; } = string.Empty;
+        /// <summary>
+        /// Route-planning destination. During the initial Islands.csv load this is
+        /// also the original map-world coordinate. The first finite value is copied
+        /// to <see cref="MapAnchorX"/> before IslandBarterLocations can replace the
+        /// route destination with the coastal barterer NPC.
+        /// </summary>
+        public double? NavigationX {
+            get { return navigationX; }
+            set {
+                navigationX = value;
+                if (!MapAnchorX.HasValue && value.HasValue && double.IsFinite(value.Value)) {
+                    MapAnchorX = value;
+                }
+            }
+        }
+
+        public double? NavigationY {
+            get { return navigationY; }
+            set {
+                navigationY = value;
+                if (!MapAnchorY.HasValue && value.HasValue && double.IsFinite(value.Value)) {
+                    MapAnchorY = value;
+                }
+            }
+        }
+
+        public string NavigationSource {
+            get { return navigationSource; }
+            set {
+                navigationSource = value ?? string.Empty;
+                // Capture the original Islands.csv coordinate-system tag once.
+                // Later route-only barterer sources must never replace it.
+                if (string.IsNullOrWhiteSpace(MapAnchorSource)
+                    && !string.IsNullOrWhiteSpace(navigationSource)
+                    && !navigationSource.StartsWith(
+                        "bdocodex-barterer-", StringComparison.OrdinalIgnoreCase)) {
+                    MapAnchorSource = navigationSource;
+                }
+            }
+        }
 
         // The HD map source labels islands at their node anchors, while sailing
         // routes need the coastal barterer. Keep the original node coordinate
