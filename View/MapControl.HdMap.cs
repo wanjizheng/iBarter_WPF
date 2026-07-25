@@ -146,16 +146,19 @@ public partial class MapControl {
 
         string[] allFallbacks = App.listIslands
             .Where(island => island.HasNavigationCoordinates
-                && !island.HasVerifiedBarterDestination)
+                && island.UsesCatalogFallbackDestination)
             .Select(island => island.IslandsName)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
+        // The complete catalog gap is useful diagnostics, not an application
+        // error. Keep it neutral and reserve the warning colour for fallbacks
+        // that are actually present in the user's active route.
         if (allFallbacks.Length > 0) {
             App.myCFun?.Log(
                 $"[route-coordinate] {allFallbacks.Length} locations use catalog fallback " +
-                $"coordinates rather than a verified barter NPC: {String.Join(", ", allFallbacks)}",
-                System.Windows.Media.Brushes.OrangeRed);
+                $"coordinates rather than an explicit barter NPC: {String.Join(", ", allFallbacks)}",
+                System.Windows.Media.Brushes.Gray);
         }
 
         var activeIds = App.myPVM?.BarterCollection
@@ -165,7 +168,7 @@ public partial class MapControl {
             ?? new HashSet<string>(StringComparer.Ordinal);
         string[] activeFallbacks = App.listIslands
             .Where(island => activeIds.Contains(island.IslandsName)
-                && !island.HasVerifiedBarterDestination)
+                && island.UsesCatalogFallbackDestination)
             .Select(island => island.IslandsName)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
@@ -173,13 +176,18 @@ public partial class MapControl {
             App.myCFun?.Log(
                 $"[route-coordinate] Active route contains non-NPC fallback stops: " +
                 $"{String.Join(", ", activeFallbacks)}. Map overlays and distance use " +
-                $"NavigationX/Y consistently, but these values are not yet verified NPC positions.",
+                $"NavigationX/Y consistently, but these values are not yet explicit NPC positions.",
                 System.Windows.Media.Brushes.OrangeRed);
         }
     }
 
     private void ReportSanityWarnings(
         IReadOnlyDictionary<string, IslandCoordinateResult> diagnostics) {
+        // Only retain bands backed by a direct map anchor or a well-established
+        // geographic expectation. Crow's Ship and Crow's Nest currently resolve
+        // through affine fallback and have no direct BDF anchor; treating them as
+        // definitely "south" produced false red alarms and conveyed more certainty
+        // than the source data supports.
         (string island, double minY, double maxY, string label)[] bands = {
             ("Dallae",     0.05, 0.25, "north edge"),
             ("Haemo",      0.05, 0.35, "northern island"),
@@ -188,8 +196,6 @@ public partial class MapControl {
             ("Padix",      0.25, 0.60, "mid-west sea"),
             ("Hakoven",    0.20, 0.50, "far east island"),
             ("Cox_Pirate", 0.35, 0.65, "central archipelago"),
-            ("Crow",       0.45, 0.75, "south"),
-            ("Crows_Nest", 0.45, 0.75, "south"),
         };
         foreach (var (island, minY, maxY, label) in bands) {
             if (!diagnostics.TryGetValue(island, out var diag)) continue;
