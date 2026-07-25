@@ -343,6 +343,115 @@ public class RouteProgressPipelineTests {
         Assert.Equal(3, toggled.Routes[0].Steps.Count);
     }
 
+    [Fact]
+    public void CompletionProgress_UsesPublishedWarehouseStock_WhenLiveSnapshotIsEmpty() {
+        // Map completion needs the live task set (r1 is now done), but a
+        // transient Storage UI refresh can report every warehouse item as
+        // zero. Replaying the already published plan against that transient
+        // stock must not reject the completion.
+        var publishedRequest = RouteTestData.TwoItemRequest(false);
+        var plan = new AutomaticRoutePlanner().Plan(
+            publishedRequest, TestContext.Current.CancellationToken);
+        Assert.Equal(RoutePlanStatus.Optimal, plan.Status);
+
+        var emptyStockRequest = new AutomaticRoutePlanningRequest(
+            publishedRequest.Tasks.Where(task => task.RowId != "r1").ToArray(),
+            publishedRequest.Items,
+            publishedRequest.Warehouses.Select(warehouse => new RouteWarehouse(
+                warehouse.WarehouseId,
+                warehouse.IslandId,
+                warehouse.Point,
+                warehouse.Inventory.Keys.ToDictionary(itemId => itemId, _ => 0,
+                    StringComparer.Ordinal))).ToArray(),
+            publishedRequest.ExtraLT,
+            publishedRequest.TotalLT,
+            publishedRequest.Limits,
+            publishedRequest.ConfigurationVersion);
+        var completed = new HashSet<string>(StringComparer.Ordinal) { "r1" };
+
+        var transientFailure = RoutePlanPublication.PreparePlanForPublication(
+            emptyStockRequest, plan, RoutePlanPublicationSource.CompletionProgress, completed);
+        Assert.False(transientFailure.Success);
+        Assert.Equal("insufficient-stock", transientFailure.Failure?.Code);
+
+        var progressRequest = RouteProgressRequestBuilder.MergePublishedExecutionState(
+            publishedRequest, emptyStockRequest);
+        var prepared = RoutePlanPublication.PreparePlanForPublication(
+            progressRequest, plan, RoutePlanPublicationSource.CompletionProgress, completed);
+
+        Assert.True(prepared.Success,
+            $"{prepared.Failure?.Code}: {prepared.Failure?.Detail}");
+    }
+
+    [Fact]
+    public void CompletionProgress_CarriesCompletedRouteUnloadIntoNextRouteStock() {
+        // Route 1 creates MID and unloads it into Velia. Route 2 then picks MID
+        // up from Velia. Once route 1 is fully completed it disappears from the
+        // visible projection, but its unload must remain part of route 2's
+        // starting warehouse state.
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["SEED"] = new("SEED", "Seed", 1, 100),
+            ["MID"] = new("MID", "Intermediate", 2, 100),
+            ["OUT"] = new("OUT", "Output", 3, 100),
+        };
+        var originalRequest = new AutomaticRoutePlanningRequest(
+            [
+                new RouteBarterTask("r1", "A", new RoutePoint(10, 0),
+                    "SEED", 10, "MID", 10),
+                new RouteBarterTask("r2", "B", new RoutePoint(20, 0),
+                    "MID", 10, "OUT", 10),
+            ],
+            items,
+            [new RouteWarehouse("Velia", "Velia", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) {
+                    ["SEED"] = 10,
+                    ["MID"] = 0,
+                    ["OUT"] = 0,
+                })],
+            0,
+            30_000,
+            new RouteSearchLimits(100_000, 1_000),
+            "completed-route-warehouse-handoff");
+        var skeleton = new RoutePlan(
+            RoutePlanStatus.Optimal,
+            [
+                BuildRoute(1,
+                    Pickup("Velia", ("SEED", 10)),
+                    Barter("r1", "SEED", 10, "MID", 10),
+                    Unload("Velia", ("MID", 10))),
+                BuildRoute(2,
+                    Pickup("Velia", ("MID", 10)),
+                    Barter("r2", "MID", 10, "OUT", 10),
+                    Unload("Velia", ("OUT", 10))),
+            ],
+            null,
+            [],
+            RoutePlanFingerprint.Compute(originalRequest));
+        var replayed = RouteReplay.ReplayPlan(originalRequest, skeleton);
+        Assert.True(replayed.Success, replayed.Failure?.FailureDetail);
+
+        var progressRequest = new AutomaticRoutePlanningRequest(
+            originalRequest.Tasks.Where(task => task.RowId == "r2").ToArray(),
+            originalRequest.Items,
+            originalRequest.Warehouses,
+            originalRequest.ExtraLT,
+            originalRequest.TotalLT,
+            originalRequest.Limits,
+            originalRequest.ConfigurationVersion);
+        var prepared = RoutePlanPublication.PreparePlanForPublication(
+            progressRequest,
+            replayed.Plan!,
+            RoutePlanPublicationSource.CompletionProgress,
+            new HashSet<string>(StringComparer.Ordinal) { "r1" });
+
+        Assert.True(prepared.Success,
+            $"{prepared.Failure?.Code}: {prepared.Failure?.Detail}");
+        var remainingRoute = Assert.Single(prepared.Plan!.Routes);
+        var pickup = Assert.IsType<WarehousePickupStep>(remainingRoute.Steps[0]);
+        Assert.Contains(pickup.Items,
+            item => item.ItemId == "MID" && item.Quantity == 10);
+    }
+
     private static RoutePlan ApplyPipeline(
         AutomaticRoutePlanningRequest request, RoutePlan plan, HashSet<string> completed) {
         var newRoutes = new List<PlannedRoute>();

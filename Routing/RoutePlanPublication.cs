@@ -157,6 +157,11 @@ public static class RoutePlanPublication {
         }
 
         var routes = new List<PlannedRoute>();
+        var projectedWarehouseInventory = request.Warehouses.ToDictionary(
+            warehouse => warehouse.WarehouseId,
+            warehouse => new Dictionary<string, int>(
+                warehouse.Inventory, StringComparer.Ordinal),
+            StringComparer.Ordinal);
         IReadOnlyDictionary<string, int>? firstRouteCarry = null;
         foreach (var route in candidate.Routes) {
             int firstRemainingBarterIndex = route.Steps
@@ -166,7 +171,17 @@ public static class RoutePlanPublication {
                 .Select(pair => pair.index)
                 .DefaultIfEmpty(-1)
                 .First();
-            if (firstRemainingBarterIndex < 0) continue;
+            if (firstRemainingBarterIndex < 0) {
+                // A fully completed route disappears from the remaining-plan
+                // projection, but its warehouse effects have already happened.
+                // Later routes may pick up an item produced and unloaded by
+                // this route, so carry those pickup/unload deltas forward.
+                if (route.Steps.OfType<BarterStep>().Any()) {
+                    ApplyCompletedRouteWarehouseEffects(
+                        route.Steps, projectedWarehouseInventory);
+                }
+                continue;
+            }
 
             bool hasCompletedPrefix = route.Steps
                 .Take(firstRemainingBarterIndex)
@@ -196,9 +211,11 @@ public static class RoutePlanPublication {
                 0));
         }
 
+        var warehouseAdjustedRequest = CopyWithWarehouseInventory(
+            request, projectedWarehouseInventory);
         var effectiveRequest = firstRouteCarry is null
-            ? request
-            : CopyWithInitialOnBoard(request, firstRouteCarry);
+            ? warehouseAdjustedRequest
+            : CopyWithInitialOnBoard(warehouseAdjustedRequest, firstRouteCarry);
         return new ProgressProjection(effectiveRequest, new RoutePlan(
             candidate.Status,
             routes,
@@ -237,6 +254,49 @@ public static class RoutePlanPublication {
             .Where(pair => pair.Value < 0)
             .ToDictionary(pair => pair.Key, pair => -pair.Value, StringComparer.Ordinal);
     }
+
+    private static void ApplyCompletedRouteWarehouseEffects(
+        IReadOnlyList<RouteStep> steps,
+        IDictionary<string, Dictionary<string, int>> warehouseInventory) {
+        foreach (var step in steps) {
+            switch (step) {
+                case WarehousePickupStep pickup
+                    when warehouseInventory.TryGetValue(
+                        pickup.WarehouseId, out var pickupStock):
+                    foreach (var item in pickup.Items) {
+                        pickupStock[item.ItemId] = checked(
+                            pickupStock.GetValueOrDefault(item.ItemId) - item.Quantity);
+                    }
+                    break;
+                case WarehouseUnloadStep unload
+                    when warehouseInventory.TryGetValue(
+                        unload.WarehouseId, out var unloadStock):
+                    foreach (var item in unload.Items) {
+                        unloadStock[item.ItemId] = checked(
+                            unloadStock.GetValueOrDefault(item.ItemId) + item.Quantity);
+                    }
+                    break;
+            }
+        }
+    }
+
+    private static AutomaticRoutePlanningRequest CopyWithWarehouseInventory(
+        AutomaticRoutePlanningRequest request,
+        IReadOnlyDictionary<string, Dictionary<string, int>> warehouseInventory) => new(
+            request.Tasks,
+            request.Items,
+            request.Warehouses.Select(warehouse => new RouteWarehouse(
+                warehouse.WarehouseId,
+                warehouse.IslandId,
+                warehouse.Point,
+                warehouseInventory.TryGetValue(warehouse.WarehouseId, out var inventory)
+                    ? inventory
+                    : warehouse.Inventory)).ToArray(),
+            request.ExtraLT,
+            request.TotalLT,
+            request.Limits,
+            request.ConfigurationVersion,
+            request.InitialOnBoard);
 
     private static AutomaticRoutePlanningRequest CopyWithInitialOnBoard(
         AutomaticRoutePlanningRequest request,

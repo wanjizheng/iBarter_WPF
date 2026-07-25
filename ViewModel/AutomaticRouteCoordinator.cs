@@ -382,7 +382,18 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             return false;
         }
 
-        var publicationRequest = request ?? currentPublicationRequest;
+        // The live Planner snapshot is needed to exclude newly completed
+        // tasks, but it is not a safe authority for warehouse stock. During
+        // map interactions the Storage UI can still be loading/refreshing and
+        // briefly report zero stock, even though the active plan was generated
+        // from a verified non-zero snapshot. Keep that published execution
+        // state and merge only the live progress overlay into it.
+        var publicationRequest = currentPublicationRequest is { } publishedRequest
+            ? request is { } progressRequest
+                ? RouteProgressRequestBuilder.MergePublishedExecutionState(
+                    publishedRequest, progressRequest)
+                : publishedRequest
+            : request;
         if (publicationRequest is null) {
             App.myCFun?.Log(
                 Localization.LanguageService.Instance.Localize("str.Log.AutoRoute.ProgressInputMissing"),
