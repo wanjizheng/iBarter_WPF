@@ -1,7 +1,7 @@
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using iBarter.Routing;
 
 namespace iBarter.View;
@@ -15,16 +15,28 @@ namespace iBarter.View;
 /// </summary>
 public partial class MapControl {
     private sealed record AutomaticBarterPinVisual(RouteStepBarterPin Pin);
+    private bool automaticBarterPinReconcileScheduled;
 
-    protected override void OnInitialized(EventArgs e) {
-        base.OnInitialized(e);
+    /// <summary>
+    /// The map's existing resize/pan/route refresh path invalidates this control.
+    /// Schedule pin reconciliation after each real render instead of relying on a
+    /// second Tick subscription whose initialization order can vary with WPF's
+    /// generated partial class. The guard coalesces repeated invalidations into one
+    /// visual-tree update.
+    /// </summary>
+    protected override void OnRender(DrawingContext drawingContext) {
+        base.OnRender(drawingContext);
+        ScheduleAutomaticBarterPinReconcile();
+    }
 
-        // The existing map timer is already the canonical safety net for camera,
-        // resize and docking changes. Reusing it keeps the square aligned with the
-        // same TryGetIslandCenter projection used by route labels and numbered
-        // route markers without introducing another timer.
-        myTimer.Tick += (_, _) => ReconcileAndPositionAutomaticBarterPins();
-        Loaded += (_, _) => ReconcileAndPositionAutomaticBarterPins();
+    private void ScheduleAutomaticBarterPinReconcile() {
+        if (automaticBarterPinReconcileScheduled || Dispatcher.HasShutdownStarted)
+            return;
+        automaticBarterPinReconcileScheduled = true;
+        Dispatcher.BeginInvoke(new Action(() => {
+            automaticBarterPinReconcileScheduled = false;
+            ReconcileAndPositionAutomaticBarterPins();
+        }), DispatcherPriority.Render);
     }
 
     private void ReconcileAndPositionAutomaticBarterPins() {
@@ -69,8 +81,8 @@ public partial class MapControl {
         }
 
         // When more than one barter occurs at the same physical stop, keep the
-        // first square centred exactly on the NPC and place subsequent squares in
-        // a compact horizontal row. This preserves every step's group colour.
+        // squares in a compact horizontal row centred on the NPC. A single square
+        // remains exactly centred on the physical barter destination.
         foreach (IGrouping<string, RouteStepBarterPin> islandGroup in desired
                      .GroupBy(pin => pin.IslandId, StringComparer.Ordinal)) {
             var island = App.listIslands?.FirstOrDefault(candidate =>
@@ -97,6 +109,9 @@ public partial class MapControl {
                     Math.Max(0, host.ActualWidth - left - 10),
                     Math.Max(0, host.ActualHeight - top - 10));
                 pinVisual.Visibility = Visibility.Visible;
+                // Route labels use z=60. Put the square above both the label and
+                // the arrow intersection so its group colour remains unmistakable.
+                Panel.SetZIndex(pinVisual, 75);
             }
         }
     }
@@ -130,7 +145,7 @@ public partial class MapControl {
             SnapsToDevicePixels = true,
         };
         RenderOptions.SetEdgeMode(rectangle, EdgeMode.Aliased);
-        Panel.SetZIndex(rectangle, 55); // route lines < square < barter text
+        Panel.SetZIndex(rectangle, 75);
         ApplyAutomaticBarterPinColour(rectangle, pin);
         return rectangle;
     }
@@ -146,11 +161,11 @@ public partial class MapControl {
         Brush groupBrush = GetBrushForGroup(pin.BarterGroup ?? Int32.MinValue);
         Brush textColour = LightenForMapBg(groupBrush);
 
-        // The user-facing contract is exact visual parity with the automatic
-        // transaction text. Use the same lightened group colour for the fill,
-        // while retaining the original group hue as a one-pixel border.
+        // Fill is exactly the same derived group colour used by the automatic
+        // transaction text. A dark outline keeps the 10x10 block distinct where
+        // it crosses a same-colour route arrow or label border.
         rectangle.Fill = textColour;
-        rectangle.Stroke = groupBrush;
-        rectangle.StrokeThickness = 1;
+        rectangle.Stroke = Brushes.Black;
+        rectangle.StrokeThickness = 1.5;
     }
 }
