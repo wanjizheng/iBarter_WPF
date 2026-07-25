@@ -41,15 +41,6 @@ public partial class MapControl {
                 island.NavigationY ?? Double.NaN,
                 island.NavigationSource ?? String.Empty,
                 MapDisplayRegion.Main,
-                // The legacy display group (LeftInset / RightInset /
-                // BottomEdge) is a static-fallback concern only — it
-                // must NEVER block direct BDF anchor resolution for
-                // a real port. Dallae Pier, Haemo Island, etc. all
-                // appear in the legacy inset list but they have real
-                // BDF coordinates and must be placed via DirectBdfMatch
-                // (or DirectBdfAliasMatch) regardless of which
-                // display group the static fallback used to render
-                // them. The route destination is projected separately.
                 PreferNavigationCalibration: false,
                 CalibrationX: island.MapAnchorX,
                 CalibrationY: island.MapAnchorY,
@@ -102,7 +93,6 @@ public partial class MapControl {
         if (!hdMapEnabled) return;
         ConstrainHdMapCamera();
         MainTileLayer.RefreshTiles();
-        // Overlay reposition is the unified pipeline's job.
     }
 
     private void ConstrainHdMapCamera() {
@@ -151,14 +141,6 @@ public partial class MapControl {
         ReportSanityWarnings(diagnostics);
     }
 
-    /// <summary>
-    /// Make coordinate provenance visible. The explicit NPC catalog currently
-    /// covers the ordinary island barterers; newly introduced continental ports
-    /// and special ship/shipwreck barter points may still rely on the best
-    /// catalog coordinate in Islands.csv. Those points remain usable, but they
-    /// are never described as exact NPC coordinates and are reported here until
-    /// a verified IslandBarterLocations row is added.
-    /// </summary>
     private void ReportRouteDestinationProvenance() {
         if (App.listIslands is null) return;
 
@@ -176,7 +158,7 @@ public partial class MapControl {
                 System.Windows.Media.Brushes.OrangeRed);
         }
 
-        var activeIds = App.myPVM?.BarterCollection?
+        var activeIds = App.myPVM?.BarterCollection
             .Where(barter => !barter.ExchangeDone && barter.ExchangeQuantity > 0)
             .Select(barter => barter.IsLandName)
             .ToHashSet(StringComparer.Ordinal)
@@ -222,13 +204,6 @@ public partial class MapControl {
         }
     }
 
-    /// <summary>
-    /// Returns the physical route stop used by all barter overlays. In HD mode
-    /// this is the projected NavigationX/Y destination: the actual barter NPC
-    /// when IslandBarterLocations.csv provides one, otherwise the catalog's
-    /// best available route coordinate. The BDF node catalog remains separate
-    /// for geographic calibration and diagnostics.
-    /// </summary>
     private bool TryGetIslandCenter(
         Islands island,
         out Grid? host,
