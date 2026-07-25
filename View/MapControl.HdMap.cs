@@ -60,6 +60,7 @@ public partial class MapControl {
         hdIslandCoordinates = catalogResult.Coordinates;
         hdRouteCoordinates = catalogResult.RouteCoordinates;
         EmitResolutionDiagnostics(catalogResult.Diagnostics);
+        ReportRouteDestinationProvenance();
 
         hdMapConfiguration = configuration;
         mainHdCamera = CreateCamera(configuration.MainRegion);
@@ -148,6 +149,51 @@ public partial class MapControl {
                 System.Windows.Media.Brushes.Gray);
         }
         ReportSanityWarnings(diagnostics);
+    }
+
+    /// <summary>
+    /// Make coordinate provenance visible. The explicit NPC catalog currently
+    /// covers the ordinary island barterers; newly introduced continental ports
+    /// and special ship/shipwreck barter points may still rely on the best
+    /// catalog coordinate in Islands.csv. Those points remain usable, but they
+    /// are never described as exact NPC coordinates and are reported here until
+    /// a verified IslandBarterLocations row is added.
+    /// </summary>
+    private void ReportRouteDestinationProvenance() {
+        if (App.listIslands is null) return;
+
+        string[] allFallbacks = App.listIslands
+            .Where(island => island.HasNavigationCoordinates
+                && !island.HasVerifiedBarterDestination)
+            .Select(island => island.IslandsName)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        if (allFallbacks.Length > 0) {
+            App.myCFun?.Log(
+                $"[route-coordinate] {allFallbacks.Length} locations use catalog fallback " +
+                $"coordinates rather than a verified barter NPC: {String.Join(", ", allFallbacks)}",
+                System.Windows.Media.Brushes.OrangeRed);
+        }
+
+        var activeIds = App.myPVM?.BarterCollection?
+            .Where(barter => !barter.ExchangeDone && barter.ExchangeQuantity > 0)
+            .Select(barter => barter.IsLandName)
+            .ToHashSet(StringComparer.Ordinal)
+            ?? new HashSet<string>(StringComparer.Ordinal);
+        string[] activeFallbacks = App.listIslands
+            .Where(island => activeIds.Contains(island.IslandsName)
+                && !island.HasVerifiedBarterDestination)
+            .Select(island => island.IslandsName)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+        if (activeFallbacks.Length > 0) {
+            App.myCFun?.Log(
+                $"[route-coordinate] Active route contains non-NPC fallback stops: " +
+                $"{String.Join(", ", activeFallbacks)}. Map overlays and distance use " +
+                $"NavigationX/Y consistently, but these values are not yet verified NPC positions.",
+                System.Windows.Media.Brushes.OrangeRed);
+        }
     }
 
     private void ReportSanityWarnings(
