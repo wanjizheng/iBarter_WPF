@@ -44,6 +44,102 @@ public sealed class BdfAffineProductionRegressionTests {
     }
 
     [Fact]
+    public void Route_coordinate_uses_NPC_destination_while_map_coordinate_uses_node_anchor() {
+        var inputs = new[] {
+            Control("A", routeX: 0, routeY: 0, mapX: 0, mapY: 0),
+            Control("B", routeX: 100, routeY: 0, mapX: 100, mapY: 0),
+            Control("C", routeX: 0, routeY: 100, mapX: 0, mapY: 100),
+            new MapIslandCoordinateInput(
+                "Haemo",
+                NavigationX: 65,
+                NavigationY: 35,
+                NavigationSource: "bdocodex-barterer-npc-58980",
+                MapDisplayRegion.Main,
+                CalibrationX: 20,
+                CalibrationY: 80,
+                MapAnchorSource: "bdo-world-direct"),
+        };
+        var nodeCoordinate = WebMercatorProjection.FromNormalized(Transform(20, 80));
+        var anchors = new[] {
+            Anchor("A", 0, 0),
+            Anchor("B", 100, 0),
+            Anchor("C", 0, 100),
+            new BdfMapAnchor(
+                "Haemo Island", "Haemo",
+                nodeCoordinate.Latitude, nodeCoordinate.Longitude,
+                "connect.js"),
+        };
+
+        var result = BdfIslandCoordinateCatalog.BuildDetailed(
+            inputs, anchors, new Dictionary<string, string>());
+
+        var mapNormalized = WebMercatorProjection.ToNormalized(
+            result.Coordinates["Haemo"]);
+        var routeNormalized = WebMercatorProjection.ToNormalized(
+            result.RouteCoordinates["Haemo"]);
+
+        Assert.Equal(Transform(20, 80).X, mapNormalized.X, 10);
+        Assert.Equal(Transform(20, 80).Y, mapNormalized.Y, 10);
+        Assert.Equal(Transform(65, 35).X, routeNormalized.X, 10);
+        Assert.Equal(Transform(65, 35).Y, routeNormalized.Y, 10);
+        Assert.NotEqual(result.Coordinates["Haemo"], result.RouteCoordinates["Haemo"]);
+    }
+
+    [Fact]
+    public void Changing_NPC_destination_moves_route_coordinate_but_not_map_anchor() {
+        var controls = new[] {
+            Control("A", 0, 0, 0, 0),
+            Control("B", 100, 0, 100, 0),
+            Control("C", 0, 100, 0, 100),
+        };
+        var anchors = new[] {
+            Anchor("A", 0, 0),
+            Anchor("B", 100, 0),
+            Anchor("C", 0, 100),
+            Anchor("Port", 25, 75),
+        };
+        var first = new MapIslandCoordinateInput(
+            "Port", 30, 40, "bdocodex-barterer-npc-1",
+            MapDisplayRegion.Main,
+            CalibrationX: 25,
+            CalibrationY: 75,
+            MapAnchorSource: "bdo-world-direct");
+        var second = first with { NavigationX = 70, NavigationY = 20 };
+
+        var firstResult = BdfIslandCoordinateCatalog.BuildDetailed(
+            controls.Append(first).ToArray(), anchors,
+            new Dictionary<string, string>());
+        var secondResult = BdfIslandCoordinateCatalog.BuildDetailed(
+            controls.Append(second).ToArray(), anchors,
+            new Dictionary<string, string>());
+
+        Assert.Equal(firstResult.Coordinates["Port"], secondResult.Coordinates["Port"]);
+        Assert.NotEqual(
+            firstResult.RouteCoordinates["Port"],
+            secondResult.RouteCoordinates["Port"]);
+    }
+
+    [Fact]
+    public void Missing_or_invalid_NPC_destination_falls_back_to_resolved_node() {
+        var inputs = new[] {
+            new MapIslandCoordinateInput(
+                "Port", Double.NaN, Double.NaN, "missing-route",
+                MapDisplayRegion.Main,
+                CalibrationX: 10,
+                CalibrationY: 20,
+                MapAnchorSource: "bdo-world-direct"),
+        };
+        var anchors = new[] {
+            new BdfMapAnchor("Port", "Port", 12, 34, "connect.js"),
+        };
+
+        var result = BdfIslandCoordinateCatalog.BuildDetailed(
+            inputs, anchors, new Dictionary<string, string>());
+
+        Assert.Equal(result.Coordinates["Port"], result.RouteCoordinates["Port"]);
+    }
+
+    [Fact]
     public void Untrusted_direct_anchor_cannot_change_trusted_affine_output() {
         var trusted = new[] {
             Control("A", 9_000, 9_000, 0, 0),
@@ -146,6 +242,7 @@ public sealed class BdfAffineProductionRegressionTests {
             new Dictionary<string, string> { ["Crows_Nest"] = "Crow's Nest" });
 
         Assert.True(result.Coordinates.ContainsKey("Crows_Nest"));
+        Assert.True(result.RouteCoordinates.ContainsKey("Crows_Nest"));
         Assert.Equal(
             IslandResolutionMode.TrustedAffineFallback,
             result.Diagnostics["Crows_Nest"].Resolution);
