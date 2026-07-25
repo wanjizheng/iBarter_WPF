@@ -50,8 +50,21 @@ public sealed record BdfMapAnchor(
     double Longitude,
     string SourceUrl);
 
+/// <summary>
+/// Two coordinate catalogs are emitted deliberately:
+/// <list type="bullet">
+/// <item><see cref="Coordinates"/> contains the BDF node/map anchors used for
+/// geographic context and ordinary island pins.</item>
+/// <item><see cref="RouteCoordinates"/> contains the projected
+/// <see cref="MapIslandCoordinateInput.NavigationX"/>/<see cref="MapIslandCoordinateInput.NavigationY"/>
+/// destination used for barter labels, sailing lines, focus and distance-related
+/// route presentation.  When IslandBarterLocations.csv has a row, this is the
+/// actual barter NPC rather than the island/node centre.</item>
+/// </list>
+/// </summary>
 public sealed record BdfIslandCoordinateCatalogResult(
     IReadOnlyDictionary<string, GeoCoordinate> Coordinates,
+    IReadOnlyDictionary<string, GeoCoordinate> RouteCoordinates,
     IReadOnlyDictionary<string, IslandCoordinateResult> Diagnostics);
 
 public readonly record struct CalibrationPair(
@@ -112,6 +125,8 @@ public static class BdfIslandCoordinateCatalog {
         double affineResidual = affine?.ComputeSelfResidual(calibrationPairs)
             ?? double.NaN;
 
+        // Resolve map/node coordinates. Direct BDF anchors always win; only
+        // locations without a direct anchor use their preserved map-world point.
         var result = new Dictionary<string, GeoCoordinate>(direct, StringComparer.Ordinal);
         if (affine is not null) {
             foreach (var island in islands.Where(x =>
@@ -122,8 +137,7 @@ public static class BdfIslandCoordinateCatalog {
                 }
 
                 NormalizedMercatorPoint normalized = affine.Transform(mapX, mapY);
-                if (normalized.X is >= 0 and <= 1
-                    && normalized.Y is >= 0 and <= 1) {
+                if (IsValidNormalized(normalized)) {
                     GeoCoordinate coordinate =
                         WebMercatorProjection.FromNormalized(normalized);
                     result[island.IslandId] = coordinate;
@@ -141,8 +155,42 @@ public static class BdfIslandCoordinateCatalog {
             }
         }
 
-        return new BdfIslandCoordinateCatalogResult(result, diagnostics);
+        // Resolve the actual sailing/interaction destinations independently of the
+        // node catalog. NavigationX/Y is intentionally projected even for islands
+        // that have a direct BDF node: IslandBarterLocations.csv replaces those
+        // fields with the barter NPC position, while MapAnchorX/Y retains the node
+        // calibration point. This keeps route labels, route lines and planning
+        // distance on the same physical stop.
+        var routeCoordinates = new Dictionary<string, GeoCoordinate>(StringComparer.Ordinal);
+        foreach (MapIslandCoordinateInput island in islands.Where(x =>
+            x.DisplayRegion != MapDisplayRegion.Hidden)) {
+            bool projected = false;
+            if (affine is not null
+                && double.IsFinite(island.NavigationX)
+                && double.IsFinite(island.NavigationY)) {
+                NormalizedMercatorPoint navigationNormalized = affine.Transform(
+                    island.NavigationX, island.NavigationY);
+                if (IsValidNormalized(navigationNormalized)) {
+                    routeCoordinates[island.IslandId] =
+                        WebMercatorProjection.FromNormalized(navigationNormalized);
+                    projected = true;
+                }
+            }
+
+            // A missing/invalid route destination must not make a known island
+            // disappear. Fall back to its resolved node/map coordinate and leave
+            // diagnostics to expose the incomplete source data.
+            if (!projected && result.TryGetValue(island.IslandId, out GeoCoordinate fallback)) {
+                routeCoordinates[island.IslandId] = fallback;
+            }
+        }
+
+        return new BdfIslandCoordinateCatalogResult(
+            result, routeCoordinates, diagnostics);
     }
+
+    private static bool IsValidNormalized(NormalizedMercatorPoint point) =>
+        point.X is >= 0 and <= 1 && point.Y is >= 0 and <= 1;
 
     private static IReadOnlyList<CalibrationPair> BuildTrustedCalibrationPairs(
         IReadOnlyList<MapIslandCoordinateInput> islands,
