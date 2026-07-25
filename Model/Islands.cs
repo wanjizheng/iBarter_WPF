@@ -140,22 +140,39 @@ namespace iBarter {
                 }
                 RaisePropertyChanged("NavigationSource");
                 RaisePropertyChanged("HasVerifiedBarterDestination");
+                RaisePropertyChanged("HasUserCalibratedBarterDestination");
                 RaisePropertyChanged("RouteDestinationProvenance");
             }
         }
 
         /// <summary>
-        /// True only when the route destination came from the explicit
-        /// IslandBarterLocations catalog and therefore identifies the real
-        /// barter NPC/interaction stop rather than a node, wharf or calibrated
-        /// geographic fallback.
+        /// Olvia Coast's barterer identity (Brio, NPC 58973) is sourced from the
+        /// live barter catalog, but the exact X/Y below is currently calibrated
+        /// from the user's in-game map observation because the public NPC page does
+        /// not expose a spawn coordinate. Keep that distinction visible rather than
+        /// claiming the position is source-extracted.
+        /// </summary>
+        public bool HasUserCalibratedBarterDestination =>
+            Island == EnumLists.Island.Olvia
+            && StringComparer.OrdinalIgnoreCase.Equals(
+                NavigationSource, "bdocodex-barterer-npc-58973");
+
+        /// <summary>
+        /// True only when the route destination came from an explicit
+        /// IslandBarterLocations catalog row whose NPC coordinate is source-derived,
+        /// rather than a node/wharf fallback or a user-calibrated correction.
         /// </summary>
         public bool HasVerifiedBarterDestination =>
             NavigationSource.StartsWith(
-                "bdocodex-barterer-npc-", StringComparison.OrdinalIgnoreCase);
+                "bdocodex-barterer-npc-", StringComparison.OrdinalIgnoreCase)
+            && !HasUserCalibratedBarterDestination;
 
         public string RouteDestinationProvenance =>
-            HasVerifiedBarterDestination ? "VerifiedNpc" : "CatalogFallback";
+            HasUserCalibratedBarterDestination
+                ? "UserCalibratedNpc"
+                : HasVerifiedBarterDestination
+                    ? "VerifiedNpc"
+                    : "CatalogFallback";
 
         // The HD map source labels islands at their node anchors, while sailing
         // routes need the coastal barterer. Keep the original node coordinate
