@@ -11,6 +11,8 @@ public partial class MapControl {
     private LocalMapConfiguration? hdMapConfiguration;
     private IReadOnlyDictionary<string, GeoCoordinate> hdIslandCoordinates =
         new Dictionary<string, GeoCoordinate>(StringComparer.Ordinal);
+    private IReadOnlyDictionary<string, GeoCoordinate> hdRouteCoordinates =
+        new Dictionary<string, GeoCoordinate>(StringComparer.Ordinal);
     private XyzViewportCamera? mainHdCamera;
     private readonly LocalTileBitmapCache hdTileBitmapCache = new(512);
     private long lastCenteredFocusRevision = -1;
@@ -47,24 +49,19 @@ public partial class MapControl {
                 // BDF coordinates and must be placed via DirectBdfMatch
                 // (or DirectBdfAliasMatch) regardless of which
                 // display group the static fallback used to render
-                // them. The "PreferNavigationCalibration" branch
-                // (bdocodex-barterer-*) is also dropped: the route
-                // destination is for pathfinding, not map placement.
+                // them. The route destination is projected separately.
                 PreferNavigationCalibration: false,
                 CalibrationX: island.MapAnchorX,
                 CalibrationY: island.MapAnchorY,
-                // Preserve the original anchor source so the BDF
-                // catalog's trusted-source filter can decide whether
-                // this island may participate in the affine pool.
                 MapAnchorSource: island.MapAnchorSource ?? string.Empty);
         }).ToArray();
         var catalogResult = BdfIslandCoordinateCatalog.BuildDetailed(
             inputs, metadata.Anchors, metadata.Aliases);
-        var coordinates = catalogResult.Coordinates;
+        hdIslandCoordinates = catalogResult.Coordinates;
+        hdRouteCoordinates = catalogResult.RouteCoordinates;
         EmitResolutionDiagnostics(catalogResult.Diagnostics);
 
         hdMapConfiguration = configuration;
-        hdIslandCoordinates = coordinates;
         mainHdCamera = CreateCamera(configuration.MainRegion);
         ConstrainHdMapCamera();
         var catalog = new LocalTileCatalog(root, configuration.TileExtension);
@@ -92,6 +89,8 @@ public partial class MapControl {
         hdMapConfiguration = null;
         hdIslandCoordinates =
             new Dictionary<string, GeoCoordinate>(StringComparer.Ordinal);
+        hdRouteCoordinates =
+            new Dictionary<string, GeoCoordinate>(StringComparer.Ordinal);
         mainHdCamera = null;
         MainTileLayer.Disable();
         Image_BackgroundMap.Visibility = Visibility.Visible;
@@ -102,13 +101,7 @@ public partial class MapControl {
         if (!hdMapEnabled) return;
         ConstrainHdMapCamera();
         MainTileLayer.RefreshTiles();
-        // Resize fix: overlay reposition is the unified pipeline's
-        // job now. RefreshHdMap owns ONLY camera + tile concerns;
-        // calling IslandsButtonRearrange here used to cause a
-        // double-pass on every HD-mode resize (the pipeline also
-        // ran, but with stale ActualWidth from the inner
-        // Grid_MapMain, so the HD pass won the race and then the
-        // pipeline pass overwrote it — leaving a visible flicker).
+        // Overlay reposition is the unified pipeline's job.
     }
 
     private void ConstrainHdMapCamera() {
@@ -126,16 +119,6 @@ public partial class MapControl {
 
     private Grid GetOverlayHost(Islands _) => Grid_MapMain;
 
-    /// <summary>
-    /// Diagnostic dump of every island's resolution path. Always
-    /// logs the islands the user explicitly cares about (Dallae,
-    /// Haemo, Midnight, Iliya, Padix, Hakoven, Cox_Pirate, Crow,
-    /// Crows_Nest) so a misplacement is easy to triage in the log.
-    /// Per the fix brief, every entry includes route destination,
-    /// map anchor, matched BDF source, matched IBarter name,
-    /// resolution mode, final GeoCoordinate, final normalized
-    /// Mercator coordinate, and the affine fit's self-residual.
-    /// </summary>
     private static readonly HashSet<string> _diagnosticIslands =
         new(StringComparer.Ordinal) {
             "Dallae", "Haemo", "Midnight", "Iliya", "Padix",
@@ -164,22 +147,11 @@ public partial class MapControl {
                 $"residual={diag.AffineResidual:0.###}",
                 System.Windows.Media.Brushes.Gray);
         }
-        RunSanityChecks(diagnostics);
+        ReportSanityWarnings(diagnostics);
     }
 
-    /// <summary>
-    /// Per the fix brief: when an HD resolution lands an island far
-    /// outside its expected geographic region, refuse to silently
-    /// accept it. A misplacement like Dallae in the map center is
-    /// rejected here, not detected later by a confused user.
-    /// </summary>
-    private void RunSanityChecks(
+    private void ReportSanityWarnings(
         IReadOnlyDictionary<string, IslandCoordinateResult> diagnostics) {
-        // In WebMercator normalized coordinates, Y=0 is the north
-        // edge of the map and Y=1 is the south edge. Each band's
-        // minY/maxY come from the actual resolved position on the
-        // real bdf-anchors.json so a "Dallae dropped to map
-        // middle" is caught here, not at user-surfaced runtime.
         (string island, double minY, double maxY, string label)[] bands = {
             ("Dallae",     0.05, 0.25, "north edge"),
             ("Haemo",      0.05, 0.35, "northern island"),
@@ -204,6 +176,13 @@ public partial class MapControl {
         }
     }
 
+    /// <summary>
+    /// Returns the physical route stop used by all barter overlays. In HD mode
+    /// this is the projected NavigationX/Y destination: the actual barter NPC
+    /// when IslandBarterLocations.csv provides one, otherwise the catalog's
+    /// best available route coordinate. The BDF node catalog remains separate
+    /// for geographic calibration and diagnostics.
+    /// </summary>
     private bool TryGetIslandCenter(
         Islands island,
         out Grid? host,
@@ -214,13 +193,6 @@ public partial class MapControl {
 
         if (!hdMapEnabled) {
             var normalized = GetDisplayCenterNormalized(island);
-            // The resize-fix pipeline owns this math: the static-map
-            // path here is the single production caller of
-            // MapProjectionHelper.ProjectNormalized so the unit
-            // test pins the value the user actually sees when
-            // resizing a non-HD window. Do NOT inline
-            // `normalized.X * host.ActualWidth` again — if a
-            // future regression is observed, the test will catch it.
             var staticProjected = MapProjectionHelper.ProjectNormalized(
                 normalized.X,
                 normalized.Y,
@@ -231,7 +203,7 @@ public partial class MapControl {
         }
 
         if (hdMapConfiguration is null
-            || !hdIslandCoordinates.TryGetValue(island.IslandsName, out var coordinate))
+            || !hdRouteCoordinates.TryGetValue(island.IslandsName, out var coordinate))
             return false;
         XyzViewportCamera? camera = mainHdCamera;
         if (camera is null || host.ActualWidth <= 0 || host.ActualHeight <= 0)
@@ -265,8 +237,8 @@ public partial class MapControl {
         if (hdMapEnabled
             && hdMapConfiguration is not null
             && mainHdCamera is not null
-            && hdIslandCoordinates.TryGetValue(fromIslandId, out var fromCoordinate)
-            && hdIslandCoordinates.TryGetValue(toIslandId, out var toCoordinate)) {
+            && hdRouteCoordinates.TryGetValue(fromIslandId, out var fromCoordinate)
+            && hdRouteCoordinates.TryGetValue(toIslandId, out var toCoordinate)) {
             var focus = MapFocusCameraCalculator.Calculate(
                 fromCoordinate,
                 toCoordinate,
