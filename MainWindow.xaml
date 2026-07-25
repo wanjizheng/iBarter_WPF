@@ -22,7 +22,7 @@
     CloseButtonTemplate="{DynamicResource ProductsWindowCloseButtonTemplate}"
     MaximizeButtonTemplate="{DynamicResource ProductsWindowMaximizeButtonTemplate}"
     MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
-    ResizeBorderThickness="8"
+    ResizeBorderThickness="4"
     ResizeMode="CanResize"
     RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
     AllowsTransparency="True"

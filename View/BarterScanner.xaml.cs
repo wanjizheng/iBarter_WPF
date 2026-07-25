@@ -216,11 +216,22 @@ namespace iBarter.View {
         }
 
         private void ButtonAdv_Add_Click(object sender, RoutedEventArgs e) {
+            bool addedToPlanner = false;
             for (int i = 0; i < App.mySVM.BarterDetails.Count; i++) {
                 Barter barter = App.mySVM.BarterDetails[i];
                 if (App.myPVM.BarterCollection.FirstOrDefault(b => b.IsLandName.Equals(barter.IsLandName)) == null) {
-                    App.myPVM.BarterCollection.Add(barter);
+                    // Scanner rows are assembled through Barter's parameterless
+                    // deserialization constructor and therefore do not own a
+                    // PlannerRowId. Transfer a clone into Planner: the clone
+                    // preserves an existing id, or assigns a fresh stable id
+                    // before SaveData serializes the row.
+                    App.myPVM.BarterCollection.Add(new Barter(barter));
+                    addedToPlanner = true;
                 }
+            }
+
+            if (addedToPlanner) {
+                App.myRouteCoordinator?.Invalidate("planner-scanner-add");
             }
 
             // 2026-07-08: auto-save planner on Add. The user previously had

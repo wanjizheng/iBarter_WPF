@@ -99,6 +99,42 @@ public sealed class BdfIslandCoordinateCatalogTests {
         Assert.NotEqual(new GeoCoordinate(80, 170), catalog["Cox_Pirate"]);
     }
 
+    [Fact]
+    public void Barterer_destination_uses_node_anchor_only_for_calibration() {
+        static NormalizedMercatorPoint Transform(double x, double y) =>
+            new(0.2 + x * 0.001, 0.3 + y * 0.001);
+        var inputs = new[] {
+            Input("A", 0, 0),
+            Input("B", 100, 0),
+            Input("C", 0, 100),
+            new MapIslandCoordinateInput(
+                "Padix", 40, 80, "bdocodex-barterer-npc-58915",
+                MapDisplayRegion.Main,
+                PreferNavigationCalibration: true,
+                CalibrationX: 40,
+                CalibrationY: 60),
+        };
+        var anchors = inputs.Select(input => {
+            double anchorX = input.CalibrationX ?? input.NavigationX;
+            double anchorY = input.CalibrationY ?? input.NavigationY;
+            GeoCoordinate coordinate = WebMercatorProjection.FromNormalized(
+                Transform(anchorX, anchorY));
+            return new BdfMapAnchor(
+                input.IslandId, input.IslandId,
+                coordinate.Latitude, coordinate.Longitude, "connect.js");
+        }).ToArray();
+
+        var catalog = BdfIslandCoordinateCatalog.Build(
+            inputs, anchors, new Dictionary<string, string>());
+        var actual = WebMercatorProjection.ToNormalized(catalog["Padix"]);
+        var nodeAnchor = WebMercatorProjection.ToNormalized(
+            new GeoCoordinate(anchors[3].Latitude, anchors[3].Longitude));
+
+        Assert.Equal(Transform(40, 80).X, actual.X, 10);
+        Assert.Equal(Transform(40, 80).Y, actual.Y, 10);
+        Assert.NotEqual(nodeAnchor, actual);
+    }
+
     private static MapIslandCoordinateInput Input(string id, double x, double y) =>
         new(id, x, y, "bdo-world-direct", MapDisplayRegion.Main);
 }

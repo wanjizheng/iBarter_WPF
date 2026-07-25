@@ -15,7 +15,9 @@ public sealed record MapIslandCoordinateInput(
     double NavigationY,
     string NavigationSource,
     MapDisplayRegion DisplayRegion,
-    bool PreferNavigationCalibration = false);
+    bool PreferNavigationCalibration = false,
+    double? CalibrationX = null,
+    double? CalibrationY = null);
 
 public sealed record BdfMapAnchor(
     string SourceName,
@@ -29,27 +31,32 @@ public static class BdfIslandCoordinateCatalog {
         IReadOnlyList<MapIslandCoordinateInput> islands,
         IReadOnlyList<BdfMapAnchor> anchors,
         IReadOnlyDictionary<string, string> aliases) {
+        var anchorCoordinates =
+            new Dictionary<string, GeoCoordinate>(StringComparer.Ordinal);
         var direct = new Dictionary<string, GeoCoordinate>(StringComparer.Ordinal);
         foreach (var island in islands.Where(x => x.DisplayRegion != MapDisplayRegion.Hidden)) {
-            if (island.PreferNavigationCalibration) continue;
             var anchor = FindAnchor(island.IslandId, anchors, aliases);
             if (anchor is not null
                 && double.IsFinite(anchor.Latitude)
-                && double.IsFinite(anchor.Longitude))
-                direct[island.IslandId] = new GeoCoordinate(
+                && double.IsFinite(anchor.Longitude)) {
+                var coordinate = new GeoCoordinate(
                     anchor.Latitude, anchor.Longitude);
+                anchorCoordinates[island.IslandId] = coordinate;
+                if (!island.PreferNavigationCalibration)
+                    direct[island.IslandId] = coordinate;
+            }
         }
 
         var calibrationPairs = islands
             .Where(island => island.DisplayRegion != MapDisplayRegion.Hidden
-                && island.NavigationSource.StartsWith("bdo-world", StringComparison.OrdinalIgnoreCase)
-                && double.IsFinite(island.NavigationX)
-                && double.IsFinite(island.NavigationY)
-                && direct.ContainsKey(island.IslandId))
+                && double.IsFinite(island.CalibrationX ?? island.NavigationX)
+                && double.IsFinite(island.CalibrationY ?? island.NavigationY)
+                && anchorCoordinates.ContainsKey(island.IslandId))
             .Select(island => new CalibrationPair(
-                island.NavigationX,
-                island.NavigationY,
-                WebMercatorProjection.ToNormalized(direct[island.IslandId])))
+                island.CalibrationX ?? island.NavigationX,
+                island.CalibrationY ?? island.NavigationY,
+                WebMercatorProjection.ToNormalized(
+                    anchorCoordinates[island.IslandId])))
             .ToArray();
         AffineMercatorTransform? affine = AffineMercatorTransform.TryFit(calibrationPairs);
 

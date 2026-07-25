@@ -122,6 +122,7 @@ namespace iBarter.ViewModel {
 
                 App.listStorage.Clear();
                 App.listStorage.AddRange(snapshot);
+                WorkspaceSnapshotService.CaptureCompletedState("storage-save");
                 App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Storage.Saved"), Brushes.DarkOliveGreen);
                 return true;
             }
@@ -154,7 +155,10 @@ namespace iBarter.ViewModel {
 
                 try {
                     loadedItems = JsonConvert.DeserializeObject<List<Items>>(jsonData) ?? new List<Items>();
-                    loadedItems = loadedItems.Select(HydrateStorageItem).ToList();
+                    loadedItems = loadedItems
+                        .Select(HydrateStorageItem)
+                        .Where(item => !string.Equals(item.ItemLV, "7", StringComparison.Ordinal))
+                        .ToList();
                     if (recoveredFromBackup) {
                         App.myCFun.Log(Localization.LanguageService.Instance.Current == Localization.AppLanguage.TraditionalChinese
                             ? "已从备份文件恢复仓库数据。"
@@ -178,9 +182,11 @@ namespace iBarter.ViewModel {
 
                 // Always seed the hardcoded fallback list. The JSON load above
                 // already populated StorageCollection with the user's saved items;
-                // this pass adds any hardcoded items not yet present, so newly-added
-                // items (e.g. the LV6 batch in 2587a5b) become visible to existing
-                // users without forcing them to delete myStorage_Data.json.
+                // this pass adds any hardcoded tracked items not yet present, so
+                // newly-added items (e.g. the LV6 batch in 2587a5b) become visible
+                // to existing users without forcing them to delete
+                // myStorage_Data.json. LV7 terminal outputs are intentionally not
+                // tracked by StorageManager.
                 SeedHardcodedFallback();
             }
         }
@@ -353,8 +359,8 @@ namespace iBarter.ViewModel {
         }
 
         // Hardcoded list of items that should always be visible in the storage
-        // grid even on a fresh install. Mirrors the LV5/LV6/LV7 barter set the
-        // user is most likely to plan around; new items get appended as the
+        // grid even on a fresh install. Mirrors the tracked LV5/LV6 barter set
+        // the user is most likely to plan around; new items get appended as the
         // catalog grows. The dedup check in the loop is what makes this safe
         // to call on every LoadData - it only adds items the user doesn't
         // already have from a previous JSON.
@@ -457,21 +463,13 @@ namespace iBarter.ViewModel {
             listItems.Add("Golden Flour Sack");
             listItems.Add("Omar Lava Powder");
             listItems.Add("Artisan Seashell Necklace");
-            // Newly-added LV7 terminal outputs must also exist in the storage
-            // ledger. Planner Done nets every selected exchange atomically;
-            // without these zero-quantity seed rows, a valid plan that
-            // produces one of them fails with MISSING_STORAGE_ITEM and the
-            // Planner is intentionally left uncleared.
-            listItems.Add("Traditional Balenos Decorative Anchor");
-            listItems.Add("Calpheonian Artisan Pearl Necklace");
-            listItems.Add("Tarif Magic Pot");
-            listItems.Add("Balenos Whale Sculpture");
-            listItems.Add("Rainbow Sea Crystal Piece");
-
             for (int i = 0; i < listItems.Count; i++) {
                 string strName = listItems[i].Replace("'", "").Replace("(", "").Replace(")", "");
                 Items myItem = App.listItems.FirstOrDefault(i => i.ItemName.Equals(strName));
                 if (myItem != null) {
+                    if (string.Equals(myItem.ItemLV, "7", StringComparison.Ordinal)) {
+                        continue;
+                    }
                     if (StorageCollection.FirstOrDefault(s => string.Equals(s.ItemID, myItem.ItemID, StringComparison.Ordinal)) == null) {
                         StorageCollection.Add(myItem);
                     }

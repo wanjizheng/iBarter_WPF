@@ -116,10 +116,24 @@ namespace iBarter.View {
             MapViewport.SizeChanged += (_, _) => {
                 if (hdMapEnabled) RefreshHdMap();
                 CenterFocusedSegmentIfNeeded();
-                // HD camera updates can shift the projected island
-                // centres, so re-run the label layout pass too.
-                Dispatcher.BeginInvoke(new Action(EnsureRouteIslandLabels),
-                    DispatcherPriority.Render);
+                // Audit round 6: also re-trigger the island-marker
+                // rearrange on MapViewport resize, not just on
+                // Grid_MapMain.SizeChanged. In some docking layout
+                // modes (ChromelessWindow ResizeBorderThickness < 8,
+                // docked-vs-document split changes) the inner grid's
+                // SizeChanged either doesn't fire or fires with
+                // stale ActualWidth/Height, leaving the barter item
+                // markers stuck at their previous coordinates. The
+                // outer Border (MapViewport) DOES fire reliably, so
+                // using it as a second anchor guarantees the markers
+                // track the new map size. Deferred to Render so the
+                // layout pass that delivered the new ActualWidth/
+                // ActualHeight completes first - same reasoning as
+                // the Grid_MapMain.SizeChanged handler above.
+                Dispatcher.BeginInvoke(new Action(() => {
+                    IslandsButtonRearrange();
+                    EnsureRouteIslandLabels();
+                }), DispatcherPriority.Render);
             };
             myTimer.Start();
         }
@@ -2102,7 +2116,12 @@ namespace iBarter.View {
                     .ToArray() ?? [];
                 bool pickup = roles.Any(step => step is WarehousePickupStep);
                 bool unload = roles.Any(step => step is WarehouseUnloadStep);
-                string role = pickup && unload ? "装货/卸货" : pickup ? "装货" : "卸货";
+                var language = LanguageService.Instance;
+                string pickupRole = language.Localize("str.Map.AutoRoute.PickupRole");
+                string unloadRole = language.Localize("str.Map.AutoRoute.UnloadRole");
+                string role = pickup && unload
+                    ? $"{pickupRole}/{unloadRole}"
+                    : pickup ? pickupRole : unloadRole;
                 string label = $"{island.IslandsNameDisplay} · {role}";
 
                 var existingGrid = listGrid_Islands.FirstOrDefault(grid =>

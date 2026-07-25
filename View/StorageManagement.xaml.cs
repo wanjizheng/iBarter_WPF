@@ -15,6 +15,7 @@ namespace iBarter.View {
         private const double MaxZoom = 2.0;
 
         private double zoomFactor = 1.0;
+        private bool loadingMaxLevelCaps;
 
         private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
 
@@ -38,6 +39,7 @@ namespace iBarter.View {
             if (IsDesignMode) return;
             DataContext = App.myStorageVM;
             DataGrid_Storage.ItemsSource = App.myStorageVM.StorageCollection;
+            LoadSavedMaxLevelCaps();
             RefreshData();
             ApplyTypography();
             Loaded += (_, _) => ApplyTypography();
@@ -50,6 +52,36 @@ namespace iBarter.View {
             ApplyTypography();
             ApplyLocalizedHeaders();
             RefreshLocalizedDisplay();
+        }
+
+        private void LoadSavedMaxLevelCaps() {
+            loadingMaxLevelCaps = true;
+            try {
+                ComboBox_MaxLV5.SelectedIndex = Math.Clamp(Properties.Settings.Default.SelectedComboBoxValueLV5, 0, 10);
+                ComboBox_MaxLV6.SelectedIndex = Math.Clamp(Properties.Settings.Default.SelectedComboBoxValueLV6, 0, 10);
+                ComboBox_MaxLV7.SelectedIndex = Math.Clamp(Properties.Settings.Default.SelectedComboBoxValueLV7, 0, 10);
+            }
+            finally {
+                loadingMaxLevelCaps = false;
+            }
+        }
+
+        private void ComboBox_MaxLV5_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
+            SaveMaxLevelCap(ComboBox_MaxLV5.SelectedIndex, value => Properties.Settings.Default.SelectedComboBoxValueLV5 = value);
+        }
+
+        private void ComboBox_MaxLV6_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
+            SaveMaxLevelCap(ComboBox_MaxLV6.SelectedIndex, value => Properties.Settings.Default.SelectedComboBoxValueLV6 = value);
+        }
+
+        private void ComboBox_MaxLV7_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
+            SaveMaxLevelCap(ComboBox_MaxLV7.SelectedIndex, value => Properties.Settings.Default.SelectedComboBoxValueLV7 = value);
+        }
+
+        private void SaveMaxLevelCap(int value, Action<int> save) {
+            if (loadingMaxLevelCaps || value < 0) return;
+            save(value);
+            Properties.Settings.Default.Save();
         }
 
         private void ApplyTypography() {

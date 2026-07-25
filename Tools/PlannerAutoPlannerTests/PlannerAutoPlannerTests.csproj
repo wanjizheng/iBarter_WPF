@@ -15,5 +15,6 @@
     <Compile Include="..\..\Planning\PlannerAutoPlanningAdapter.cs" Link="Planning\PlannerAutoPlanningAdapter.cs" Condition="Exists('..\..\Planning\PlannerAutoPlanningAdapter.cs')" />
     <Compile Include="..\..\Planning\PlannerInventoryReconciler.cs" Link="Planning\PlannerInventoryReconciler.cs" />
     <Compile Include="..\..\Persistence\AtomicFileStore.cs" Link="Persistence\AtomicFileStore.cs" />
+    <Compile Include="..\..\Persistence\WorkspaceSnapshotService.cs" Link="Persistence\WorkspaceSnapshotService.cs" />
   </ItemGroup>
 </Project>

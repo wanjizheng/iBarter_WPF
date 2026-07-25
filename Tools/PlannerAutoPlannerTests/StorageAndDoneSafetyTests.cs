@@ -92,6 +92,22 @@ public sealed class StorageAndDoneSafetyTests {
     }
 
     [Fact]
+    public void Done_does_not_require_or_store_ignored_level7_output() {
+        var reconciler = new PlannerInventoryReconciler();
+        var inventory = new[] { Item("A", velia: 5) };
+
+        var result = reconciler.Reconcile(
+            inventory,
+            [Exchange("1", "A", 1, "800231", 1, 5)],
+            defaultWarehouseIndex: 0,
+            ignoredOutputItemIds: new HashSet<string>(StringComparer.Ordinal) { "800231" });
+
+        Assert.True(result.Success);
+        Assert.Equal(0, result.Inventory["A"].Total);
+        Assert.DoesNotContain("800231", result.Inventory.Keys);
+    }
+
+    [Fact]
     public void Done_shortage_rejects_entire_transaction() {
         var reconciler = new PlannerInventoryReconciler();
         var inventory = new[] { Item("A", velia: 1), Item("B", iliya: 7) };

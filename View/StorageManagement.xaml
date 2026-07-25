@@ -15,7 +15,7 @@
                              CloseButtonTemplate="{DynamicResource ProductsWindowCloseButtonTemplate}"
                              MaximizeButtonTemplate="{DynamicResource ProductsWindowMaximizeButtonTemplate}"
                              MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
-                             ResizeBorderThickness="0"
+                             ResizeBorderThickness="4"
                              RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
                              Title="{loc:Localize str.Menu.StorageManager}" Height="450" Width="800"
                              FontFamily="{DynamicResource AppFontFamily}"
@@ -81,6 +81,34 @@
                 <Syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Grid.Storage.Col.Iliya}" />
                 <Syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Grid.Storage.Col.Epheria}" />
                 <Syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Grid.Storage.Col.Ancado}" />
+            </Syncfusion:ComboBoxAdv>
+            <Separator Margin="12,0" />
+            <Label Content="{loc:Localize str.Planner.MaxLV5}" VerticalAlignment="Center" />
+            <Syncfusion:ComboBoxAdv x:Name="ComboBox_MaxLV5" Width="48" SelectionChanged="ComboBox_MaxLV5_SelectionChanged">
+                <Syncfusion:ComboBoxItemAdv Content="0" /><Syncfusion:ComboBoxItemAdv Content="1" />
+                <Syncfusion:ComboBoxItemAdv Content="2" /><Syncfusion:ComboBoxItemAdv Content="3" />
+                <Syncfusion:ComboBoxItemAdv Content="4" /><Syncfusion:ComboBoxItemAdv Content="5" />
+                <Syncfusion:ComboBoxItemAdv Content="6" /><Syncfusion:ComboBoxItemAdv Content="7" />
+                <Syncfusion:ComboBoxItemAdv Content="8" /><Syncfusion:ComboBoxItemAdv Content="9" />
+                <Syncfusion:ComboBoxItemAdv Content="10" />
+            </Syncfusion:ComboBoxAdv>
+            <Label Content="{loc:Localize str.Planner.MaxLV6}" VerticalAlignment="Center" />
+            <Syncfusion:ComboBoxAdv x:Name="ComboBox_MaxLV6" Width="48" SelectionChanged="ComboBox_MaxLV6_SelectionChanged">
+                <Syncfusion:ComboBoxItemAdv Content="0" /><Syncfusion:ComboBoxItemAdv Content="1" />
+                <Syncfusion:ComboBoxItemAdv Content="2" /><Syncfusion:ComboBoxItemAdv Content="3" />
+                <Syncfusion:ComboBoxItemAdv Content="4" /><Syncfusion:ComboBoxItemAdv Content="5" />
+                <Syncfusion:ComboBoxItemAdv Content="6" /><Syncfusion:ComboBoxItemAdv Content="7" />
+                <Syncfusion:ComboBoxItemAdv Content="8" /><Syncfusion:ComboBoxItemAdv Content="9" />
+                <Syncfusion:ComboBoxItemAdv Content="10" />
+            </Syncfusion:ComboBoxAdv>
+            <Label Content="{loc:Localize str.Planner.MaxLV7}" VerticalAlignment="Center" />
+            <Syncfusion:ComboBoxAdv x:Name="ComboBox_MaxLV7" Width="48" SelectionChanged="ComboBox_MaxLV7_SelectionChanged">
+                <Syncfusion:ComboBoxItemAdv Content="0" /><Syncfusion:ComboBoxItemAdv Content="1" />
+                <Syncfusion:ComboBoxItemAdv Content="2" /><Syncfusion:ComboBoxItemAdv Content="3" />
+                <Syncfusion:ComboBoxItemAdv Content="4" /><Syncfusion:ComboBoxItemAdv Content="5" />
+                <Syncfusion:ComboBoxItemAdv Content="6" /><Syncfusion:ComboBoxItemAdv Content="7" />
+                <Syncfusion:ComboBoxItemAdv Content="8" /><Syncfusion:ComboBoxItemAdv Content="9" />
+                <Syncfusion:ComboBoxItemAdv Content="10" />
             </Syncfusion:ComboBoxAdv>
         </Syncfusion:ToolBarAdv>
         <Syncfusion:SfDataGrid x:Name="DataGrid_Storage" Height="NaN" Width="NaN" AutoGenerateColumns="False"

@@ -17,7 +17,7 @@
                              CloseButtonTemplate="{DynamicResource ProductsWindowCloseButtonTemplate}"
                              MaximizeButtonTemplate="{DynamicResource ProductsWindowMaximizeButtonTemplate}"
                              MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
-                             ResizeBorderThickness="0"
+                             ResizeBorderThickness="4"
                              RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
                              Title="{loc:Localize str.Menu.BarterScanner}" Height="350" Width="750"
                              FontFamily="{DynamicResource AppFontFamily}"

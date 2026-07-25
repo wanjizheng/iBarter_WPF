@@ -801,7 +801,58 @@ namespace iBarter {
                 }
             }
 
+            ApplyIslandBarterLocations(listIslands);
             return listIslands;
+        }
+
+        private void ApplyIslandBarterLocations(List<Islands> islands) {
+            string path = Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory,
+                "Resources",
+                "IslandBarterLocations.csv");
+            if (!File.Exists(path)) {
+                Log($"Island barter location catalog not found: {path}", Brushes.OrangeRed);
+                return;
+            }
+
+            var byName = islands.ToDictionary(
+                island => island.IslandsName,
+                StringComparer.Ordinal);
+            using var reader = new StreamReader(path, Encoding.UTF8);
+            int lineNo = 0;
+            while (!reader.EndOfStream) {
+                lineNo++;
+                string? line = reader.ReadLine();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (lineNo == 1 && line.StartsWith("IslandId,", StringComparison.Ordinal))
+                    continue;
+
+                var results = SplitCsvLine(line);
+                if (results.Count != 6
+                    || !byName.TryGetValue(results[0].Trim(), out Islands? island)
+                    || !double.TryParse(
+                        results[1], NumberStyles.Float, CultureInfo.InvariantCulture,
+                        out double barterX)
+                    || !double.TryParse(
+                        results[2], NumberStyles.Float, CultureInfo.InvariantCulture,
+                        out double barterY)
+                    || !double.IsFinite(barterX)
+                    || !double.IsFinite(barterY)
+                    || !int.TryParse(
+                        results[3], NumberStyles.None, CultureInfo.InvariantCulture,
+                        out int npcId)
+                    || npcId <= 0) {
+                    Log($"Invalid island barter location at line {lineNo}: {line}",
+                        Brushes.Red);
+                    continue;
+                }
+
+                island.MapAnchorX = island.NavigationX;
+                island.MapAnchorY = island.NavigationY;
+                island.NavigationX = barterX;
+                island.NavigationY = barterY;
+                island.NavigationSource = $"bdocodex-barterer-npc-{npcId}";
+            }
         }
 
         /// <summary>
@@ -3572,8 +3623,9 @@ namespace iBarter {
             if (int.TryParse(parleyDigits, out int parsedParley)
                 && parsedParley >= 1000 && parsedParley <= 999999) {
                 intParley = parsedParley;
-                Log("[DIAG-parley] " + strIsland + " OCR原始=\"" + (strParley ?? "")
-                    + "\" => " + intParley, Brushes.Gray);
+                Log(Localization.LanguageService.Instance.Localize(
+                    "str.Log.Diagnostic.Parley.Ocr", strIsland, strParley ?? "", intParley),
+                    Brushes.Gray);
             }
             else {
                 // PureDM 通道读空/无效 —— 用统一的 2 秒本地 OCR 熔断器
@@ -3585,12 +3637,13 @@ namespace iBarter {
                         parleyOcrX1, parleyOcrY1, parleyOcrX2, parleyOcrY2));
                 if (localParley >= 1000 && localParley <= 999999) {
                     intParley = localParley;
-                    Log("[DIAG-parley] " + strIsland + " PureDM原始=\"" + (strParley ?? "")
-                        + "\" 空/无效 → 本地放大管线 => " + intParley, Brushes.Gray);
+                    Log(Localization.LanguageService.Instance.Localize(
+                        "str.Log.Diagnostic.Parley.PureDmFallback", strIsland, strParley ?? "", intParley),
+                        Brushes.Gray);
                 }
                 else {
-                    Log("[DIAG-parley] " + strIsland + " OCR原始=\"" + (strParley ?? "")
-                        + "\" 本地兜底=" + localParley + "，回退岛屿默认=" + parleyDefault + "（此值可能不准）",
+                    Log(Localization.LanguageService.Instance.Localize(
+                        "str.Log.Diagnostic.Parley.LocalFallback", strIsland, strParley ?? "", localParley, parleyDefault),
                         Brushes.OrangeRed);
                 }
             }
@@ -4265,6 +4318,51 @@ namespace iBarter {
             return ChineseTextNormalizer.NormalizeForMatching(sb.ToString().Normalize(NormalizationForm.FormC));
         }
 
+        internal static string TrimIslandOcrEdgeNoise(string value) {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+
+            string trimmed = value.Trim();
+            int start = 0;
+            int end = trimmed.Length - 1;
+            while (start <= end && !char.IsLetterOrDigit(trimmed[start])) start++;
+            while (end >= start && !char.IsLetterOrDigit(trimmed[end])) end--;
+            return start <= end
+                ? trimmed.Substring(start, end - start + 1)
+                : string.Empty;
+        }
+
+        internal static string NormalizeEnglishIslandMatcherText(string value) {
+            value = TrimIslandOcrEdgeNoise(value);
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+
+            var normalized = new StringBuilder(value.Length);
+            bool pendingSeparator = false;
+            foreach (char ch in value) {
+                if (char.IsLetterOrDigit(ch)) {
+                    if (pendingSeparator && normalized.Length > 0) {
+                        normalized.Append(' ');
+                    }
+                    normalized.Append(ch);
+                    pendingSeparator = false;
+                }
+                else if (ch is '\'' or '\u2018' or '\u2019' or '\u02BC' or '`') {
+                    // Possessive punctuation is not a word boundary:
+                    // Crow's / Crow’s / Crows must share one matcher key.
+                }
+                else if (normalized.Length > 0) {
+                    // Treat enum underscores, spaces, hyphens and OCR
+                    // punctuation as the same single word boundary.
+                    pendingSeparator = true;
+                }
+            }
+            string result = normalized.ToString();
+            const string islandSuffix = " Island";
+            if (result.EndsWith(islandSuffix, StringComparison.OrdinalIgnoreCase)) {
+                result = result.Substring(0, result.Length - islandSuffix.Length).TrimEnd();
+            }
+            return result;
+        }
+
         private static string TruncForLog(string value, int maxLen) {
             if (string.IsNullOrEmpty(value)) return "";
             return value.Length <= maxLen ? value : value.Substring(0, maxLen) + "...";
@@ -4904,11 +5002,15 @@ namespace iBarter {
         // a French/screenshot-only client OCRs whatever the screenshot
         // contains.
         public EnumLists.Island IslandEnumSmart(string _island, int minScore = 70) {
+            _island = TrimIslandOcrEdgeNoise(_island);
             if (string.IsNullOrWhiteSpace(_island)) {
                 return EnumLists.Island.UnKnown;
             }
 
             bool isCjk = ContainsCjk(_island);
+            string matcherInput = isCjk
+                ? _island
+                : NormalizeEnglishIslandMatcherText(_island);
 
             if (_zhTwIslandMatcher == null || _englishIslandMatcher == null) {
                 BuildIslandMatchers();
@@ -4919,8 +5021,20 @@ namespace iBarter {
             var primaryMap = isCjk ? _zhTwIslandEnumByCandidate : _englishIslandEnumByCandidate;
             var secondaryMap = isCjk ? _englishIslandEnumByCandidate : _zhTwIslandEnumByCandidate;
 
-            // Try primary catalog
-            var best = primary.FindBest(_island, out int score);
+            // Try primary catalog. For English OCR, reject a non-exact result
+            // when the runner-up is nearly tied; returning Unknown is safer
+            // than silently assigning a barter to the wrong island.
+            var primaryRanking = primary.TopN(matcherInput, 2);
+            var best = primaryRanking.Count > 0 ? primaryRanking[0].item : null;
+            int score = primaryRanking.Count > 0 ? primaryRanking[0].score : 0;
+            bool ambiguousEnglishMatch =
+                !isCjk
+                && score < 100
+                && primaryRanking.Count > 1
+                && score - primaryRanking[1].score < 5;
+            if (ambiguousEnglishMatch) {
+                return IslandEnum(_island);
+            }
             if (score >= minScore) {
                 var resolved = ResolveIslandMatcherCandidate(best, primaryMap);
                 if (resolved != EnumLists.Island.UnKnown) {
@@ -5024,7 +5138,7 @@ namespace iBarter {
             }
 
             // Cross-fallback: try the OTHER catalog
-            best = secondary.FindBest(_island, out int score2);
+            best = secondary.FindBest(matcherInput, out int score2);
             if (score2 >= minScore) {
                 var resolved = ResolveIslandMatcherCandidate(best, secondaryMap);
                 if (resolved != EnumLists.Island.UnKnown) {
@@ -5172,26 +5286,17 @@ namespace iBarter {
                     return;
                 }
 
-                // English catalog: enum-to-name mapping via ToString().
-                var english = new System.Collections.Generic.List<string> {
-                    "Ajir", "Albresser", "Almai", "Al_Naha", "Ancient", "Angie",
-                    "Arakil", "Arita", "Baeza", "Balvege", "Barater", "Baremi",
-                    "Beiruwa", "Boa", "Haran", "Carrack", "Cholace", "Cox_Pirate",
-                    "Crows_Nest", "Crow", "Daton", "Delinghart", "Derko",
-                    "Duch", "Dunde", "Eberdeen", "Ephde_Rune", "Esfah",
-                    "Eveto", "Ginburrey", "Hakoven", "Halmad", "Iliya",
-                    "Unfinished", "Invernen", "Kanvera", "Kashuma", "Kuit",
-                    "Lantinia", "Lema", "Lerao", "Lisz", "Louruve",
-                    "Luivano", "Mariveno", "Marka", "Marlene", "Modric",
-                    "Narvo", "Netnume", "Oben", "Orffs", "Orisha", "Ostra",
-                    "Padix", "Pakio", "Paratama", "Pilava", "Portanen",
-                    "Pujara", "Racid", "Rameda", "Randis", "Rickun", "Riyed",
-                    "Rosevan", "Serca", "Shasha", "Shirna", "Sokota", "Staren",
-                    "Taramura", "Tashu", "Teste", "Teyamal", "Theonil",
-                    "Tigris", "Tinberra", "Tulu", "Wandering", "Weita",
-                    "Marine", "Olvia", "Arehaza", "Grandiha", "Midnight",
-                    "Haemo", "Dallae", "Epheria", "Sausan", "Sanctuary",
-                };
+                // Derive the English catalog from the enum so newly added
+                // islands cannot silently be omitted. The previous manual
+                // list missed Velia, causing damaged Velia OCR to resolve as
+                // Iliya even though Velia existed in both enum and CSV data.
+                var english = System.Enum.GetValues<EnumLists.Island>()
+                    .Where(island => island != EnumLists.Island.UnKnown)
+                    .Select(island => island.ToString())
+                    .ToList();
+                var englishMatcherNames = english
+                    .Select(NormalizeEnglishIslandMatcherText)
+                    .ToList();
 
                 // zh-TW catalog: read from Resources/Islands.zh-TW.csv.  Falls
                 // back to the English enum name when the sidecar has no row
@@ -5265,13 +5370,13 @@ namespace iBarter {
                 // "一、"; containment safely absorbs that prefix.
                 AddZhTwIslandAlias(zhTw, zhTwAliases, "流浪商人的船", EnumLists.Island.Wandering);
 
-                _englishIslandMatcher = new iBarter.StringSimilarityMatcher(new System.Collections.ArrayList(english), ignoreCase: true, removeDiacritics: true);
+                _englishIslandMatcher = new iBarter.StringSimilarityMatcher(new System.Collections.ArrayList(englishMatcherNames), ignoreCase: true, removeDiacritics: true);
                 _zhTwIslandMatcher = new iBarter.StringSimilarityMatcher(new System.Collections.ArrayList(zhTw), ignoreCase: true, removeDiacritics: true);
                 _englishIslandEnumByCandidate = new System.Collections.Generic.Dictionary<string, EnumLists.Island>(System.StringComparer.Ordinal);
                 _zhTwIslandEnumByCandidate = new System.Collections.Generic.Dictionary<string, EnumLists.Island>(System.StringComparer.Ordinal);
                 for (int i = 0; i < english.Count; i++) {
                     if (System.Enum.TryParse(english[i], out EnumLists.Island island)) {
-                        _englishIslandEnumByCandidate[NormalizeBasic(english[i])] = island;
+                        _englishIslandEnumByCandidate[NormalizeBasic(englishMatcherNames[i])] = island;
                         if (i < zhTw.Count && !string.IsNullOrWhiteSpace(zhTw[i])) {
                             _zhTwIslandEnumByCandidate[NormalizeBasic(zhTw[i])] = island;
                         }

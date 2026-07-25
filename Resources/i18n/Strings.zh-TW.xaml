@@ -49,6 +49,8 @@
     <sys:String x:Key="str.Planner.Btn.SaveTip">储存目前计画</sys:String>
     <sys:String x:Key="str.Planner.Btn.Load">读取</sys:String>
     <sys:String x:Key="str.Planner.Btn.LoadTip">载入已储存计画</sys:String>
+    <sys:String x:Key="str.Planner.Btn.Restore">恢复</sys:String>
+    <sys:String x:Key="str.Planner.Btn.RestoreTip">恢复上一个 Planner、仓库与自动路线快照</sys:String>
     <sys:String x:Key="str.Planner.Btn.Groupping">群组化</sys:String>
     <sys:String x:Key="str.Planner.Btn.GrouppingTip">依物品家族分组</sys:String>
     <sys:String x:Key="str.Planner.Btn.Clean">清理</sys:String>
@@ -159,6 +161,8 @@
     <sys:String x:Key="str.ItemTier.Misc">[其他]</sys:String>
 
     <sys:String x:Key="str.Map.LabelFormat">[{0}] {1} =&gt; {2} [{3}]</sys:String>
+    <sys:String x:Key="str.Map.AutoRoute.PickupRole">装货</sys:String>
+    <sys:String x:Key="str.Map.AutoRoute.UnloadRole">卸货</sys:String>
 
     <sys:String x:Key="str.StatusBar.VersionLabel">版本：</sys:String>
 
@@ -198,6 +202,13 @@
     <sys:String x:Key="str.Log.Planner.Loaded">已载入…</sys:String>
     <sys:String x:Key="str.Log.Planner.Saved">已储存…</sys:String>
     <sys:String x:Key="str.Log.Planner.DefaultStorageOutOfRange">预设仓库下拉选单索引超出范围，预设为贝利利亚。</sys:String>
+    <sys:String x:Key="str.Log.Planner.RowIdMigrated">[Planner] 已为 {0} 条旧记录生成持久化 PlannerRowId，已立即持久化。</sys:String>
+    <sys:String x:Key="str.Log.Planner.InventoryError.InsufficientStock">仓库库存不足</sys:String>
+    <sys:String x:Key="str.Log.Planner.InventoryError.MissingStorageItem">仓库物品列表缺少该物品</sys:String>
+    <sys:String x:Key="str.Log.Planner.InventoryError.DuplicateItem">仓库物品重复</sys:String>
+    <sys:String x:Key="str.Log.Planner.InventoryError.InvalidData">库存数据无效</sys:String>
+    <sys:String x:Key="str.Log.Planner.InventorySettlementFailed">无法完成库存结算：{0}（{1}）。库存和计划均未修改。</sys:String>
+    <sys:String x:Key="str.Log.Planner.StorageSaveFailed">仓库数据保存失败，库存和计划均未修改。</sys:String>
 
     <sys:String x:Key="str.Log.Storage.Loaded">已载入…</sys:String>
     <sys:String x:Key="str.Log.Storage.CannotFindItem">找不到物品：{0}</sys:String>
@@ -219,6 +230,9 @@
     <sys:String x:Key="str.Log.Scanner.OcrSummary">&lt;{0} - {1} ~ {2}&gt; 物品1：{3} =&gt; {4} | 物品2：{5} =&gt; {6}</sys:String>
     <sys:String x:Key="str.Log.Scanner.FoundAnchors">找到 anchor×{0}（{1}）</sys:String>
     <sys:String x:Key="str.Log.Scanner.FilteredAnchors">已过滤 {0} 个 X 坐标异常的 anchor（保留 X={1}~{2}，剩余 {3} 个）</sys:String>
+    <sys:String x:Key="str.Log.Diagnostic.Parley.Ocr">[DIAG-parley] {0} OCR原始=&quot;{1}&quot; =&gt; {2}</sys:String>
+    <sys:String x:Key="str.Log.Diagnostic.Parley.PureDmFallback">[DIAG-parley] {0} PureDM原始=&quot;{1}&quot; 空/无效 → 本地放大管线 =&gt; {2}</sys:String>
+    <sys:String x:Key="str.Log.Diagnostic.Parley.LocalFallback">[DIAG-parley] {0} OCR原始=&quot;{1}&quot; 本地兜底={2}，回退岛屿默认={3}（此值可能不准）</sys:String>
 
     <sys:String x:Key="str.Log.OcrQty.Picked">OCR 数量 {0}：选取 {1}（票数={2}；A={3} R={4} G={5}）</sys:String>
     <sys:String x:Key="str.Log.OcrQty.NoConsensus">OCR 数量 {0}：无共识；原始={1} R={2} G={3}</sys:String>
@@ -266,6 +280,18 @@
     <sys:String x:Key="str.Log.AutoRoute.SaveFailed">自动路线保存失败：{0}</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.MapRenderFailed">自动路线地图渲染失败：{0}</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.MissingIsland">无法绘制自动路线，因为缺少岛屿「{0}」。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.Restored">[AutoRoute] 已恢复上次保存的路线（{0} 模式，{1} 条路线）。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.RestoreNoSaved">[AutoRoute] 首次启动，没有可恢复的自动路线。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.RestoreMismatch">[AutoRoute] 已保存的路线与当前 Planner、仓库、船舶设置或搜索模式不一致，需重新生成 (saved={0})。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.RestoreUnsupportedSchema">[AutoRoute] 路线保存格式版本 (Schema {0}) 不受支持，需重新生成。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.RestoreCorrupt">[AutoRoute] 自动路线保存文件已损坏，无法恢复。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.RestoreFailed">[AutoRoute] 自动路线恢复失败 ({0})。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.ProgressInputMissing">[AutoRoute] 路线进度验证失败：缺少当前规划输入，未发布、未保存。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.ProgressAllCompleted">[AutoRoute] 所有自动路线均已完成。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.ProgressApplied">[AutoRoute] 已应用路线进度：完成 1 个交换，剩余 {0} 条路线。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.SaveRepairedFailed">[AutoRoute] 修复后的路线保存失败，旧文件与备份均已保留：{0}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.NormalizationRepair">[AutoRoute] 已修复保存路线中的冗余货物：路线 {0}，{1} ×{2}。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.PublicationFailed">[AutoRoute] 路线验证失败，未发布、未保存：{0} {1}</sys:String>
     <sys:String x:Key="str.Msg.AutoRoute.MissingStock">仓库中的物品 {0} 库存不足。</sys:String>
     <sys:String x:Key="str.Msg.AutoRoute.TaskOverweight">{0} 的单次交换无法满足总 LT 限制。</sys:String>
     <sys:String x:Key="str.Msg.AutoRoute.MissingCoordinate">缺少 {0} 的路线坐标。</sys:String>
@@ -277,5 +303,8 @@
     <sys:String x:Key="str.Msg.Planner.DeleteRowMenu">删除此列</sys:String>
     <sys:String x:Key="str.Msg.Planner.DoneConfirm">确定已完成此计画吗？</sys:String>
     <sys:String x:Key="str.Msg.Planner.CleanConfirm">确定要清理此计画吗？</sys:String>
+    <sys:String x:Key="str.Msg.Planner.RestoreSuccess">已恢复上一个有效快照：Planner 共 {0} 列，仓库与自动路线已同步恢复。</sys:String>
+    <sys:String x:Key="str.Msg.Planner.RestoreNone">没有可恢复的更早非空快照。</sys:String>
+    <sys:String x:Key="str.Msg.Planner.RestoreFailed">快照恢复失败：{0}</sys:String>
 
 </ResourceDictionary>

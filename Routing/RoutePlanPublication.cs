@@ -94,12 +94,24 @@ public static class RoutePlanPublication {
                     RouteReplay.FormatFailureDetail(replay.Failure)));
         }
 
-        var verification = RoutePlanVerifier.Verify(effectiveRequest, replay.Plan);
+        RoutePlan publicationCandidate = replay.Plan;
+        bool boundaryChanged = false;
+        if (source == RoutePlanPublicationSource.FreshGeneration) {
+            WarehouseBoundaryOptimizationResult boundary =
+                WarehouseBoundaryOptimizer.Improve(
+                    effectiveRequest,
+                    publicationCandidate,
+                    CancellationToken.None);
+            publicationCandidate = boundary.Plan;
+            boundaryChanged = boundary.Changed;
+        }
+
+        var verification = RoutePlanVerifier.Verify(effectiveRequest, publicationCandidate);
         if (!verification.Success || verification.VerifiedPlan is null) {
             return new RoutePlanPublicationResult(
                 false,
                 null,
-                normalization.Changed,
+                normalization.Changed || boundaryChanged,
                 normalization.Changes,
                 new RoutePlanPublicationFailure(
                     verification.Diagnostic?.Code ?? "verification-failed",
@@ -112,7 +124,7 @@ public static class RoutePlanPublication {
             return new RoutePlanPublicationResult(
                 false,
                 null,
-                normalization.Changed,
+                normalization.Changed || boundaryChanged,
                 normalization.Changes,
                 new RoutePlanPublicationFailure(
                     "route-redundant-cargo-roundtrip", detail));
@@ -121,7 +133,7 @@ public static class RoutePlanPublication {
         return new RoutePlanPublicationResult(
             true,
             verification.VerifiedPlan,
-            normalization.Changed,
+            normalization.Changed || boundaryChanged,
             normalization.Changes,
             null) {
             RetainedPlan = source is RoutePlanPublicationSource.CompletionProgress

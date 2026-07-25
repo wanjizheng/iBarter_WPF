@@ -10,10 +10,215 @@ if (islandResolver.IslandEnum("Velia") != EnumLists.Island.Velia) {
     Console.Error.WriteLine("Expected the canonical Velia catalog row to resolve to Velia.");
     return 1;
 }
+
+var islandMatchFailures = new List<string>();
+void ExpectIsland(string input, EnumLists.Island expected) {
+    EnumLists.Island actual = islandResolver.IslandEnumSmart(input);
+    if (actual != expected) {
+        islandMatchFailures.Add($"\"{input}\" => {actual}, expected {expected}");
+    }
+}
+
+foreach (EnumLists.Island island in Enum.GetValues<EnumLists.Island>()) {
+    if (island == EnumLists.Island.UnKnown) continue;
+    string enumName = island.ToString();
+    ExpectIsland(enumName, island);
+    string displayName = enumName.Replace('_', ' ');
+    ExpectIsland(displayName, island);
+    ExpectIsland(displayName + " Island", island);
+}
+
+string islandRepoRoot = FindIBarterRepoRoot();
+var enumCatalogNames = Enum.GetValues<EnumLists.Island>()
+    .Where(island => island != EnumLists.Island.UnKnown)
+    .Select(island => island.ToString())
+    .ToHashSet(StringComparer.Ordinal);
+var englishCsvNames = File.ReadLines(Path.Combine(
+        islandRepoRoot, "Resources", "Islands.csv"))
+    .Where(line => !string.IsNullOrWhiteSpace(line))
+    .Select(line => line.Split(',')[0].Trim())
+    .ToHashSet(StringComparer.Ordinal);
+if (!englishCsvNames.SetEquals(enumCatalogNames)) {
+    islandMatchFailures.Add(
+        "Resources/Islands.csv and EnumLists.Island differ: " +
+        $"missing=[{string.Join(",", enumCatalogNames.Except(englishCsvNames))}], " +
+        $"extra=[{string.Join(",", englishCsvNames.Except(enumCatalogNames))}]");
+}
+
+int zhTwCatalogCaseCount = 0;
+var zhTwCsvNames = new HashSet<string>(StringComparer.Ordinal);
+foreach (string line in File.ReadLines(Path.Combine(
+             islandRepoRoot, "Resources", "Islands.zh-TW.csv")).Skip(1)) {
+    if (string.IsNullOrWhiteSpace(line)) continue;
+    string[] fields = line.Split(',');
+    if (fields.Length < 2
+        || !Enum.TryParse(fields[0].Trim(), out EnumLists.Island expected)) {
+        islandMatchFailures.Add($"Invalid Islands.zh-TW.csv row: {line}");
+        continue;
+    }
+    if (expected != EnumLists.Island.UnKnown) {
+        zhTwCsvNames.Add(fields[0].Trim());
+    }
+    ExpectIsland(fields[1].Trim(), expected);
+    zhTwCatalogCaseCount++;
+}
+if (!zhTwCsvNames.SetEquals(enumCatalogNames)) {
+    islandMatchFailures.Add(
+        "Resources/Islands.zh-TW.csv and EnumLists.Island differ: " +
+        $"missing=[{string.Join(",", enumCatalogNames.Except(zhTwCsvNames))}], " +
+        $"extra=[{string.Join(",", zhTwCsvNames.Except(enumCatalogNames))}]");
+}
+
+var observedEnglishIslandNames = new (string Input, EnumLists.Island Expected)[] {
+    ("Aji", EnumLists.Island.Ajir),
+    ("Al-Naha", EnumLists.Island.Al_Naha),
+    ("AI-Naha", EnumLists.Island.Al_Naha),
+    ("Shipwrecked Ancient Relic Transport Vessel", EnumLists.Island.Ancient),
+    ("Araki", EnumLists.Island.Arakil),
+    ("Shipwrecked Haran's Cargo Ship", EnumLists.Island.Haran),
+    ("Old Moon Guild Carrack", EnumLists.Island.Carrack),
+    ("Cox Pirate", EnumLists.Island.Cox_Pirate),
+    ("Crow's Nest", EnumLists.Island.Crows_Nest),
+    ("Crow’s Nest", EnumLists.Island.Crows_Nest),
+    ("Crow Nest", EnumLists.Island.Crows_Nest),
+    ("Crow's Ne", EnumLists.Island.Crows_Nest),
+    ("Crow's Nesl", EnumLists.Island.Crows_Nest),
+    ("Ephde Rune", EnumLists.Island.Ephde_Rune),
+    ("Evelo", EnumLists.Island.Eveto),
+    ("Unfinished Adrift Vessel", EnumLists.Island.Unfinished),
+    ("Qben", EnumLists.Island.Oben),
+    ("Drffs", EnumLists.Island.Orffs),
+    ("Dstra", EnumLists.Island.Ostra),
+    ("Qstra", EnumLists.Island.Ostra),
+    ("Ried", EnumLists.Island.Riyed),
+    ("Shima", EnumLists.Island.Shirna),
+    ("Grándiha", EnumLists.Island.Grandiha),
+    ("Starry Midnight Port", EnumLists.Island.Midnight),
+    ("Dallae Pier", EnumLists.Island.Dallae),
+    ("Epheria Sentry Post", EnumLists.Island.Epheria),
+    ("Sausan Garrison", EnumLists.Island.Sausan),
+    ("Sanctuary Coastal Cave", EnumLists.Island.Sanctuary),
+};
+foreach (var sample in observedEnglishIslandNames) {
+    ExpectIsland(sample.Input, sample.Expected);
+}
+if (args.Contains("--island-fuzz-audit", StringComparer.Ordinal)) {
+    var wrongMatches = new List<string>();
+    var unknownMatches = new List<string>();
+    int fuzzCaseCount = 0;
+
+    void AuditVariant(string input, EnumLists.Island expected, string mutation) {
+        fuzzCaseCount++;
+        EnumLists.Island actual = islandResolver.IslandEnumSmart(input);
+        if (actual == expected) return;
+        string failure = $"{expected} [{mutation}] \"{input}\" => {actual}";
+        if (actual == EnumLists.Island.UnKnown) unknownMatches.Add(failure);
+        else wrongMatches.Add(failure);
+    }
+
+    var ocrSubstitutions = new Dictionary<char, char[]> {
+        ['a'] = ['o'],
+        ['b'] = ['h'],
+        ['c'] = ['e'],
+        ['d'] = ['o'],
+        ['e'] = ['c'],
+        ['f'] = ['t'],
+        ['g'] = ['q'],
+        ['h'] = ['b'],
+        ['i'] = ['l', '1'],
+        ['l'] = ['i', '1'],
+        ['m'] = ['n'],
+        ['n'] = ['m'],
+        ['o'] = ['0', 'q', 'd'],
+        ['q'] = ['o', 'g'],
+        ['r'] = ['n'],
+        ['s'] = ['5'],
+        ['t'] = ['f'],
+        ['u'] = ['v'],
+        ['v'] = ['u', 'y'],
+        ['y'] = ['v'],
+    };
+
+    foreach (EnumLists.Island island in Enum.GetValues<EnumLists.Island>()) {
+        if (island == EnumLists.Island.UnKnown) continue;
+        string display = island.ToString().Replace('_', ' ');
+        AuditVariant("~~. " + display, island, "leading-noise");
+        AuditVariant(display + " ...", island, "trailing-noise");
+        AuditVariant(display.Replace(' ', '-'), island, "hyphen");
+        AuditVariant(display.Replace(" ", "  "), island, "double-space");
+
+        string compact = display.Replace(" ", "");
+        AuditVariant(compact, island, "compact");
+
+        if (display.Length >= 5) {
+            for (int i = 0; i < display.Length; i++) {
+                if (!char.IsLetterOrDigit(display[i])) continue;
+                AuditVariant(display.Remove(i, 1), island, $"delete-{i}");
+            }
+            for (int i = 0; i + 1 < display.Length; i++) {
+                if (!char.IsLetterOrDigit(display[i])
+                    || !char.IsLetterOrDigit(display[i + 1])
+                    || char.ToLowerInvariant(display[i]) == char.ToLowerInvariant(display[i + 1])) {
+                    continue;
+                }
+                char[] swapped = display.ToCharArray();
+                (swapped[i], swapped[i + 1]) = (swapped[i + 1], swapped[i]);
+                AuditVariant(new string(swapped), island, $"transpose-{i}");
+            }
+        }
+
+        for (int i = 0; i < display.Length; i++) {
+            char lower = char.ToLowerInvariant(display[i]);
+            if (!ocrSubstitutions.TryGetValue(lower, out char[]? replacements)) continue;
+            foreach (char replacement in replacements) {
+                char[] substituted = display.ToCharArray();
+                substituted[i] = char.IsUpper(display[i])
+                    ? char.ToUpperInvariant(replacement)
+                    : replacement;
+                AuditVariant(new string(substituted), island, $"ocr-{i}-{replacement}");
+            }
+        }
+    }
+
+    Console.WriteLine(
+        $"Island fuzz audit: {fuzzCaseCount} cases, {wrongMatches.Count} wrong-island, " +
+        $"{unknownMatches.Count} unknown.");
+    if (wrongMatches.Count > 0) {
+        Console.WriteLine("Wrong-island matches:");
+        foreach (string failure in wrongMatches.Take(250)) Console.WriteLine("  " + failure);
+    }
+    if (unknownMatches.Count > 0) {
+        Console.WriteLine("Unknown matches:");
+        foreach (string failure in unknownMatches.Take(100)) Console.WriteLine("  " + failure);
+    }
+    return wrongMatches.Count == 0 ? 0 : 1;
+}
+if (islandMatchFailures.Count > 0) {
+    Console.Error.WriteLine("English island matching audit failed:");
+    foreach (string failure in islandMatchFailures) {
+        Console.Error.WriteLine("  " + failure);
+    }
+    return 1;
+}
+
 if (islandResolver.IslandEnumSmart("一、流浪商人的船") != EnumLists.Island.Wandering) {
     Console.Error.WriteLine(
         "Expected the observed Wandering ship OCR text, including its row prefix, to resolve to Wandering.");
     return 1;
+}
+if (islandResolver.IslandEnumSmart("~~. Gréndiha") != EnumLists.Island.Grandiha) {
+    Console.Error.WriteLine(
+        "Expected English OCR edge noise and an accented vowel in Gréndiha to resolve to Grandiha.");
+    return 1;
+}
+if (args.Contains("--island-only", StringComparer.Ordinal)) {
+    int canonicalCaseCount =
+        (Enum.GetValues<EnumLists.Island>().Length - 1) * 3;
+    int totalCaseCount =
+        canonicalCaseCount + zhTwCatalogCaseCount + observedEnglishIslandNames.Length + 2;
+    Console.WriteLine(
+        $"Island matching audit passed: {totalCaseCount} canonical, suffix, alias and OCR-noise cases.");
+    return 0;
 }
 
 string startupSource = File.ReadAllText(Path.Combine(FindIBarterRepoRoot(), "MainWindow.xaml.cs"));

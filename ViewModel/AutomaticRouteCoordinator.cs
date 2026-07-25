@@ -385,7 +385,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         var publicationRequest = request ?? currentPublicationRequest;
         if (publicationRequest is null) {
             App.myCFun?.Log(
-                "[AutoRoute] 路线进度验证失败：缺少当前规划输入，未发布、未保存。",
+                Localization.LanguageService.Instance.Localize("str.Log.AutoRoute.ProgressInputMissing"),
                 System.Windows.Media.Brushes.OrangeRed);
             return true;
         }
@@ -418,13 +418,13 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         if (completed) {
             if (remainingRoutes.Count == 0) {
                 App.myCFun?.Log(
-                    "[AutoRoute] 所有自动路线均已完成。",
+                    Localization.LanguageService.Instance.Localize("str.Log.AutoRoute.ProgressAllCompleted"),
                     System.Windows.Media.Brushes.DarkOliveGreen);
             }
             else {
                 App.myCFun?.Log(
-                    "[AutoRoute] 已应用路线进度：完成 1 个交换，剩余 " +
-                    remainingRoutes.Count + " 条路线。",
+                    Localization.LanguageService.Instance.Localize(
+                        "str.Log.AutoRoute.ProgressApplied", remainingRoutes.Count),
                     System.Windows.Media.Brushes.DarkOliveGreen);
             }
         }
@@ -644,7 +644,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             App.myCFun?.Log(
-                $"[AutoRoute] 修复后的路线保存失败，旧文件与备份均已保留：{ex.Message}",
+                Localization.LanguageService.Instance.Localize(
+                    "str.Log.AutoRoute.SaveRepairedFailed", ex.Message),
                 System.Windows.Media.Brushes.OrangeRed);
             return false;
         }
@@ -654,16 +655,17 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         IReadOnlyList<CargoNormalizationChange> changes) {
         foreach (var change in changes.Where(change => change.RedundantQuantity > 0)) {
             App.myCFun?.Log(
-                $"[AutoRoute] 已修复保存路线中的冗余货物：路线 {change.RouteNumber}，" +
-                $"{ResolveItemDisplayName(change.ItemId)} ×{change.RedundantQuantity}。",
+                Localization.LanguageService.Instance.Localize(
+                    "str.Log.AutoRoute.NormalizationRepair", change.RouteNumber,
+                    ResolveItemDisplayName(change.ItemId), change.RedundantQuantity),
                 System.Windows.Media.Brushes.DarkOliveGreen);
         }
     }
 
     private static void LogPublicationFailure(RoutePlanPublicationFailure? failure) {
         App.myCFun?.Log(
-            $"[AutoRoute] 路线验证失败，未发布、未保存：" +
-            $"{failure?.Code ?? "unknown"} {failure?.Detail ?? ""}",
+            Localization.LanguageService.Instance.Localize(
+                "str.Log.AutoRoute.PublicationFailed", failure?.Code ?? "unknown", failure?.Detail ?? ""),
             System.Windows.Media.Brushes.OrangeRed);
     }
 

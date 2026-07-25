@@ -61,6 +61,8 @@
     <sys:String x:Key="str.Planner.Btn.SaveTip">Save the current plan</sys:String>
     <sys:String x:Key="str.Planner.Btn.Load">Load</sys:String>
     <sys:String x:Key="str.Planner.Btn.LoadTip">Load a saved plan</sys:String>
+    <sys:String x:Key="str.Planner.Btn.Restore">Restore</sys:String>
+    <sys:String x:Key="str.Planner.Btn.RestoreTip">Restore the previous Planner, storage and automatic-route snapshot</sys:String>
     <sys:String x:Key="str.Planner.Btn.Groupping">Groupping</sys:String>
     <sys:String x:Key="str.Planner.Btn.GrouppingTip">Group rows by item family</sys:String>
     <sys:String x:Key="str.Planner.Btn.Clean">Clean</sys:String>
@@ -185,6 +187,8 @@
          ItemNameDisplay), {2}=Item2 name (localized), {3}=Item2 quantity.
          The '=>' arrow is kept as a visual symbol regardless of language. -->
     <sys:String x:Key="str.Map.LabelFormat">[{0}] {1} =&gt; {2} [{3}]</sys:String>
+    <sys:String x:Key="str.Map.AutoRoute.PickupRole">Load</sys:String>
+    <sys:String x:Key="str.Map.AutoRoute.UnloadRole">Unload</sys:String>
 
     <!-- Phase 6 (i18n): status-bar text appended to the version string
          (e.g. "Version: Beta6.0").  Localized separately from the version
@@ -234,6 +238,13 @@
     <sys:String x:Key="str.Log.Planner.Loaded">Loaded...</sys:String>
     <sys:String x:Key="str.Log.Planner.Saved">Saved...</sys:String>
     <sys:String x:Key="str.Log.Planner.DefaultStorageOutOfRange">ComboBoxAdv_DefaultStorage.SelectedIndex out of range; defaulting to Velia.</sys:String>
+    <sys:String x:Key="str.Log.Planner.RowIdMigrated">[Planner] Generated and persisted PlannerRowId values for {0} legacy row(s).</sys:String>
+    <sys:String x:Key="str.Log.Planner.InventoryError.InsufficientStock">insufficient warehouse stock</sys:String>
+    <sys:String x:Key="str.Log.Planner.InventoryError.MissingStorageItem">item is missing from the warehouse list</sys:String>
+    <sys:String x:Key="str.Log.Planner.InventoryError.DuplicateItem">duplicate warehouse item</sys:String>
+    <sys:String x:Key="str.Log.Planner.InventoryError.InvalidData">invalid inventory data</sys:String>
+    <sys:String x:Key="str.Log.Planner.InventorySettlementFailed">Could not settle inventory: {0} ({1}). Neither inventory nor plan was changed.</sys:String>
+    <sys:String x:Key="str.Log.Planner.StorageSaveFailed">Failed to save warehouse data. Neither inventory nor plan was changed.</sys:String>
 
     <sys:String x:Key="str.Log.Storage.Loaded">Loaded...</sys:String>
     <sys:String x:Key="str.Log.Storage.CannotFindItem">Cannot find the item: {0}</sys:String>
@@ -255,6 +266,9 @@
     <sys:String x:Key="str.Log.Scanner.OcrSummary">&lt;{0} - {1} ~ {2}&gt; Item1: {3} =&gt; {4} | Item2: {5} =&gt; {6}</sys:String>
     <sys:String x:Key="str.Log.Scanner.FoundAnchors">Found anchor×{0} ({1})</sys:String>
     <sys:String x:Key="str.Log.Scanner.FilteredAnchors">Filtered {0} outlier anchors (kept X={1}~{2}, {3} remaining)</sys:String>
+    <sys:String x:Key="str.Log.Diagnostic.Parley.Ocr">[DIAG-parley] {0} OCR raw=&quot;{1}&quot; =&gt; {2}</sys:String>
+    <sys:String x:Key="str.Log.Diagnostic.Parley.PureDmFallback">[DIAG-parley] {0} PureDM raw=&quot;{1}&quot; empty/invalid → local enlarged pipeline =&gt; {2}</sys:String>
+    <sys:String x:Key="str.Log.Diagnostic.Parley.LocalFallback">[DIAG-parley] {0} OCR raw=&quot;{1}&quot; local fallback={2}, island default={3} (may be inaccurate)</sys:String>
 
     <sys:String x:Key="str.Log.OcrQty.Picked">OCR qty {0}: picked {1} (votes={2}; A={3} R={4} G={5})</sys:String>
     <sys:String x:Key="str.Log.OcrQty.NoConsensus">OCR qty {0}: no consensus; raw={1} R={2} G={3}</sys:String>
@@ -302,6 +316,18 @@
     <sys:String x:Key="str.Log.AutoRoute.SaveFailed">Automatic route save failed: {0}</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.MapRenderFailed">Automatic route map render failed: {0}</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.MissingIsland">Cannot draw automatic route because island '{0}' is missing.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.Restored">[AutoRoute] Restored the previous saved route ({0} mode, {1} route(s)).</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.RestoreNoSaved">[AutoRoute] First start: no automatic route is available to restore.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.RestoreMismatch">[AutoRoute] The saved route does not match the current Planner, warehouse, ship settings, or search mode; regenerate it (saved={0}).</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.RestoreUnsupportedSchema">[AutoRoute] Saved route format version (Schema {0}) is not supported; regenerate it.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.RestoreCorrupt">[AutoRoute] The saved automatic-route file is corrupt and cannot be restored.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.RestoreFailed">[AutoRoute] Automatic-route restore failed ({0}).</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.ProgressInputMissing">[AutoRoute] Route-progress validation failed: current planning input is unavailable; nothing was published or saved.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.ProgressAllCompleted">[AutoRoute] All automatic routes are complete.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.ProgressApplied">[AutoRoute] Applied route progress: completed 1 barter; {0} route(s) remain.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.SaveRepairedFailed">[AutoRoute] Failed to save the repaired route; both the old file and backup were retained: {0}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.NormalizationRepair">[AutoRoute] Removed redundant cargo from the saved route: route {0}, {1} ×{2}.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.PublicationFailed">[AutoRoute] Route validation failed; nothing was published or saved: {0} {1}</sys:String>
     <sys:String x:Key="str.Msg.AutoRoute.MissingStock">Warehouse stock is insufficient for item {0}.</sys:String>
     <sys:String x:Key="str.Msg.AutoRoute.TaskOverweight">The barter at {0} cannot fit within Total LT.</sys:String>
     <sys:String x:Key="str.Msg.AutoRoute.MissingCoordinate">Route coordinates are missing for {0}.</sys:String>
@@ -314,5 +340,8 @@
     <sys:String x:Key="str.Msg.Planner.DeleteRowMenu">Delete this row</sys:String>
     <sys:String x:Key="str.Msg.Planner.DoneConfirm">Are you sure you have completed this plan?</sys:String>
     <sys:String x:Key="str.Msg.Planner.CleanConfirm">Are you sure you want to clean this plan?</sys:String>
+    <sys:String x:Key="str.Msg.Planner.RestoreSuccess">Restored the previous valid snapshot: {0} Planner row(s), storage and automatic routes were restored together.</sys:String>
+    <sys:String x:Key="str.Msg.Planner.RestoreNone">There is no earlier non-empty snapshot to restore.</sys:String>
+    <sys:String x:Key="str.Msg.Planner.RestoreFailed">Snapshot restore failed: {0}</sys:String>
 
 </ResourceDictionary>

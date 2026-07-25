@@ -101,6 +101,13 @@ namespace iBarter {
         public double? NavigationY { get; set; }
         public string NavigationSource { get; set; } = string.Empty;
 
+        // The HD map source labels islands at their node anchors, while sailing
+        // routes need the coastal barterer. Keep the original node coordinate
+        // only as an internal calibration pair; persisted plans continue to
+        // expose NavigationX/Y as the actual sailing destination.
+        internal double? MapAnchorX { get; set; }
+        internal double? MapAnchorY { get; set; }
+
         public bool HasNavigationCoordinates =>
             NavigationX.HasValue && NavigationY.HasValue &&
             double.IsFinite(NavigationX.Value) && double.IsFinite(NavigationY.Value);

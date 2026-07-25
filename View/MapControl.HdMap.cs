@@ -40,7 +40,11 @@ public partial class MapControl {
                 island.NavigationSource ?? String.Empty,
                 MapDisplayRegion.Main,
                 PreferNavigationCalibration:
-                    IslandNavigationGeometry.LeftInsetNames.Contains(island.IslandsName));
+                    IslandNavigationGeometry.LeftInsetNames.Contains(island.IslandsName)
+                    || island.NavigationSource.StartsWith(
+                        "bdocodex-barterer-", StringComparison.OrdinalIgnoreCase),
+                CalibrationX: island.MapAnchorX,
+                CalibrationY: island.MapAnchorY);
         }).ToArray();
         var coordinates = BdfIslandCoordinateCatalog.Build(
             inputs, metadata.Anchors, metadata.Aliases);

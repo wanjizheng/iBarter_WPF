@@ -41,8 +41,10 @@
                 Label="{loc:Localize str.Planner.Btn.Save}" ToolTip="{loc:Localize str.Planner.Btn.SaveTip}" Click="ButtonAdv_Save_Click" />
             <controls:FluentIconButton x:Name="ButtonAdv_Load" IconData="{StaticResource FluentIcon.FolderOpen}"
                 Label="{loc:Localize str.Planner.Btn.Load}" ToolTip="{loc:Localize str.Planner.Btn.LoadTip}" Click="ButtonAdv_Load_Click" />
+            <controls:FluentIconButton x:Name="ButtonAdv_Restore" IconData="{StaticResource FluentIcon.ArrowUndo}"
+                Label="{loc:Localize str.Planner.Btn.Restore}" ToolTip="{loc:Localize str.Planner.Btn.RestoreTip}" Click="ButtonAdv_Restore_Click" />
             <Separator />
-            <controls:FluentIconButton x:Name="ButtonAdv_Refresh" IconData="{StaticResource FluentIcon.ArrowSync}"
+            <controls:FluentIconButton x:Name="ButtonAdv_Refresh" IconData="{StaticResource FluentIcon.GroupList}"
                 Label="{loc:Localize str.Planner.Btn.Groupping}" ToolTip="{loc:Localize str.Planner.Btn.GrouppingTip}" Click="ButtonAdv_Refresh_Click" />
             <controls:FluentIconButton x:Name="ButtonAdv_Clean" IconData="{StaticResource FluentIcon.Delete}"
                 Label="{loc:Localize str.Planner.Btn.Clean}" ToolTip="{loc:Localize str.Planner.Btn.CleanTip}" Click="ButtonAdv_Clean_Click" />
@@ -71,55 +73,7 @@
             <Separator />
             <Label x:Name="Label_TotalBarters" Content="{loc:Localize str.Planner.TotalBarters}" VerticalAlignment="Center" />
             <Separator />
-            <!-- <Label Content="Value Pack:" VerticalAlignment="Center" /> -->
-            <!-- <CheckBox x:Name="CheckBox_ValuePack"  VerticalAlignment="Center" IsChecked="True" Checked="CheckBox_ValuePack_Checked" Unchecked="CheckBox_ValuePack_Unchecked"/> -->
-            <!-- <Separator Margin="10,0,0,0" /> -->
-            <Label Content="{loc:Localize str.Planner.MaxLV5}" VerticalAlignment="Center" />
-            <syncfusion:ComboBoxAdv x:Name="ComboBox_LV5Max" SelectionChanged="ComboBox_LV5Max_SelectionChanged">
-                <syncfusion:ComboBoxItemAdv Content="0" />
-                <syncfusion:ComboBoxItemAdv Content="1" />
-                <syncfusion:ComboBoxItemAdv Content="2" />
-                <syncfusion:ComboBoxItemAdv Content="3" />
-                <syncfusion:ComboBoxItemAdv Content="4" />
-                <syncfusion:ComboBoxItemAdv Content="5" />
-                <syncfusion:ComboBoxItemAdv Content="6" />
-                <syncfusion:ComboBoxItemAdv Content="7" />
-                <syncfusion:ComboBoxItemAdv Content="8" />
-                <syncfusion:ComboBoxItemAdv Content="9" />
-                <syncfusion:ComboBoxItemAdv Content="10" />
-            </syncfusion:ComboBoxAdv>
-            <Label Content="{loc:Localize str.Planner.MaxLV6}" VerticalAlignment="Center" />
-            <syncfusion:ComboBoxAdv x:Name="ComboBox_LV6Max" SelectionChanged="ComboBox_LV6Max_SelectionChanged">
-                <syncfusion:ComboBoxItemAdv Content="0" />
-                <syncfusion:ComboBoxItemAdv Content="1" />
-                <syncfusion:ComboBoxItemAdv Content="2" />
-                <syncfusion:ComboBoxItemAdv Content="3" />
-                <syncfusion:ComboBoxItemAdv Content="4" />
-                <syncfusion:ComboBoxItemAdv Content="5" />
-                <syncfusion:ComboBoxItemAdv Content="6" />
-                <syncfusion:ComboBoxItemAdv Content="7" />
-                <syncfusion:ComboBoxItemAdv Content="8" />
-                <syncfusion:ComboBoxItemAdv Content="9" />
-                <syncfusion:ComboBoxItemAdv Content="10" />
-            </syncfusion:ComboBoxAdv>
-            <Label Content="{loc:Localize str.Planner.MaxLV7}" VerticalAlignment="Center" />
-            <syncfusion:ComboBoxAdv x:Name="ComboBox_LV7Max" SelectionChanged="ComboBox_LV7Max_SelectionChanged">
-                <syncfusion:ComboBoxItemAdv Content="0" />
-                <syncfusion:ComboBoxItemAdv Content="1" />
-                <syncfusion:ComboBoxItemAdv Content="2" />
-                <syncfusion:ComboBoxItemAdv Content="3" />
-                <syncfusion:ComboBoxItemAdv Content="4" />
-                <syncfusion:ComboBoxItemAdv Content="5" />
-                <syncfusion:ComboBoxItemAdv Content="6" />
-                <syncfusion:ComboBoxItemAdv Content="7" />
-                <syncfusion:ComboBoxItemAdv Content="8" />
-                <syncfusion:ComboBoxItemAdv Content="9" />
-                <syncfusion:ComboBoxItemAdv Content="10" />
-            </syncfusion:ComboBoxAdv>
             <Separator Margin="10,0,0,0" />
-            <!-- <Label Content="Alt Level:" VerticalAlignment="Center" /> -->
-            <!-- <syncfusion:ComboBoxAdv x:Name="ComboBox_AltLevel" /> -->
-            <!-- <Separator Margin="10,0,0,0" /> -->
             <Label Content="{loc:Localize str.Planner.Parley}" VerticalAlignment="Center" />
             <Label x:Name="Label_SelectedParley" Content="0" HorizontalAlignment="Right" Margin="0"
                    VerticalAlignment="Center" />

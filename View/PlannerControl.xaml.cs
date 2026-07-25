@@ -96,7 +96,6 @@ namespace iBarter.View {
 
             //DataGrid_Planner.SortColumnDescriptions.Add(new SortColumnDescription() { ColumnName = "x:Column_LV", SortDirection = ListSortDirection.Ascending });
             SetupDataGridStyle();
-            LoadSavedComboBoxValue();
             ApplyTypography();
             Loaded += (_, _) => {
                 ApplyTypography();
@@ -196,7 +195,8 @@ namespace iBarter.View {
             string mode = result.SavedOptimizationMode?.ToString() ?? "Balanced";
             int routeCount = result.Snapshot?.Plan.Routes.Count ?? 0;
             App.myCFun?.Log(
-                $"[AutoRoute] 已恢复上次保存的路线（{mode} 模式，{routeCount} 条路线）。",
+                Localization.LanguageService.Instance.Localize(
+                    "str.Log.AutoRoute.Restored", mode, routeCount),
                 Brushes.DarkOliveGreen);
         }
 
@@ -206,14 +206,14 @@ namespace iBarter.View {
                 : "<none>";
             string message = result.Status switch {
                 RoutePlanLoadStatus.FileNotFound =>
-                    "[AutoRoute] 首次启动，没有可恢复的自动路线。",
+                    Localization.LanguageService.Instance.Localize("str.Log.AutoRoute.RestoreNoSaved"),
                 RoutePlanLoadStatus.FingerprintMismatch =>
-                    $"[AutoRoute] 已保存的路线与当前 Planner、仓库、船舶设置或搜索模式不一致，需重新生成 (saved={fingerprintShort})。",
+                    Localization.LanguageService.Instance.Localize("str.Log.AutoRoute.RestoreMismatch", fingerprintShort),
                 RoutePlanLoadStatus.UnsupportedSchema =>
-                    $"[AutoRoute] 路线保存格式版本 (Schema {result.SchemaVersion}) 不受支持，需重新生成。",
+                    Localization.LanguageService.Instance.Localize("str.Log.AutoRoute.RestoreUnsupportedSchema", result.SchemaVersion),
                 RoutePlanLoadStatus.CorruptFile =>
-                    "[AutoRoute] 自动路线保存文件已损坏，无法恢复。",
-                _ => $"[AutoRoute] 自动路线恢复失败 ({result.Status})。",
+                    Localization.LanguageService.Instance.Localize("str.Log.AutoRoute.RestoreCorrupt"),
+                _ => Localization.LanguageService.Instance.Localize("str.Log.AutoRoute.RestoreFailed", result.Status),
             };
             App.myCFun?.Log(message, Brushes.OrangeRed);
         }
@@ -531,7 +531,10 @@ namespace iBarter.View {
         }
 
         private void ButtonAdv_Refresh_Click(object sender, RoutedEventArgs e) {
-            Grouping();
+            using (WorkspaceSnapshotService.BeginBatch("planner-group")) {
+                Grouping();
+                SaveData();
+            }
         }
 
         public void Grouping() {
@@ -832,7 +835,8 @@ namespace iBarter.View {
                             // the next reload reuses the same ids.
                             SaveData();
                             App.myCFun.Log(
-                                $"[Planner] 已为 {migratedCount} 条旧记录生成持久化 PlannerRowId，已立即持久化。",
+                                Localization.LanguageService.Instance.Localize(
+                                    "str.Log.Planner.RowIdMigrated", migratedCount),
                                 Brushes.SteelBlue);
                         }
                         App.myCFun.Log(Localization.LanguageService.Instance.Localize(
@@ -863,6 +867,38 @@ namespace iBarter.View {
 
             App.myfmMain.myShipCargo.RefreshData();
             TryRestoreAutomaticRouteAfterLoad();
+            WorkspaceSnapshotService.CaptureCompletedState("planner-load");
+        }
+
+        private void ButtonAdv_Restore_Click(object sender, RoutedEventArgs e) {
+            var svc = Localization.LanguageService.Instance;
+            WorkspaceSnapshotRestoreResult restore;
+            using (WorkspaceSnapshotService.SuppressCapture()) {
+                restore = WorkspaceSnapshotService.RestorePreviousNonEmpty();
+                if (!restore.Success) {
+                    string key = restore.Error is "NO_SNAPSHOT" or "NO_PREVIOUS_NON_EMPTY_SNAPSHOT"
+                        ? "str.Msg.Planner.RestoreNone"
+                        : "str.Msg.Planner.RestoreFailed";
+                    string message = key == "str.Msg.Planner.RestoreNone"
+                        ? svc.Localize(key)
+                        : svc.Localize(key, restore.Error ?? "unknown");
+                    App.myCFun.Log(message, Brushes.OrangeRed);
+                    return;
+                }
+
+                App.myRouteCoordinator?.Invalidate("snapshot-restore");
+                App.myStorageVM?.LoadData();
+                ButtonAdv_Load_Click(ButtonAdv_Restore, new RoutedEventArgs());
+                UpdateParley();
+                UpdateMapControl();
+                // ButtonAdv_Load_Click already reloads the cargo UI before it
+                // restores the automatic route. Refreshing it again here would
+                // call ActivateManual() and immediately discard that route.
+            }
+
+            App.myCFun.Log(
+                svc.Localize("str.Msg.Planner.RestoreSuccess", restore.PlannerRowCount),
+                Brushes.DarkOliveGreen);
         }
 
         private void ButtonAdv_Save_Click(object sender, RoutedEventArgs e) {
@@ -888,6 +924,7 @@ namespace iBarter.View {
                 AtomicFileStore.WriteValidated(dataPath, jsonData, IsValidPlannerJson, HasPlannerRows);
                 App.listBarterPlanner.Clear();
                 App.listBarterPlanner.AddRange(snapshot);
+                WorkspaceSnapshotService.CaptureCompletedState("planner-save");
             }
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);
@@ -1231,12 +1268,20 @@ namespace iBarter.View {
                     barter.Item2?.ItemID ?? string.Empty,
                     barter.Item2Number,
                     barter.ExchangeQuantity)).ToArray();
+            // StorageManager does not track terminal LV7 barter goods. Build the
+            // exclusion set from the authoritative item catalog instead of the
+            // current Planner rows, whose embedded metadata may be stale.
+            var ignoredOutputItemIds = App.listItems
+                .Where(item => string.Equals(item.ItemLV, "7", StringComparison.Ordinal))
+                .Select(item => item.ItemID)
+                .ToHashSet(StringComparer.Ordinal);
+            ignoredOutputItemIds.Add("10");
 
             var reconciliation = new PlannerInventoryReconciler().Reconcile(
                 currentInventory,
                 exchanges,
                 defaultWarehouse,
-                new HashSet<string>(StringComparer.Ordinal) { "10" });
+                ignoredOutputItemIds);
 
             if (!reconciliation.Success) {
                 PlannerInventoryError firstError = reconciliation.Errors.First();
@@ -1244,15 +1289,17 @@ namespace iBarter.View {
                     .FirstOrDefault(item => item.ItemID == firstError.ItemId)?.ItemNameDisplay
                     ?? firstError.ItemId;
                 string reason = firstError.Code switch {
-                    "INSUFFICIENT_STOCK" => "仓库库存不足",
-                    "MISSING_STORAGE_ITEM" => "仓库物品列表缺少该物品",
-                    "DUPLICATE_ITEM" => "仓库物品重复",
-                    _ => "库存数据无效"
+                    "INSUFFICIENT_STOCK" => Localization.LanguageService.Instance.Localize("str.Log.Planner.InventoryError.InsufficientStock"),
+                    "MISSING_STORAGE_ITEM" => Localization.LanguageService.Instance.Localize("str.Log.Planner.InventoryError.MissingStorageItem"),
+                    "DUPLICATE_ITEM" => Localization.LanguageService.Instance.Localize("str.Log.Planner.InventoryError.DuplicateItem"),
+                    _ => Localization.LanguageService.Instance.Localize("str.Log.Planner.InventoryError.InvalidData")
                 };
-                App.myCFun.Log($"无法完成库存结算：{itemName}（{reason}）。库存和计划均未修改。", Brushes.Red);
+                App.myCFun.Log(Localization.LanguageService.Instance.Localize(
+                    "str.Log.Planner.InventorySettlementFailed", itemName, reason), Brushes.Red);
                 return;
             }
 
+            using var snapshotBatch = WorkspaceSnapshotService.BeginBatch("planner-done");
             using (App.myStorageVM.SuppressAutoSave(saveOnDispose: false)) {
                 foreach (Items item in App.myStorageVM.StorageCollection) {
                     if (!reconciliation.Inventory.TryGetValue(item.ItemID, out PlannerWarehouseInventory? updated)) {
@@ -1275,7 +1322,8 @@ namespace iBarter.View {
                         item.StorageVeliaQuantity_Ancado = original.Ancado;
                     }
                 }
-                App.myCFun.Log("仓库数据保存失败，库存和计划均未修改。", Brushes.Red);
+                App.myCFun.Log(Localization.LanguageService.Instance.Localize(
+                    "str.Log.Planner.StorageSaveFailed"), Brushes.Red);
                 return;
             }
 
@@ -1289,6 +1337,16 @@ namespace iBarter.View {
             App.listBarterPlanner.Clear();
             DataGrid_Planner.BeginInit();
             App.myPVM.BarterCollection.Clear();
+            // Clear sort / group state too: DONE wipes the rows, but the
+            // descriptions survive into the next session's first scan-add.
+            // Without this the freshly-added rows snap into the leftover
+            // Item1LV sort + BarterGroup grouping the user had before
+            // confirming, instead of appearing in the order they were
+            // scanned.
+            DataGrid_Planner.SortColumnDescriptions.Clear();
+            DataGrid_Planner.GroupColumnDescriptions.Clear();
+            DataGrid_Planner.View.GroupDescriptions?.Clear();
+            DataGrid_Planner.AutoExpandGroups = false;
             DataGrid_Planner.EndInit();
             SaveData();
         }
@@ -1296,14 +1354,22 @@ namespace iBarter.View {
 
 
         private void ButtonAdv_New_Click(object sender, RoutedEventArgs e) {
-            App.myRouteCoordinator?.Invalidate("planner-new");
-            DataGrid_Planner.BeginInit();
-            if (App.myPVM != null) {
-                App.myPVM.BarterCollection.Clear();
-            }
+            using (WorkspaceSnapshotService.BeginBatch("planner-new")) {
+                App.myRouteCoordinator?.Invalidate("planner-new");
+                DataGrid_Planner.BeginInit();
+                if (App.myPVM != null) {
+                    App.myPVM.BarterCollection.Clear();
+                }
 
-            DataGrid_Planner.SortColumnDescriptions.Clear();
-            DataGrid_Planner.EndInit();
+                // Match the DONE-reset contract: the user expects a fresh
+                // grid (rows + sort + grouping) when they click New.
+                DataGrid_Planner.SortColumnDescriptions.Clear();
+                DataGrid_Planner.GroupColumnDescriptions.Clear();
+                DataGrid_Planner.View.GroupDescriptions?.Clear();
+                DataGrid_Planner.AutoExpandGroups = false;
+                DataGrid_Planner.EndInit();
+                SaveData();
+            }
         }
 
         private void ButtonAdv_Clean_Click(object sender, RoutedEventArgs e) {
@@ -1322,6 +1388,13 @@ namespace iBarter.View {
                 }
 
                 DataGrid_Planner.SortColumnDescriptions.Clear();
+                // Clean resets every row to "not done", so any prior
+                // grouping becomes a wall of half-empty collapsed groups.
+                // Drop the group descriptions too so the rows read in
+                // scan / insertion order instead of by stale group.
+                DataGrid_Planner.GroupColumnDescriptions.Clear();
+                DataGrid_Planner.View.GroupDescriptions?.Clear();
+                DataGrid_Planner.AutoExpandGroups = false;
                 // SortColumnDescription mySCD = new SortColumnDescription();
                 // mySCD.ColumnName = "Item1LV";
                 // mySCD.SortDirection = ListSortDirection.Ascending;
@@ -1359,41 +1432,6 @@ namespace iBarter.View {
 
                 e.Handled = true; // 标记事件已处理，避免默认滚动行为
             }
-        }
-
-        private void ComboBox_LV5Max_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
-            if (ComboBox_LV5Max.SelectedItem != null) {
-                // 保存选中的值
-                Properties.Settings.Default.SelectedComboBoxValueLV5 = ComboBox_LV5Max.SelectedIndex;
-                Properties.Settings.Default.Save();
-            }
-        }
-
-        private void ComboBox_LV6Max_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
-            if (ComboBox_LV6Max.SelectedItem != null) {
-                Properties.Settings.Default.SelectedComboBoxValueLV6 = ComboBox_LV6Max.SelectedIndex;
-                Properties.Settings.Default.Save();
-            }
-        }
-
-        private void ComboBox_LV7Max_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
-            if (ComboBox_LV7Max.SelectedItem != null) {
-                Properties.Settings.Default.SelectedComboBoxValueLV7 = ComboBox_LV7Max.SelectedIndex;
-                Properties.Settings.Default.Save();
-            }
-        }
-
-
-        private void LoadSavedComboBoxValue() {
-            int savedValue = Properties.Settings.Default.SelectedComboBoxValueLV5;
-            if (savedValue >= 0 && savedValue < ComboBox_LV5Max.Items.Count)
-                ComboBox_LV5Max.SelectedIndex = savedValue;
-            savedValue = Properties.Settings.Default.SelectedComboBoxValueLV6;
-            if (savedValue >= 0 && savedValue < ComboBox_LV6Max.Items.Count)
-                ComboBox_LV6Max.SelectedIndex = savedValue;
-            savedValue = Properties.Settings.Default.SelectedComboBoxValueLV7;
-            if (savedValue >= 0 && savedValue < ComboBox_LV7Max.Items.Count)
-                ComboBox_LV7Max.SelectedIndex = savedValue;
         }
 
         // Phase 6 (i18n) / Task 6: Auto Plan click handler. Builds snapshots from the
@@ -1497,10 +1535,8 @@ namespace iBarter.View {
                 strategy = AutoPlanningStrategy.ProfitFirst;
             }
 
-            int lv5Target = ComboBox_LV5Max != null && ComboBox_LV5Max.SelectedIndex >= 0
-                ? ComboBox_LV5Max.SelectedIndex : 0;
-            int lv6Target = ComboBox_LV6Max != null && ComboBox_LV6Max.SelectedIndex >= 0
-                ? ComboBox_LV6Max.SelectedIndex : 0;
+            int lv5Target = Math.Clamp(Properties.Settings.Default.SelectedComboBoxValueLV5, 0, 10);
+            int lv6Target = Math.Clamp(Properties.Settings.Default.SelectedComboBoxValueLV6, 0, 10);
 
             int extraLT = Convert.ToInt32(Math.Round(
                 App.myCargoProperty.ExtraLT, MidpointRounding.AwayFromZero));
@@ -1623,31 +1659,33 @@ namespace iBarter.View {
             // Commit the Planner multipliers only after route calculation and replay
             // verification succeeded. A failed new attempt therefore leaves the last
             // saved Planner + automatic route pair intact and restorable.
-            if (!manualSelection && !continuingRestoredSearch) {
-                DataGrid_Planner.BeginInit();
-                try {
-                    // Audit round 3: the planner's Multipliers dictionary
-                    // is keyed by Barter.PlannerRowId (persistent), not
-                    // by collection index. Look each row up by its stable
-                    // id so duplicate tuples get their own multiplier.
-                    foreach (var b in liveRows) {
-                        if (calculation.ApplySet.Multipliers.TryGetValue(b.PlannerRowId, out int multiplier))
-                            b.ExchangeQuantity = multiplier;
+            using (WorkspaceSnapshotService.BeginBatch("planner-auto-plan")) {
+                if (!manualSelection && !continuingRestoredSearch) {
+                    DataGrid_Planner.BeginInit();
+                    try {
+                        // Audit round 3: the planner's Multipliers dictionary
+                        // is keyed by Barter.PlannerRowId (persistent), not
+                        // by collection index. Look each row up by its stable
+                        // id so duplicate tuples get their own multiplier.
+                        foreach (var b in liveRows) {
+                            if (calculation.ApplySet.Multipliers.TryGetValue(b.PlannerRowId, out int multiplier))
+                                b.ExchangeQuantity = multiplier;
+                        }
+                    }
+                    finally {
+                        DataGrid_Planner.EndInit();
                     }
                 }
-                finally {
-                    DataGrid_Planner.EndInit();
-                }
+
+                if (!App.myRouteCoordinator.PublishGeneratedPlan(request, routePlan, profile.Mode))
+                    throw new InvalidOperationException("The generated route failed commit verification.");
+
+                UpdateInvChange(-1);
+                UpdateParley();
+                SaveData();
+                UpdateMapControl();
+                App.myfmMain?.myShipCargo?.UpdateCurrentLV();
             }
-
-            if (!App.myRouteCoordinator.PublishGeneratedPlan(request, routePlan, profile.Mode))
-                throw new InvalidOperationException("The generated route failed commit verification.");
-
-            UpdateInvChange(-1);
-            UpdateParley();
-            SaveData();
-            UpdateMapControl();
-            App.myfmMain?.myShipCargo?.UpdateCurrentLV();
 
             int selectedRoutes = liveRows.Select((row, index) => new {
                     Row = row,

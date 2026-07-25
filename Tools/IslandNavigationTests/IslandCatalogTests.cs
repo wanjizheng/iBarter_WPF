@@ -29,6 +29,56 @@ public sealed class IslandCatalogTests {
         AssertCoordinate(rows, "Hakoven", 1_252_450, 547_567, 1);
     }
 
+    [Fact]
+    public void Barter_location_catalog_uses_unique_finite_npc_destinations() {
+        string path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
+            "..", "..", "..", "..", "..", "Resources",
+            "IslandBarterLocations.csv"));
+        var rows = File.ReadAllLines(path)
+            .Skip(1)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => line.Split(','))
+            .ToArray();
+
+        Assert.Equal(68, rows.Length);
+        Assert.Equal(rows.Length, rows.Select(row => row[0]).Distinct().Count());
+        Assert.Equal(rows.Length, rows.Select(row => row[3]).Distinct().Count());
+        foreach (string[] row in rows) {
+            Assert.Equal(6, row.Length);
+            Assert.True(double.TryParse(
+                row[1], NumberStyles.Float, CultureInfo.InvariantCulture,
+                out double x));
+            Assert.True(double.TryParse(
+                row[2], NumberStyles.Float, CultureInfo.InvariantCulture,
+                out double y));
+            Assert.True(double.IsFinite(x));
+            Assert.True(double.IsFinite(y));
+            Assert.True(int.TryParse(row[3], out int npcId) && npcId > 0);
+            Assert.Equal($"https://bdocodex.com/us/npc/{npcId}/", row[5]);
+        }
+    }
+
+    [Fact]
+    public void Padix_destination_is_keshao_on_the_north_coast() {
+        string path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
+            "..", "..", "..", "..", "..", "Resources",
+            "IslandBarterLocations.csv"));
+        string[] row = File.ReadAllLines(path)
+            .Skip(1)
+            .Select(line => line.Split(','))
+            .Single(row => row[0] == "Padix");
+
+        Assert.Equal("-349081", row[1]);
+        Assert.Equal("347470", row[2]);
+        Assert.Equal("58915", row[3]);
+        Assert.Equal("Keshao", row[4]);
+
+        var islandRows = LoadRows().ToDictionary(entry => entry[0], StringComparer.Ordinal);
+        double nodeY = double.Parse(islandRows["Padix"][7], CultureInfo.InvariantCulture);
+        double barterY = double.Parse(row[2], CultureInfo.InvariantCulture);
+        Assert.True(barterY > nodeY + 50_000);
+    }
+
     internal static List<string[]> LoadRows() {
         string path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
             "..", "..", "..", "..", "..", "Resources", "Islands.csv"));
