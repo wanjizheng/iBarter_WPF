@@ -138,8 +138,24 @@ namespace iBarter {
                         "bdocodex-barterer-", StringComparison.OrdinalIgnoreCase)) {
                     MapAnchorSource = navigationSource;
                 }
+                RaisePropertyChanged("NavigationSource");
+                RaisePropertyChanged("HasVerifiedBarterDestination");
+                RaisePropertyChanged("RouteDestinationProvenance");
             }
         }
+
+        /// <summary>
+        /// True only when the route destination came from the explicit
+        /// IslandBarterLocations catalog and therefore identifies the real
+        /// barter NPC/interaction stop rather than a node, wharf or calibrated
+        /// geographic fallback.
+        /// </summary>
+        public bool HasVerifiedBarterDestination =>
+            NavigationSource.StartsWith(
+                "bdocodex-barterer-npc-", StringComparison.OrdinalIgnoreCase);
+
+        public string RouteDestinationProvenance =>
+            HasVerifiedBarterDestination ? "VerifiedNpc" : "CatalogFallback";
 
         // The HD map source labels islands at their node anchors, while sailing
         // routes need the coastal barterer. Keep the original node coordinate
