@@ -4,6 +4,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using iBarter.Routing;
+using iBarter.ViewModel;
 
 namespace iBarter.View;
 
