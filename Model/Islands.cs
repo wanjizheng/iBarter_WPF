@@ -139,11 +139,22 @@ namespace iBarter {
                     MapAnchorSource = navigationSource;
                 }
                 RaisePropertyChanged("NavigationSource");
+                RaisePropertyChanged("HasExplicitBarterDestination");
                 RaisePropertyChanged("HasVerifiedBarterDestination");
                 RaisePropertyChanged("HasUserCalibratedBarterDestination");
+                RaisePropertyChanged("UsesCatalogFallbackDestination");
                 RaisePropertyChanged("RouteDestinationProvenance");
             }
         }
+
+        /// <summary>
+        /// The route destination is backed by an explicit barter-NPC row in
+        /// IslandBarterLocations.csv. This includes both source-extracted NPC
+        /// coordinates and deliberately labelled user-calibrated NPC coordinates.
+        /// </summary>
+        public bool HasExplicitBarterDestination =>
+            NavigationSource.StartsWith(
+                "bdocodex-barterer-npc-", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// Olvia Coast's barterer identity (Brio, NPC 58973) is sourced from the
@@ -153,7 +164,8 @@ namespace iBarter {
         /// claiming the position is source-extracted.
         /// </summary>
         public bool HasUserCalibratedBarterDestination =>
-            Island == EnumLists.Island.Olvia
+            HasExplicitBarterDestination
+            && Island == EnumLists.Island.Olvia
             && StringComparer.OrdinalIgnoreCase.Equals(
                 NavigationSource, "bdocodex-barterer-npc-58973");
 
@@ -163,9 +175,16 @@ namespace iBarter {
         /// rather than a node/wharf fallback or a user-calibrated correction.
         /// </summary>
         public bool HasVerifiedBarterDestination =>
-            NavigationSource.StartsWith(
-                "bdocodex-barterer-npc-", StringComparison.OrdinalIgnoreCase)
+            HasExplicitBarterDestination
             && !HasUserCalibratedBarterDestination;
+
+        /// <summary>
+        /// True only when no explicit barter-NPC destination is available and the
+        /// route is using the best coordinate retained in Islands.csv instead.
+        /// A user-calibrated NPC is not a catalog fallback.
+        /// </summary>
+        public bool UsesCatalogFallbackDestination =>
+            !HasExplicitBarterDestination;
 
         public string RouteDestinationProvenance =>
             HasUserCalibratedBarterDestination
