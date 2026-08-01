@@ -409,11 +409,13 @@ namespace iBarter.View {
                         }
                         return;
                     }
-                    Barter myBarter = (Barter)myItem.Content;
-                    if (myBarter != null) {
-                        Clipboard.SetText(myBarter.Item1Name);
-                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.ShipCargo.CopiedToClipboard", myBarter.Item1NameDisplay), Brushes.DarkGreen);
-                    }
+                    // A virtualized WPF item can be disconnected between the
+                    // mouse event and this handler. In that window Content is
+                    // MS.Internal.NamedObject (DisconnectedItem), not Barter.
+                    if (myItem?.Content is not Barter myBarter) return;
+
+                    Clipboard.SetText(myBarter.Item1Name);
+                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.ShipCargo.CopiedToClipboard", myBarter.Item1NameDisplay), Brushes.DarkGreen);
                 }
                 catch (Exception exception) {
                     App.myCFun.Log(exception.Message, Brushes.Red);
@@ -434,11 +436,12 @@ namespace iBarter.View {
                         }
                         return;
                     }
-                    Barter myBarter = (Barter)myItem.Content;
-                    if (myBarter != null) {
-                        Clipboard.SetText(myBarter.Item2Name);
-                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.ShipCargo.CopiedToClipboard", myBarter.Item2NameDisplay), Brushes.DarkGreen);
-                    }
+                    // See the left-button handler: Content can briefly be
+                    // WPF's internal DisconnectedItem during virtualization.
+                    if (myItem?.Content is not Barter myBarter) return;
+
+                    Clipboard.SetText(myBarter.Item2Name);
+                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.ShipCargo.CopiedToClipboard", myBarter.Item2NameDisplay), Brushes.DarkGreen);
                 }
             }
             catch (Exception exception) {

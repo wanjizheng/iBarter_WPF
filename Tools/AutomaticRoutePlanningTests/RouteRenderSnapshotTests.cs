@@ -37,6 +37,47 @@ public sealed class RouteRenderSnapshotTests {
     }
 
     [Fact]
+    public void Lv0_material_for_lv1_barter_is_self_supplied_at_each_warehouse_island() {
+        var rows = new[] {
+            new PlannerRouteSnapshot(
+                "land-to-lv1", false, 10, "StarterIsland",
+                "LAND", "Land Material", 0, 100,
+                "LV1", "Level 1 Good", 1, 1),
+        };
+        var storage = new[] {
+            new StorageItemSnapshot("LV1", 1, 0, 0, 0, 0),
+        };
+        var islands = new[] {
+            new IslandRouteSnapshot("StarterIsland", new RoutePoint(10, 0)),
+            new IslandRouteSnapshot("Velia", new RoutePoint(0, 0)),
+            new IslandRouteSnapshot("Iliya", new RoutePoint(0, 20)),
+            new IslandRouteSnapshot("Epheria", new RoutePoint(0, 30)),
+            new IslandRouteSnapshot("Sausan", new RoutePoint(0, 40)),
+        };
+
+        var request = AutomaticRoutePlanningAdapter.BuildRequest(
+            rows, storage, islands,
+            new CargoCapacitySnapshot(0, 30_000),
+            new RouteSearchLimits(100_000, 1_000));
+
+        Assert.Empty(request.InitialOnBoard);
+        Assert.All(request.Warehouses, warehouse =>
+            Assert.Equal(1_000, warehouse.Inventory["LAND"]));
+        Assert.True(AutomaticRoutePreflight.Validate(request).IsValid);
+
+        var plan = new AutomaticRoutePlanner().Plan(
+            request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(RoutePlanStatus.Optimal, plan.Status);
+        var route = Assert.Single(plan.Routes);
+        var pickup = Assert.Single(route.Steps.OfType<WarehousePickupStep>());
+        Assert.Equal(
+            new RouteItemQuantity("LAND", 1_000),
+            Assert.Single(pickup.Items));
+        Assert.IsType<BarterStep>(route.Steps[1]);
+    }
+
+    [Fact]
     public void Adapter_splits_all_selected_exchanges_across_capacity_safe_tasks() {
         const string plannerRowId = "br-pujara";
         var rows = new[] {

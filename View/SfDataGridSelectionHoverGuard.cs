@@ -74,7 +74,7 @@ namespace iBarter.View {
                 state.HoveredRowIndex = ResolveRowIndex(row, e.OriginalSource as DependencyObject);
             }
 
-            if (row == null) {
+            if (row == null || !IsSelectableDataRowIndex(state.HoveredRowIndex)) {
                 return;
             }
 
@@ -99,7 +99,8 @@ namespace iBarter.View {
             // authoritative even when virtualization wraps DataContext in a
             // RecordEntry or reuses the visible row container.
             var selectedRows = grid.SelectionController?.SelectedRows;
-            if (rowIndex >= 0 && selectedRows?.Contains(rowIndex) == true) {
+            if (IsSelectableDataRowIndex(rowIndex)
+                && selectedRows?.Contains(rowIndex) == true) {
                 return true;
             }
 
@@ -107,6 +108,13 @@ namespace iBarter.View {
             return selectedRows?.ContainsObject(rowData) == true
                 || ReferenceEquals(rowData, grid.SelectedItem)
                 || grid.SelectedItems.Contains(rowData);
+        }
+
+        private static bool IsSelectableDataRowIndex(int rowIndex) {
+            // Syncfusion's GridSelectedRowsCollection.Find(int) rejects zero
+            // and negative indexes. Header/filter/popup mouse routes can resolve
+            // to row zero, so never pass a non-data index into Contains(int).
+            return rowIndex > 0;
         }
 
         private static int ResolveRowIndex(

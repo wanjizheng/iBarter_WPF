@@ -132,8 +132,12 @@ namespace iBarter.View {
                 return false;
             }
 
-            // Cheap path first: raw candidate vs raw filterText.
-            if (candidate.StartsWith(filterText, comparison)) {
+            // Keep autocomplete aligned with incremental filtering. Item
+            // columns in Planner and Scanner use SearchCondition.Contains,
+            // so a distinctive middle or trailing fragment (for example
+            // "纱帽" in "最高级纱帽箱子") must be eligible for selection too.
+            if (MatchesBySearchCondition(
+                    candidate, filterText, comparison, SearchCondition)) {
                 return true;
             }
 
@@ -145,11 +149,21 @@ namespace iBarter.View {
 
             string normalizedCandidate = ChineseTextNormalizer.NormalizeForMatching(candidate);
             return !string.IsNullOrEmpty(normalizedCandidate)
-                   && normalizedCandidate.StartsWith(normalizedFilter, comparison);
+                   && MatchesBySearchCondition(
+                       normalizedCandidate, normalizedFilter, comparison, SearchCondition);
         }
 
         private bool MatchesCore(string candidate, string query, StringComparison comparison) {
-            return SearchCondition switch {
+            return MatchesBySearchCondition(
+                candidate, query, comparison, SearchCondition);
+        }
+
+        internal static bool MatchesBySearchCondition(
+                string candidate,
+                string query,
+                StringComparison comparison,
+                SearchCondition searchCondition) {
+            return searchCondition switch {
                 SearchCondition.Equals     => string.Equals(candidate, query, comparison),
                 SearchCondition.Contains   => candidate.IndexOf(query, comparison) >= 0,
                 SearchCondition.StartsWith => candidate.StartsWith(query, comparison),

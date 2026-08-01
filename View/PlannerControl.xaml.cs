@@ -636,7 +636,7 @@ namespace iBarter.View {
             // Capture the current view so BeginInit/EndInit stay paired even
             // if the grid creates its view while these descriptions change.
             var plannerView = DataGrid_Planner.View;
-            plannerView?.BeginInit();
+            plannerView?.BeginInit(true);
             try {
                 DataGrid_Planner.SortColumnDescriptions.Clear();
                 DataGrid_Planner.GroupColumnDescriptions.Clear();
@@ -658,16 +658,55 @@ namespace iBarter.View {
             // 让分组自动展开（可选；开了它一般就不需要手动 ExpandAllGroup）
             DataGrid_Planner.AutoExpandGroups = true;
 
-            // 若你坚持手动展开，请务必在 EndInit 之后，并做空值保护；或者丢到 Dispatcher
-            if (plannerView?.TopLevelGroup != null &&
-                DataGrid_Planner.GroupColumnDescriptions.Count > 0 &&
-                plannerView.Records.Count > 0) {
-                DataGrid_Planner.ExpandAllGroup();
-            }
+            // A populated Syncfusion view can accept GroupColumnDescriptions
+            // without rebuilding its TopLevelGroup. Refresh() alone only
+            // repaints the existing flat records; this is why the first Group
+            // click after Scanner Add had no caption/header rows, while Load
+            // (which recreates the view) immediately fixed it.
+            //
+            // BeginInit(true)/EndInit is the public Syncfusion path for a
+            // programmatic view operation: the true flag makes EndInit resume
+            // the UI update and reinitialize sorting/grouping/filtering.
+            RefreshPlannerGroupingView();
+
+            // Syncfusion also completes part of its descriptor/view update
+            // through data-binding work. Run the same idempotent rebuild once
+            // more after that queue drains so the first click creates caption
+            // rows without requiring a save/load round trip.
+            Dispatcher.BeginInvoke(
+                new Action(RefreshPlannerGroupingView),
+                DispatcherPriority.DataBind);
 
             //RefreshDataGrid();
             UpdateParley();
             UpdateMapControl();
+        }
+
+        private void RefreshPlannerGroupingView() {
+            if (DataGrid_Planner == null
+                || DataGrid_Planner.GroupColumnDescriptions.Count == 0) {
+                return;
+            }
+
+            var currentView = DataGrid_Planner.View;
+            if (currentView == null) return;
+
+            currentView.BeginInit(true);
+            try {
+                // EndInit below performs the actual view reinitialization.
+            }
+            finally {
+                currentView.EndInit();
+            }
+
+            if (!currentView.IsInDeferRefresh) {
+                currentView.Refresh();
+            }
+
+            if (currentView.TopLevelGroup != null
+                && currentView.Records.Count > 0) {
+                DataGrid_Planner.ExpandAllGroup();
+            }
         }
 
         private void FindBarterGroup(Barter _barter, int _lv, int _group) {
@@ -1011,11 +1050,13 @@ namespace iBarter.View {
                 // re-derived, and the auto-route-plan.json is updated
                 // atomically. Both the Planner CK and the map double-click
                 // call the same code path.
-                Barter myBarter = (Barter)e.Record;
-                string rowId = myBarter is null
-                    ? string.Empty
-                    : myBarter.PlannerRowId;
-                bool completed = myBarter?.ExchangeDone ?? false;
+                // Syncfusion can raise this event while WPF is disconnecting a
+                // virtualized row. In that case Record is the internal
+                // DisconnectedItem (MS.Internal.NamedObject), not planner data.
+                if (e.Record is not Barter myBarter) return;
+
+                string rowId = myBarter.PlannerRowId;
+                bool completed = myBarter.ExchangeDone;
                 App.myRouteCoordinator?.ApplyBarterCompletionProgress(
                     BuildCurrentAutomaticRouteRequest(
                         ResolveSelectedOptimizationProfile()),
@@ -1282,12 +1323,21 @@ namespace iBarter.View {
                 .Select(item => item.ItemID)
                 .ToHashSet(StringComparer.Ordinal);
             ignoredOutputItemIds.Add("10");
+            // Level-0 land materials are supplied by the player outside
+            // StorageManager (the automatic-route request follows the same
+            // rule). DONE must neither require a storage row nor deduct them
+            // from the tracked barter-goods ledger.
+            var ignoredInputItemIds = App.listItems
+                .Where(item => string.Equals(item.ItemLV, "0", StringComparison.Ordinal))
+                .Select(item => item.ItemID)
+                .ToHashSet(StringComparer.Ordinal);
 
             var reconciliation = new PlannerInventoryReconciler().Reconcile(
                 currentInventory,
                 exchanges,
                 defaultWarehouse,
-                ignoredOutputItemIds);
+                ignoredOutputItemIds,
+                ignoredInputItemIds);
 
             if (!reconciliation.Success) {
                 PlannerInventoryError firstError = reconciliation.Errors.First();

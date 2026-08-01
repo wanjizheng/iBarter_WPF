@@ -9,6 +9,7 @@
                              xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
                              xmlns:collections="clr-namespace:System.Collections;assembly=System.Runtime"
                              mc:Ignorable="d"
+                             AllowsTransparency="True" WindowStyle="None"
                              Icon="/Images/storage.png"
                              TitleBarBackground="{Binding TitleBarBackground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              TitleBarForeground="{Binding TitleBarForeground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

@@ -13,7 +13,8 @@
                 MouseWheel="MapViewport_MouseWheel"
                 MouseLeftButtonDown="MapViewport_MouseLeftButtonDown"
                 MouseMove="MapViewport_MouseMove"
-                MouseLeftButtonUp="MapViewport_MouseLeftButtonUp">
+                PreviewMouseLeftButtonUp="MapViewport_MouseLeftButtonUp"
+                LostMouseCapture="MapViewport_LostMouseCapture">
             <Grid x:Name="MainViewportContent" RenderTransformOrigin="0,0">
                 <Grid.RenderTransform>
                     <TransformGroup>

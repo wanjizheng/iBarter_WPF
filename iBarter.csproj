@@ -45,22 +45,16 @@
 
   <!-- OR-Tools ships a win-x64 native runtime while the WPF/PureDM process must
        remain win-x86. Build and stage the isolated solver beside the app. -->
-  <Target Name="BuildExtremeRouteSolver" AfterTargets="Build"
-          Condition="'$(DesignTimeBuild)' != 'true'">
-    <MSBuild Projects="$(ExtremeRouteSolverProject)" Targets="Build"
-             Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=win-x64" />
+  <Target Name="BuildExtremeRouteSolver" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <MSBuild Projects="$(ExtremeRouteSolverProject)" Targets="Build" Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=win-x64" />
     <ItemGroup>
       <ExtremeRouteSolverFiles Include="$(ExtremeRouteSolverBuildDir)**\*" />
     </ItemGroup>
-    <Copy SourceFiles="@(ExtremeRouteSolverFiles)"
-          DestinationFiles="@(ExtremeRouteSolverFiles->'$(TargetDir)ExtremeSolver\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(ExtremeRouteSolverFiles)" DestinationFiles="@(ExtremeRouteSolverFiles->'$(TargetDir)ExtremeSolver\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="PublishExtremeRouteSolver" AfterTargets="Publish"
-          Condition="'$(DesignTimeBuild)' != 'true'">
-    <MSBuild Projects="$(ExtremeRouteSolverProject)" Targets="Publish"
-             Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=win-x64;SelfContained=true;PublishDir=$(PublishDir)ExtremeSolver\" />
+  <Target Name="PublishExtremeRouteSolver" AfterTargets="Publish" Condition="'$(DesignTimeBuild)' != 'true'">
+    <MSBuild Projects="$(ExtremeRouteSolverProject)" Targets="Publish" Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=win-x64;SelfContained=true;PublishDir=$(PublishDir)ExtremeSolver\" />
   </Target>
 
   <!--
@@ -230,31 +224,31 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="FuzzySharp" Version="2.0.2" />
-    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.15.0" />
+    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.16.0" />
     <PackageReference Include="MaterialDesignThemes" Version="5.3.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="Syncfusion.Licensing" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Shared.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.FluentDark.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.MaterialDark.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.MaterialDarkBlue.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.MaterialLight.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.MaterialLightBlue.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.Metro.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.Office2019Black.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.Office2019Colorful.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.Office2019DarkGray.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.Office2019HighContrast.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.Office2019HighContrastWhite.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.Office2019White.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.SystemTheme.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.Windows11Dark.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Themes.Windows11Light.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.Tools.WPF" Version="34.1.32" />
-    <PackageReference Include="Syncfusion.UI.WPF.NET" Version="34.1.32" />
+    <PackageReference Include="Syncfusion.Licensing" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Shared.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.FluentDark.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.MaterialDark.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.MaterialDarkBlue.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.MaterialLight.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.MaterialLightBlue.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.Metro.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.Office2019Black.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.Office2019Colorful.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.Office2019DarkGray.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.Office2019HighContrast.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.Office2019HighContrastWhite.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.Office2019White.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.SystemTheme.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.Windows11Dark.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Themes.Windows11Light.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.Tools.WPF" Version="34.1.33" />
+    <PackageReference Include="Syncfusion.UI.WPF.NET" Version="34.1.33" />
   </ItemGroup>
 
   <ItemGroup>

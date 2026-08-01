@@ -262,7 +262,55 @@ public static class RouteCargoNormalizer {
             var routeStartOnBoard = routeIndex == 0
                 ? request.InitialOnBoard
                 : EmptyOnBoard;
-            string[] itemIds = RewriteRoute(routeStartOnBoard, route).Changes
+            RouteCargoRewriteResult routeRewrite =
+                RewriteRoute(routeStartOnBoard, route);
+            // A route can deliberately ferry cargo between warehouses for a
+            // later route without consuming it locally. Route-local cleanup
+            // sees that cargo as redundant. During completion progress the
+            // remaining route may also need several obsolete prefix pickups
+            // removed as one batch before it fits again, so item-by-item
+            // retries cannot recover. Protect the explicit warehouse handoff
+            // first, then retry the other cleanup candidates coherently.
+            HashSet<string> protectedHandoffItemIds =
+                FindLaterRouteWarehouseHandoffItems(candidate, routeIndex);
+            HashSet<string> coherentItemIds = routeRewrite.Changes
+                .Select(change => change.ItemId)
+                .Where(itemId => !protectedHandoffItemIds.Contains(itemId))
+                .ToHashSet(StringComparer.Ordinal);
+            RouteCargoRewriteResult coherentRewrite =
+                protectedHandoffItemIds.Count == 0
+                    ? routeRewrite
+                    : RewriteRoute(routeStartOnBoard, route, coherentItemIds);
+            if (coherentRewrite.Changed) {
+                var routes = candidate.Routes.ToArray();
+                routes[routeIndex] = coherentRewrite.Route;
+                var trial = new RoutePlan(
+                    candidate.Status,
+                    routes,
+                    candidate.Objective,
+                    candidate.Diagnostics,
+                    candidate.InputFingerprint);
+                var trialReplay = RouteReplay.ReplayPlan(request, trial);
+                if (trialReplay.Success && trialReplay.Plan is not null) {
+                    candidate = new RoutePlan(
+                        trialReplay.Plan.Status,
+                        trialReplay.Plan.Routes,
+                        trialReplay.Plan.Objective,
+                        plan.Diagnostics,
+                        plan.InputFingerprint);
+                    acceptedChanges.AddRange(coherentRewrite.Changes);
+                    changed = true;
+                    continue;
+                }
+            }
+
+            // Some progress projections need several obsolete pickup items
+            // removed together before the route becomes valid again (for
+            // example, each individual cleanup still leaves the ship
+            // overweight). Try that coherent route-local batch first. If the
+            // batch would break a deliberate cross-route warehouse handoff,
+            // fall back to the existing item-by-item safety checks.
+            string[] itemIds = routeRewrite.Changes
                 .Select(change => change.ItemId)
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(itemId => itemId, StringComparer.Ordinal)
@@ -325,6 +373,25 @@ public static class RouteCargoNormalizer {
             changed,
             acceptedChanges,
             null);
+    }
+
+    private static HashSet<string> FindLaterRouteWarehouseHandoffItems(
+        RoutePlan plan,
+        int routeIndex) {
+        var laterPickups = plan.Routes
+            .Skip(routeIndex + 1)
+            .SelectMany(route => route.Steps.OfType<WarehousePickupStep>())
+            .SelectMany(pickup => pickup.Items.Select(
+                item => (pickup.WarehouseId, item.ItemId)))
+            .ToHashSet();
+
+        return plan.Routes[routeIndex].Steps
+            .OfType<WarehouseUnloadStep>()
+            .SelectMany(unload => unload.Items
+                .Where(item => laterPickups.Contains(
+                    (unload.WarehouseId, item.ItemId)))
+                .Select(item => item.ItemId))
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>

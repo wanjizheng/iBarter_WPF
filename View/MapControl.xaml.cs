@@ -109,6 +109,7 @@ namespace iBarter.View {
                 ScheduleMapOverlayReflow();
             };
             this.Unloaded += (_, _) => {
+                EndMapPan();
                 if (myTimer != null && myTimer.IsEnabled) myTimer.Stop();
             };
             // Pure-geometry changes funnel through the single
@@ -167,14 +168,26 @@ namespace iBarter.View {
 
         private void MapViewport_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
             if (!IsBlankMapArea(e.OriginalSource)) return;
-            isPanningMap = true;
+            EndMapPan();
             lastPanPoint = e.GetPosition(MapViewport);
-            MapViewport.CaptureMouse();
+            if (!MapViewport.CaptureMouse()) return;
+            isPanningMap = true;
             e.Handled = true;
         }
 
         private void MapViewport_MouseMove(object sender, MouseEventArgs e) {
-            if (!isPanningMap || e.LeftButton != MouseButtonState.Pressed) return;
+            if (!isPanningMap) return;
+            if (e.LeftButton != MouseButtonState.Pressed) {
+                // Mouse-up can be consumed by window chrome or a docking-tab
+                // transition. Movement with the button already released is a
+                // reliable final safety net for a missed up event.
+                EndMapPan();
+                return;
+            }
+            if (!MapViewport.IsMouseCaptured) {
+                isPanningMap = false;
+                return;
+            }
             Point current = e.GetPosition(MapViewport);
             Vector delta = current - lastPanPoint;
             if (hdMapEnabled && mainHdCamera is not null && hdMapConfiguration is not null)
@@ -186,10 +199,20 @@ namespace iBarter.View {
         }
 
         private void MapViewport_MouseLeftButtonUp(object sender, MouseButtonEventArgs e) {
-            if (!isPanningMap) return;
+            bool wasPanning = isPanningMap || MapViewport.IsMouseCaptured;
+            EndMapPan();
+            if (wasPanning) e.Handled = true;
+        }
+
+        private void MapViewport_LostMouseCapture(object sender, MouseEventArgs e) {
             isPanningMap = false;
-            MapViewport.ReleaseMouseCapture();
-            e.Handled = true;
+        }
+
+        private void EndMapPan() {
+            isPanningMap = false;
+            if (MapViewport.IsMouseCaptured) {
+                MapViewport.ReleaseMouseCapture();
+            }
         }
 
         private bool IsBlankMapArea(object? originalSource) {

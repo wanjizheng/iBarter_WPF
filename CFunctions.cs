@@ -3906,10 +3906,12 @@ namespace iBarter {
             if (top2Candidates.Count == 0) {
                 top2Candidates = FindMostSimilarItemZhTwAware(strItem2, 3, ExtractLevelPrefix(strItem2).lv);
             }
+            PreferCrowCoinCandidateWhenTierPrefixMissing(
+                strItem2, top2Candidates, App.listItems);
             if (top1Candidates.Count == 0 || top2Candidates.Count == 0) {
                 Log("[DIAG-item-ocr] island=" + myIslands.IslandsNameDisplay
-                    + " slot1Raw=\"" + TruncForLog(strItem1, 48) + "\" slot1Top=" + DescribeItemCandidates(top1Candidates)
-                    + " slot2Raw=\"" + TruncForLog(strItem2, 48) + "\" slot2Top=" + DescribeItemCandidates(top2Candidates)
+                    + " slot1Raw=\"" + TruncForLog(strItem1 ?? "", 48) + "\" slot1Top=" + DescribeItemCandidates(top1Candidates)
+                    + " slot2Raw=\"" + TruncForLog(strItem2 ?? "", 48) + "\" slot2Top=" + DescribeItemCandidates(top2Candidates)
                     + " rect1=(" + pointPlusParley.X + "," + (pointPlusParley.Y - pointPlusParley.Size.Height)
                     + "," + (pointPlusRequired.X + 120) + "," + (pointPlusParley.Y + 1) + ")"
                     + " rect2=(" + (pointPlusParley.X + 376) + "," + (pointPlusParley.Y - pointPlusParley.Size.Height)
@@ -4378,6 +4380,40 @@ namespace iBarter {
         private static string DescribeItemCandidates(System.Collections.Generic.List<Items> candidates) {
             if (candidates == null || candidates.Count == 0) return "[]";
             return "[" + string.Join(",", candidates.Take(3).Select(i => i?.ItemID ?? "null")) + "]";
+        }
+
+        // Every normal barter reward carries a visible [Level N] / [N阶段]
+        // prefix. Crow Coin is the exception. In the live Chinese UI its gold
+        // label is repeatedly OCR'd as unrelated short garbage such as
+        // "户耶z画十" and "户允芋十"; fuzzy matching then proposes arbitrary
+        // catalog items and only searches those wrong icon templates.
+        //
+        // Put Crow Coin first only when the OCR text has no recognizable tier
+        // prefix. FindItemIconCompare checks 10.bmp in slot2's X column before
+        // the other fuzzy candidates, so a damaged prefix on a non-Crow reward
+        // can still be recovered when one of those other icon templates wins.
+        internal static void PreferCrowCoinCandidateWhenTierPrefixMissing(
+                string? ocrText,
+                System.Collections.Generic.List<Items> candidates,
+                System.Collections.Generic.IEnumerable<Items>? catalog) {
+            if (candidates == null || catalog == null) return;
+            if (HasRecognizableItemTierPrefix(ocrText)) return;
+
+            Items? crowCoin = catalog.FirstOrDefault(i => i?.ItemID == "10");
+            if (crowCoin == null) return;
+
+            candidates.RemoveAll(i => i?.ItemID == "10");
+            candidates.Insert(0, crowCoin);
+        }
+
+        internal static bool HasRecognizableItemTierPrefix(string? value) {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            return value.Contains("阶段", StringComparison.Ordinal)
+                || value.Contains("階段", StringComparison.Ordinal)
+                || Regex.IsMatch(
+                    value,
+                    @"\[\s*Level\s+[1-7]\s*\]",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
 
         // 切词（英文够用）：按非字母数字分割，保留整词
@@ -5371,6 +5407,11 @@ namespace iBarter {
                 AddZhTwIslandAlias(zhTw, zhTwAliases, "酷斯海賊團", EnumLists.Island.Cox_Pirate);
                 AddZhTwIslandAlias(zhTw, zhTwAliases, "柯魯之巢", EnumLists.Island.Crows_Nest);
                 AddZhTwIslandAlias(zhTw, zhTwAliases, "西奧尼爾", EnumLists.Island.Theonil);
+                // Observed OCR for 莎莎島: the game font caused both 莎
+                // characters to be read as 蘇. Keep this as a narrow alias;
+                // otherwise fuzzy matching prefers 塔蘇島 because "蘇島"
+                // remains intact in the damaged text.
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "蘇蘇島", EnumLists.Island.Shasha);
                 // The canonical in-game name is also kept as an explicit
                 // alias so OCR still works if an older deployed sidecar is
                 // present. OCR may capture a leading row glyph such as

@@ -452,6 +452,309 @@ public class RouteProgressPipelineTests {
             item => item.ItemId == "MID" && item.Quantity == 10);
     }
 
+    [Fact]
+    public void CompletionProgress_AppliesCorrelatedCleanupWithoutBreakingWarehouseHandoff() {
+        // Removing either obsolete A or B alone still leaves route 1
+        // overweight after ACTIVE produces D. Both completed-prefix inputs
+        // must be removed as one coherent route cleanup. Route 2's X looks
+        // route-locally redundant, but it is deliberately unloaded into W2
+        // for route 3 and therefore must survive conservative normalization.
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["A"] = new("A", "A", 1, 40),
+            ["B"] = new("B", "B", 1, 40),
+            ["C"] = new("C", "C", 1, 20),
+            ["D"] = new("D", "D", 1, 70),
+            ["ZA"] = new("ZA", "ZA", 0, 0),
+            ["ZB"] = new("ZB", "ZB", 0, 0),
+            ["X"] = new("X", "X", 1, 10),
+            ["E"] = new("E", "E", 1, 10),
+            ["F"] = new("F", "F", 1, 10),
+            ["G"] = new("G", "G", 1, 10),
+        };
+        RouteBarterTask[] allTasks = [
+            new("c1", "C1", new RoutePoint(0, 0), "A", 1, "ZA", 1),
+            new("c2", "C2", new RoutePoint(0, 0), "B", 1, "ZB", 1),
+            new("active", "ACTIVE", new RoutePoint(0, 0), "C", 1, "D", 1),
+            new("active2", "ACTIVE2", new RoutePoint(0, 0), "E", 1, "F", 1),
+            new("active3", "ACTIVE3", new RoutePoint(0, 0), "X", 1, "G", 1),
+        ];
+        RouteWarehouse[] warehouses = [
+            new("W1", "W1", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) {
+                    ["A"] = 1,
+                    ["B"] = 1,
+                    ["C"] = 1,
+                    ["X"] = 1,
+                    ["E"] = 1,
+                }),
+            new("W2", "W2", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) {
+                    ["X"] = 0,
+                }),
+        ];
+        var originalRequest = new AutomaticRoutePlanningRequest(
+            allTasks,
+            items,
+            warehouses,
+            0,
+            100,
+            new RouteSearchLimits(100_000, 1_000),
+            "correlated-progress-cleanup");
+        var skeleton = new RoutePlan(
+            RoutePlanStatus.Optimal,
+            [
+                new PlannedRoute(
+                    1, "W1", "W1",
+                    [
+                        Pickup("W1", ("A", 1), ("B", 1), ("C", 1)),
+                        new BarterStep("c1", "C1", new("A", 1), new("ZA", 1), ZeroLoad),
+                        new BarterStep("c2", "C2", new("B", 1), new("ZB", 1), ZeroLoad),
+                        new BarterStep("active", "ACTIVE", new("C", 1), new("D", 1), ZeroLoad),
+                        Unload("W1", ("ZA", 1), ("ZB", 1), ("D", 1)),
+                    ],
+                    0, 0, 0, 0),
+                new PlannedRoute(
+                    2, "W1", "W2",
+                    [
+                        Pickup("W1", ("X", 1), ("E", 1)),
+                        new BarterStep("active2", "ACTIVE2", new("E", 1), new("F", 1), ZeroLoad),
+                        Unload("W2", ("X", 1), ("F", 1)),
+                    ],
+                    0, 0, 0, 0),
+                new PlannedRoute(
+                    3, "W2", "W2",
+                    [
+                        Pickup("W2", ("X", 1)),
+                        new BarterStep("active3", "ACTIVE3", new("X", 1), new("G", 1), ZeroLoad),
+                        Unload("W2", ("G", 1)),
+                    ],
+                    0, 0, 0, 0),
+            ],
+            null,
+            [],
+            RoutePlanFingerprint.Compute(originalRequest));
+        RoutePlanReplayResult originalReplay =
+            RouteReplay.ReplayPlan(originalRequest, skeleton);
+        Assert.True(originalReplay.Success,
+            RouteReplay.FormatFailureDetail(originalReplay.Failure));
+        var progressRequest = new AutomaticRoutePlanningRequest(
+            allTasks.Where(task => task.RowId is not ("c1" or "c2")).ToArray(),
+            items,
+            warehouses,
+            0,
+            100,
+            originalRequest.Limits,
+            originalRequest.ConfigurationVersion);
+
+        RoutePlanPublicationResult prepared =
+            RoutePlanPublication.PreparePlanForPublication(
+                progressRequest,
+                originalReplay.Plan!,
+                RoutePlanPublicationSource.CompletionProgress,
+                new HashSet<string>(StringComparer.Ordinal) { "c1", "c2" });
+
+        Assert.True(prepared.Success,
+            $"{prepared.Failure?.Code}: {prepared.Failure?.Detail}");
+        WarehousePickupStep firstPickup =
+            Assert.IsType<WarehousePickupStep>(prepared.Plan!.Routes[0].Steps[0]);
+        Assert.Equal(["C"], firstPickup.Items.Select(item => item.ItemId).ToArray());
+        WarehouseUnloadStep handoff =
+            Assert.IsType<WarehouseUnloadStep>(prepared.Plan.Routes[1].Steps[^1]);
+        Assert.Contains(handoff.Items, item => item.ItemId == "X");
+        WarehousePickupStep downstreamPickup =
+            Assert.IsType<WarehousePickupStep>(prepared.Plan.Routes[2].Steps[0]);
+        Assert.Contains(downstreamPickup.Items, item => item.ItemId == "X");
+    }
+
+    [Fact]
+    public void CompletionProgress_PreservesHandoffCarriedByPartiallyCompletedRoute() {
+        // The completed prefix leaves A and B as obsolete pickup cargo. Both
+        // must be removed together before ACTIVE fits, while X must remain on
+        // the same route because it is ferried from W1 to W2 for route 2.
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["A"] = new("A", "A", 1, 30),
+            ["B"] = new("B", "B", 1, 30),
+            ["C"] = new("C", "C", 1, 10),
+            ["X"] = new("X", "X", 1, 30),
+            ["D"] = new("D", "D", 2, 60),
+            ["ZA"] = new("ZA", "ZA", 0, 0),
+            ["ZB"] = new("ZB", "ZB", 0, 0),
+            ["G"] = new("G", "G", 2, 30),
+        };
+        RouteBarterTask[] allTasks = [
+            new("c1", "C1", new RoutePoint(1, 0), "A", 1, "ZA", 1),
+            new("c2", "C2", new RoutePoint(2, 0), "B", 1, "ZB", 1),
+            new("active", "ACTIVE", new RoutePoint(3, 0), "C", 1, "D", 1),
+            new("next", "NEXT", new RoutePoint(4, 0), "X", 1, "G", 1),
+        ];
+        RouteWarehouse[] warehouses = [
+            new("W1", "W1", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) {
+                    ["A"] = 1,
+                    ["B"] = 1,
+                    ["C"] = 1,
+                    ["X"] = 1,
+                }),
+            new("W2", "W2", new RoutePoint(5, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) {
+                    ["X"] = 0,
+                }),
+        ];
+        var originalRequest = new AutomaticRoutePlanningRequest(
+            allTasks,
+            items,
+            warehouses,
+            0,
+            100,
+            new RouteSearchLimits(100_000, 1_000),
+            "partial-route-handoff");
+        var skeleton = new RoutePlan(
+            RoutePlanStatus.Optimal,
+            [
+                new PlannedRoute(
+                    1, "W1", "W2",
+                    [
+                        Pickup("W1", ("A", 1), ("B", 1), ("C", 1), ("X", 1)),
+                        Barter("c1", "A", 1, "ZA", 1),
+                        Barter("c2", "B", 1, "ZB", 1),
+                        Barter("active", "C", 1, "D", 1),
+                        Unload("W2", ("X", 1), ("D", 1)),
+                    ],
+                    0, 0, 0, 0),
+                new PlannedRoute(
+                    2, "W2", "W2",
+                    [
+                        Pickup("W2", ("X", 1)),
+                        Barter("next", "X", 1, "G", 1),
+                        Unload("W2", ("G", 1)),
+                    ],
+                    0, 0, 0, 0),
+            ],
+            null,
+            [],
+            RoutePlanFingerprint.Compute(originalRequest));
+        RoutePlanReplayResult originalReplay =
+            RouteReplay.ReplayPlan(originalRequest, skeleton);
+        Assert.True(originalReplay.Success,
+            RouteReplay.FormatFailureDetail(originalReplay.Failure));
+        var progressRequest = new AutomaticRoutePlanningRequest(
+            allTasks.Where(task => task.RowId is not ("c1" or "c2")).ToArray(),
+            items,
+            warehouses,
+            0,
+            100,
+            originalRequest.Limits,
+            originalRequest.ConfigurationVersion);
+
+        RoutePlanPublicationResult prepared =
+            RoutePlanPublication.PreparePlanForPublication(
+                progressRequest,
+                originalReplay.Plan!,
+                RoutePlanPublicationSource.CompletionProgress,
+                new HashSet<string>(StringComparer.Ordinal) { "c1", "c2" });
+
+        Assert.True(prepared.Success,
+            $"{prepared.Failure?.Code}: {prepared.Failure?.Detail}");
+        WarehousePickupStep firstPickup =
+            Assert.IsType<WarehousePickupStep>(prepared.Plan!.Routes[0].Steps[0]);
+        Assert.DoesNotContain(firstPickup.Items, item => item.ItemId is "A" or "B");
+        Assert.Contains(firstPickup.Items, item => item.ItemId == "X");
+        WarehouseUnloadStep handoff =
+            Assert.IsType<WarehouseUnloadStep>(prepared.Plan.Routes[0].Steps[^1]);
+        Assert.Contains(handoff.Items, item => item.ItemId == "X");
+        WarehousePickupStep downstreamPickup =
+            Assert.IsType<WarehousePickupStep>(prepared.Plan.Routes[1].Steps[0]);
+        Assert.Contains(downstreamPickup.Items, item => item.ItemId == "X");
+    }
+
+    [Fact]
+    public void CompletionProgress_ReplaysImmediateUnloadBeforeNextWarehousePickup() {
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["SYRUP"] = new("SYRUP", "Syrup", 6, 2_000),
+            ["TELESCOPE"] = new("TELESCOPE", "Telescope", 7, 2_000),
+            ["NEXT-IN"] = new("NEXT-IN", "Next input", 3, 900),
+            ["NEXT-OUT"] = new("NEXT-OUT", "Next output", 4, 1_000),
+        };
+        var originalRequest = new AutomaticRoutePlanningRequest(
+            [
+                new RouteBarterTask("finish", "Iliya", new RoutePoint(10, 0),
+                    "SYRUP", 5, "TELESCOPE", 5),
+                new RouteBarterTask("next", "Tigris", new RoutePoint(20, 0),
+                    "NEXT-IN", 10, "NEXT-OUT", 20),
+            ],
+            items,
+            [
+                new RouteWarehouse("Velia", "Velia", new RoutePoint(0, 0),
+                    new Dictionary<string, int>(StringComparer.Ordinal) {
+                        ["SYRUP"] = 5,
+                    }),
+                new RouteWarehouse("Iliya", "Iliya", new RoutePoint(10, 0),
+                    new Dictionary<string, int>(StringComparer.Ordinal) {
+                        ["NEXT-IN"] = 10,
+                    }),
+            ],
+            0,
+            30_000,
+            new RouteSearchLimits(100_000, 1_000),
+            "progress-immediate-unload");
+        var skeleton = new RoutePlan(
+            RoutePlanStatus.Optimal,
+            [
+                new PlannedRoute(
+                    1,
+                    "Velia",
+                    "Iliya",
+                    [
+                        Pickup("Velia", ("SYRUP", 5)),
+                        MakeBarterAt("finish", "Iliya",
+                            "SYRUP", 5, "TELESCOPE", 5),
+                        Unload("Iliya", ("TELESCOPE", 5)),
+                        Pickup("Iliya", ("NEXT-IN", 10)),
+                        MakeBarterAt("next", "Tigris",
+                            "NEXT-IN", 10, "NEXT-OUT", 20),
+                        Unload("Iliya", ("NEXT-OUT", 20)),
+                    ],
+                    0,
+                    0,
+                    0,
+                    0),
+            ],
+            null,
+            [],
+            RoutePlanFingerprint.Compute(originalRequest));
+        RoutePlanReplayResult replayed =
+            RouteReplay.ReplayPlan(originalRequest, skeleton);
+        Assert.True(replayed.Success,
+            RouteReplay.FormatFailureDetail(replayed.Failure));
+        var progressRequest = new AutomaticRoutePlanningRequest(
+            originalRequest.Tasks.Where(task => task.RowId == "next").ToArray(),
+            originalRequest.Items,
+            originalRequest.Warehouses,
+            originalRequest.ExtraLT,
+            originalRequest.TotalLT,
+            originalRequest.Limits,
+            originalRequest.ConfigurationVersion);
+
+        RoutePlanPublicationResult prepared =
+            RoutePlanPublication.PreparePlanForPublication(
+                progressRequest,
+                replayed.Plan!,
+                RoutePlanPublicationSource.CompletionProgress,
+                new HashSet<string>(StringComparer.Ordinal) { "finish" });
+
+        Assert.True(prepared.Success,
+            $"{prepared.Failure?.Code}: {prepared.Failure?.Detail}");
+        PlannedRoute remaining = Assert.Single(prepared.Plan!.Routes);
+        WarehouseUnloadStep first =
+            Assert.IsType<WarehouseUnloadStep>(remaining.Steps[0]);
+        Assert.Contains(first.Items,
+            item => item.ItemId == "TELESCOPE" && item.Quantity == 5);
+        Assert.IsType<WarehousePickupStep>(remaining.Steps[1]);
+        Assert.Equal(
+            "next",
+            Assert.IsType<BarterStep>(remaining.Steps[2]).RowId);
+    }
+
     private static RoutePlan ApplyPipeline(
         AutomaticRoutePlanningRequest request, RoutePlan plan, HashSet<string> completed) {
         var newRoutes = new List<PlannedRoute>();

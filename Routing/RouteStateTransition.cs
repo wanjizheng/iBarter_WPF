@@ -139,7 +139,13 @@ public static class RouteStateTransition {
         var warehouse = request.Warehouses.FirstOrDefault(x => x.WarehouseId == warehouseId);
         if (warehouse is null || !state.WarehouseInventory.ContainsKey(warehouseId))
             return Failure(state, "unknown-warehouse", detail: warehouseId);
-        if (!state.CurrentRouteSteps.OfType<BarterStep>().Any())
+        // A completion-progress projection can remove an already completed
+        // barter while carrying its output in InitialOnBoard.  If that barter
+        // was followed by an immediate warehouse deposit, the remaining route
+        // legitimately starts with a partial unload before continuing to its
+        // next pickup/barter.  Keep rejecting unload-only route completion,
+        // but allow this non-terminal handoff to be replayed and verified.
+        if (finishRoute && !state.CurrentRouteSteps.OfType<BarterStep>().Any())
             return Failure(state, "empty-route", detail: warehouseId);
 
         var requested = items
@@ -185,13 +191,17 @@ public static class RouteStateTransition {
         onboard.Clear();
         var routeSteps = state.CurrentRouteSteps.Append(step).ToArray();
         var firstPickup = routeSteps.OfType<WarehousePickupStep>().FirstOrDefault();
-        int initialLT = firstPickup?.Load.TotalWithExtraLT ??
-            checked(request.ExtraLT + ComputeCargoLT(request, request.InitialOnBoard));
+        string startWarehouseId = routeSteps[0] switch {
+            WarehousePickupStep pickup => pickup.WarehouseId,
+            WarehouseUnloadStep unload => unload.WarehouseId,
+            _ => firstPickup?.WarehouseId ?? warehouseId,
+        };
+        int initialLT = routeSteps[0].Load.TotalWithExtraLT;
         double finishedDistance = state.FinishedRoutes.Sum(x => x.Distance);
         double routeDistance = state.TotalDistance + legDistance - finishedDistance;
         var route = new PlannedRoute(
             state.CurrentRouteNumber,
-            firstPickup?.WarehouseId ?? warehouseId,
+            startWarehouseId,
             warehouseId,
             routeSteps,
             routeDistance,

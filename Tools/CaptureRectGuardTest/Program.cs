@@ -4,6 +4,7 @@ using iBarter;
 using iBarter.View;
 using PureDM;
 using PureDM.DmSoft;
+using Syncfusion.UI.Xaml.Grid;
 
 var islandResolver = new CFunctions();
 if (islandResolver.IslandEnum("Velia") != EnumLists.Island.Velia) {
@@ -102,6 +103,7 @@ var observedEnglishIslandNames = new (string Input, EnumLists.Island Expected)[]
 foreach (var sample in observedEnglishIslandNames) {
     ExpectIsland(sample.Input, sample.Expected);
 }
+ExpectIsland("一、苏苏岛", EnumLists.Island.Shasha);
 if (args.Contains("--island-fuzz-audit", StringComparer.Ordinal)) {
     var wrongMatches = new List<string>();
     var unknownMatches = new List<string>();
@@ -211,11 +213,154 @@ if (islandResolver.IslandEnumSmart("~~. Gréndiha") != EnumLists.Island.Grandiha
         "Expected English OCR edge noise and an accented vowel in Gréndiha to resolve to Grandiha.");
     return 1;
 }
+foreach (string query in new[] { "纱帽箱子", "纱帽" }) {
+    if (!LocalizedMultiColumnDropDownControl.MatchesBySearchCondition(
+            "最高级纱帽箱子",
+            query,
+            StringComparison.CurrentCultureIgnoreCase,
+            SearchCondition.Contains)) {
+        Console.Error.WriteLine(
+            $"Expected item autocomplete to find \"最高级纱帽箱子\" from the middle query \"{query}\".");
+        return 1;
+    }
+}
+string plannerGroupingSource = File.ReadAllText(Path.Combine(
+    FindIBarterRepoRoot(), "View", "PlannerControl.xaml.cs"));
+int plannerGroupEndInitIndex = plannerGroupingSource.IndexOf(
+    "plannerView?.EndInit();", StringComparison.Ordinal);
+int plannerGroupProgrammaticBeginIndex = plannerGroupingSource.IndexOf(
+    "plannerView?.BeginInit(true);", StringComparison.Ordinal);
+int plannerGroupSearchStart = Math.Max(0, plannerGroupEndInitIndex);
+int plannerGroupReinitializeIndex = plannerGroupingSource.IndexOf(
+    "currentView.BeginInit(true);", plannerGroupSearchStart,
+    StringComparison.Ordinal);
+int plannerGroupProgrammaticRefreshIndex = plannerGroupingSource.IndexOf(
+    "currentView.Refresh();", Math.Max(0, plannerGroupReinitializeIndex),
+    StringComparison.Ordinal);
+int plannerGroupDeferredRefreshIndex = plannerGroupingSource.IndexOf(
+    "new Action(RefreshPlannerGroupingView)", plannerGroupSearchStart,
+    StringComparison.Ordinal);
+if (plannerGroupEndInitIndex < 0
+    || plannerGroupProgrammaticBeginIndex < 0
+    || plannerGroupProgrammaticBeginIndex > plannerGroupEndInitIndex
+    || plannerGroupReinitializeIndex < plannerGroupEndInitIndex
+    || plannerGroupProgrammaticRefreshIndex < plannerGroupReinitializeIndex
+    || plannerGroupDeferredRefreshIndex < plannerGroupEndInitIndex) {
+    Console.Error.WriteLine(
+        "Expected Planner grouping to rebuild and programmatically refresh the existing view " +
+        "after committing group descriptions, including one deferred data-binding pass.");
+    return 1;
+}
+if (args.Contains("--planner-group-only", StringComparer.Ordinal)) {
+    Console.WriteLine(
+        "Planner grouping view-refresh contract passed.");
+    return 0;
+}
+if (args.Contains("--planner-filter-input-only", StringComparer.Ordinal)) {
+    MethodInfo? isSelectableDataRowIndex = typeof(SfDataGridSelectionHoverGuard).GetMethod(
+        "IsSelectableDataRowIndex",
+        BindingFlags.NonPublic | BindingFlags.Static);
+    if (isSelectableDataRowIndex == null) {
+        Console.Error.WriteLine(
+            "Expected the Planner hover guard to expose a non-data-row boundary helper.");
+        return 1;
+    }
+
+    foreach (var sample in new[] {
+                 (RowIndex: -1, Expected: false),
+                 (RowIndex: 0, Expected: false),
+                 (RowIndex: 1, Expected: true),
+             }) {
+        bool? actual = isSelectableDataRowIndex.Invoke(null, [sample.RowIndex]) as bool?;
+        if (actual != sample.Expected) {
+            Console.Error.WriteLine(
+                $"Planner hover row-index boundary failed for {sample.RowIndex}: " +
+                $"actual={actual}, expected={sample.Expected}.");
+            return 1;
+        }
+    }
+
+    Console.WriteLine(
+        "Planner filter-popup mouse-input row-index boundary contract passed.");
+    return 0;
+}
+if (args.Contains("--map-input-only", StringComparer.Ordinal)) {
+    string mapInputSource = File.ReadAllText(Path.Combine(
+        FindIBarterRepoRoot(), "View", "MapControl.xaml.cs"));
+    string mapInputXaml = File.ReadAllText(Path.Combine(
+        FindIBarterRepoRoot(), "View", "MapControl.xaml"));
+    bool hasPreviewMouseUp = mapInputXaml.Contains(
+        "PreviewMouseLeftButtonUp=\"MapViewport_MouseLeftButtonUp\"",
+        StringComparison.Ordinal);
+    bool hasLostCapture = mapInputXaml.Contains(
+        "LostMouseCapture=\"MapViewport_LostMouseCapture\"",
+        StringComparison.Ordinal);
+    bool moveReleasesStaleCapture = mapInputSource.Contains(
+        "if (e.LeftButton != MouseButtonState.Pressed)", StringComparison.Ordinal)
+        && mapInputSource.Contains("EndMapPan();", StringComparison.Ordinal);
+    bool unloadReleasesCapture = mapInputSource.Contains(
+        "this.Unloaded += (_, _) => {\r\n                EndMapPan();",
+        StringComparison.Ordinal)
+        || mapInputSource.Contains(
+            "this.Unloaded += (_, _) => {\n                EndMapPan();",
+            StringComparison.Ordinal);
+    if (!hasPreviewMouseUp
+        || !hasLostCapture
+        || !moveReleasesStaleCapture
+        || !unloadReleasesCapture) {
+        Console.Error.WriteLine(
+            "Expected map panning to release mouse capture on preview-up, lost-capture, stale-button and unload paths.");
+        return 1;
+    }
+    Console.WriteLine(
+        "Map mouse-capture release contract passed.");
+    return 0;
+}
+
+var crowCoin = new Items("Crow Coin", "10", "1");
+var fig = new Items("Fig", "7018", "0");
+var portrait = new Items("Portrait of the Ancient", "800067", "5");
+foreach (string damagedCrowText in new[] {
+             "",
+             "户 耶z画十",
+             "户 了邓芋十",
+             "户允芋十",
+             "户 邓芋十",
+         }) {
+    var candidates = new List<Items> { fig, portrait };
+    CFunctions.PreferCrowCoinCandidateWhenTierPrefixMissing(
+        damagedCrowText, candidates, new[] { fig, portrait, crowCoin });
+    if (candidates.Count != 3 || candidates[0].ItemID != "10") {
+        Console.Error.WriteLine(
+            $"Expected damaged tierless slot2 OCR \"{damagedCrowText}\" to probe Crow Coin first.");
+        return 1;
+    }
+}
+foreach (string tieredRewardText in new[] {
+             "[4阶段]万灵药",
+             "[4階段]萬靈藥",
+             "[Level 4] Panacea",
+         }) {
+    var candidates = new List<Items> { fig, portrait };
+    CFunctions.PreferCrowCoinCandidateWhenTierPrefixMissing(
+        tieredRewardText, candidates, new[] { fig, portrait, crowCoin });
+    if (candidates.Any(i => i.ItemID == "10")) {
+        Console.Error.WriteLine(
+            $"Expected tiered slot2 OCR \"{tieredRewardText}\" not to inject Crow Coin.");
+        return 1;
+    }
+}
+if (args.Contains("--crow-coin-only", StringComparer.Ordinal)) {
+    Console.WriteLine(
+        "Crow Coin damaged-label candidate selection contract passed.");
+    return 0;
+}
+
 if (args.Contains("--island-only", StringComparer.Ordinal)) {
     int canonicalCaseCount =
         (Enum.GetValues<EnumLists.Island>().Length - 1) * 3;
     int totalCaseCount =
-        canonicalCaseCount + zhTwCatalogCaseCount + observedEnglishIslandNames.Length + 2;
+        canonicalCaseCount + zhTwCatalogCaseCount + observedEnglishIslandNames.Length + 3;
     Console.WriteLine(
         $"Island matching audit passed: {totalCaseCount} canonical, suffix, alias and OCR-noise cases.");
     return 0;

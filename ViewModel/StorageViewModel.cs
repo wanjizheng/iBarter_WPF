@@ -49,6 +49,36 @@ namespace iBarter.ViewModel {
         private bool _storageChangedPending;
         private readonly HashSet<Items> _subscribedStorageItems = new();
 
+        // StorageManager keeps this requested exchange tier at the top of the
+        // ledger. IDs (rather than display names) make the order independent of
+        // the active UI language and catalog-name refreshes.
+        private static readonly string[] PriorityStorageItemIds = {
+            "800224", // Sharp Safflower Blade Crate
+            "800223", // Brass Bowl Crate
+            "800222", // Top-Quality Gamtu Crate
+            "800221", // Top-Quality Blue Underglaze Porcelain Crate
+            "800220", // Hanji Country Wild Berry Crate
+            "800219", // High-quality Ink-scented Box
+            "800218", // Nampo Persimmon Crate
+            "800217", // Bamboo Sap Crate
+            "800216", // Shadow Ornament Mirror
+            "800215", // Moonshade Aged Wine
+            "800214", // Moonlit Crystal Shard
+            "800213", // Black Rose Bouquet
+            "800212", // Mossy Silver Log Decoration
+            "800211", // Moonlit Crystal Lamp
+            "800210", // Kamasylvian Sculpture
+            "800209", // Forest Fairy Perfume
+            "800208", // Golden Cactus Bouquet
+            "800207", // Miniature Arehaza Lighthouse
+            "800206", // Traditional Arehazan Tea
+            "800205", // Top-Quality Coconut Syrup
+            "800204", // Golden Sand Ring
+            "800203", // Fancy Camel Hide
+            "800202", // Valencian Desert Fine Sword
+            "800201", // Valencia Sand Shield
+        };
+
         public event EventHandler? StorageChanged;
 
         #region Constructor
@@ -188,6 +218,7 @@ namespace iBarter.ViewModel {
                 // myStorage_Data.json. LV7 terminal outputs are intentionally not
                 // tracked by StorageManager.
                 SeedHardcodedFallback();
+                ApplyPreferredDisplayOrder();
             }
         }
 
@@ -358,6 +389,29 @@ namespace iBarter.ViewModel {
             return hydrated;
         }
 
+        private void ApplyPreferredDisplayOrder() {
+            var priority = PriorityStorageItemIds
+                .Select((itemId, index) => new { itemId, index })
+                .ToDictionary(pair => pair.itemId, pair => pair.index, StringComparer.Ordinal);
+            var ordered = StorageCollection
+                .Where(item => priority.ContainsKey(item.ItemID))
+                .OrderBy(item => priority[item.ItemID])
+                // Keep every non-priority item in its existing order, so the
+                // historic LV5 and lower ordering remains unchanged.
+                .Concat(StorageCollection.Where(item => !priority.ContainsKey(item.ItemID)))
+                .ToList();
+
+            if (StorageCollection.Select(item => item.ItemID)
+                .SequenceEqual(ordered.Select(item => item.ItemID), StringComparer.Ordinal)) {
+                return;
+            }
+
+            StorageCollection.Clear();
+            foreach (Items item in ordered) {
+                StorageCollection.Add(item);
+            }
+        }
+
         // Hardcoded list of items that should always be visible in the storage
         // grid even on a fresh install. Mirrors the tracked LV5/LV6 barter set
         // the user is most likely to plan around; new items get appended as the
@@ -460,7 +514,6 @@ namespace iBarter.ViewModel {
             listItems.Add("Traditional Arehazan Tea");
             listItems.Add("Valencia Sand Shield");
             listItems.Add("Valencian Desert Fine Sword");
-            listItems.Add("Golden Flour Sack");
             listItems.Add("Omar Lava Powder");
             listItems.Add("Artisan Seashell Necklace");
             for (int i = 0; i < listItems.Count; i++) {

@@ -73,6 +73,14 @@ public static class AutomaticRoutePlanningAdapter {
                 group => group.Key,
                 group => group.Sum(row => (long)row.ExchangeQuantity * row.Item1Number),
                 StringComparer.Ordinal);
+        var selfSuppliedLandMaterials = activeRows
+            .Where(row => row.Item1Level == 0 && row.Item2Level == 1)
+            .GroupBy(row => row.Item1Id, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => checked((int)group.Sum(
+                    row => (long)row.ExchangeQuantity * row.Item1Number)),
+                StringComparer.Ordinal);
         var storedTotals = storageItems
             .Where(item => !string.IsNullOrWhiteSpace(item.ItemId))
             .GroupBy(item => item.ItemId, StringComparer.Ordinal)
@@ -125,6 +133,16 @@ public static class AutomaticRoutePlanningAdapter {
                     _ => x.Ancado,
                 },
                 StringComparer.Ordinal);
+            // Land materials exchanged directly for LV1 barter goods are supplied
+            // by the player outside StorageManager. Treat the full selected demand
+            // as available at every supported warehouse island so route planning
+            // still chooses and renders a real warehouse pickup, while neither
+            // inventory feasibility nor warehouse choice depends on data the app
+            // does not track.
+            foreach (var pair in selfSuppliedLandMaterials)
+                inventory[pair.Key] = Math.Max(
+                    inventory.GetValueOrDefault(pair.Key),
+                    pair.Value);
             return new RouteWarehouse(
                 mapping.WarehouseId,
                 mapping.IslandId,

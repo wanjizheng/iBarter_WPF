@@ -89,6 +89,43 @@ public sealed class RouteStateTransitionTests {
     }
 
     [Fact]
+    public void Progress_carry_can_be_partially_unloaded_before_remaining_route_starts() {
+        var baseline = RouteTestData.SingleTask();
+        var request = new AutomaticRoutePlanningRequest(
+            baseline.Tasks,
+            baseline.Items,
+            baseline.Warehouses,
+            baseline.ExtraLT,
+            baseline.TotalLT,
+            baseline.Limits,
+            baseline.ConfigurationVersion,
+            new Dictionary<string, int>(StringComparer.Ordinal) {
+                ["OUT"] = 1,
+            });
+        var initial = RouteSimulationState.CreateInitial(request);
+
+        var partial = RouteStateTransition.TryUnload(
+            request,
+            initial,
+            "W",
+            [new RouteItemQuantity("OUT", 1)],
+            finishRoute: false);
+        var invalidFinish = RouteStateTransition.TryUnload(
+            request,
+            initial,
+            "W",
+            [new RouteItemQuantity("OUT", 1)],
+            finishRoute: true);
+
+        Assert.True(partial.Success);
+        Assert.Empty(partial.State.OnBoard);
+        Assert.Empty(partial.State.FinishedRoutes);
+        Assert.IsType<WarehouseUnloadStep>(partial.State.CurrentRouteSteps.Single());
+        Assert.False(invalidFinish.Success);
+        Assert.Equal("empty-route", invalidFinish.Diagnostic?.Code);
+    }
+
+    [Fact]
     public void Route_distance_uses_the_same_right_region_corridor_in_both_directions() {
         var items = new Dictionary<string, RouteItem> {
             ["IN"] = new("IN", "Input", 1, 100),

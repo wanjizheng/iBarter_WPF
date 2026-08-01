@@ -33,7 +33,8 @@ public sealed class PlannerInventoryReconciler {
         IEnumerable<PlannerWarehouseInventory> currentInventory,
         IEnumerable<PlannerInventoryExchange> exchanges,
         int defaultWarehouseIndex,
-        ISet<string>? ignoredOutputItemIds = null) {
+        ISet<string>? ignoredOutputItemIds = null,
+        ISet<string>? ignoredInputItemIds = null) {
         ArgumentNullException.ThrowIfNull(currentInventory);
         ArgumentNullException.ThrowIfNull(exchanges);
 
@@ -42,6 +43,7 @@ public sealed class PlannerInventoryReconciler {
         }
 
         ignoredOutputItemIds ??= new HashSet<string>(StringComparer.Ordinal);
+        ignoredInputItemIds ??= new HashSet<string>(StringComparer.Ordinal);
         var errors = new List<PlannerInventoryError>();
         var inventory = new Dictionary<string, PlannerWarehouseInventory>(StringComparer.Ordinal);
 
@@ -68,8 +70,10 @@ public sealed class PlannerInventoryReconciler {
             }
 
             try {
-                AddDelta(deltas, exchange.Item1Id,
-                    checked(-(long)exchange.ExchangeQuantity * exchange.Item1Number));
+                if (!ignoredInputItemIds.Contains(exchange.Item1Id)) {
+                    AddDelta(deltas, exchange.Item1Id,
+                        checked(-(long)exchange.ExchangeQuantity * exchange.Item1Number));
+                }
                 if (!ignoredOutputItemIds.Contains(exchange.Item2Id)) {
                     AddDelta(deltas, exchange.Item2Id,
                         checked((long)exchange.ExchangeQuantity * exchange.Item2Number));

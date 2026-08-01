@@ -101,6 +101,27 @@ public static class RoutePairRebuilder {
         IReadOnlyList<PlannedRoute> routes,
         int left,
         int right) {
+        RouteSimulationState? normal = TryRebuild(
+            request, routes, left, right, preferWarehouseBoundaryRelease: false);
+        RouteSimulationState? boundaryFirst = TryRebuild(
+            request, routes, left, right, preferWarehouseBoundaryRelease: true);
+        if (normal is null) return boundaryFirst;
+        if (boundaryFirst is null) return normal;
+        RoutePlanObjective normalObjective = RoutePlanFactory.FromState(
+            request, normal, RoutePlanStatus.BestKnownWithinLimit, []).Objective!.Value;
+        RoutePlanObjective boundaryObjective = RoutePlanFactory.FromState(
+            request, boundaryFirst, RoutePlanStatus.BestKnownWithinLimit, []).Objective!.Value;
+        return boundaryObjective.CompareTo(normalObjective) < 0
+            ? boundaryFirst
+            : normal;
+    }
+
+    private static RouteSimulationState? TryRebuild(
+        AutomaticRoutePlanningRequest request,
+        IReadOnlyList<PlannedRoute> routes,
+        int left,
+        int right,
+        bool preferWarehouseBoundaryRelease) {
         var pooledIndexes = routes[left].Steps.OfType<BarterStep>()
             .Concat(routes[right].Steps.OfType<BarterStep>())
             .Select(x => FindTaskIndex(request, x.RowId))
@@ -110,7 +131,11 @@ public static class RoutePairRebuilder {
         var state = RouteSimulationState.CreateInitial(request);
         for (int routeIndex = 0; routeIndex < routes.Count; routeIndex++) {
             if (routeIndex == left) {
-                var rebuilt = BuildPooledRoutes(request, state, pooledIndexes);
+                var rebuilt = BuildPooledRoutes(
+                    request,
+                    state,
+                    pooledIndexes,
+                    preferWarehouseBoundaryRelease);
                 if (rebuilt is null) return null;
                 state = rebuilt;
                 continue;
@@ -126,7 +151,8 @@ public static class RoutePairRebuilder {
     private static RouteSimulationState? BuildPooledRoutes(
         AutomaticRoutePlanningRequest request,
         RouteSimulationState start,
-        IReadOnlyList<int> taskIndexes) {
+        IReadOnlyList<int> taskIndexes,
+        bool preferWarehouseBoundaryRelease) {
         ulong poolMask = taskIndexes.Aggregate(0UL, (mask, index) => mask | 1UL << index);
         var state = start;
         int guard = Math.Max(100, taskIndexes.Count * request.Warehouses.Count * 40);
@@ -143,10 +169,18 @@ public static class RoutePairRebuilder {
                 .FirstOrDefault();
             if (executable.Result is not null) {
                 state = executable.Result.State;
+                ulong remainingAfterBarter = poolMask & ~state.CompletedMask;
+                state = WarehouseBoundaryOptimizer.UnloadTerminalRewardIfPossible(
+                    request,
+                    state,
+                    executable.Index,
+                    hasRemainingWork: remainingAfterBarter != 0,
+                    out _);
                 continue;
             }
 
-            var pickups = new List<(int Supported, double Distance, int CargoLT, string WarehouseId,
+            var pickups = new List<(bool BoundaryRelease, int Supported,
+                double Distance, int CargoLT, string WarehouseId,
                 string StableKey, RouteTransitionResult Result)>();
             foreach (var warehouse in request.Warehouses.OrderBy(x => x.WarehouseId, StringComparer.Ordinal)) {
                 if (state.VisitedWarehouseIds.Contains(warehouse.WarehouseId)) continue;
@@ -154,6 +188,12 @@ public static class RoutePairRebuilder {
                     var result = RouteStateTransition.TryPickup(request, state, warehouse.WarehouseId, bundle.Items);
                     if (!result.Success) continue;
                     pickups.Add((
+                        SupportsWarehouseBoundaryRelease(
+                            request,
+                            state,
+                            warehouse.WarehouseId,
+                            remaining,
+                            bundle.SupportedTaskMask),
                         BitOperations.PopCount(bundle.SupportedTaskMask & remaining),
                         result.State.TotalDistance - state.TotalDistance,
                         bundle.TotalCargoLT,
@@ -163,7 +203,9 @@ public static class RoutePairRebuilder {
                 }
             }
             var pickup = pickups
-                .OrderByDescending(x => x.Supported)
+                .OrderByDescending(x =>
+                    preferWarehouseBoundaryRelease && x.BoundaryRelease)
+                .ThenByDescending(x => x.Supported)
                 .ThenBy(x => x.Distance)
                 .ThenBy(x => x.CargoLT)
                 .ThenBy(x => x.WarehouseId, StringComparer.Ordinal)
@@ -188,6 +230,40 @@ public static class RoutePairRebuilder {
         if (state.CurrentRouteSteps.Count == 0) return state;
         var finalUnload = WarehouseUnloadPlanner.TryCompleteRoute(request, state);
         return finalUnload.Success ? finalUnload.State : null;
+    }
+
+    private static bool SupportsWarehouseBoundaryRelease(
+        AutomaticRoutePlanningRequest request,
+        RouteSimulationState state,
+        string pickupWarehouseId,
+        ulong remaining,
+        ulong supportedTaskMask) {
+        ulong supported = supportedTaskMask & remaining;
+        while (supported != 0) {
+            int taskIndex = BitOperations.TrailingZeroCount(supported);
+            supported &= supported - 1;
+            RouteBarterTask task = request.Tasks[taskIndex];
+            if (request.Tasks.Any(candidate => StringComparer.Ordinal.Equals(
+                    candidate.Item1Id, task.Item2Id))
+                || !request.Items.TryGetValue(
+                    task.Item2Id, out RouteItem? producedItem)
+                || producedItem.UnitWeight <= 0) {
+                continue;
+            }
+
+            RouteWarehouse[] matchingWarehouses = request.Warehouses
+                .Where(warehouse => StringComparer.Ordinal.Equals(
+                    warehouse.IslandId, task.IslandId))
+                .ToArray();
+            if (matchingWarehouses.Length == 1
+                && !StringComparer.Ordinal.Equals(
+                    matchingWarehouses[0].WarehouseId, pickupWarehouseId)
+                && !state.VisitedWarehouseIds.Contains(
+                    matchingWarehouses[0].WarehouseId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static RouteSimulationState? ReplayRoute(
