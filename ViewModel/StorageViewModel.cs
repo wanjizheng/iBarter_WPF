@@ -188,6 +188,9 @@ namespace iBarter.ViewModel {
                     loadedItems = loadedItems
                         .Select(HydrateStorageItem)
                         .Where(item => !string.Equals(item.ItemLV, "7", StringComparison.Ordinal))
+                        // [Ocean] Rust Repair Tool remains catalog-valid for
+                        // Planner recognition, but is not tracked in StorageManager.
+                        .Where(item => !string.Equals(item.ItemID, "800073", StringComparison.Ordinal))
                         .ToList();
                     if (recoveredFromBackup) {
                         App.myCFun.Log(Localization.LanguageService.Instance.Current == Localization.AppLanguage.TraditionalChinese

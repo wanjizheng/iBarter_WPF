@@ -21,9 +21,11 @@ public sealed class AutomaticRoutePlanner {
         AutomaticRoutePlanningRequest request,
         RouteOptimizationProfile profile,
         RoutePlan? preferredIncumbent,
-        CancellationToken cancellationToken = default) {
+        CancellationToken cancellationToken = default,
+        Action<ExtremeSearchProgressSnapshot>? extremeProgress = null) {
         if (profile.Mode == RouteOptimizationMode.Extreme)
-            return PlanExtreme(request, profile, preferredIncumbent, cancellationToken);
+            return PlanExtreme(
+                request, profile, preferredIncumbent, cancellationToken, extremeProgress);
 
         string fingerprint = RoutePlanFingerprint.Compute(request);
         var budget = new RouteSearchBudget(profile, taskCount: request.Tasks.Count);
@@ -219,13 +221,19 @@ public sealed class AutomaticRoutePlanner {
         AutomaticRoutePlanningRequest request,
         RouteOptimizationProfile profile,
         RoutePlan? preferredIncumbent,
-        CancellationToken cancellationToken) {
+        CancellationToken cancellationToken,
+        Action<ExtremeSearchProgressSnapshot>? progress) {
         string fingerprint = RoutePlanFingerprint.Compute(request);
-        var watch = Stopwatch.StartNew();
+        var controller = new ExtremeSearchController(
+            profile.ExtremeMaxSearchDuration,
+            profile.ExtremeNoImprovementTimeout);
+        progress?.Invoke(controller.Snapshot());
         ExtremeRouteResources resources = ExtremeRouteResourcePolicy.Detect();
         try {
             cancellationToken.ThrowIfCancellationRequested();
             RoutePlan? incumbent = VerifyPreferredIncumbent(request, preferredIncumbent);
+            controller.TryAcceptCandidate(incumbent);
+            progress?.Invoke(controller.Snapshot());
             RoutePlan seed;
             if (incumbent is not null) {
                 seed = incumbent;
@@ -243,28 +251,51 @@ public sealed class AutomaticRoutePlanner {
                         or RoutePlanStatus.BestKnownWithinLimit
                     ? seed
                     : null;
+                controller.TryAcceptCandidate(incumbent);
+                progress?.Invoke(controller.Snapshot());
             }
-            if (seed.Status == RoutePlanStatus.Optimal)
+            cancellationToken.ThrowIfCancellationRequested();
+            if (seed.Status == RoutePlanStatus.Optimal) {
+                controller.Finish(ExtremeSearchTerminationReason.Completed);
+                progress?.Invoke(controller.Snapshot());
                 return WithExtremeDiagnostic(
                     seed, "seed-already-optimal", seed.Objective?.TotalDistance ?? 0,
-                    0, watch.Elapsed, 0, 0, resources, null);
+                    0, controller.Snapshot().Elapsed, 0, 0, resources, null);
+            }
 
-            TimeSpan remaining = profile.TotalTarget - watch.Elapsed - TimeSpan.FromSeconds(15);
-            if (remaining <= TimeSpan.Zero)
-                return WithExtremeDiagnostic(incumbent ?? seed, "seed-time-budget", 0, 1,
-                    watch.Elapsed, 0, 0, resources, null);
+            ExtremeSearchTerminationReason preSolverStop = controller.EvaluateTermination();
+            if (preSolverStop != ExtremeSearchTerminationReason.None) {
+                progress?.Invoke(controller.Snapshot());
+                return WithExtremeDiagnostic(
+                    controller.BestPlan ?? seed,
+                    "seed-time-budget",
+                    0,
+                    1,
+                    controller.Snapshot().Elapsed,
+                    0,
+                    0,
+                    resources,
+                    null);
+            }
 
             ExtremeRouteSolverRunResult exact = ExtremeRouteSolverClient.Solve(
                 request,
                 incumbent,
-                remaining,
                 resources,
-                cancellationToken);
+                cancellationToken,
+                controller,
+                progress);
 
-            RoutePlan? chosen = incumbent;
-            if (exact.Plan?.Objective is { } exactObjective
-                && (chosen?.Objective is null || exactObjective.CompareTo(chosen.Objective.Value) < 0))
-                chosen = exact.Plan;
+            RoutePlan? chosen = controller.BestPlan;
+
+            if (exact.TerminationReason == ExtremeSearchTerminationReason.UserCancelled) {
+                return new RoutePlan(
+                    RoutePlanStatus.Cancelled,
+                    chosen?.Routes ?? [],
+                    chosen?.Objective,
+                    [new RouteDiagnostic("extreme-cp-sat", Detail: ExtremeDetail(exact))],
+                    fingerprint);
+            }
 
             if (chosen is null)
                 return new RoutePlan(
@@ -275,6 +306,7 @@ public sealed class AutomaticRoutePlanner {
                     fingerprint);
 
             bool provenDistanceOptimal = exact.Plan is not null
+                && exact.TerminationReason == ExtremeSearchTerminationReason.Completed
                 && StringComparer.OrdinalIgnoreCase.Equals(exact.SolverStatus, "Optimal")
                 && exact.FullRouteSpace
                 && exact.Plan.Objective is { } solvedObjective
@@ -291,7 +323,28 @@ public sealed class AutomaticRoutePlanner {
                 fingerprint);
         }
         catch (OperationCanceledException) {
-            return new RoutePlan(RoutePlanStatus.Cancelled, [], null, [], fingerprint);
+            controller.Finish(ExtremeSearchTerminationReason.UserCancelled);
+            progress?.Invoke(controller.Snapshot());
+            RoutePlan? best = controller.BestPlan;
+            return new RoutePlan(
+                RoutePlanStatus.Cancelled,
+                best?.Routes ?? [],
+                best?.Objective,
+                [new RouteDiagnostic("extreme-cp-sat", Detail: "termination=UserCancelled")],
+                fingerprint);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException) {
+            controller.Finish(ExtremeSearchTerminationReason.Error,
+                $"{ex.GetType().Name}:{ex.Message}");
+            progress?.Invoke(controller.Snapshot());
+            RoutePlan? best = controller.BestPlan;
+            return new RoutePlan(
+                best is null ? RoutePlanStatus.InvalidInput : RoutePlanStatus.BestKnownWithinLimit,
+                best?.Routes ?? [],
+                best?.Objective,
+                [new RouteDiagnostic("extreme-cp-sat", Detail:
+                    $"termination=Error failure={ex.GetType().Name}:{ex.Message}")],
+                fingerprint);
         }
     }
 
@@ -338,7 +391,7 @@ public sealed class AutomaticRoutePlanner {
             result.MemoryLimitMb,
             result.Failure)
         + FormattableString.Invariant(
-            $" attempts={result.AttemptCount} routeLimit={result.RouteLimit} fullRouteSpace={result.FullRouteSpace}")
+            $" attempts={result.AttemptCount} routeLimit={result.RouteLimit} fullRouteSpace={result.FullRouteSpace} termination={result.TerminationReason}")
         + (result.Plan?.Objective is { } candidateObjective
             ? FormattableString.Invariant(
                 $" candidateRoutes={result.Plan.Routes.Count} candidateDistance={candidateObjective.TotalDistance:F1}")

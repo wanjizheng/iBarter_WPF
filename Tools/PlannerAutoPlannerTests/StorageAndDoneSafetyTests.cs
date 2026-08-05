@@ -108,6 +108,55 @@ public sealed class StorageAndDoneSafetyTests {
     }
 
     [Fact]
+    public void Done_skips_missing_storage_items_and_still_checks_tracked_items() {
+        var exchanges = new[] {
+            Exchange("missing-output", "800053", 1, "800073", 1, 1),
+            Exchange("missing-input", "800074", 1, "800075", 1, 1),
+            Exchange("tracked-shortage", "800076", 2, "800077", 1, 1)
+        };
+        var inventory = new[] {
+            Item("800053", velia: 1),
+            Item("800075"),
+            Item("800076", velia: 1),
+            Item("800077")
+        };
+
+        var result = new PlannerInventoryReconciler().Reconcile(
+            inventory, exchanges, defaultWarehouseIndex: 0);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Errors,
+            error => error.Code == "INSUFFICIENT_STOCK" && error.ItemId == "800076");
+        Assert.DoesNotContain(result.Errors, error => error.Code == "MISSING_STORAGE_ITEM");
+        Assert.Equal(1, result.Inventory["800053"].Total);
+        Assert.DoesNotContain("800073", result.Inventory.Keys);
+        Assert.DoesNotContain("800074", result.Inventory.Keys);
+        Assert.Equal(0, result.Inventory["800075"].Total);
+    }
+
+    [Fact]
+    public void Done_settles_tracked_items_while_omitting_missing_storage_rows() {
+        var exchanges = new[] {
+            Exchange("missing-output", "800053", 1, "800073", 1, 1),
+            Exchange("missing-input", "800074", 1, "800075", 1, 1)
+        };
+        var inventory = new[] {
+            Item("800053", velia: 1),
+            Item("800075")
+        };
+
+        var result = new PlannerInventoryReconciler().Reconcile(
+            inventory, exchanges, defaultWarehouseIndex: 0);
+
+        Assert.True(result.Success);
+        Assert.Empty(result.Errors);
+        Assert.Equal(0, result.Inventory["800053"].Total);
+        Assert.Equal(1, result.Inventory["800075"].Total);
+        Assert.DoesNotContain("800073", result.Inventory.Keys);
+        Assert.DoesNotContain("800074", result.Inventory.Keys);
+    }
+
+    [Fact]
     public void Done_does_not_require_or_deduct_external_level0_input() {
         var reconciler = new PlannerInventoryReconciler();
         var inventory = new[] { Item("800011") };
@@ -122,22 +171,6 @@ public sealed class StorageAndDoneSafetyTests {
         Assert.DoesNotContain("5301", result.Inventory.Keys);
         Assert.Equal(10, result.Inventory["800011"].Total);
         Assert.Equal(10, result.Inventory["800011"].Iliya);
-    }
-
-    [Fact]
-    public void Done_missing_tracked_input_still_rejects_entire_transaction() {
-        var reconciler = new PlannerInventoryReconciler();
-        var inventory = new[] { Item("B", iliya: 7) };
-
-        var result = reconciler.Reconcile(
-            inventory,
-            [Exchange("tracked", "A", 2, "B", 1, 1)],
-            defaultWarehouseIndex: 0);
-
-        Assert.False(result.Success);
-        Assert.Contains(result.Errors,
-            error => error.Code == "MISSING_STORAGE_ITEM" && error.ItemId == "A");
-        Assert.Equal(7, result.Inventory["B"].Total);
     }
 
     [Fact]

@@ -91,6 +91,9 @@ namespace iBarter {
             { "苔蘇樹合板", "4695" },  // 蘇 ~ 藓 (both 鱼 family)
             { "苔藓树合板", "4695" },  // 苔藓 in simplified (the correct chars)
             { "苔藓樹合板", "4695" },  // 苔藓 in traditional (catalog form)
+            // Observed slot-2 truncation: "[6阶段]最高级椰子" loses the
+            // final "糖浆" and fuzzy matching otherwise prefers Coconut (7026).
+            { "6階段最高級椰子", "800205" },
         };
 
         public void Log(string _message, Brush _color) {
@@ -3887,8 +3890,8 @@ namespace iBarter {
             // simplified-vs-traditional form fails the Dictionary
             // exact-match lookup.
             var top1Candidates = new System.Collections.Generic.List<Items>();
-            string aliasKey1 = NormalizeBasic(strItem1 ?? "");
-            if (OCR_ALIASES.TryGetValue(aliasKey1, out string aliasItemID1)
+            string? aliasItemID1 = ResolveItemOcrAliasItemID(strItem1);
+            if (aliasItemID1 != null
                 && App.listItems != null) {
                 var aliased = App.listItems.FirstOrDefault(i => i.ItemID == aliasItemID1);
                 if (aliased != null) top1Candidates.Add(aliased);
@@ -3897,8 +3900,8 @@ namespace iBarter {
                 top1Candidates = FindMostSimilarItemZhTwAware(strItem1, 3, ExtractLevelPrefix(strItem1).lv);
             }
             var top2Candidates = new System.Collections.Generic.List<Items>();
-            string aliasKey2 = NormalizeBasic(strItem2 ?? "");
-            if (OCR_ALIASES.TryGetValue(aliasKey2, out string aliasItemID2)
+            string? aliasItemID2 = ResolveItemOcrAliasItemID(strItem2);
+            if (aliasItemID2 != null
                 && App.listItems != null) {
                 var aliased = App.listItems.FirstOrDefault(i => i.ItemID == aliasItemID2);
                 if (aliased != null) top2Candidates.Add(aliased);
@@ -3906,8 +3909,11 @@ namespace iBarter {
             if (top2Candidates.Count == 0) {
                 top2Candidates = FindMostSimilarItemZhTwAware(strItem2, 3, ExtractLevelPrefix(strItem2).lv);
             }
+            string slot2TextTopItemID = top2Candidates.FirstOrDefault()?.ItemID;
             PreferCrowCoinCandidateWhenTierPrefixMissing(
                 strItem2, top2Candidates, App.listItems);
+            bool slot2CrowCoinWasPromoted = slot2TextTopItemID != "10"
+                && top2Candidates.FirstOrDefault()?.ItemID == "10";
             if (top1Candidates.Count == 0 || top2Candidates.Count == 0) {
                 Log("[DIAG-item-ocr] island=" + myIslands.IslandsNameDisplay
                     + " slot1Raw=\"" + TruncForLog(strItem1 ?? "", 48) + "\" slot1Top=" + DescribeItemCandidates(top1Candidates)
@@ -4048,14 +4054,25 @@ namespace iBarter {
                         ? FindItemIconCompare(top2Candidates, intX1, intY1, intX2, intY2,
                             slot2MinX, slot2MaxX)
                         : FindItemIconCompare(top2Candidates, intX1, intY1, intX2, intY2);
-                    if (!cmp.Best.IsEmpty && !cmp.FuzzyTop.IsEmpty
-                        && cmp.FuzzyTop.Sim < cmp.Best.Sim * 0.5) {
+                    Items slot2IconBestItem = !cmp.Best.IsEmpty
+                        ? ResolveItemFromIconID(cmp.Best.ImageID)
+                        : null;
+                    bool recoveredTextAndIconAgreement = ShouldRecoverAfterCrowCoinPromotion(
+                        slot2CrowCoinWasPromoted,
+                        slot2TextTopItemID,
+                        slot2IconBestItem?.ItemID,
+                        cmp.Best.IsEmpty ? 0 : cmp.Best.Sim,
+                        cmp.FuzzyTop.IsEmpty ? 0 : cmp.FuzzyTop.Sim);
+                    if (recoveredTextAndIconAgreement
+                        || (!cmp.Best.IsEmpty && !cmp.FuzzyTop.IsEmpty
+                            && cmp.FuzzyTop.Sim < cmp.Best.Sim * 0.5)) {
                         myPP2 = cmp.Best;
-                        chosenItem2 = ResolveItemFromIconID(cmp.Best.ImageID);
+                        chosenItem2 = slot2IconBestItem;
                         Log("[DIAG-icon] slot2 chose image-best fuzzySim="
                             + cmp.FuzzyTop.Sim.ToString("0.000")
                             + " bestSim=" + cmp.Best.Sim.ToString("0.000")
-                            + " bestItemID=" + (chosenItem2 != null ? chosenItem2.ItemID : "?"),
+                            + " bestItemID=" + (chosenItem2 != null ? chosenItem2.ItemID : "?")
+                            + (recoveredTextAndIconAgreement ? " reason=text-icon-agree-after-crow-promotion" : ""),
                             Brushes.LightSlateGray);
                     } else if (!cmp.FuzzyTop.IsEmpty) {
                         myPP2 = cmp.FuzzyTop;
@@ -4084,9 +4101,7 @@ namespace iBarter {
                     // and the best icon don't agree - the normal case
                     // (fuzzy right, icon agrees) keeps the log quiet, so
                     // the per-scan log budget stays at most a few lines.
-                    Items bestItemForDiag = !cmp.Best.IsEmpty
-                        ? ResolveItemFromIconID(cmp.Best.ImageID)
-                        : null;
+                    Items bestItemForDiag = slot2IconBestItem;
                     if (bestItemForDiag != null
                         && chosenItem2 != null
                         && bestItemForDiag.ItemID != chosenItem2.ItemID) {
@@ -4327,6 +4342,13 @@ namespace iBarter {
             return ChineseTextNormalizer.NormalizeForMatching(sb.ToString().Normalize(NormalizationForm.FormC));
         }
 
+        internal static string? ResolveItemOcrAliasItemID(string? ocrText) {
+            string aliasKey = NormalizeBasic(ocrText ?? string.Empty);
+            return OCR_ALIASES.TryGetValue(aliasKey, out string itemID)
+                ? itemID
+                : null;
+        }
+
         internal static string TrimIslandOcrEdgeNoise(string value) {
             if (string.IsNullOrWhiteSpace(value)) return string.Empty;
 
@@ -4404,6 +4426,25 @@ namespace iBarter {
 
             candidates.RemoveAll(i => i?.ItemID == "10");
             candidates.Insert(0, crowCoin);
+        }
+
+        internal static bool ShouldRecoverAfterCrowCoinPromotion(
+                bool crowCoinWasPromoted,
+                string? textTopItemID,
+                string? iconBestItemID,
+                double iconBestSimilarity,
+                double promotedCrowIconSimilarity) {
+            // Crow Coin is inserted ahead of the OCR ranking when slot2 has
+            // no tier prefix. Recover the original text choice only when its
+            // own icon independently agrees at a valid confidence and beats
+            // the promoted Crow template by a material margin. This leaves
+            // the conservative global fuzzy-vs-icon threshold unchanged.
+            return crowCoinWasPromoted
+                && !string.IsNullOrWhiteSpace(textTopItemID)
+                && textTopItemID != "10"
+                && string.Equals(textTopItemID, iconBestItemID, StringComparison.Ordinal)
+                && iconBestSimilarity >= 0.65
+                && iconBestSimilarity - promotedCrowIconSimilarity >= 0.10;
         }
 
         internal static bool HasRecognizableItemTierPrefix(string? value) {
@@ -5412,6 +5453,15 @@ namespace iBarter {
                 // otherwise fuzzy matching prefers 塔蘇島 because "蘇島"
                 // remains intact in the damaged text.
                 AddZhTwIslandAlias(zhTw, zhTwAliases, "蘇蘇島", EnumLists.Island.Shasha);
+                // Observed OCR damage for 瑪魯雷斯島. Without this narrow
+                // alias, the intact 雷 character makes the matcher choose 雷瑪島.
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "玫會雷斯僻", EnumLists.Island.Marlene);
+                // Observed OCR damage for 巴貝茲島; the two middle characters
+                // are too damaged to clear the normal similarity threshold.
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "巴只關島", EnumLists.Island.Balvege);
+                // Observed OCR damage for 纳勒柏岛. When 柏 is read as 析,
+                // fuzzy matching otherwise prefers the shorter 薛纳岛 name.
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "纳勒析岛", EnumLists.Island.Narvo);
                 // The canonical in-game name is also kept as an explicit
                 // alias so OCR still works if an older deployed sidecar is
                 // present. OCR may capture a leading row glyph such as

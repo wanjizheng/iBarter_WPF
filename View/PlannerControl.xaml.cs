@@ -31,6 +31,10 @@ namespace iBarter.View {
         private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
         private bool startupLoadScheduled;
         private bool startupLoadCompleted;
+        private bool extremeSearchRunning;
+        private DispatcherTimer? extremeSearchUiTimer;
+        private System.Diagnostics.Stopwatch? extremeSearchUiWatch;
+        private ExtremeSearchProgressSnapshot? extremeSearchUiOverride;
 
         // Phase 2 (i18n): column-header MappingName -> resource key for every
         // direct GridTextColumn on DataGrid_Planner. HeaderText is a plain CLR
@@ -1498,7 +1502,13 @@ namespace iBarter.View {
         // BeginInit and never writes a multiplier.
         private async void ButtonAdv_AutoPlan_Click(object sender, RoutedEventArgs e) {
             var svc = Localization.LanguageService.Instance;
-            ButtonAdv_AutoPlan.IsEnabled = false;
+            if (extremeSearchRunning) {
+                App.myRouteCoordinator?.CancelActiveSearch();
+                ButtonAdv_AutoPlan.IsEnabled = false;
+                return;
+            }
+            var profile = ResolveSelectedOptimizationProfile();
+            ButtonAdv_AutoPlan.IsEnabled = profile.Mode == RouteOptimizationMode.Extreme;
             try {
 
             // End any in-progress edit so the just-typed value makes it into the
@@ -1598,7 +1608,6 @@ namespace iBarter.View {
                 App.myCargoProperty.ExtraLT, MidpointRounding.AwayFromZero));
             int totalLT = Convert.ToInt32(Math.Round(
                 App.myCargoProperty.TotalLT, MidpointRounding.AwayFromZero));
-            var profile = ResolveSelectedOptimizationProfile();
             AutomaticRoutePlanningRequest? restoredContinuationRequest = null;
             bool continuingRestoredSearch = false;
             bool useCurrentPlanAsIncumbent = true;
@@ -1690,9 +1699,18 @@ namespace iBarter.View {
                     new RouteSearchLimits(250_000, profile.MaxLocalEvaluations), profile);
             App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Solving",
                 svc.Localize(OptimModeLocalizationKey(profile.Mode))), Brushes.SteelBlue);
+            if (profile.Mode == RouteOptimizationMode.Extreme)
+                BeginExtremeSearchFeedback();
             var routePlan = await App.myRouteCoordinator.CalculateAsync(
                 request, profile, useCurrentPlanAsIncumbent);
-            if (routePlan.Status is not (RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit)) {
+            if (profile.Mode == RouteOptimizationMode.Extreme)
+                RefreshExtremeSearchFeedback();
+            bool cancelledWithBest = profile.Mode == RouteOptimizationMode.Extreme
+                && routePlan.Status == RoutePlanStatus.Cancelled
+                && routePlan.Objective is not null
+                && routePlan.Routes.Count > 0;
+            if (routePlan.Status is not (RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit)
+                && !cancelledWithBest) {
                 switch (routePlan.Status) {
                     case RoutePlanStatus.Infeasible:
                         App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Infeasible",
@@ -1702,7 +1720,8 @@ namespace iBarter.View {
                         App.myCFun.Log(svc.Localize("str.Log.AutoRoute.NoFeasibleWithinLimit"), Brushes.OrangeRed);
                         break;
                     case RoutePlanStatus.Cancelled:
-                        App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Cancelled"), Brushes.Gray);
+                        App.myCFun.Log(svc.Localize(
+                            "str.Planner.Extreme.Termination.Cancelled"), Brushes.Gray);
                         break;
                     default:
                         App.myCFun.Log(svc.Localize("str.Log.AutoRoute.InvalidInput",
@@ -1755,16 +1774,28 @@ namespace iBarter.View {
                 AutoPlanningStrategy.ManualSelection => "str.Planner.AutoPlan.ManualSelection",
                 _ => "str.Planner.AutoPlan.ProfitFirst",
             });
-            App.myCFun.Log(svc.Localize(
-                "str.Msg.Planner.AutoPlan.Success",
-                strategyDisplay,
-                calculation.UsedParley.ToString("N0", CultureInfo.InvariantCulture),
-                selectedRoutes.ToString(CultureInfo.InvariantCulture)),
-                selectedRoutes > 0 ? Brushes.DarkOliveGreen : Brushes.Orange);
+            if (routePlan.Status != RoutePlanStatus.Cancelled) {
+                App.myCFun.Log(svc.Localize(
+                    "str.Msg.Planner.AutoPlan.Success",
+                    strategyDisplay,
+                    calculation.UsedParley.ToString("N0", CultureInfo.InvariantCulture),
+                    selectedRoutes.ToString(CultureInfo.InvariantCulture)),
+                    selectedRoutes > 0 ? Brushes.DarkOliveGreen : Brushes.Orange);
+            }
             switch (routePlan.Status) {
                 case RoutePlanStatus.Optimal:
-                    App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Optimal",
-                        routePlan.Routes.Count, routePlan.Objective?.TotalDistance ?? 0), Brushes.DarkOliveGreen);
+                    if (profile.Mode == RouteOptimizationMode.Extreme) {
+                        App.myCFun.Log(svc.Localize("str.Log.AutoRoute.BestKnown",
+                            svc.Localize(OptimModeLocalizationKey(profile.Mode)),
+                            routePlan.Routes.Count,
+                            routePlan.Objective?.TotalDistance ?? 0,
+                            routePlan.Diagnostics.FirstOrDefault()?.Detail ?? "",
+                            svc.Localize("str.Log.AutoRoute.NotOptimal")), Brushes.DarkOliveGreen);
+                    }
+                    else {
+                        App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Optimal",
+                            routePlan.Routes.Count, routePlan.Objective?.TotalDistance ?? 0), Brushes.DarkOliveGreen);
+                    }
                     break;
                 case RoutePlanStatus.BestKnownWithinLimit:
                     // The new anytime mode publishes the selected profile, the
@@ -1780,6 +1811,10 @@ namespace iBarter.View {
                         routePlan.Objective?.TotalDistance ?? 0,
                         stopReason,
                         svc.Localize("str.Log.AutoRoute.NotOptimal")), Brushes.Orange);
+                    break;
+                case RoutePlanStatus.Cancelled:
+                    App.myCFun.Log(svc.Localize(
+                        "str.Planner.Extreme.Termination.Cancelled"), Brushes.Gray);
                     break;
             }
             }
@@ -1812,8 +1847,98 @@ namespace iBarter.View {
                 App.myCFun.Log(svc.Localize("str.Log.AutoRoute.MapRenderFailed", exception.Message), Brushes.OrangeRed);
             }
             finally {
+                if (profile.Mode == RouteOptimizationMode.Extreme)
+                    EndExtremeSearchFeedback();
                 ButtonAdv_AutoPlan.IsEnabled = true;
             }
         }
+
+        private void BeginExtremeSearchFeedback() {
+            extremeSearchRunning = true;
+            extremeSearchUiOverride = null;
+            extremeSearchUiWatch = System.Diagnostics.Stopwatch.StartNew();
+            Border_ExtremeSearchStatus.Visibility = Visibility.Visible;
+            ButtonAdv_AutoPlan.Label = Localization.LanguageService.Instance.Localize(
+                "str.Planner.Extreme.CancelButton");
+            ButtonAdv_AutoPlan.IsEnabled = true;
+            extremeSearchUiTimer?.Stop();
+            extremeSearchUiTimer = new DispatcherTimer(
+                TimeSpan.FromSeconds(1),
+                DispatcherPriority.Background,
+                (_, _) => RefreshExtremeSearchFeedback(),
+                Dispatcher);
+            extremeSearchUiTimer.Start();
+            RefreshExtremeSearchFeedback();
+        }
+
+        private void EndExtremeSearchFeedback() {
+            extremeSearchUiTimer?.Stop();
+            extremeSearchUiTimer = null;
+            ExtremeSearchProgressSnapshot? snapshot =
+                App.myRouteCoordinator?.ExtremeSearchProgress;
+            if (snapshot is null || !snapshot.IsTerminal) {
+                TimeSpan elapsed = snapshot?.Elapsed
+                    ?? extremeSearchUiWatch?.Elapsed
+                    ?? TimeSpan.Zero;
+                extremeSearchUiOverride = new ExtremeSearchProgressSnapshot(
+                    elapsed,
+                    snapshot?.BestObjective,
+                    snapshot?.LastImprovementElapsed,
+                    snapshot?.ElapsedSinceLastImprovement,
+                    ExtremeSearchTerminationReason.Error);
+            }
+            RefreshExtremeSearchFeedback();
+            extremeSearchUiWatch?.Stop();
+            extremeSearchRunning = false;
+            ButtonAdv_AutoPlan.Label = Localization.LanguageService.Instance.Localize(
+                "str.Planner.Btn.AutoPlan");
+        }
+
+        private void RefreshExtremeSearchFeedback() {
+            var svc = Localization.LanguageService.Instance;
+            ExtremeSearchProgressSnapshot snapshot = extremeSearchUiOverride
+                ?? App.myRouteCoordinator?.ExtremeSearchProgress
+                ?? new ExtremeSearchProgressSnapshot(
+                    extremeSearchUiWatch?.Elapsed ?? TimeSpan.Zero,
+                    null,
+                    null,
+                    null,
+                    ExtremeSearchTerminationReason.None);
+            TimeSpan elapsed = snapshot.IsTerminal
+                ? snapshot.Elapsed
+                : Max(snapshot.Elapsed, extremeSearchUiWatch?.Elapsed ?? TimeSpan.Zero);
+            TimeSpan? sinceImprovement = snapshot.LastImprovementElapsed is TimeSpan improved
+                ? elapsed - improved < TimeSpan.Zero ? TimeSpan.Zero : elapsed - improved
+                : null;
+
+            Text_ExtremeSearchHeader.Text = svc.Localize(snapshot.IsTerminal
+                ? "str.Planner.Extreme.Completed"
+                : "str.Planner.Extreme.Running");
+            Text_ExtremeSearchElapsed.Text = svc.Localize(
+                snapshot.IsTerminal
+                    ? "str.Planner.Extreme.ElapsedCompleted"
+                    : "str.Planner.Extreme.ElapsedRunning",
+                FormatExtremeElapsed(elapsed));
+            Text_ExtremeSearchBest.Text = snapshot.BestObjective is { } objective
+                ? svc.Localize("str.Planner.Extreme.BestDistance", objective.TotalDistance)
+                : svc.Localize("str.Planner.Extreme.NoValidResult");
+            Text_ExtremeSearchLastImprovement.Text = snapshot.LastImprovementElapsed is TimeSpan last
+                ? svc.Localize("str.Planner.Extreme.LastImprovement", FormatExtremeElapsed(last))
+                : svc.Localize("str.Planner.Extreme.LastImprovement", "--:--");
+            Text_ExtremeSearchSinceImprovement.Text = sinceImprovement is TimeSpan since
+                ? svc.Localize("str.Planner.Extreme.SinceImprovement", FormatExtremeElapsed(since))
+                : svc.Localize("str.Planner.Extreme.SinceImprovement", "--:--");
+            string reasonKey = ExtremeSearchPresentation.TerminationLocalizationKey(
+                snapshot.TerminationReason);
+            Text_ExtremeSearchTermination.Text = snapshot.IsTerminal
+                ? svc.Localize("str.Planner.Extreme.Termination", svc.Localize(reasonKey))
+                : string.Empty;
+        }
+
+        private static TimeSpan Max(TimeSpan left, TimeSpan right) =>
+            left >= right ? left : right;
+
+        private static string FormatExtremeElapsed(TimeSpan value) =>
+            $"{Math.Max(0, (int)value.TotalMinutes):00}:{Math.Max(0, value.Seconds):00}";
     }
 }

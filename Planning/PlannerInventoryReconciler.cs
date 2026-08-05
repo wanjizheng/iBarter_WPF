@@ -91,7 +91,10 @@ public sealed class PlannerInventoryReconciler {
         var result = inventory.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         foreach (var (itemId, delta) in deltas.OrderBy(pair => pair.Key, StringComparer.Ordinal)) {
             if (!result.TryGetValue(itemId, out var item)) {
-                errors.Add(new PlannerInventoryError("MISSING_STORAGE_ITEM", itemId));
+                // StorageManager is an explicitly tracked subset of the item
+                // catalog. Untracked goods (for example [Ocean] items) are
+                // neither created nor settled; continue validating every
+                // tracked item in the same DONE operation.
                 continue;
             }
 

@@ -39,6 +39,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private HashSet<string> completedBarterRowIds = new(StringComparer.Ordinal);
     private IReadOnlyList<AutomaticRouteStepViewModel> visibleAutomaticSteps = [];
     private IReadOnlyList<RouteSelectionOption> routeOptions = [];
+    private volatile ExtremeSearchProgressSnapshot? extremeSearchProgress;
 
     public AutomaticRouteCoordinator(
         StorageViewModel storageViewModel,
@@ -65,6 +66,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     public long FocusRevision => focusRevision;
     public IReadOnlyList<AutomaticRouteStepViewModel> VisibleAutomaticSteps => visibleAutomaticSteps;
     public IReadOnlyList<RouteSelectionOption> RouteOptions => routeOptions;
+    public ExtremeSearchProgressSnapshot? ExtremeSearchProgress => extremeSearchProgress;
     public event EventHandler? RouteDisplayChanged;
 
     public async Task<RoutePlan> CalculateAsync(AutomaticRoutePlanningRequest request) {
@@ -94,10 +96,24 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             ownRequestId = ++requestId;
             activeFingerprint = fingerprint;
         }
+        extremeSearchProgress = null;
 
         RoutePlan plan = await Task.Run(
             () => planner.Plan(
-                request, profile, preferredIncumbent, ownCancellation.Token),
+                request,
+                profile,
+                preferredIncumbent,
+                ownCancellation.Token,
+                profile.Mode == RouteOptimizationMode.Extreme
+                    ? snapshot => {
+                        lock (gate) {
+                            if (ownRequestId == requestId
+                                && StringComparer.Ordinal.Equals(
+                                    activeFingerprint, fingerprint))
+                                extremeSearchProgress = snapshot;
+                        }
+                    }
+                    : null),
             ownCancellation.Token)
             .ContinueWith(task => task.IsCanceled
                     ? new RoutePlan(RoutePlanStatus.Cancelled, [], null, [], fingerprint)
@@ -112,6 +128,10 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         }
 
         return plan;
+    }
+
+    public void CancelActiveSearch() {
+        lock (gate) cancellation?.Cancel();
     }
 
     public bool CanContinueRestoredExtremeSearch(AutomaticRoutePlanningRequest request) {
@@ -171,10 +191,22 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         AutomaticRoutePlanningRequest request,
         RoutePlan plan,
         RouteOptimizationMode generationMode) {
-        if (plan.Status is not (RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit))
+        bool cancelledWithBest = plan.Status == RoutePlanStatus.Cancelled
+            && plan.Objective is not null
+            && plan.Routes.Count > 0;
+        if (plan.Status is not (RoutePlanStatus.Optimal or RoutePlanStatus.BestKnownWithinLimit)
+            && !cancelledWithBest)
             return false;
+        RoutePlan publicationCandidate = cancelledWithBest
+            ? new RoutePlan(
+                RoutePlanStatus.BestKnownWithinLimit,
+                plan.Routes,
+                plan.Objective,
+                plan.Diagnostics,
+                plan.InputFingerprint)
+            : plan;
         var prepared = RoutePlanPublication.PreparePlanForPublication(
-            request, plan, RoutePlanPublicationSource.FreshGeneration);
+            request, publicationCandidate, RoutePlanPublicationSource.FreshGeneration);
         if (!prepared.Success || prepared.Plan is null) {
             LogPublicationFailure(prepared.Failure);
             return false;

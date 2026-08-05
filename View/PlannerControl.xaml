@@ -32,6 +32,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0">
@@ -79,7 +80,21 @@
                    VerticalAlignment="Center" />
             <Label Content="{loc:Localize str.Planner.ParleyMax}" HorizontalAlignment="Left" Margin="0" VerticalAlignment="Center" />
         </syncfusion:ToolBarAdv>
-        <Grid Grid.Row="1">
+        <Border x:Name="Border_ExtremeSearchStatus" Grid.Row="1" Visibility="Collapsed"
+                Margin="6,4" Padding="10,7" CornerRadius="4"
+                BorderBrush="#665B8DEF" BorderThickness="1" Background="#145B8DEF">
+            <StackPanel>
+                <TextBlock x:Name="Text_ExtremeSearchHeader" FontWeight="SemiBold" />
+                <WrapPanel Margin="0,4,0,0">
+                    <TextBlock x:Name="Text_ExtremeSearchElapsed" Margin="0,0,22,2" />
+                    <TextBlock x:Name="Text_ExtremeSearchBest" Margin="0,0,22,2" />
+                    <TextBlock x:Name="Text_ExtremeSearchLastImprovement" Margin="0,0,22,2" />
+                    <TextBlock x:Name="Text_ExtremeSearchSinceImprovement" Margin="0,0,22,2" />
+                </WrapPanel>
+                <TextBlock x:Name="Text_ExtremeSearchTermination" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+        <Grid Grid.Row="2">
             <syncfusion:SfDataGrid x:Name="DataGrid_Planner" Height="NaN" Width="NaN"
                                    FontFamily="{DynamicResource AppFontFamily}"
                                    FontSize="14"

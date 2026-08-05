@@ -20,7 +20,8 @@ public sealed record ExtremeRouteSolverRunResult(
     int WorkerCount,
     int MemoryLimitMb,
     int AttemptCount,
-    string? Failure);
+    string? Failure,
+    ExtremeSearchTerminationReason TerminationReason = ExtremeSearchTerminationReason.None);
 
 public static class ExtremeRouteSolverClient {
     private static readonly JsonSerializerOptions JsonOptions = new() {
@@ -34,42 +35,121 @@ public static class ExtremeRouteSolverClient {
         ExtremeRouteResources resources,
         CancellationToken cancellationToken,
         string? solverPath = null) {
-        var overall = Stopwatch.StartNew();
+        var controller = new ExtremeSearchController(
+            timeLimit,
+            ExtremeRouteSolverProtocol.ExtremeNoImprovementTimeout);
+        controller.TryAcceptCandidate(incumbent);
+        return Solve(
+            request, incumbent, resources, cancellationToken,
+            controller, progress: null, solverPath);
+    }
+
+    internal static ExtremeRouteSolverRunResult Solve(
+        AutomaticRoutePlanningRequest request,
+        RoutePlan? incumbent,
+        ExtremeRouteResources resources,
+        CancellationToken cancellationToken,
+        ExtremeSearchController controller,
+        Action<ExtremeSearchProgressSnapshot>? progress,
+        string? solverPath = null) {
         var failures = new List<string>();
         ExtremeRouteResources attemptResources = resources;
         int attempts = 0;
+        ExtremeRouteSolverRunResult? last = null;
+
+        controller.TryAcceptCandidate(incumbent);
+        progress?.Invoke(controller.Snapshot());
 
         while (true) {
-            cancellationToken.ThrowIfCancellationRequested();
-            TimeSpan remaining = timeLimit - overall.Elapsed;
-            if (remaining <= TimeSpan.Zero) {
-                string failure = failures.Count == 0
-                    ? "solver-time-budget"
-                    : $"solver-time-budget after {string.Join(" | ", failures)}";
-                return new ExtremeRouteSolverRunResult(
-                    null, "Unavailable", 0, false, 0, 1, overall.Elapsed, 0, 0,
-                    attemptResources.WorkerCount, attemptResources.MemoryLimitMb,
-                    attempts, failure);
-            }
+            ExtremeSearchTerminationReason reason = controller.EvaluateTermination(
+                cancellationToken.IsCancellationRequested);
+            if (reason != ExtremeSearchTerminationReason.None)
+                return Finish(reason, last?.Failure);
+
+            TimeSpan remaining = controller.RemainingUntilMaximum;
+            TimeSpan slice = remaining < TimeSpan.FromSeconds(
+                    ExtremeRouteSolverProtocol.SolverSliceSeconds)
+                ? remaining
+                : TimeSpan.FromSeconds(ExtremeRouteSolverProtocol.SolverSliceSeconds);
+            if (slice <= TimeSpan.Zero)
+                return Finish(controller.Finish(
+                    ExtremeSearchTerminationReason.MaxDurationReached), last?.Failure);
 
             attempts++;
             ExtremeRouteSolverRunResult result = SolveOnce(
-                request, incumbent, remaining, attemptResources, cancellationToken, solverPath);
-            if (result.Plan is not null || !IsNativeExit(result.Failure)
-                || attemptResources.WorkerCount <= 1) {
-                string? failure = result.Failure;
-                if (failure is not null && failures.Count > 0)
-                    failure = $"{string.Join(" | ", failures)} | final={failure}";
-                return result with {
-                    Elapsed = overall.Elapsed,
-                    AttemptCount = attempts,
-                    Failure = failure,
-                };
+                request,
+                controller.BestPlan,
+                slice,
+                attemptResources,
+                cancellationToken,
+                controller,
+                progress,
+                solverPath);
+            last = result;
+
+            if (result.Failure?.StartsWith("interrupted:", StringComparison.Ordinal) == true) {
+                reason = controller.EvaluateTermination(cancellationToken.IsCancellationRequested);
+                if (reason == ExtremeSearchTerminationReason.None)
+                    reason = controller.Finish(ExtremeSearchTerminationReason.Error, result.Failure);
+                return Finish(reason, result.Failure);
             }
 
-            failures.Add($"workers={attemptResources.WorkerCount}:{result.Failure}");
-            int reducedWorkers = Math.Max(1, attemptResources.WorkerCount / 2);
-            attemptResources = attemptResources with { WorkerCount = reducedWorkers };
+            if (result.Plan is not null)
+                controller.TryAcceptCandidate(result.Plan);
+            progress?.Invoke(controller.Snapshot());
+
+            if (StringComparer.OrdinalIgnoreCase.Equals(result.SolverStatus, "Optimal")) {
+                reason = controller.Finish(ExtremeSearchTerminationReason.Completed);
+                return Finish(reason, result.Failure);
+            }
+            if (StringComparer.OrdinalIgnoreCase.Equals(result.SolverStatus, "Infeasible")
+                && controller.BestPlan is null) {
+                reason = controller.Finish(ExtremeSearchTerminationReason.Completed);
+                return Finish(reason, result.Failure);
+            }
+
+            if (StringComparer.Ordinal.Equals(result.SolverStatus, "Unavailable")) {
+                if (IsNativeExit(result.Failure) && attemptResources.WorkerCount > 1) {
+                    failures.Add($"workers={attemptResources.WorkerCount}:{result.Failure}");
+                    int reducedWorkers = Math.Max(1, attemptResources.WorkerCount / 2);
+                    attemptResources = attemptResources with { WorkerCount = reducedWorkers };
+                    continue;
+                }
+                reason = controller.Finish(ExtremeSearchTerminationReason.Error, result.Failure);
+                return Finish(reason, result.Failure);
+            }
+            if (StringComparer.OrdinalIgnoreCase.Equals(result.SolverStatus, "Error")
+                || StringComparer.OrdinalIgnoreCase.Equals(result.SolverStatus, "ModelInvalid")) {
+                reason = controller.Finish(ExtremeSearchTerminationReason.Error, result.Failure);
+                return Finish(reason, result.Failure);
+            }
+        }
+
+        ExtremeRouteSolverRunResult Finish(
+            ExtremeSearchTerminationReason reason,
+            string? failure) {
+            string? combinedFailure = failure;
+            if (failures.Count > 0)
+                combinedFailure = string.IsNullOrWhiteSpace(failure)
+                    ? string.Join(" | ", failures)
+                    : $"{string.Join(" | ", failures)} | final={failure}";
+            ExtremeSearchProgressSnapshot snapshot = controller.Snapshot();
+            progress?.Invoke(snapshot);
+            return new ExtremeRouteSolverRunResult(
+                controller.BestPlan,
+                last?.SolverStatus ?? "Unavailable",
+                last?.RouteLimit ?? 0,
+                last?.FullRouteSpace ?? false,
+                last?.BestBound ?? 0,
+                last?.RelativeGap ?? 1,
+                snapshot.Elapsed,
+                last?.Conflicts ?? 0,
+                last?.Branches ?? 0,
+                last?.WorkerCount ?? attemptResources.WorkerCount,
+                last?.MemoryLimitMb ?? attemptResources.MemoryLimitMb,
+                attempts,
+                combinedFailure,
+                reason);
         }
     }
 
@@ -79,6 +159,8 @@ public static class ExtremeRouteSolverClient {
         TimeSpan timeLimit,
         ExtremeRouteResources resources,
         CancellationToken cancellationToken,
+        ExtremeSearchController controller,
+        Action<ExtremeSearchProgressSnapshot>? progress,
         string? solverPath) {
         var watch = Stopwatch.StartNew();
         if (request.Tasks.Count > ExtremeRouteSolverProtocol.MaximumTasks)
@@ -114,13 +196,26 @@ public static class ExtremeRouteSolverClient {
             using var job = WindowsProcessMemoryJob.TryCreate(process, resources.MemoryLimitMb);
             using var cancelRegistration = cancellationToken.Register(() => Kill(process));
             TimeSpan hardLimit = timeLimit + TimeSpan.FromSeconds(15);
+            ExtremeSearchTerminationReason interrupted = ExtremeSearchTerminationReason.None;
             while (!process.WaitForExit(250)) {
-                cancellationToken.ThrowIfCancellationRequested();
+                interrupted = controller.EvaluateTermination(
+                    cancellationToken.IsCancellationRequested);
+                progress?.Invoke(controller.Snapshot());
+                if (interrupted != ExtremeSearchTerminationReason.None) {
+                    Kill(process);
+                    break;
+                }
                 if (watch.Elapsed >= hardLimit) {
                     Kill(process);
                     break;
                 }
             }
+
+            if (interrupted == ExtremeSearchTerminationReason.None
+                && cancellationToken.IsCancellationRequested)
+                interrupted = controller.EvaluateTermination(userCancellationRequested: true);
+            if (interrupted != ExtremeSearchTerminationReason.None)
+                return Failure($"interrupted:{interrupted}");
 
             ExtremeSolverOutputDto? output = TryReadOutput(outputPath);
             if (output is null) {
@@ -157,10 +252,8 @@ public static class ExtremeRouteSolverClient {
                 output.WorkerCount,
                 output.MemoryLimitMb,
                 1,
-                replayFailure ?? (output.Error is null ? null : SingleLine(output.Error)));
-        }
-        catch (OperationCanceledException) {
-            throw;
+                replayFailure ?? (output.Error is null ? null : SingleLine(output.Error)),
+                ExtremeSearchTerminationReason.None);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException) {
             return Failure($"{ex.GetType().Name}:{SingleLine(ex.Message)}");
@@ -171,7 +264,8 @@ public static class ExtremeRouteSolverClient {
 
         ExtremeRouteSolverRunResult Failure(string detail) => new(
             null, "Unavailable", 0, false, 0, 1, watch.Elapsed, 0, 0,
-            resources.WorkerCount, resources.MemoryLimitMb, 1, detail);
+            resources.WorkerCount, resources.MemoryLimitMb, 1, detail,
+            ExtremeSearchTerminationReason.None);
     }
 
     private static bool IsNativeExit(string? failure) =>

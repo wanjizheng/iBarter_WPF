@@ -29,6 +29,14 @@ public sealed record RouteOptimizationProfile(
     int MaxLocalEvaluations,
     int BeamWidth) {
 
+    public TimeSpan ExtremeMaxSearchDuration => Mode == RouteOptimizationMode.Extreme
+        ? TotalTarget
+        : TimeSpan.Zero;
+    public TimeSpan ExtremeNoImprovementTimeout => Mode == RouteOptimizationMode.Extreme
+        ? ExtremeRouteSolverProtocol.ExtremeNoImprovementTimeout
+        : TimeSpan.Zero;
+    public bool UsesExtremeConvergence => Mode == RouteOptimizationMode.Extreme;
+
     public static RouteOptimizationProfile For(RouteOptimizationMode mode) => mode switch {
         RouteOptimizationMode.Quick => new(
             Mode: RouteOptimizationMode.Quick,
@@ -56,7 +64,7 @@ public sealed record RouteOptimizationProfile(
             BeamWidth: 1_024),
         RouteOptimizationMode.Extreme => new(
             Mode: RouteOptimizationMode.Extreme,
-            TotalTarget: TimeSpan.FromSeconds(ExtremeRouteSolverProtocol.DefaultTimeLimitSeconds),
+            TotalTarget: ExtremeRouteSolverProtocol.ExtremeMaxSearchDuration,
             FinalizationReserve: TimeSpan.Zero,
             MaxBeamParents: 100_000,
             MaxSuccessors: 4_000_000,

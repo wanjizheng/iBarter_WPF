@@ -104,6 +104,19 @@ foreach (var sample in observedEnglishIslandNames) {
     ExpectIsland(sample.Input, sample.Expected);
 }
 ExpectIsland("一、苏苏岛", EnumLists.Island.Shasha);
+ExpectIsland("一、玫會雷斯僻", EnumLists.Island.Marlene);
+ExpectIsland("一、巴只關島", EnumLists.Island.Balvege);
+ExpectIsland("一、纳勒析岛", EnumLists.Island.Narvo);
+if (CFunctions.ResolveItemOcrAliasItemID("[6阶段]最高级椰子") != "800205") {
+    Console.Error.WriteLine(
+        "Expected observed truncated Top-Quality Coconut Syrup OCR to resolve to item 800205.");
+    return 1;
+}
+if (args.Contains("--item-ocr-alias-only", StringComparer.Ordinal)) {
+    Console.WriteLine(
+        "Observed truncated Top-Quality Coconut Syrup OCR alias contract passed.");
+    return 0;
+}
 if (args.Contains("--island-fuzz-audit", StringComparer.Ordinal)) {
     var wrongMatches = new List<string>();
     var unknownMatches = new List<string>();
@@ -317,9 +330,32 @@ if (args.Contains("--map-input-only", StringComparer.Ordinal)) {
     return 0;
 }
 
-var crowCoin = new Items("Crow Coin", "10", "1");
+var crowCoin = new Items("Crow Coin", "10", "-1") {
+    ItemNameZhTw = "乌鸦硬币"
+};
+var oquillaFlower = new Items("Oquilla's Flower", "8010", "-1") {
+    ItemNameZhTw = "奥基鲁阿之花"
+};
+var deepSeaMemoryGlue = new Items("Deep Sea Memory Filled Glue", "5825", "-1") {
+    ItemNameZhTw = "蕴含深海记忆的黏胶"
+};
 var fig = new Items("Fig", "7018", "0");
 var portrait = new Items("Portrait of the Ancient", "800067", "5");
+var savedItemCatalog = App.listItems;
+App.listItems = new List<Items> {
+    crowCoin, oquillaFlower, deepSeaMemoryGlue, fig, portrait
+};
+var oquillaOcrCandidates = islandResolver.FindMostSimilarItemZhTwAware(
+    "奧基便阿之花", 3);
+var glueOcrCandidates = islandResolver.FindMostSimilarItemZhTwAware(
+    "蕴含深海记忆的知肢", 3);
+App.listItems = savedItemCatalog;
+if (oquillaOcrCandidates.FirstOrDefault()?.ItemID != "8010"
+    || glueOcrCandidates.FirstOrDefault()?.ItemID != "5825") {
+    Console.Error.WriteLine(
+        "Expected observed Oquilla's Flower and Deep Sea Memory Filled Glue OCR to rank the correct text candidate first before Crow Coin promotion.");
+    return 1;
+}
 foreach (string damagedCrowText in new[] {
              "",
              "户 耶z画十",
@@ -350,9 +386,49 @@ foreach (string tieredRewardText in new[] {
         return 1;
     }
 }
+if (!CFunctions.ShouldRecoverAfterCrowCoinPromotion(
+        crowCoinWasPromoted: true,
+        textTopItemID: "8010",
+        iconBestItemID: "8010",
+        iconBestSimilarity: 0.912,
+        promotedCrowIconSimilarity: 0.588)
+    || !CFunctions.ShouldRecoverAfterCrowCoinPromotion(
+        crowCoinWasPromoted: true,
+        textTopItemID: "5825",
+        iconBestItemID: "5825",
+        iconBestSimilarity: 0.699,
+        promotedCrowIconSimilarity: 0.539)
+    || CFunctions.ShouldRecoverAfterCrowCoinPromotion(
+        crowCoinWasPromoted: true,
+        textTopItemID: "8010",
+        iconBestItemID: "8010",
+        iconBestSimilarity: 0.649,
+        promotedCrowIconSimilarity: 0.539)
+    || CFunctions.ShouldRecoverAfterCrowCoinPromotion(
+        crowCoinWasPromoted: true,
+        textTopItemID: "8010",
+        iconBestItemID: "8010",
+        iconBestSimilarity: 0.699,
+        promotedCrowIconSimilarity: 0.600)
+    || CFunctions.ShouldRecoverAfterCrowCoinPromotion(
+        crowCoinWasPromoted: true,
+        textTopItemID: "8010",
+        iconBestItemID: "10",
+        iconBestSimilarity: 0.912,
+        promotedCrowIconSimilarity: 0.588)
+    || CFunctions.ShouldRecoverAfterCrowCoinPromotion(
+        crowCoinWasPromoted: false,
+        textTopItemID: "8010",
+        iconBestItemID: "8010",
+        iconBestSimilarity: 0.912,
+        promotedCrowIconSimilarity: 0.588)) {
+    Console.Error.WriteLine(
+        "Expected high-confidence text/icon agreement to recover Oquilla's Flower only after Crow Coin promotion.");
+    return 1;
+}
 if (args.Contains("--crow-coin-only", StringComparer.Ordinal)) {
     Console.WriteLine(
-        "Crow Coin damaged-label candidate selection contract passed.");
+        "Crow Coin damaged-label selection and text/icon recovery contract passed.");
     return 0;
 }
 
@@ -360,7 +436,7 @@ if (args.Contains("--island-only", StringComparer.Ordinal)) {
     int canonicalCaseCount =
         (Enum.GetValues<EnumLists.Island>().Length - 1) * 3;
     int totalCaseCount =
-        canonicalCaseCount + zhTwCatalogCaseCount + observedEnglishIslandNames.Length + 3;
+        canonicalCaseCount + zhTwCatalogCaseCount + observedEnglishIslandNames.Length + 4;
     Console.WriteLine(
         $"Island matching audit passed: {totalCaseCount} canonical, suffix, alias and OCR-noise cases.");
     return 0;
