@@ -43,6 +43,15 @@ public sealed class ExtremeSearchResumePolicyTests {
     }
 
     [Fact]
+    public void Restored_matching_custom_duration_plan_can_be_used_as_an_incumbent() {
+        Assert.True(ExtremeSearchResumePolicy.CanOfferContinuation(
+            restoredFromDisk: true,
+            RouteOptimizationMode.Custom,
+            Plan("same"),
+            "same"));
+    }
+
+    [Fact]
     public void Restored_extreme_plan_still_offers_prompt_before_a_fresh_request_is_built() {
         Assert.True(ExtremeSearchResumePolicy.CanOfferPrompt(
             restoredFromDisk: true,

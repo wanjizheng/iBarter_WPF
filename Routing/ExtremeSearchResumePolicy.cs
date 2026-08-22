@@ -11,7 +11,9 @@ public static class ExtremeSearchResumePolicy {
         RouteOptimizationMode currentPlanMode,
         RoutePlan? currentPlan) =>
         restoredFromDisk
-        && currentPlanMode is RouteOptimizationMode.Deep or RouteOptimizationMode.Extreme
+        && currentPlanMode is RouteOptimizationMode.Deep
+            or RouteOptimizationMode.Extreme
+            or RouteOptimizationMode.Custom
         && currentPlan?.Status is RoutePlanStatus.Optimal
             or RoutePlanStatus.BestKnownWithinLimit;
 

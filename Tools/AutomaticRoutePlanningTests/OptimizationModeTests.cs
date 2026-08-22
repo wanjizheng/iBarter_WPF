@@ -32,6 +32,8 @@ public sealed class OptimizationModeTests {
         var balanced = RouteOptimizationProfile.For(RouteOptimizationMode.Balanced);
         var deep = RouteOptimizationProfile.For(RouteOptimizationMode.Deep);
         var extreme = RouteOptimizationProfile.For(RouteOptimizationMode.Extreme);
+        var custom = RouteOptimizationProfile.For(
+            RouteOptimizationMode.Custom, TimeSpan.FromMinutes(37));
 
         Assert.Equal(3_000, quick.TotalTarget.TotalMilliseconds);
         Assert.Equal(500, quick.FinalizationReserve.TotalMilliseconds);
@@ -49,11 +51,29 @@ public sealed class OptimizationModeTests {
         Assert.Equal(600_000, extreme.TotalTarget.TotalMilliseconds);
         Assert.Equal(2_000, extreme.MaxLocalEvaluations);
         Assert.Equal(2_000, deep.MaxLocalEvaluations);
+        Assert.Equal(TimeSpan.FromMinutes(37), custom.TotalTarget);
+        Assert.True(custom.UsesExtremeSearch);
+        Assert.False(custom.UsesExtremeConvergence);
+        Assert.Equal(TimeSpan.Zero, custom.ExtremeNoImprovementTimeout);
 
         // No single fixed 5 s wall-clock cap is shared across modes.
         Assert.NotEqual(quick.MaxBeamParents, deep.MaxBeamParents);
         Assert.True(quick.MaxBeamParents < balanced.MaxBeamParents);
         Assert.True(balanced.MaxBeamParents < deep.MaxBeamParents);
+    }
+
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(15, 15)]
+    [InlineData(2_000, 1_440)]
+    public void Custom_duration_is_bounded_by_the_central_policy(
+        int requestedMinutes,
+        int expectedMinutes) {
+        RouteOptimizationProfile profile = RouteOptimizationProfile.For(
+            RouteOptimizationMode.Custom,
+            TimeSpan.FromMinutes(requestedMinutes));
+
+        Assert.Equal(TimeSpan.FromMinutes(expectedMinutes), profile.TotalTarget);
     }
 
     [Fact]

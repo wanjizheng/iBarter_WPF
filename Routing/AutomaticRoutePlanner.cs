@@ -23,7 +23,7 @@ public sealed class AutomaticRoutePlanner {
         RoutePlan? preferredIncumbent,
         CancellationToken cancellationToken = default,
         Action<ExtremeSearchProgressSnapshot>? extremeProgress = null) {
-        if (profile.Mode == RouteOptimizationMode.Extreme)
+        if (profile.UsesExtremeSearch)
             return PlanExtreme(
                 request, profile, preferredIncumbent, cancellationToken, extremeProgress);
 
@@ -391,11 +391,15 @@ public sealed class AutomaticRoutePlanner {
             result.MemoryLimitMb,
             result.Failure)
         + FormattableString.Invariant(
-            $" attempts={result.AttemptCount} routeLimit={result.RouteLimit} fullRouteSpace={result.FullRouteSpace} termination={result.TerminationReason}")
+            $" attempts={result.AttemptCount} solverCandidates={result.SolverCandidateCount} solverImprovements={result.SolverImprovementCount} metricScope=lastAttempt routeLimit={result.RouteLimit} fullRouteSpace={result.FullRouteSpace} termination={result.TerminationReason}")
         + (result.Plan?.Objective is { } candidateObjective
             ? FormattableString.Invariant(
-                $" candidateRoutes={result.Plan.Routes.Count} candidateDistance={candidateObjective.TotalDistance:F1}")
-            : " candidateDistance=n/a");
+                $" bestRoutes={result.Plan.Routes.Count} bestDistance={candidateObjective.TotalDistance:F1}")
+            : " bestDistance=n/a")
+        + (result.LastSolverCandidate?.Objective is { } solverObjective
+            ? FormattableString.Invariant(
+                $" solverCandidateRoutes={result.LastSolverCandidate.Routes.Count} solverCandidateDistance={solverObjective.TotalDistance:F1}")
+            : " solverCandidateDistance=n/a");
 
     private static string ExtremeDetail(
         string status,

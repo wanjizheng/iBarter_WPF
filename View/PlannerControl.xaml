@@ -62,13 +62,24 @@
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.ManualSelection}" Tag="ManualSelection" />
             </syncfusion:ComboBoxAdv>
             <Label Content="{loc:Localize str.Planner.AutoPlan.OptimMode}" VerticalAlignment="Center" />
-            <syncfusion:ComboBoxAdv x:Name="ComboBoxAdv_OptimMode" SelectedIndex="1" Width="205"
+            <syncfusion:ComboBoxAdv x:Name="ComboBoxAdv_OptimMode" SelectedIndex="1" Width="230"
                                     SelectionChanged="ComboBoxAdv_OptimMode_SelectionChanged">
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.OptimQuick}" Tag="Quick" />
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.OptimBalanced}" Tag="Balanced" />
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.OptimDeep}" Tag="Deep" />
                 <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.OptimExtreme}" Tag="Extreme" />
+                <syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Planner.AutoPlan.OptimCustom}" Tag="Custom" />
             </syncfusion:ComboBoxAdv>
+            <StackPanel x:Name="Panel_CustomSearchDuration" Orientation="Horizontal"
+                        VerticalAlignment="Center" Visibility="Collapsed">
+                <TextBox x:Name="TextBox_CustomSearchMinutes" Width="52" MaxLength="4"
+                         Text="10" VerticalContentAlignment="Center"
+                         PreviewTextInput="TextBox_CustomSearchMinutes_PreviewTextInput"
+                         LostKeyboardFocus="TextBox_CustomSearchMinutes_LostKeyboardFocus"
+                         ToolTip="{loc:Localize str.Planner.AutoPlan.CustomDurationTip}" />
+                <Label Content="{loc:Localize str.Planner.AutoPlan.CustomDurationUnit}"
+                       VerticalAlignment="Center" Padding="4,0,8,0" />
+            </StackPanel>
             <controls:FluentIconButton x:Name="ButtonAdv_AutoPlan" IconData="{StaticResource FluentIcon.VehicleShip}"
                 Label="{loc:Localize str.Planner.Btn.AutoPlan}" ToolTip="{loc:Localize str.Planner.Btn.AutoPlanTip}" Click="ButtonAdv_AutoPlan_Click" />
             <Separator />
@@ -83,16 +94,27 @@
         <Border x:Name="Border_ExtremeSearchStatus" Grid.Row="1" Visibility="Collapsed"
                 Margin="6,4" Padding="10,7" CornerRadius="4"
                 BorderBrush="#665B8DEF" BorderThickness="1" Background="#145B8DEF">
-            <StackPanel>
-                <TextBlock x:Name="Text_ExtremeSearchHeader" FontWeight="SemiBold" />
-                <WrapPanel Margin="0,4,0,0">
-                    <TextBlock x:Name="Text_ExtremeSearchElapsed" Margin="0,0,22,2" />
-                    <TextBlock x:Name="Text_ExtremeSearchBest" Margin="0,0,22,2" />
-                    <TextBlock x:Name="Text_ExtremeSearchLastImprovement" Margin="0,0,22,2" />
-                    <TextBlock x:Name="Text_ExtremeSearchSinceImprovement" Margin="0,0,22,2" />
-                </WrapPanel>
-                <TextBlock x:Name="Text_ExtremeSearchTermination" TextWrapping="Wrap" />
-            </StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock x:Name="Text_ExtremeSearchHeader" FontWeight="SemiBold" />
+                    <WrapPanel Margin="0,4,0,0">
+                        <TextBlock x:Name="Text_ExtremeSearchElapsed" Margin="0,0,22,2" />
+                        <TextBlock x:Name="Text_ExtremeSearchBest" Margin="0,0,22,2" />
+                        <TextBlock x:Name="Text_ExtremeSearchLastImprovement" Margin="0,0,22,2" />
+                        <TextBlock x:Name="Text_ExtremeSearchSinceImprovement" Margin="0,0,22,2" />
+                    </WrapPanel>
+                    <TextBlock x:Name="Text_ExtremeSearchTermination" TextWrapping="Wrap" />
+                </StackPanel>
+                <Button x:Name="Button_DismissExtremeSearchStatus" Grid.Column="1"
+                        Content="×" Width="26" Height="26" Margin="10,0,0,0"
+                        VerticalAlignment="Top" Visibility="Collapsed"
+                        ToolTip="{loc:Localize str.Planner.Extreme.DismissStatus}"
+                        Click="Button_DismissExtremeSearchStatus_Click" />
+            </Grid>
         </Border>
         <Grid Grid.Row="2">
             <syncfusion:SfDataGrid x:Name="DataGrid_Planner" Height="NaN" Width="NaN"

@@ -35,6 +35,7 @@ namespace iBarter.View {
         private DispatcherTimer? extremeSearchUiTimer;
         private System.Diagnostics.Stopwatch? extremeSearchUiWatch;
         private ExtremeSearchProgressSnapshot? extremeSearchUiOverride;
+        private RouteOptimizationProfile? activeExtremeSearchProfile;
 
         // Phase 2 (i18n): column-header MappingName -> resource key for every
         // direct GridTextColumn on DataGrid_Planner. HeaderText is a plain CLR
@@ -83,6 +84,9 @@ namespace iBarter.View {
         public PlannerControl() {
             InitializeComponent();
             if (IsDesignMode) return;
+            TextBox_CustomSearchMinutes.Text = CustomRouteSearchDurationPolicy.ClampMinutes(
+                Properties.Settings.Default.CustomRouteSearchMinutes)
+                .ToString(CultureInfo.InvariantCulture);
             this.DataContext = App.myPVM;
             DataGrid_Planner.ItemsSource = App.myPVM.BarterCollection;
 
@@ -165,6 +169,7 @@ namespace iBarter.View {
                         RouteOptimizationMode.Balanced,
                         RouteOptimizationMode.Deep,
                         RouteOptimizationMode.Extreme,
+                        RouteOptimizationMode.Custom,
                     };
                 }
 
@@ -284,13 +289,47 @@ namespace iBarter.View {
             if (ComboBoxAdv_OptimMode?.SelectedItem is System.Windows.Controls.ContentControl { Tag: string tag }) {
                 if (Enum.TryParse(tag, out RouteOptimizationMode parsed)) mode = parsed;
             }
-            return RouteOptimizationProfile.For(mode);
+            return mode == RouteOptimizationMode.Custom
+                ? RouteOptimizationProfile.For(
+                    mode, TimeSpan.FromMinutes(ReadAndPersistCustomSearchMinutes()))
+                : RouteOptimizationProfile.For(mode);
         }
 
         private void ComboBoxAdv_OptimMode_SelectionChanged(object sender,
             System.Windows.Controls.SelectionChangedEventArgs e) {
             var profile = ResolveSelectedOptimizationProfile();
+            if (Panel_CustomSearchDuration is not null)
+                Panel_CustomSearchDuration.Visibility = profile.Mode == RouteOptimizationMode.Custom
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
             App.myRouteCoordinator?.SetOptimizationMode(profile.Mode);
+        }
+
+        private void TextBox_CustomSearchMinutes_PreviewTextInput(
+            object sender, TextCompositionEventArgs e) =>
+            e.Handled = e.Text.Any(character => !char.IsDigit(character));
+
+        private void TextBox_CustomSearchMinutes_LostKeyboardFocus(
+            object sender, KeyboardFocusChangedEventArgs e) =>
+            ReadAndPersistCustomSearchMinutes();
+
+        private int ReadAndPersistCustomSearchMinutes() {
+            int fallback = CustomRouteSearchDurationPolicy.ClampMinutes(
+                Properties.Settings.Default.CustomRouteSearchMinutes);
+            int minutes = int.TryParse(
+                    TextBox_CustomSearchMinutes?.Text,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out int parsed)
+                ? CustomRouteSearchDurationPolicy.ClampMinutes(parsed)
+                : fallback;
+            if (TextBox_CustomSearchMinutes is not null)
+                TextBox_CustomSearchMinutes.Text = minutes.ToString(CultureInfo.InvariantCulture);
+            if (Properties.Settings.Default.CustomRouteSearchMinutes != minutes) {
+                Properties.Settings.Default.CustomRouteSearchMinutes = minutes;
+                Properties.Settings.Default.Save();
+            }
+            return minutes;
         }
 
         private static string OptimModeLocalizationKey(RouteOptimizationMode mode) => mode switch {
@@ -298,8 +337,18 @@ namespace iBarter.View {
             RouteOptimizationMode.Balanced => "str.Planner.AutoPlan.OptimBalanced",
             RouteOptimizationMode.Deep => "str.Planner.AutoPlan.OptimDeep",
             RouteOptimizationMode.Extreme => "str.Planner.AutoPlan.OptimExtreme",
+            RouteOptimizationMode.Custom => "str.Planner.AutoPlan.OptimCustom",
             _ => "str.Planner.AutoPlan.OptimBalanced",
         };
+
+        private static string OptimModeDisplay(
+            RouteOptimizationProfile profile,
+            LanguageService language) => profile.Mode == RouteOptimizationMode.Custom
+                ? language.Localize(
+                    "str.Planner.AutoPlan.OptimCustomDisplay",
+                    ((int)profile.TotalTarget.TotalMinutes).ToString(
+                        CultureInfo.InvariantCulture))
+                : language.Localize(OptimModeLocalizationKey(profile.Mode));
 
         private static string FormatRouteDiagnostic(
             RouteDiagnostic? diagnostic,
@@ -1508,7 +1557,7 @@ namespace iBarter.View {
                 return;
             }
             var profile = ResolveSelectedOptimizationProfile();
-            ButtonAdv_AutoPlan.IsEnabled = profile.Mode == RouteOptimizationMode.Extreme;
+            ButtonAdv_AutoPlan.IsEnabled = profile.UsesExtremeSearch;
             try {
 
             // End any in-progress edit so the just-typed value makes it into the
@@ -1611,7 +1660,7 @@ namespace iBarter.View {
             AutomaticRoutePlanningRequest? restoredContinuationRequest = null;
             bool continuingRestoredSearch = false;
             bool useCurrentPlanAsIncumbent = true;
-            if (profile.Mode == RouteOptimizationMode.Extreme
+            if (profile.UsesExtremeSearch
                 && (restoredContinuationRequest = App.myRouteCoordinator
                     .GetRestoredExtremeContinuationRequest()) is not null) {
                 MessageBoxResult resumeChoice = MessageBox.Show(
@@ -1698,14 +1747,14 @@ namespace iBarter.View {
                     routeRows, storageRows, islandRows, cargo,
                     new RouteSearchLimits(250_000, profile.MaxLocalEvaluations), profile);
             App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Solving",
-                svc.Localize(OptimModeLocalizationKey(profile.Mode))), Brushes.SteelBlue);
-            if (profile.Mode == RouteOptimizationMode.Extreme)
-                BeginExtremeSearchFeedback();
+                OptimModeDisplay(profile, svc)), Brushes.SteelBlue);
+            if (profile.UsesExtremeSearch)
+                BeginExtremeSearchFeedback(profile);
             var routePlan = await App.myRouteCoordinator.CalculateAsync(
                 request, profile, useCurrentPlanAsIncumbent);
-            if (profile.Mode == RouteOptimizationMode.Extreme)
+            if (profile.UsesExtremeSearch)
                 RefreshExtremeSearchFeedback();
-            bool cancelledWithBest = profile.Mode == RouteOptimizationMode.Extreme
+            bool cancelledWithBest = profile.UsesExtremeSearch
                 && routePlan.Status == RoutePlanStatus.Cancelled
                 && routePlan.Objective is not null
                 && routePlan.Routes.Count > 0;
@@ -1784,9 +1833,9 @@ namespace iBarter.View {
             }
             switch (routePlan.Status) {
                 case RoutePlanStatus.Optimal:
-                    if (profile.Mode == RouteOptimizationMode.Extreme) {
+                    if (profile.UsesExtremeSearch) {
                         App.myCFun.Log(svc.Localize("str.Log.AutoRoute.BestKnown",
-                            svc.Localize(OptimModeLocalizationKey(profile.Mode)),
+                            OptimModeDisplay(profile, svc),
                             routePlan.Routes.Count,
                             routePlan.Objective?.TotalDistance ?? 0,
                             routePlan.Diagnostics.FirstOrDefault()?.Detail ?? "",
@@ -1803,7 +1852,7 @@ namespace iBarter.View {
                     // globally optimal" disclaimer in the same message so the
                     // user understands the difference between BestKnown and
                     // Optimal without needing to read the source.
-                    var modeName = svc.Localize(OptimModeLocalizationKey(profile.Mode));
+                    var modeName = OptimModeDisplay(profile, svc);
                     var stopReason = routePlan.Diagnostics.FirstOrDefault()?.Detail ?? "";
                     App.myCFun.Log(svc.Localize("str.Log.AutoRoute.BestKnown",
                         modeName,
@@ -1847,17 +1896,19 @@ namespace iBarter.View {
                 App.myCFun.Log(svc.Localize("str.Log.AutoRoute.MapRenderFailed", exception.Message), Brushes.OrangeRed);
             }
             finally {
-                if (profile.Mode == RouteOptimizationMode.Extreme)
+                if (profile.UsesExtremeSearch)
                     EndExtremeSearchFeedback();
                 ButtonAdv_AutoPlan.IsEnabled = true;
             }
         }
 
-        private void BeginExtremeSearchFeedback() {
+        private void BeginExtremeSearchFeedback(RouteOptimizationProfile profile) {
             extremeSearchRunning = true;
+            activeExtremeSearchProfile = profile;
             extremeSearchUiOverride = null;
             extremeSearchUiWatch = System.Diagnostics.Stopwatch.StartNew();
             Border_ExtremeSearchStatus.Visibility = Visibility.Visible;
+            Button_DismissExtremeSearchStatus.Visibility = Visibility.Collapsed;
             ButtonAdv_AutoPlan.Label = Localization.LanguageService.Instance.Localize(
                 "str.Planner.Extreme.CancelButton");
             ButtonAdv_AutoPlan.IsEnabled = true;
@@ -1887,9 +1938,9 @@ namespace iBarter.View {
                     snapshot?.ElapsedSinceLastImprovement,
                     ExtremeSearchTerminationReason.Error);
             }
-            RefreshExtremeSearchFeedback();
             extremeSearchUiWatch?.Stop();
             extremeSearchRunning = false;
+            RefreshExtremeSearchFeedback();
             ButtonAdv_AutoPlan.Label = Localization.LanguageService.Instance.Localize(
                 "str.Planner.Btn.AutoPlan");
         }
@@ -1912,8 +1963,12 @@ namespace iBarter.View {
                 : null;
 
             Text_ExtremeSearchHeader.Text = svc.Localize(snapshot.IsTerminal
-                ? "str.Planner.Extreme.Completed"
-                : "str.Planner.Extreme.Running");
+                ? activeExtremeSearchProfile?.Mode == RouteOptimizationMode.Custom
+                    ? "str.Planner.Custom.Completed"
+                    : "str.Planner.Extreme.Completed"
+                : activeExtremeSearchProfile?.Mode == RouteOptimizationMode.Custom
+                    ? "str.Planner.Custom.Running"
+                    : "str.Planner.Extreme.Running");
             Text_ExtremeSearchElapsed.Text = svc.Localize(
                 snapshot.IsTerminal
                     ? "str.Planner.Extreme.ElapsedCompleted"
@@ -1931,8 +1986,28 @@ namespace iBarter.View {
             string reasonKey = ExtremeSearchPresentation.TerminationLocalizationKey(
                 snapshot.TerminationReason);
             Text_ExtremeSearchTermination.Text = snapshot.IsTerminal
-                ? svc.Localize("str.Planner.Extreme.Termination", svc.Localize(reasonKey))
+                ? svc.Localize(
+                    "str.Planner.Extreme.Termination",
+                    snapshot.TerminationReason == ExtremeSearchTerminationReason.MaxDurationReached
+                        && activeExtremeSearchProfile?.Mode == RouteOptimizationMode.Custom
+                        ? svc.Localize(
+                            "str.Planner.Custom.Termination.MaxDuration",
+                            FormatExtremeElapsed(
+                                activeExtremeSearchProfile?.TotalTarget ?? snapshot.Elapsed))
+                        : svc.Localize(reasonKey))
                 : string.Empty;
+            Button_DismissExtremeSearchStatus.Visibility = snapshot.IsTerminal
+                && !extremeSearchRunning
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
+        private void Button_DismissExtremeSearchStatus_Click(
+            object sender, RoutedEventArgs e) {
+            if (extremeSearchRunning) return;
+            Border_ExtremeSearchStatus.Visibility = Visibility.Collapsed;
+            extremeSearchUiOverride = null;
+            activeExtremeSearchProfile = null;
         }
 
         private static TimeSpan Max(TimeSpan left, TimeSpan right) =>

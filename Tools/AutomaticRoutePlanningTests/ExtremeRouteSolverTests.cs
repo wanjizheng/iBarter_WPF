@@ -1,9 +1,70 @@
+using System.Diagnostics;
+using System.Text.Json;
 using iBarter.Routing;
 using Xunit;
 
 namespace AutomaticRoutePlanningTests;
 
 public sealed class ExtremeRouteSolverTests {
+    [Fact]
+    public void Continuous_attempt_uses_the_entire_remaining_budget() {
+        Assert.Equal(
+            TimeSpan.FromMinutes(10),
+            ExtremeRouteSolverClient.SelectAttemptDuration(TimeSpan.FromMinutes(10)));
+        Assert.Equal(
+            TimeSpan.FromMilliseconds(250),
+            ExtremeRouteSolverClient.SelectAttemptDuration(TimeSpan.FromMilliseconds(250)));
+        Assert.Equal(
+            TimeSpan.Zero,
+            ExtremeRouteSolverClient.SelectAttemptDuration(TimeSpan.FromMilliseconds(-1)));
+    }
+
+    [Fact]
+    public async Task Cp_sat_worker_gracefully_stops_and_writes_its_final_result() {
+        string solver = SolverPath();
+        Assert.True(File.Exists(solver), $"Build the x64 solver first: {solver}");
+
+        string work = Path.Combine(
+            Path.GetTempPath(), "iBarter", "ExtremeRouteSolverTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        string inputPath = Path.Combine(work, "input.json");
+        string outputPath = Path.Combine(work, "best.json");
+        string stopSignalPath = Path.Combine(work, "stop.signal");
+        try {
+            File.WriteAllText(inputPath, JsonSerializer.Serialize(GracefulStopInput()));
+            File.WriteAllText(stopSignalPath, "NoImprovementConverged");
+
+            using var process = new Process {
+                StartInfo = new ProcessStartInfo {
+                    FileName = solver,
+                    UseShellExecute = false,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                },
+            };
+            process.StartInfo.ArgumentList.Add(inputPath);
+            process.StartInfo.ArgumentList.Add(outputPath);
+            process.StartInfo.ArgumentList.Add(stopSignalPath);
+            Assert.True(process.Start());
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
+                TestContext.Current.CancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+            await process.WaitForExitAsync(timeout.Token);
+
+            string stderr = await process.StandardError.ReadToEndAsync(timeout.Token);
+            Assert.True(File.Exists(outputPath),
+                $"The graceful stop must preserve a final solver response. exit={process.ExitCode}; stderr={stderr}");
+            ExtremeSolverOutputDto output = JsonSerializer.Deserialize<ExtremeSolverOutputDto>(
+                File.ReadAllText(outputPath))!;
+            Assert.Equal(ExtremeRouteSolverProtocol.Version, output.ProtocolVersion);
+            Assert.DoesNotContain(output.Status, new[] { "Error", "ModelInvalid" });
+        }
+        finally {
+            try { Directory.Delete(work, recursive: true); } catch { }
+        }
+    }
+
     [Fact]
     public void Cp_sat_worker_returns_a_replay_verified_inventory_and_capacity_safe_plan() {
         string solver = SolverPath();
@@ -66,6 +127,53 @@ public sealed class ExtremeRouteSolverTests {
         Assert.Null(result.Failure);
         Assert.NotNull(result.Plan);
         Assert.Equal(2, result.Plan!.Routes.Count);
+        Assert.True(RoutePlanVerifier.Verify(request, result.Plan).Success);
+    }
+
+    [Fact]
+    public void Cp_sat_continuous_search_improves_a_verified_warm_start() {
+        string solver = SolverPath();
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["raw"] = new("raw", "Raw", 1, 1),
+            ["coin"] = new("coin", "Coin", 0, 0),
+        };
+        var request = new AutomaticRoutePlanningRequest(
+            [
+                new RouteBarterTask("east", "East", new RoutePoint(100, 0), "raw", 1, "coin", 1),
+                new RouteBarterTask("north", "North", new RoutePoint(0, 100), "raw", 1, "coin", 1),
+                new RouteBarterTask("north-east", "NorthEast", new RoutePoint(100, 100), "raw", 1, "coin", 1),
+            ],
+            items,
+            [new RouteWarehouse("W", "W", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) { ["raw"] = 3 })],
+            extraLT: 0,
+            totalLT: 3,
+            new RouteSearchLimits(10_000, 100),
+            "extreme-continuous-warm-start");
+
+        RouteSimulationState state = RouteSimulationState.CreateInitial(request);
+        state = AssertTransition(RouteStateTransition.TryPickup(
+            request, state, "W", [new RouteItemQuantity("raw", 3)]));
+        state = AssertTransition(RouteStateTransition.TryBarter(request, state, 0));
+        state = AssertTransition(RouteStateTransition.TryBarter(request, state, 1));
+        state = AssertTransition(RouteStateTransition.TryBarter(request, state, 2));
+        state = AssertTransition(RouteStateTransition.TryUnload(request, state, "W"));
+        RoutePlan seed = RoutePlanFactory.FromState(
+            request, state, RoutePlanStatus.BestKnownWithinLimit, []);
+        Assert.True(RoutePlanVerifier.Verify(request, seed).Success);
+
+        ExtremeRouteSolverRunResult result = ExtremeRouteSolverClient.Solve(
+            request, seed, TimeSpan.FromSeconds(20), new ExtremeRouteResources(2, 1_024),
+            TestContext.Current.CancellationToken, solver);
+
+        Assert.Null(result.Failure);
+        Assert.Equal(1, result.AttemptCount);
+        Assert.True(result.SolverCandidateCount > 0);
+        Assert.True(result.SolverImprovementCount > 0);
+        Assert.NotNull(result.LastSolverCandidate);
+        Assert.NotNull(result.Plan);
+        Assert.True(result.Plan!.Objective!.Value.TotalDistance
+            < seed.Objective!.Value.TotalDistance);
         Assert.True(RoutePlanVerifier.Verify(request, result.Plan).Success);
     }
 
@@ -155,5 +263,53 @@ public sealed class ExtremeRouteSolverTests {
         for (int i = 0; i < 5; i++) directory = directory.Parent!;
         return Path.Combine(directory.FullName, "Tools", "ExtremeRouteSolver", "bin", "Release",
             "net10.0", "win-x64", "iBarter.ExtremeRouteSolver.exe");
+    }
+
+    private static RouteSimulationState AssertTransition(RouteTransitionResult transition) {
+        Assert.True(
+            transition.Success,
+            transition.Diagnostic is null
+                ? "transition failed without diagnostic"
+                : $"{transition.Diagnostic.Code}:{transition.Diagnostic.Detail}");
+        return transition.State;
+    }
+
+    private static ExtremeSolverInputDto GracefulStopInput() {
+        const int taskCount = 12;
+        var tasks = Enumerable.Range(0, taskCount)
+            .Select(index => new ExtremeSolverTaskDto(
+                index, $"task-{index}", "W", "raw", 1, "coin", 1))
+            .ToArray();
+        IReadOnlyList<IReadOnlyList<long>> Square(int size) => Enumerable.Range(0, size)
+            .Select(_ => (IReadOnlyList<long>)new long[size]).ToArray();
+        IReadOnlyList<IReadOnlyList<long>> Rectangle(int rows, int columns) =>
+            Enumerable.Range(0, rows)
+                .Select(_ => (IReadOnlyList<long>)new long[columns]).ToArray();
+
+        return new ExtremeSolverInputDto(
+            ExtremeRouteSolverProtocol.Version,
+            TimeLimitSeconds: 10,
+            MemoryLimitMb: 1_024,
+            WorkerCount: 2,
+            MaxRoutes: 1,
+            CargoCapacityLT: taskCount,
+            [
+                new ExtremeSolverItemDto("raw", 1, taskCount),
+                new ExtremeSolverItemDto("coin", 0, taskCount),
+            ],
+            [new ExtremeSolverWarehouseDto(
+                "W", "W", new Dictionary<string, int>(StringComparer.Ordinal) {
+                    ["raw"] = taskCount,
+                    ["coin"] = 0,
+                })],
+            tasks,
+            new Dictionary<string, int>(StringComparer.Ordinal),
+            [new ExtremeSolverRouteDto(
+                1, "W", "W", [new ExtremeSolverPickupDto("raw", taskCount)],
+                Enumerable.Range(0, taskCount).ToArray())],
+            Square(taskCount),
+            Rectangle(1, taskCount),
+            Rectangle(taskCount, 1),
+            Square(1));
     }
 }

@@ -83,9 +83,10 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         RoutePlan? preferredIncumbent = null;
         lock (gate) {
             if (useCurrentPlanAsIncumbent
-                && profile.Mode == RouteOptimizationMode.Extreme
+                && profile.UsesExtremeSearch
                 && currentPlanMode is RouteOptimizationMode.Deep
                     or RouteOptimizationMode.Extreme
+                    or RouteOptimizationMode.Custom
                 && StringComparer.Ordinal.Equals(
                     currentPlan?.InputFingerprint, fingerprint)) {
                 preferredIncumbent = currentPlan;
@@ -104,7 +105,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 profile,
                 preferredIncumbent,
                 ownCancellation.Token,
-                profile.Mode == RouteOptimizationMode.Extreme
+                profile.UsesExtremeSearch
                     ? snapshot => {
                         lock (gate) {
                             if (ownRequestId == requestId

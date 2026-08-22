@@ -5,7 +5,8 @@ public static class ExtremeRouteSolverProtocol {
     public const long DistanceScale = 1_000;
     public const int DefaultTimeLimitSeconds = 600;
     public const int DefaultNoImprovementTimeoutSeconds = 90;
-    public const int SolverSliceSeconds = 10;
+    public const int ProcessPollMilliseconds = 100;
+    public const int GracefulStopTimeoutSeconds = 5;
     public const int MaximumTasks = 32;
 
     public static readonly TimeSpan ExtremeMaxSearchDuration =

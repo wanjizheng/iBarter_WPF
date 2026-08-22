@@ -67,9 +67,15 @@
     <sys:String x:Key="str.Planner.AutoPlan.OptimQuick">快速（約 3 秒）</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.OptimBalanced">平衡（約 10 秒）</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.OptimDeep">深度（約 60 秒）</sys:String>
-    <sys:String x:Key="str.Planner.AutoPlan.OptimExtreme">极深（最多 10 分钟 / 自动资源）</sys:String>
-    <sys:String x:Key="str.Planner.Extreme.Running">正在進行極深搜尋……</sys:String>
-    <sys:String x:Key="str.Planner.Extreme.Completed">極深搜尋完成</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimExtreme">智能（90 秒无改善提前结束）</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimCustom">自定义时长</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.OptimCustomDisplay">自定义时长（{0} 分钟 / 自动资源）</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.CustomDurationUnit">分钟</sys:String>
+    <sys:String x:Key="str.Planner.AutoPlan.CustomDurationTip">范围 1–1440 分钟；不会因连续 90 秒无改善而提前结束</sys:String>
+    <sys:String x:Key="str.Planner.Extreme.Running">正在进行智能搜索……</sys:String>
+    <sys:String x:Key="str.Planner.Extreme.Completed">智能搜索完成</sys:String>
+    <sys:String x:Key="str.Planner.Custom.Running">正在进行自定义时长搜索……</sys:String>
+    <sys:String x:Key="str.Planner.Custom.Completed">自定义时长搜索完成</sys:String>
     <sys:String x:Key="str.Planner.Extreme.CancelButton">取消搜尋</sys:String>
     <sys:String x:Key="str.Planner.Extreme.ElapsedRunning">已運行：{0}</sys:String>
     <sys:String x:Key="str.Planner.Extreme.ElapsedCompleted">總運行時間：{0}</sys:String>
@@ -78,11 +84,13 @@
     <sys:String x:Key="str.Planner.Extreme.LastImprovement">最後改善：{0}</sys:String>
     <sys:String x:Key="str.Planner.Extreme.SinceImprovement">距上次改善：{0}</sys:String>
     <sys:String x:Key="str.Planner.Extreme.Termination">終止原因：{0}</sys:String>
-    <sys:String x:Key="str.Planner.Extreme.Termination.MaxDuration">已達到極深模式最大搜尋時間（10 分鐘）</sys:String>
+    <sys:String x:Key="str.Planner.Extreme.Termination.MaxDuration">已达到智能模式最大搜索时间（10 分钟）</sys:String>
+    <sys:String x:Key="str.Planner.Custom.Termination.MaxDuration">已达到用户指定的搜索时间（{0}）</sys:String>
     <sys:String x:Key="str.Planner.Extreme.Termination.NoImprovement">已連續 90 秒未發現更優路線，搜尋已收斂並提前結束</sys:String>
     <sys:String x:Key="str.Planner.Extreme.Termination.Cancelled">搜尋已由使用者取消，目前顯示的是取消前找到的最佳路線</sys:String>
     <sys:String x:Key="str.Planner.Extreme.Termination.Completed">搜尋正常完成，目前顯示最佳已找到路線</sys:String>
     <sys:String x:Key="str.Planner.Extreme.Termination.Error">搜尋發生錯誤，目前顯示的是錯誤前找到的最佳路線</sys:String>
+    <sys:String x:Key="str.Planner.Extreme.DismissStatus">关闭此状态</sys:String>
     <sys:String x:Key="str.Planner.AutoPlan.ManualSelection">手动选择</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlan">自動規劃</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlanTip">自动策略会填写交换次数；手动选择策略只使用当前交换次数计算最优路线</sys:String>
@@ -94,7 +102,7 @@
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveNoProducer">自動規劃:同一商團內沒有 {0} 的上游生產路線。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveBudgetExceeded">自動規劃:貢獻度預算不足,無法達成 LV5/LV6 庫存目標 ({0})。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ReserveUnreachable">自動規劃:無法滿足 LV5/LV6 庫存目標 ({0})。</sys:String>
-    <sys:String x:Key="str.Msg.Planner.AutoPlan.ExtremeResumeTitle">极深搜索</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.ExtremeResumeTitle">智能/自定义路线搜索</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ExtremeResumePrompt">检测到与当前数据匹配的已保存路线。&#10;&#10;是：从已保存的最佳结果继续向下搜索&#10;否：忽略旧结果，重新搜索&#10;取消：不开始搜索</sys:String>
     <sys:String x:Key="str.ShipCargo.CurrentSelection">当前选择</sys:String>
 

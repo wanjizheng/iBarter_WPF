@@ -7,6 +7,26 @@ public enum RouteOptimizationMode {
     Balanced,
     Deep,
     Extreme,
+    Custom,
+}
+
+public static class CustomRouteSearchDurationPolicy {
+    public const int MinimumMinutes = 1;
+    public const int MaximumMinutes = 1_440;
+    public const int DefaultMinutes = 10;
+
+    public static int ClampMinutes(int minutes) => Math.Clamp(
+        minutes, MinimumMinutes, MaximumMinutes);
+
+    public static TimeSpan Normalize(TimeSpan duration) {
+        double minutes = Math.Ceiling(duration.TotalMinutes);
+        int bounded = ClampMinutes(minutes >= int.MaxValue
+            ? MaximumMinutes
+            : minutes <= int.MinValue
+                ? MinimumMinutes
+                : (int)minutes);
+        return TimeSpan.FromMinutes(bounded);
+    }
 }
 
 public enum BeamStopReason {
@@ -29,15 +49,19 @@ public sealed record RouteOptimizationProfile(
     int MaxLocalEvaluations,
     int BeamWidth) {
 
-    public TimeSpan ExtremeMaxSearchDuration => Mode == RouteOptimizationMode.Extreme
+    public TimeSpan ExtremeMaxSearchDuration => UsesExtremeSearch
         ? TotalTarget
         : TimeSpan.Zero;
     public TimeSpan ExtremeNoImprovementTimeout => Mode == RouteOptimizationMode.Extreme
         ? ExtremeRouteSolverProtocol.ExtremeNoImprovementTimeout
         : TimeSpan.Zero;
     public bool UsesExtremeConvergence => Mode == RouteOptimizationMode.Extreme;
+    public bool UsesExtremeSearch => Mode is RouteOptimizationMode.Extreme
+        or RouteOptimizationMode.Custom;
 
-    public static RouteOptimizationProfile For(RouteOptimizationMode mode) => mode switch {
+    public static RouteOptimizationProfile For(
+        RouteOptimizationMode mode,
+        TimeSpan? customDuration = null) => mode switch {
         RouteOptimizationMode.Quick => new(
             Mode: RouteOptimizationMode.Quick,
             TotalTarget: TimeSpan.FromSeconds(3),
@@ -65,6 +89,16 @@ public sealed record RouteOptimizationProfile(
         RouteOptimizationMode.Extreme => new(
             Mode: RouteOptimizationMode.Extreme,
             TotalTarget: ExtremeRouteSolverProtocol.ExtremeMaxSearchDuration,
+            FinalizationReserve: TimeSpan.Zero,
+            MaxBeamParents: 100_000,
+            MaxSuccessors: 4_000_000,
+            MaxLocalEvaluations: 2_000,
+            BeamWidth: 1_024),
+        RouteOptimizationMode.Custom => new(
+            Mode: RouteOptimizationMode.Custom,
+            TotalTarget: CustomRouteSearchDurationPolicy.Normalize(
+                customDuration ?? TimeSpan.FromMinutes(
+                    CustomRouteSearchDurationPolicy.DefaultMinutes)),
             FinalizationReserve: TimeSpan.Zero,
             MaxBeamParents: 100_000,
             MaxSuccessors: 4_000_000,
@@ -149,7 +183,9 @@ public sealed class RouteSearchBudget {
         // additionally cap by task count so the frontier stays manageable
         // for very large plans. Tests can pass taskCount=0 to disable the
         // task-count cap.
-        int taskCap = profile.Mode is RouteOptimizationMode.Deep or RouteOptimizationMode.Extreme
+        int taskCap = profile.Mode is RouteOptimizationMode.Deep
+            or RouteOptimizationMode.Extreme
+            or RouteOptimizationMode.Custom
             ? int.MaxValue
             : taskCount switch {
                 >= 20 => 128,

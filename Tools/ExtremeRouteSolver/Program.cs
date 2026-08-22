@@ -2,8 +2,9 @@ using System.Text.Json;
 using Google.OrTools.Sat;
 using iBarter.Routing;
 
-if (args.Length != 2) {
-    Console.Error.WriteLine("usage: iBarter.ExtremeRouteSolver <input.json> <output.json>");
+if (args.Length is < 2 or > 3) {
+    Console.Error.WriteLine(
+        "usage: iBarter.ExtremeRouteSolver <input.json> <output.json> [stop-signal]");
     return 2;
 }
 
@@ -12,7 +13,11 @@ try {
     var input = JsonSerializer.Deserialize<ExtremeSolverInputDto>(
         await File.ReadAllTextAsync(args[0]), jsonOptions)
         ?? throw new InvalidDataException("The solver input is empty.");
-    var engine = new ExtremeCpSatEngine(input, args[1], jsonOptions);
+    var engine = new ExtremeCpSatEngine(
+        input,
+        args[1],
+        jsonOptions,
+        args.Length == 3 ? args[2] : null);
     return engine.Solve();
 }
 catch (Exception ex) {
@@ -38,6 +43,7 @@ internal sealed class ExtremeCpSatEngine {
     private readonly ExtremeSolverInputDto input;
     private readonly string outputPath;
     private readonly JsonSerializerOptions jsonOptions;
+    private readonly string? stopSignalPath;
     private readonly int n;
     private readonly int wCount;
     private readonly int itemCount;
@@ -58,10 +64,12 @@ internal sealed class ExtremeCpSatEngine {
     public ExtremeCpSatEngine(
         ExtremeSolverInputDto input,
         string outputPath,
-        JsonSerializerOptions jsonOptions) {
+        JsonSerializerOptions jsonOptions,
+        string? stopSignalPath) {
         this.input = input;
         this.outputPath = outputPath;
         this.jsonOptions = jsonOptions;
+        this.stopSignalPath = stopSignalPath;
         n = input.Tasks.Count;
         wCount = input.Warehouses.Count;
         itemCount = input.Items.Count;
@@ -87,11 +95,12 @@ internal sealed class ExtremeCpSatEngine {
             "cp_model_presolve:true",
             "use_optimization_hints:true",
         };
-        // Extreme is an anytime "best route within ten minutes" mode. Once a
-        // verified seed exists, dedicate the CP-SAT portfolio to large-neighborhood
-        // improvement instead of spending most workers proving a very weak bound.
-        if (input.InitialRoutes.Count > 0)
-            parameters.Add("use_lns_only:true");
+        // Keep CP-SAT's complete default portfolio even when a verified seed
+        // is supplied. InitialRoutes is a partial hint: publication can contain
+        // intermediate warehouse boundaries that this compact solver model does
+        // not encode one-for-one. use_lns_only would disable the workers needed
+        // to establish a base solution and a meaningful objective bound, which
+        // can leave a large hinted model in Unknown for the whole time budget.
         if (Environment.GetEnvironmentVariable("IBARTER_EXTREME_DIAGNOSTICS") == "1") {
             parameters.Remove("log_search_progress:false");
             parameters.Add("log_search_progress:true");
@@ -108,6 +117,7 @@ internal sealed class ExtremeCpSatEngine {
         // while the managed callback walked thousands of variables. This is a
         // bounded optimization run, so CP-SAT returns its best feasible result
         // at the time limit and the intermediate callback is unnecessary.
+        using var stopMonitor = new SolverStopSignalMonitor(solver, stopSignalPath);
         CpSolverStatus status = solver.Solve(model);
         writer.WriteFinal(solver, status);
         return status is CpSolverStatus.Optimal or CpSolverStatus.Feasible ? 0 : 3;
@@ -429,6 +439,41 @@ internal sealed class ExtremeCpSatEngine {
             for (int column = 0; column < columns; column++)
                 result[row, column] = tuples[row][column];
         return result;
+    }
+}
+
+/// <summary>
+/// A file signal lets the x86 WPF host ask the isolated x64 CP-SAT process to
+/// stop without killing it. CpSolver.StopSearch is asynchronous; Solve then
+/// returns normally and FinalSolutionWriter persists the best solution held by
+/// the native solver before the helper exits.
+/// </summary>
+internal sealed class SolverStopSignalMonitor : IDisposable {
+    private readonly CancellationTokenSource completion = new();
+    private readonly Task monitor;
+
+    public SolverStopSignalMonitor(CpSolver solver, string? stopSignalPath) {
+        monitor = string.IsNullOrWhiteSpace(stopSignalPath)
+            ? Task.CompletedTask
+            : Task.Run(async () => {
+                while (!completion.IsCancellationRequested) {
+                    if (File.Exists(stopSignalPath))
+                        solver.StopSearch();
+                    try {
+                        await Task.Delay(50, completion.Token);
+                    }
+                    catch (OperationCanceledException) {
+                        break;
+                    }
+                }
+            });
+    }
+
+    public void Dispose() {
+        completion.Cancel();
+        try { monitor.GetAwaiter().GetResult(); }
+        catch (OperationCanceledException) { }
+        completion.Dispose();
     }
 }
 

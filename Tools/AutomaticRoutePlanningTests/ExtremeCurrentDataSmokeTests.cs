@@ -272,13 +272,21 @@ public sealed class ExtremeCurrentDataSmokeTests {
         string solver = ExtremeRouteSolverTestsPath();
         int seconds = int.TryParse(Environment.GetEnvironmentVariable("EXTREME_SMOKE_SECONDS"), out int configured)
             ? Math.Max(1, configured)
-            : 60;
+            : 180;
 
         var watch = Stopwatch.StartNew();
+        var controller = new ExtremeSearchController(
+            TimeSpan.FromSeconds(seconds),
+            noImprovementTimeout: TimeSpan.Zero);
+        controller.TryAcceptCandidate(seed);
         ExtremeRouteSolverRunResult result = ExtremeRouteSolverClient.Solve(
-            request, seed, TimeSpan.FromSeconds(seconds),
+            request,
+            seed,
             ExtremeRouteResourcePolicy.Detect(),
-            TestContext.Current.CancellationToken, solver);
+            TestContext.Current.CancellationToken,
+            controller,
+            progress: null,
+            solver);
         watch.Stop();
 
         output.WriteLine(
@@ -288,10 +296,21 @@ public sealed class ExtremeCurrentDataSmokeTests {
             $"elapsed={watch.Elapsed.TotalSeconds:F1}s distance={result.Plan?.Objective?.TotalDistance:F1} " +
             $"bound={result.BestBound:F1} gap={result.RelativeGap:P2} " +
             $"workers={result.WorkerCount} memory={result.MemoryLimitMb}MB " +
-            $"attempts={result.AttemptCount} failure={result.Failure}");
+            $"attempts={result.AttemptCount} candidates={result.SolverCandidateCount} " +
+            $"improvements={result.SolverImprovementCount} failure={result.Failure}");
         Assert.InRange(request.Tasks.Count, 1, ExtremeRouteSolverProtocol.MaximumTasks);
+        Assert.Equal(1, result.AttemptCount);
         Assert.NotNull(result.Plan);
+        Assert.True(result.SolverCandidateCount > 0,
+            "The current-data smoke must observe a CP-SAT candidate; returning the supplied seed alone does not exercise the solver.");
+        Assert.NotNull(result.LastSolverCandidate);
+        Assert.True(RoutePlanVerifier.Verify(request, result.LastSolverCandidate!).Success);
         Assert.True(RoutePlanVerifier.Verify(request, result.Plan!).Success);
+        if (Environment.GetEnvironmentVariable("EXTREME_REQUIRE_IMPROVEMENT") is not null) {
+            Assert.True(result.SolverImprovementCount > 0,
+                $"CP-SAT produced {result.SolverCandidateCount} verified candidate(s) but did not improve the supplied seed; " +
+                $"seed={seed?.Objective?.TotalDistance:F1}, candidate={result.LastSolverCandidate?.Objective?.TotalDistance:F1}.");
+        }
         if (seed?.Objective is { } seedObjective) {
             Assert.True(result.Plan!.Objective?.TotalDistance <= seedObjective.TotalDistance,
                 $"CP-SAT distance {result.Plan.Objective?.TotalDistance:F1} must not exceed seed {seedObjective.TotalDistance:F1}.");

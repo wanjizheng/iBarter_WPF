@@ -41,7 +41,7 @@ public sealed record ExtremeSearchProgressSnapshot(
 public sealed class ExtremeSearchController {
     private readonly IMonotonicClock clock;
     private readonly TimeSpan maxDuration;
-    private readonly TimeSpan noImprovementTimeout;
+    private readonly TimeSpan? noImprovementTimeout;
     private readonly long searchStartedAt;
     private long lastImprovementAt;
     private TimeSpan? lastImprovementElapsed;
@@ -51,11 +51,11 @@ public sealed class ExtremeSearchController {
 
     public ExtremeSearchController(
         TimeSpan maxDuration,
-        TimeSpan noImprovementTimeout,
+        TimeSpan? noImprovementTimeout,
         IMonotonicClock? clock = null) {
         if (maxDuration <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(maxDuration));
-        if (noImprovementTimeout <= TimeSpan.Zero)
+        if (noImprovementTimeout < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(noImprovementTimeout));
         this.clock = clock ?? StopwatchMonotonicClock.Instance;
         if (this.clock.Frequency <= 0)
@@ -94,15 +94,34 @@ public sealed class ExtremeSearchController {
         bool userCancellationRequested = false) {
         if (terminationReason != ExtremeSearchTerminationReason.None)
             return terminationReason;
+        ExtremeSearchTerminationReason pending = CheckTermination(
+            userCancellationRequested);
+        return pending == ExtremeSearchTerminationReason.None
+            ? pending
+            : Finish(pending);
+    }
+
+    /// <summary>
+    /// Inspects the monotonic deadlines without sealing the lifecycle. The
+    /// solver client uses this while a CP-SAT slice is still running so it can
+    /// request a graceful stop, read the slice's final candidate, and only
+    /// then decide whether convergence still applies.
+    /// </summary>
+    public ExtremeSearchTerminationReason CheckTermination(
+        bool userCancellationRequested = false) {
+        if (terminationReason != ExtremeSearchTerminationReason.None)
+            return terminationReason;
         if (userCancellationRequested)
-            return Finish(ExtremeSearchTerminationReason.UserCancelled);
+            return ExtremeSearchTerminationReason.UserCancelled;
 
         long now = clock.GetTimestamp();
         if (ElapsedAt(now) >= maxDuration)
-            return Finish(ExtremeSearchTerminationReason.MaxDurationReached);
+            return ExtremeSearchTerminationReason.MaxDurationReached;
         if (bestPlan is not null
-            && ElapsedBetween(lastImprovementAt, now) >= noImprovementTimeout)
-            return Finish(ExtremeSearchTerminationReason.NoImprovementConverged);
+            && noImprovementTimeout is { } convergenceTimeout
+            && convergenceTimeout > TimeSpan.Zero
+            && ElapsedBetween(lastImprovementAt, now) >= convergenceTimeout)
+            return ExtremeSearchTerminationReason.NoImprovementConverged;
         return ExtremeSearchTerminationReason.None;
     }
 

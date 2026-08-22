@@ -46,6 +46,26 @@ public sealed class ExtremeSearchLifecycleTests {
     }
 
     [Fact]
+    public void Pending_convergence_does_not_seal_before_the_final_slice_candidate_is_read() {
+        var (controller, clock) = CreateController();
+        controller.TryAcceptCandidate(Plan(distance: 200));
+        clock.Advance(TimeSpan.FromSeconds(90));
+
+        Assert.Equal(
+            ExtremeSearchTerminationReason.NoImprovementConverged,
+            controller.CheckTermination());
+        Assert.Equal(ExtremeSearchTerminationReason.None, controller.TerminationReason);
+        Assert.True(controller.TryAcceptCandidate(Plan(distance: 150)));
+        Assert.Equal(TimeSpan.FromSeconds(90), controller.LastImprovementElapsed);
+        Assert.Equal(ExtremeSearchTerminationReason.None, controller.EvaluateTermination());
+
+        clock.Advance(TimeSpan.FromSeconds(90));
+        Assert.Equal(
+            ExtremeSearchTerminationReason.NoImprovementConverged,
+            controller.EvaluateTermination());
+    }
+
+    [Fact]
     public void Equal_objective_does_not_reset_the_convergence_window() {
         var (controller, clock) = CreateController();
         RoutePlan first = Plan(distance: 200);
@@ -104,6 +124,28 @@ public sealed class ExtremeSearchLifecycleTests {
     }
 
     [Fact]
+    public void Custom_duration_disables_no_improvement_but_still_honors_its_deadline() {
+        var clock = new FakeMonotonicClock();
+        var controller = new ExtremeSearchController(
+            TimeSpan.FromMinutes(5),
+            TimeSpan.Zero,
+            clock);
+        RoutePlan best = Plan(distance: 200);
+        Assert.True(controller.TryAcceptCandidate(best));
+
+        clock.Advance(TimeSpan.FromMinutes(4));
+        Assert.Equal(ExtremeSearchTerminationReason.None, controller.EvaluateTermination());
+        Assert.Equal(TimeSpan.FromMinutes(4),
+            controller.Snapshot().ElapsedSinceLastImprovement);
+
+        clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.Equal(
+            ExtremeSearchTerminationReason.MaxDurationReached,
+            controller.EvaluateTermination());
+        Assert.Same(best, controller.BestPlan);
+    }
+
+    [Fact]
     public void Early_stop_retains_the_best_candidate_from_the_entire_search() {
         var (controller, clock) = CreateController();
         controller.TryAcceptCandidate(Plan(distance: 300));
@@ -150,6 +192,8 @@ public sealed class ExtremeSearchLifecycleTests {
 
         Assert.Equal(ExtremeSearchTerminationReason.UserCancelled, result.TerminationReason);
         Assert.Same(best, result.Plan);
+        Assert.Equal("NotRun", result.SolverStatus);
+        Assert.Null(result.Failure);
     }
 
     [Fact]
@@ -187,6 +231,20 @@ public sealed class ExtremeSearchLifecycleTests {
 
         Assert.All(keys, key => Assert.False(string.IsNullOrWhiteSpace(key)));
         Assert.Equal(keys.Length, keys.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void Planner_ui_exposes_custom_duration_and_a_terminal_status_dismiss_button() {
+        DirectoryInfo directory = new(AppContext.BaseDirectory);
+        for (int i = 0; i < 5; i++) directory = directory.Parent!;
+        string xaml = File.ReadAllText(Path.Combine(
+            directory.FullName, "View", "PlannerControl.xaml"));
+
+        Assert.Contains("Tag=\"Custom\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TextBox_CustomSearchMinutes", xaml, StringComparison.Ordinal);
+        Assert.Contains("Button_DismissExtremeSearchStatus", xaml, StringComparison.Ordinal);
+        Assert.Contains("Click=\"Button_DismissExtremeSearchStatus_Click\"",
+            xaml, StringComparison.Ordinal);
     }
 
     private static (ExtremeSearchController Controller, FakeMonotonicClock Clock)
