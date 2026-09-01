@@ -106,6 +106,18 @@ public static class RoutePlanRestoreCompatibility {
         if (IsCompatibleDirect(currentRequest, persistedPlan, completedBarterRowIds))
             return true;
 
+        // A map-completed capacity segment reduces the Planner's authoritative
+        // remaining ExchangeQuantity (10 -> 8). Rebuilding the request then
+        // collapses the surviving segment back to the parent PlannerRowId.
+        // Match that task by parent identity plus exact quantities so restart
+        // keeps the already verified remaining route instead of regenerating it.
+        if (TryMapCapacitySplitProgress(
+                currentRequest, persistedPlan, completedBarterRowIds,
+                out var splitMapping)
+            && IsCompatibleWithMapping(
+                currentRequest, persistedPlan, completedBarterRowIds, splitMapping))
+            return true;
+
         // Fall back to the legacy migration. A unique (Island, Item1,
         // Item2) match for every saved RowId succeeds; an ambiguous
         // match fails the whole restore so the user is told to
@@ -116,6 +128,52 @@ public static class RoutePlanRestoreCompatibility {
             return IsCompatibleWithMapping(currentRequest, persistedPlan,
                 completedBarterRowIds, migration.SavedRowIdToCurrentRowId);
         return false;
+    }
+
+    private static bool TryMapCapacitySplitProgress(
+        AutomaticRoutePlanningRequest currentRequest,
+        RoutePlan persistedPlan,
+        IReadOnlySet<string> completedRowIds,
+        out IReadOnlyDictionary<string, string> mapping) {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        var currentTasks = currentRequest.Tasks.ToArray();
+        foreach (var saved in persistedPlan.Routes
+            .SelectMany(route => route.Steps.OfType<BarterStep>())) {
+            var exact = currentTasks.FirstOrDefault(task =>
+                StringComparer.Ordinal.Equals(task.RowId, saved.RowId));
+            if (exact is not null) {
+                result[saved.RowId] = exact.RowId;
+                continue;
+            }
+            if (RouteTaskIdentity.IsCompleted(saved.RowId, completedRowIds)) {
+                result[saved.RowId] = saved.RowId;
+                continue;
+            }
+
+            string plannerRowId = RouteTaskIdentity.PlannerRowId(saved.RowId);
+            var candidates = currentTasks.Where(task =>
+                    StringComparer.Ordinal.Equals(
+                        RouteTaskIdentity.PlannerRowId(task.RowId), plannerRowId)
+                    && StringComparer.Ordinal.Equals(task.IslandId, saved.IslandId)
+                    && StringComparer.Ordinal.Equals(task.Item1Id, saved.Consumed.ItemId)
+                    && task.InputQuantity == saved.Consumed.Quantity
+                    && StringComparer.Ordinal.Equals(task.Item2Id, saved.Produced.ItemId)
+                    && task.OutputQuantity == saved.Produced.Quantity)
+                .ToArray();
+            if (candidates.Length != 1) {
+                mapping = new Dictionary<string, string>();
+                return false;
+            }
+            result[saved.RowId] = candidates[0].RowId;
+        }
+
+        if (currentTasks.Any(task => !result.Values.Contains(
+                task.RowId, StringComparer.Ordinal))) {
+            mapping = new Dictionary<string, string>();
+            return false;
+        }
+        mapping = result;
+        return result.Count > 0;
     }
 
     /// <summary>

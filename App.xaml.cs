@@ -1,5 +1,6 @@
 ﻿using iBarter.Localization;
 using iBarter.Model;
+using iBarter.Persistence;
 using iBarter.View;
 using iBarter.ViewModel;
 using iBarter.Routing;
@@ -202,7 +203,13 @@ namespace iBarter {
             // Hoisting the load to startup makes the data ready before any binding
             // reads it and confines the seed cascade to a single, controlled load.
             if (myStorageVM != null) {
-                myStorageVM.LoadData();
+                // Loading already-persisted storage on startup must not create a
+                // fresh workspace snapshot. A post-restore restart previously
+                // inserted the restored state at the head of history, so the next
+                // Restore toggled forward to the state the user had just undone.
+                using (WorkspaceSnapshotService.SuppressCapture()) {
+                    myStorageVM.LoadData();
+                }
             }
 
             myfmMain.Show();

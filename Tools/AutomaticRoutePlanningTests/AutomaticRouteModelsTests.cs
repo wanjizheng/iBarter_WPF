@@ -35,6 +35,42 @@ public sealed class AutomaticRouteModelsTests {
         Assert.Equal(plannerRowId, RouteTaskIdentity.PlannerRowId(first));
         Assert.Equal(plannerRowId, RouteTaskIdentity.PlannerRowId(second));
         Assert.Equal(plannerRowId, RouteTaskIdentity.CreateSegmentId(plannerRowId, 0, 1));
+        Assert.True(RouteTaskIdentity.IsSegmentId(first));
+        Assert.False(RouteTaskIdentity.IsSegmentId(plannerRowId));
+        Assert.True(RouteTaskIdentity.IsCompleted(
+            first, new HashSet<string>([first], StringComparer.Ordinal)));
+        Assert.False(RouteTaskIdentity.IsCompleted(
+            second, new HashSet<string>([first], StringComparer.Ordinal)));
+        Assert.True(RouteTaskIdentity.IsCompleted(
+            second, new HashSet<string>([plannerRowId], StringComparer.Ordinal)));
+        Assert.False(RouteTaskIdentity.AreAllTasksCompleted(
+            plannerRowId,
+            [first, second],
+            new HashSet<string>([first], StringComparer.Ordinal)));
+        Assert.True(RouteTaskIdentity.AreAllTasksCompleted(
+            plannerRowId,
+            [first, second],
+            new HashSet<string>([first, second], StringComparer.Ordinal)));
+
+        var step = new BarterStep(
+            first,
+            "Ostra",
+            new RouteItemQuantity("IN", 2),
+            new RouteItemQuantity("OUT", 6),
+            new RouteLoadSnapshot(0, 0, 0));
+        Assert.True(RouteTaskIdentity.TryGetExchangeCount(step, 1, 3, out int count));
+        Assert.Equal(2, count);
+        Assert.False(RouteTaskIdentity.TryGetExchangeCount(step, 2, 2, out _));
+
+        var partial = RouteTaskIdentity.DecideCompletion(10, 2);
+        Assert.True(partial.IsValid);
+        Assert.False(partial.CompletesPlannerRow);
+        Assert.Equal(8, partial.RemainingExchangeQuantity);
+        var whole = RouteTaskIdentity.DecideCompletion(8, 8);
+        Assert.True(whole.IsValid);
+        Assert.True(whole.CompletesPlannerRow);
+        Assert.Equal(8, whole.RemainingExchangeQuantity);
+        Assert.False(RouteTaskIdentity.DecideCompletion(2, 8).IsValid);
     }
 
     [Fact]

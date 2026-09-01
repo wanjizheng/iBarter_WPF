@@ -124,7 +124,14 @@ namespace iBarter.View {
                     if (startupLoadCompleted) return;
                     startupLoadCompleted = true;
                     startupLoadScheduled = false;
-                    ButtonAdv_Load_Click(this, new RoutedEventArgs());
+                    // Startup loading is observational: it reconstructs the live
+                    // view from files that are already persisted. Do not create a
+                    // new undo snapshot merely because the application restarted,
+                    // otherwise a subsequent Restore can toggle back to the state
+                    // the user just undid.
+                    using (WorkspaceSnapshotService.SuppressCapture()) {
+                        LoadPlannerData(restoreGridSettings: true);
+                    }
                 }), DispatcherPriority.ContextIdle);
             }
 
@@ -847,7 +854,10 @@ namespace iBarter.View {
             return depth + maxSub;
         }
 
-        private void ButtonAdv_Load_Click(object sender, RoutedEventArgs e) {
+        private void ButtonAdv_Load_Click(object sender, RoutedEventArgs e) =>
+            LoadPlannerData(restoreGridSettings: true);
+
+        private void LoadPlannerData(bool restoreGridSettings) {
             // A manual load supersedes any startup load still waiting in the
             // Dispatcher queue, preventing a second reload moments later.
             startupLoadCompleted = true;
@@ -865,8 +875,14 @@ namespace iBarter.View {
             // one the user actually wants back. Previously a missing
             // XML silently aborted the whole load with no log entry,
             // which looked like "click does nothing" from the UI.
-            bool loadedSetting = false;
-            if (File.Exists(strPath_Setting)) {
+            // Deserializing SfDataGrid columns while a visible grid is already in
+            // its measure/arrange pass leaves Syncfusion's visible-column cache
+            // out of sync with Columns. Restore reloads rows immediately and used
+            // to trigger an endless DataRow.CreateColumn(index) exception storm.
+            // The restored XML remains on disk and will be applied safely on the
+            // next startup; the live restore only needs to reload the data rows.
+            bool loadedSetting = !restoreGridSettings;
+            if (restoreGridSettings && File.Exists(strPath_Setting)) {
                 try {
                     using (var file = File.Open(strPath_Setting, FileMode.Open)) {
                         DataGrid_Planner.Deserialize(file);
@@ -986,7 +1002,7 @@ namespace iBarter.View {
 
                 App.myRouteCoordinator?.Invalidate("snapshot-restore");
                 App.myStorageVM?.LoadData();
-                ButtonAdv_Load_Click(ButtonAdv_Restore, new RoutedEventArgs());
+                LoadPlannerData(restoreGridSettings: false);
                 UpdateParley();
                 UpdateMapControl();
                 // ButtonAdv_Load_Click already reloads the cargo UI before it
@@ -1900,6 +1916,11 @@ namespace iBarter.View {
                     EndExtremeSearchFeedback();
                 ButtonAdv_AutoPlan.IsEnabled = true;
             }
+        }
+
+        public void RefreshDerivedValuesAfterRouteProgress() {
+            UpdateInvChange(-1);
+            UpdateParley();
         }
 
         private void BeginExtremeSearchFeedback(RouteOptimizationProfile profile) {

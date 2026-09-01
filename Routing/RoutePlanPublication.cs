@@ -156,6 +156,11 @@ public static class RoutePlanPublication {
                 RoutePlanFingerprint.Compute(request)));
         }
 
+        var remainingTasks = request.Tasks
+            .Where(task => !RouteTaskIdentity.IsCompleted(
+                task.RowId, completedBarterRowIds))
+            .ToArray();
+
         var routes = new List<PlannedRoute>();
         var projectedWarehouseInventory = request.Warehouses.ToDictionary(
             warehouse => warehouse.WarehouseId,
@@ -191,6 +196,7 @@ public static class RoutePlanPublication {
                 .Where(step => step is not BarterStep barter
                     || !RouteTaskIdentity.IsCompleted(barter.RowId, completedBarterRowIds))
                 .ToArray();
+            steps = RemapRemainingTaskIdentities(steps, remainingTasks);
             if (routes.Count == 0 && hasCompletedPrefix) {
                 // The ship has already executed the pickup and completed
                 // barter prefix. Derive only the missing handoff cargo from
@@ -211,8 +217,16 @@ public static class RoutePlanPublication {
                 0));
         }
 
+        // Planner CK removes an entire Planner row from the live request, but a
+        // capacity-split map completion intentionally leaves the parent row
+        // active until its final segment is done. Remove exact completed task
+        // ids here so replay/verifier compare the projection against the true
+        // remaining work instead of requiring the completed segment again.
+        var remainingTaskRequest = CopyWithTasks(
+            request,
+            remainingTasks);
         var warehouseAdjustedRequest = CopyWithWarehouseInventory(
-            request, projectedWarehouseInventory);
+            remainingTaskRequest, projectedWarehouseInventory);
         var effectiveRequest = firstRouteCarry is null
             ? warehouseAdjustedRequest
             : CopyWithInitialOnBoard(warehouseAdjustedRequest, firstRouteCarry);
@@ -297,6 +311,50 @@ public static class RoutePlanPublication {
             request.Limits,
             request.ConfigurationVersion,
             request.InitialOnBoard);
+
+    private static AutomaticRoutePlanningRequest CopyWithTasks(
+        AutomaticRoutePlanningRequest request,
+        IReadOnlyList<RouteBarterTask> tasks) => new(
+            tasks,
+            request.Items,
+            request.Warehouses,
+            request.ExtraLT,
+            request.TotalLT,
+            request.Limits,
+            request.ConfigurationVersion,
+            request.InitialOnBoard);
+
+    private static RouteStep[] RemapRemainingTaskIdentities(
+        IReadOnlyList<RouteStep> steps,
+        IReadOnlyList<RouteBarterTask> remainingTasks) => steps
+            .Select(step => {
+                if (step is not BarterStep barter) return step;
+                var exact = remainingTasks.FirstOrDefault(task =>
+                    StringComparer.Ordinal.Equals(task.RowId, barter.RowId));
+                if (exact is not null) return step;
+
+                string plannerRowId = RouteTaskIdentity.PlannerRowId(barter.RowId);
+                var candidates = remainingTasks.Where(task =>
+                        StringComparer.Ordinal.Equals(
+                            RouteTaskIdentity.PlannerRowId(task.RowId), plannerRowId)
+                        && StringComparer.Ordinal.Equals(task.IslandId, barter.IslandId)
+                        && StringComparer.Ordinal.Equals(
+                            task.Item1Id, barter.Consumed.ItemId)
+                        && task.InputQuantity == barter.Consumed.Quantity
+                        && StringComparer.Ordinal.Equals(
+                            task.Item2Id, barter.Produced.ItemId)
+                        && task.OutputQuantity == barter.Produced.Quantity)
+                    .ToArray();
+                return candidates.Length == 1
+                    ? new BarterStep(
+                        candidates[0].RowId,
+                        barter.IslandId,
+                        barter.Consumed,
+                        barter.Produced,
+                        barter.Load)
+                    : step;
+            })
+            .ToArray();
 
     private static AutomaticRoutePlanningRequest CopyWithInitialOnBoard(
         AutomaticRoutePlanningRequest request,
