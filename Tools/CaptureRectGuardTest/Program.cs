@@ -117,6 +117,45 @@ if (args.Contains("--item-ocr-alias-only", StringComparer.Ordinal)) {
         "Observed truncated Top-Quality Coconut Syrup OCR alias contract passed.");
     return 0;
 }
+if (CFunctions.JoinItem2OcrLines("[6阶段]阿利赫兹灯塔雕\r\n像\r\n")
+        != "[6阶段]阿利赫兹灯塔雕像") {
+    Console.Error.WriteLine(
+        "Expected the observed wrapped statue name to be joined before catalog matching.");
+    return 1;
+}
+if (args.Contains("--item2-layout-only", StringComparer.Ordinal)) {
+    var item2RectMethod = typeof(CFunctions).GetMethod(
+        "TryBuildItem2OcrRectangle",
+        BindingFlags.Static | BindingFlags.NonPublic)
+        ?? throw new MissingMethodException("TryBuildItem2OcrRectangle");
+    object[] item2RectArgs = { 1116, 585, 25, 1182, 2560, 0, 0, 0, 0 };
+    bool item2RectOk = (bool)item2RectMethod.Invoke(null, item2RectArgs)!;
+    if (!item2RectOk
+        || (int)item2RectArgs[5] != 1492
+        || (int)item2RectArgs[6] != 560
+        || (int)item2RectArgs[7] != 1658
+        || (int)item2RectArgs[8] != 635) {
+        Console.Error.WriteLine(
+            $"Expected buffered wrapped-item rect 1492,560,1658,635 but got {item2RectArgs[5]},{item2RectArgs[6]},{item2RectArgs[7]},{item2RectArgs[8]} ok={item2RectOk}");
+        return 1;
+    }
+    if (!CFunctions.ShouldTryAlternateItem2OcrMode("人")
+        || CFunctions.ShouldTryAlternateItem2OcrMode("中硬币")
+        || CFunctions.ShouldTryAlternateItem2OcrMode("[4阶段]偷窃的海贼团短刀")
+        || CFunctions.SelectPreferredItem2OcrRead(
+            "人",
+            "[6阶段]阿利赫兹灯塔雕\r\n像") != "[6阶段]阿利赫兹灯塔雕\r\n像"
+        || CFunctions.SelectPreferredItem2OcrRead(
+            "他吧  上骑士团上",
+            "[4阶段]海上骑士团的头盔") != "[4阶段]海上骑士团的头盔") {
+        Console.Error.WriteLine(
+            "Expected Auto/SparseText fallback to prefer a structured tiered item read.");
+        return 1;
+    }
+    Console.WriteLine(
+        "Buffered wrapped item2 OCR and single-glyph fallback contract passed.");
+    return 0;
+}
 if (args.Contains("--island-fuzz-audit", StringComparer.Ordinal)) {
     var wrongMatches = new List<string>();
     var unknownMatches = new List<string>();
@@ -644,9 +683,9 @@ if (numberPageSeg != Emgu.CV.OCR.PageSegMode.Auto) {
 }
 var item2PageSeg = CV.SelectPageSegMode(
     CV.OCRType.Words,
-    Emgu.CV.OCR.PageSegMode.Auto);
-if (item2PageSeg != Emgu.CV.OCR.PageSegMode.Auto) {
-    Console.Error.WriteLine($"Expected an explicit item2 OCR segmentation override to select Auto, got {item2PageSeg}.");
+    Emgu.CV.OCR.PageSegMode.SparseText);
+if (item2PageSeg != Emgu.CV.OCR.PageSegMode.SparseText) {
+    Console.Error.WriteLine($"Expected an explicit wrapped-item2 OCR override to select SparseText, got {item2PageSeg}.");
     return 1;
 }
 if (CFunctions.JoinItem2OcrLines("[7阶段]卡尔佩恩匠/\r\n珍珠项链\r\n")
@@ -932,9 +971,9 @@ finally {
 
 Console.WriteLine("Capture file stable-length wait passed.");
 var item2RetryRectMethod = typeof(CFunctions).GetMethod(
-    "TryBuildRetryItem2OcrRectangle",
+    "TryBuildItem2OcrRectangle",
     BindingFlags.Static | BindingFlags.NonPublic)
-    ?? throw new MissingMethodException("TryBuildRetryItem2OcrRectangle");
+    ?? throw new MissingMethodException("TryBuildItem2OcrRectangle");
 
 object[] item2Args = { 1116, 585, 25, 1182, 2560, 0, 0, 0, 0 };
 bool item2Ok = (bool)item2RetryRectMethod.Invoke(null, item2Args)!;
@@ -942,9 +981,9 @@ if (!item2Ok
     || (int)item2Args[5] != 1492
     || (int)item2Args[6] != 560
     || (int)item2Args[7] != 1658
-    || (int)item2Args[8] != 586) {
+    || (int)item2Args[8] != 635) {
     Console.Error.WriteLine(
-        $"Expected retry item2 rect 1492,560,1658,586 but got {item2Args[5]},{item2Args[6]},{item2Args[7]},{item2Args[8]} ok={item2Ok}");
+        $"Expected buffered wrapped-item rect 1492,560,1658,635 but got {item2Args[5]},{item2Args[6]},{item2Args[7]},{item2Args[8]} ok={item2Ok}");
     return 1;
 }
 
