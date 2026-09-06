@@ -281,15 +281,26 @@ namespace iBarter.ViewModel {
         /// <summary>
         /// Method helps to perform product selection change.
         /// </summary>
-        public void OnSelectedProductChanged() {
-            // Use the same path as the selector.  The previous direct-field
-            // initialization skipped SetTheme on startup, then the first UI
-            // change had to repair a partially themed visual tree.
+        public void InitializeThemeAtStartup() {
+            // Complete selection and palette setup before MainWindow runs
+            // InitializeComponent. MainWindow then calls SetTheme once, which
+            // merges the complete theme into Application.Resources.
             selectedtheme = themelist.FirstOrDefault(theme =>
                 theme.ThemeName == MainWindowViewModel.DefaultThemeName);
-            selectedthemename = string.Empty;
-            SelectedThemeName = MainWindowViewModel.DefaultThemeName;
+            selectedthemename = MainWindowViewModel.DefaultThemeName;
+            Palettes = new ObservableCollection<Palette>(PaletteList.Where(x =>
+                x.Theme.Equals(selectedthemename)).ToList<Palette>());
+            synchronizingThemeSelection = true;
+            SelectedPalette = Palettes.FirstOrDefault(x => x.Name.Equals("Default"))
+                ?? Palettes.FirstOrDefault();
+            synchronizingThemeSelection = false;
+
+            RegisterSelectedPalette(selectedthemename);
+            RefreshLegacyGradientColorAliases();
+            UpdateTitleBarBackgroundandForeground(selectedthemename);
+            UpdateApplicationPalette(selectedthemename);
             RaisePropertyChanged(nameof(SelectedTheme));
+            RaisePropertyChanged(nameof(SelectedThemeName));
         }
 
 
@@ -311,10 +322,6 @@ namespace iBarter.ViewModel {
         /// </summary>
         /// <param name="selectedTheme">Selected Theme</param>
         private void OnThemeChanged(string selectedTheme, bool forceResourceReload = false) {
-            // Keep this identical to iMacro's proven implementation: with
-            // ApplyStylesOnApplication enabled once during startup, apply a
-            // fresh Theme instance to every open root window.  ApplicationTheme
-            // must not be mixed into this path.
             if (Application.Current is not null) {
                 foreach (Window window in Application.Current.Windows.OfType<Window>().ToArray())
                     ApplyThemeToWindow(window, selectedTheme, forceResourceReload);
@@ -328,11 +335,6 @@ namespace iBarter.ViewModel {
             }
         }
 
-        /// <summary>
-        /// Applies the currently selected theme to a newly created top-level
-        /// window.  Child windows are created after the initial selection and
-        /// therefore cannot rely on the first MainWindow theme application.
-        /// </summary>
         public void ApplyCurrentThemeToWindow(Window window) {
             if (window is null || string.IsNullOrWhiteSpace(selectedthemename))
                 return;
@@ -344,11 +346,6 @@ namespace iBarter.ViewModel {
             Window window,
             string themeName,
             bool forceResourceReload) {
-            // Syncfusion's Theme dependency-property callback compares Theme
-            // instances by ThemeName. RegisterThemeSettings updates the
-            // palette, but assigning another Theme with the same name is then
-            // ignored. Bounce through Default only for a palette change so
-            // the selected theme's resource dictionaries are rebuilt.
             if (forceResourceReload
                 && string.Equals(
                     SfSkinManager.GetTheme(window)?.ThemeName,
@@ -358,6 +355,43 @@ namespace iBarter.ViewModel {
             }
 
             SfSkinManager.SetTheme(window, new Theme(themeName));
+            RefreshLegacyGradientColorAliases();
+        }
+
+        internal static void RefreshLegacyGradientColorAliases() {
+            if (Application.Current is null)
+                return;
+
+            // Syncfusion 34.2.6 templates still contain StaticResource keys in
+            // the legacy "brush.Color" form, while Common/Brushes now exposes
+            // only SolidColorBrush resources. Restrict lookup to the semantic
+            // brush keys referenced by the package templates; enumerating every
+            // deferred dictionary value would instantiate unrelated templates.
+            string[] brushKeys = {
+                "Border", "BorderAlt", "BorderAlt1", "BorderAlt2",
+                "BorderAlt2Gradient", "BorderAlt4", "BorderAlt5",
+                "BorderAlt5Gradient", "BorderGradient", "ContentBackground",
+                "ContentBackgroundAlt2", "ContentBackgroundHovered",
+                "ContentBackgroundSelected", "ContentForeground",
+                "ErrorBackground", "Fill", "Foreground", "IconColor",
+                "IconColorDisabled", "IconColorHovered", "IconColorSelected",
+                "LinkForeground", "PrimaryBackground",
+                "PrimaryBackgroundOpacity1", "PrimaryBackgroundOpacity2",
+                "PrimaryButtonBorder", "PrimaryButtonBorderGradient",
+                "PrimaryButtonBorderHovered",
+                "PrimaryButtonBorderHoveredGradient", "PrimaryColorLight1",
+                "PrimaryColorLight2", "PrimaryForeground",
+                "SecondaryBackgroundHovered", "SecondaryBackgroundSelected",
+                "SecondaryBorder", "SecondaryBorderGradient",
+                "SecondaryBorderHovered", "SecondaryBorderHoveredGradient",
+                "Series1", "Series2", "Series3", "Series4", "Series5",
+                "SuccessForeground", "WarningForeground"
+            };
+
+            foreach (string brushKey in brushKeys) {
+                if (Application.Current.TryFindResource(brushKey) is SolidColorBrush brush)
+                    Application.Current.Resources[$"{brushKey}.Color"] = brush.Color;
+            }
         }
 
         private void UpdateTitleBarBackgroundandForeground(string selectedTheme) {

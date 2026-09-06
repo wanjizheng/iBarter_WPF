@@ -62,7 +62,8 @@ namespace iBarter.ViewModel {
                         projected.Step.Item2Id, barter.Item2NameDisplay, 0, projected.Step.Item2UnitWeight),
                 };
                 return new BarterRouteStepViewModel(
-                    routeStep, barter.IsLandNameDisplay, items, barter);
+                    routeStep, barter.IsLandNameDisplay, items,
+                    projected.Load.PeakTotalLT, barter);
             }).ToArray();
             RaisePropertyChanged(nameof(ManualSteps));
             return projection;

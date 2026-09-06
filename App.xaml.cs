@@ -66,11 +66,10 @@ namespace iBarter {
             this.DispatcherUnhandledException += App_DispatcherUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
-            // Match the proven iMacro theme lifecycle: select application-level
-            // resources once at startup, then apply every theme/palette change
-            // with SetTheme on each open window.  Do not mix this with the
-            // ApplicationTheme property; that path retained the first theme in
-            // iBarter and broke Dark -> Light switching.
+            // Keep one Syncfusion theme path. With application-level resources,
+            // SetTheme loads the complete common/control dictionaries together;
+            // mixing ApplicationTheme/default-style loading with SetTheme leaves
+            // DockingManager templates temporarily missing Windows11 brush keys.
             SfSkinManager.ApplyStylesOnApplication = true;
 
             // Phase 9 hotfix: install the i18n dictionary FIRST, before
@@ -169,6 +168,12 @@ namespace iBarter {
             ApplyLocalizedTypography();
             LanguageService.Instance.LanguageChanged += (_, _) =>
                 ApplyLocalizedTypography();
+
+            // Register the initial palette and application theme before the
+            // first Window is constructed. Syncfusion then applies the theme
+            // while each control initializes instead of restyling the complete
+            // DockingManager tree after InitializeComponent.
+            myMainWVM.InitializeThemeAtStartup();
 
             // App.xaml is initialized before OnStartup runs. MainWindow and its
             // nested controls use Fluent icon resources merged by App.xaml, so

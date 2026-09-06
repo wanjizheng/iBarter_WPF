@@ -2,6 +2,11 @@ using System.Text;
 
 namespace iBarter.Routing;
 
+public readonly record struct RouteTaskCompletionDecision(
+    bool IsValid,
+    bool CompletesPlannerRow,
+    int RemainingExchangeQuantity);
+
 /// <summary>
 /// Keeps a capacity-split route task unique for the solver while preserving
 /// the stable PlannerRowId used by completion, selection and UI workflows.
@@ -45,6 +50,56 @@ public static class RouteTaskIdentity {
         }
     }
 
+    public static bool IsSegmentId(string taskRowId) =>
+        !string.IsNullOrEmpty(taskRowId)
+        && taskRowId.StartsWith(SplitPrefix, StringComparison.Ordinal)
+        && !StringComparer.Ordinal.Equals(PlannerRowId(taskRowId), taskRowId);
+
     public static bool IsCompleted(string taskRowId, IReadOnlySet<string> completedPlannerRowIds) =>
-        completedPlannerRowIds.Contains(PlannerRowId(taskRowId));
+        completedPlannerRowIds.Contains(taskRowId)
+        || completedPlannerRowIds.Contains(PlannerRowId(taskRowId));
+
+    public static bool AreAllTasksCompleted(
+        string plannerRowId,
+        IEnumerable<string> taskRowIds,
+        IReadOnlySet<string> completedTaskRowIds) {
+        var siblings = taskRowIds
+            .Where(taskRowId => StringComparer.Ordinal.Equals(
+                PlannerRowId(taskRowId), plannerRowId))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return siblings.Length > 0
+            && siblings.All(completedTaskRowIds.Contains);
+    }
+
+    public static bool TryGetExchangeCount(
+        BarterStep step,
+        int item1PerExchange,
+        int item2PerExchange,
+        out int exchangeCount) {
+        exchangeCount = 0;
+        if (step is null || item1PerExchange <= 0 || item2PerExchange <= 0
+            || step.Consumed.Quantity <= 0 || step.Produced.Quantity <= 0
+            || step.Consumed.Quantity % item1PerExchange != 0
+            || step.Produced.Quantity % item2PerExchange != 0)
+            return false;
+
+        int consumedCount = step.Consumed.Quantity / item1PerExchange;
+        int producedCount = step.Produced.Quantity / item2PerExchange;
+        if (consumedCount <= 0 || consumedCount != producedCount) return false;
+        exchangeCount = consumedCount;
+        return true;
+    }
+
+    public static RouteTaskCompletionDecision DecideCompletion(
+        int plannerExchangeQuantity,
+        int taskExchangeCount) {
+        if (plannerExchangeQuantity <= 0 || taskExchangeCount <= 0
+            || taskExchangeCount > plannerExchangeQuantity)
+            return new RouteTaskCompletionDecision(false, false, plannerExchangeQuantity);
+        return taskExchangeCount == plannerExchangeQuantity
+            ? new RouteTaskCompletionDecision(true, true, plannerExchangeQuantity)
+            : new RouteTaskCompletionDecision(
+                true, false, plannerExchangeQuantity - taskExchangeCount);
+    }
 }

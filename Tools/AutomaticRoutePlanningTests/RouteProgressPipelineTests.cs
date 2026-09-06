@@ -139,6 +139,24 @@ public class RouteProgressPipelineTests {
     }
 
     [Fact]
+    public void Split_task_completion_removes_only_the_clicked_segment() {
+        string plannerRowId = "br-split-progress";
+        string first = RouteTaskIdentity.CreateSegmentId(plannerRowId, 0, 2);
+        string second = RouteTaskIdentity.CreateSegmentId(plannerRowId, 1, 2);
+        var routes = new[] {
+            BuildRoute(1, Barter(first, "IN", 2, "OUT", 6)),
+            BuildRoute(2, Barter(second, "IN", 8, "OUT", 24)),
+        };
+
+        var remaining = RouteProgressFilter.RemainingRoutes(
+            routes, new HashSet<string>([first], StringComparer.Ordinal));
+
+        var route = Assert.Single(remaining);
+        Assert.Equal(2, route.Number);
+        Assert.Equal(second, Assert.Single(route.Steps.OfType<BarterStep>()).RowId);
+    }
+
+    [Fact]
     public void FindVisibleBarterRowForSegment_OnlyRemainingBarters() {
         // 'a' is at Baremi; 'b' is at a separate island Baremi2.
         // When 'a' is completed, the visible map trace is [b, unload] and
@@ -381,6 +399,86 @@ public class RouteProgressPipelineTests {
 
         Assert.True(prepared.Success,
             $"{prepared.Failure?.Code}: {prepared.Failure?.Detail}");
+    }
+
+    [Fact]
+    public void CompletionProgress_Verifies_one_capacity_split_segment_as_remaining_work() {
+        string plannerRowId = "br-ostra";
+        string first = RouteTaskIdentity.CreateSegmentId(plannerRowId, 0, 2);
+        string second = RouteTaskIdentity.CreateSegmentId(plannerRowId, 1, 2);
+        var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal) {
+            ["IN"] = new("IN", "Input", 2, 400),
+            ["OUT"] = new("OUT", "Output", 3, 900),
+        };
+        var request = new AutomaticRoutePlanningRequest(
+            [
+                new(first, "Baremi", new RoutePoint(10, 0), "IN", 2, "OUT", 6),
+                new(second, "Baremi", new RoutePoint(10, 0), "IN", 8, "OUT", 24),
+            ],
+            items,
+            [new RouteWarehouse("Iliya", "Iliya", new RoutePoint(0, 0),
+                new Dictionary<string, int>(StringComparer.Ordinal) { ["IN"] = 10 })],
+            0,
+            24_000,
+            new RouteSearchLimits(100_000, 1_000),
+            "split-progress");
+        var skeleton = new RoutePlan(
+            RoutePlanStatus.Optimal,
+            [
+                BuildRoute(1,
+                    Pickup("Iliya", ("IN", 2)),
+                    Barter(first, "IN", 2, "OUT", 6),
+                    Unload("Iliya", ("OUT", 6))),
+                BuildRoute(2,
+                    Pickup("Iliya", ("IN", 8)),
+                    Barter(second, "IN", 8, "OUT", 24),
+                    Unload("Iliya", ("OUT", 24))),
+            ],
+            null,
+            [],
+            RoutePlanFingerprint.Compute(request));
+        var replayed = RouteReplay.ReplayPlan(request, skeleton);
+        Assert.True(replayed.Success, replayed.Failure?.FailureDetail);
+
+        var prepared = RoutePlanPublication.PreparePlanForPublication(
+            request,
+            replayed.Plan!,
+            RoutePlanPublicationSource.CompletionProgress,
+            new HashSet<string>([first], StringComparer.Ordinal));
+
+        Assert.True(prepared.Success,
+            $"{prepared.Failure?.Code}: {prepared.Failure?.Detail}");
+        var remainingRoute = Assert.Single(prepared.Plan!.Routes);
+        Assert.Equal(second,
+            Assert.Single(remainingRoute.Steps.OfType<BarterStep>()).RowId);
+
+        // After the map records 2 completed exchanges, Planner is authoritative
+        // at 8. Rebuilding the request collapses its only remaining task back to
+        // the parent PlannerRowId; the persisted verified route must still
+        // restore and remap without regenerating or losing the 8-exchange route.
+        var plannerRemainingRequest = new AutomaticRoutePlanningRequest(
+            [new(plannerRowId, "Baremi", new RoutePoint(10, 0),
+                "IN", 8, "OUT", 24)],
+            request.Items,
+            request.Warehouses,
+            request.ExtraLT,
+            request.TotalLT,
+            request.Limits,
+            request.ConfigurationVersion);
+        var completedFirst = new HashSet<string>([first], StringComparer.Ordinal);
+        Assert.True(RoutePlanRestoreCompatibility.IsCompatibleAfterProgress(
+            plannerRemainingRequest, replayed.Plan!, completedFirst));
+
+        var restoredProjection = RoutePlanPublication.PreparePlanForPublication(
+            plannerRemainingRequest,
+            replayed.Plan!,
+            RoutePlanPublicationSource.CompletionProgress,
+            completedFirst);
+        Assert.True(restoredProjection.Success,
+            $"{restoredProjection.Failure?.Code}: {restoredProjection.Failure?.Detail}");
+        Assert.Equal(plannerRowId,
+            Assert.Single(restoredProjection.Plan!.Routes
+                .SelectMany(route => route.Steps.OfType<BarterStep>())).RowId);
     }
 
     [Fact]

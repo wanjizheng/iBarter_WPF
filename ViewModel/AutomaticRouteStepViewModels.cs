@@ -16,11 +16,11 @@ public abstract class AutomaticRouteStepViewModel {
         IslandId = islandId;
     }
 
-    internal static string FormatLoad(RouteLoadSnapshot load) =>
+    internal static string FormatLoad(RouteLoadSnapshot load, int displayedPeakLT) =>
         LanguageService.Instance.Localize(
             "str.ShipCargo.AutoRoute.LoadFormat",
             load.TotalWithExtraLT,
-            load.PeakTotalLT);
+            displayedPeakLT);
 }
 
 public sealed class WarehouseRouteStepViewModel : AutomaticRouteStepViewModel {
@@ -35,13 +35,14 @@ public sealed class WarehouseRouteStepViewModel : AutomaticRouteStepViewModel {
         bool isUnload,
         IReadOnlyList<RouteItemQuantity> items,
         IReadOnlyDictionary<string, RouteItem> itemLookup,
-        RouteLoadSnapshot load)
+        RouteLoadSnapshot load,
+        int displayedPeakLT)
         : base(
             LanguageService.Instance.Localize(isUnload
                 ? "str.ShipCargo.AutoRoute.Unload"
                 : "str.ShipCargo.AutoRoute.Pickup", islandDisplayName),
             string.Empty,
-            FormatLoad(load),
+            FormatLoad(load, displayedPeakLT),
             islandId) {
         WarehouseId = warehouseId;
         IsUnload = isUnload;
@@ -74,12 +75,13 @@ public sealed class BarterRouteStepViewModel : AutomaticRouteStepViewModel {
         BarterStep step,
         string islandDisplayName,
         IReadOnlyDictionary<string, RouteItem> items,
+        int displayedPeakLT,
         Barter? sourceBarter = null)
         : base(
             LanguageService.Instance.Localize("str.ShipCargo.AutoRoute.Barter", islandDisplayName),
             $"{Display(items, step.Consumed.ItemId)} × {step.Consumed.Quantity} → " +
             $"{Display(items, step.Produced.ItemId)} × {step.Produced.Quantity}",
-            FormatLoad(step.Load),
+            FormatLoad(step.Load, displayedPeakLT),
             step.IslandId) {
         RowId = step.RowId;
         Item1Icon = Icon(step.Consumed.ItemId);

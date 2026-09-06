@@ -2375,7 +2375,7 @@ namespace iBarter {
                 && x2 <= 99999 && y2 <= 99999; // catch overflow on degenerate inputs
         }
 
-        private static bool TryBuildRetryItem2OcrRectangle(
+        private static bool TryBuildItem2OcrRectangle(
             int parleyX,
             int parleyY,
             int parleyHeight,
@@ -2389,8 +2389,49 @@ namespace iBarter {
             x1 = Math.Max(0, parleyX + 376);
             y1 = Math.Max(0, parleyY - parleyHeight);
             x2 = Math.Min(maxX, requiredX + 376 + 100);
-            y2 = Math.Max(y1, parleyY + 1);
+            // Slot2 always uses the wrapped-name layout: same top edge as
+            // slot1, with room for exactly two text lines.  A one-line name
+            // simply leaves the lower half empty.
+            y2 = Math.Max(y1, parleyY + parleyHeight);
             return IsValidOcrRectangle(x1, y1, x2, y2);
+        }
+
+        internal static bool LooksLikeCrowCoinOcr(string? value) {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            string compact = JoinItem2OcrLines(value).Replace(" ", string.Empty);
+            return compact.Contains("硬币", StringComparison.Ordinal)
+                || compact.Contains("硬幣", StringComparison.Ordinal)
+                || Regex.IsMatch(
+                    compact,
+                    @"crow.*coin",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        internal static bool ShouldTryAlternateItem2OcrMode(string? value) {
+            return !HasRecognizableItemTierPrefix(value)
+                && !LooksLikeCrowCoinOcr(value);
+        }
+
+        internal static string SelectPreferredItem2OcrRead(
+                string? current,
+                string? alternative) {
+            if (string.IsNullOrWhiteSpace(current)) return alternative ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(alternative)) return current;
+
+            int currentStructure = HasRecognizableItemTierPrefix(current)
+                ? 2
+                : LooksLikeCrowCoinOcr(current) ? 1 : 0;
+            int alternativeStructure = HasRecognizableItemTierPrefix(alternative)
+                ? 2
+                : LooksLikeCrowCoinOcr(alternative) ? 1 : 0;
+            if (alternativeStructure != currentStructure) {
+                return alternativeStructure > currentStructure ? alternative : current;
+            }
+
+            static int EvidenceLength(string value) => value.Count(char.IsLetterOrDigit);
+            return EvidenceLength(alternative) > EvidenceLength(current)
+                ? alternative
+                : current;
         }
 
         private int TryReadRemainingCount(PointPlus pointPlusAnchor, PointPlus pointPlusEdge, string strIsland) {
@@ -3716,49 +3757,55 @@ namespace iBarter {
             }
 
 
-            // 2026-07-09: debug capture for item2 OCR (Color)
-            int item2X1 = pointPlusParley.X + 376;
-            int item2Y1 = pointPlusParley.Y - pointPlusParley.Size.Height;
-            int item2X2 = pointPlusRequired.X + 376 + 100;
-            // 2026-07-11: extend Y2 down by 1 extra parleyHeight so the
-            // rect covers 2-line item text. BDO barter slot2 wraps to
-            // 2 lines when the name is long (e.g. "[6阶段]阿利赫兹灯塔
-            // 雕像" — the 灯塔雕像 suffix wraps "像" to a 2nd line).
-            //
-            // The reason parley.Y is a valid Y anchor here even though
-            // "parley" is the 交涉力 label: FindScanLabel("Parley",...)
-            // searches a 700x62 box centered on anchor.Y
-            // (CFunctions.cs:3427-3430), and FindItemIconCompare uses
-            // the same box — so parley icon Y, required icon Y, item1
-            // icon Y, item2 icon Y are all in the same row, within
-            // ±30px of anchor.Y. parley.Y is the row's vertical center.
-            //
-            // User-reported vertical layout:
-            //   - 1-line text: vertically CENTERED on the row center
-            //     (parley.Y), spanning parley.Y ± lineHeight/2.
-            //   - 2-line text: TOP aligned with the icon top, so the
-            //     bottom of the 2nd line is at
-            //     parley.Y - lineHeight + 2*lineHeight = parley.Y + lineHeight.
-            //     If lineHeight ≈ parleyHeight, the 2-line bottom lands
-            //     right at Y2 = parley.Y + parleyHeight, easily clipped
-            //     by 1-2px of anti-aliasing.
-            //
-            // Original Y2 = parley.Y + parleyHeight was missing the 2nd
-            // line — observed: 阿尔纳哈岛 "全" (real: 偷窃的海贼团短刀)
-            // and 阿利赫恣村庄 "人" (real: 阿利赫兹灯塔雕像), both 1-char
-            // garbage from a stray stroke near icon top. Extending to
-            // parley.Y + 2*parleyHeight adds 1 line of buffer so the
-            // 2nd line is comfortably inside the rect; 1-line items
-            // still fit because their text is centered on parley.Y.
-            int item2Y2 = pointPlusParley.Y + 2 * pointPlusParley.Size.Height;
+            // Use one fixed two-line rectangle for every slot2 label.  Long
+            // names are top-aligned with slot1; short names remain inside the
+            // same rectangle with harmless empty space below.  Keeping this
+            // to exactly two line-heights avoids the icon/count noise included
+            // by the former three-line-height crop.
+            if (!TryBuildItem2OcrRectangle(
+                    pointPlusParley.X,
+                    pointPlusParley.Y,
+                    pointPlusParley.Size.Height,
+                    pointPlusRequired.X,
+                    App.myPureDM.WindowWidth,
+                    out int item2X1,
+                    out int item2Y1,
+                    out int item2X2,
+                    out int item2Y2)) {
+                Log("[DIAG-item-ocr] invalid fixed two-line slot2 rectangle", Brushes.IndianRed);
+                return (Barter)null;
+            }
             TrySaveOcrDebugCapture(item2X1, item2Y1, item2X2, item2Y2,
                 CV.OCRType.Words, CV.OCRMode.Color,
                 "item2_y" + pointPlusAnchor.Y);
+            // Most slot2 names are one visual line, so Auto is the most
+            // stable primary segmentation mode.  It still uses the same
+            // fixed two-line rectangle; the extra lower area is harmless.
             string strItem2 = PureDmWorker.Call(() =>
                 App.myPureDM.CV.OCRString(
                     item2X1, item2Y1, item2X2, item2Y2,
                     CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage(),
                     Emgu.CV.OCR.PageSegMode.Auto));
+
+            // Auto can drop the first line when a wrapped second line contains
+            // only one glyph (向阳岛: 南浦特产柿子箱 / 子).  Retry the
+            // identical rectangle with SparseText only when Auto produced
+            // neither a tiered item nor a recognizable Crow Coin label.
+            if (ShouldTryAlternateItem2OcrMode(strItem2)) {
+                string item2Sparse = PureDmWorker.Call(() =>
+                    App.myPureDM.CV.OCRString(
+                        item2X1, item2Y1, item2X2, item2Y2,
+                        CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage(),
+                        Emgu.CV.OCR.PageSegMode.SparseText));
+                string selected = SelectPreferredItem2OcrRead(strItem2, item2Sparse);
+                if (!string.Equals(selected, strItem2, StringComparison.Ordinal)) {
+                    Log("[DIAG-item-ocr] slot2 Color Auto=\""
+                        + TruncForLog(strItem2, 24)
+                        + "\" -> SparseText=\"" + TruncForLog(item2Sparse, 32) + "\"",
+                        Brushes.DarkCyan);
+                    strItem2 = selected;
+                }
+            }
             // 2026-07-08: same Binary retry for slot2 (matches the slot1
             // pattern above). Empty OCR for slot2 was the dominant
             // observation across the 2026-07-08 incident scans where
@@ -3774,71 +3821,42 @@ namespace iBarter {
             // Binary mode on the identical crop reads the full text in
             // these cases (Tesseract's chi_sim is more robust than
             // PureDM Color when the dx-hook frame is mid-ghost).
-            bool item2LooksGarbage = !string.IsNullOrWhiteSpace(strItem2)
-                && strItem2.Length < 4
-                && !strItem2.Contains("阶段")
-                && !strItem2.Contains("階段");
-            if (string.IsNullOrWhiteSpace(strItem2) || item2LooksGarbage) {
+            bool item2NeedsBinaryRetry = string.IsNullOrWhiteSpace(strItem2)
+                || ShouldTryAlternateItem2OcrMode(strItem2);
+            if (item2NeedsBinaryRetry) {
                 // 2026-07-09: debug capture for item2 OCR (Binary retry)
                 TrySaveOcrDebugCapture(item2X1, item2Y1, item2X2, item2Y2,
                     CV.OCRType.Words, CV.OCRMode.Binary,
                     "item2B_y" + pointPlusAnchor.Y);
-                string item2Binary = PureDmWorker.Call(() =>
+                string item2BinaryAuto = PureDmWorker.Call(() =>
                     App.myPureDM.CV.OCRString(
                         item2X1, item2Y1, item2X2, item2Y2,
                         CV.OCRType.Words, CV.OCRMode.Binary, false, "", CurrentOcrLanguage(),
                         Emgu.CV.OCR.PageSegMode.Auto));
-                // Prefer the Binary read if Color was empty, OR if Binary
-                // is materially longer (≥4 chars AND has Chinese lexical
-                // signal that Color lacked). Reject Binary if it's the
-                // same garbage length — no point overwriting.
-                if (string.IsNullOrWhiteSpace(strItem2)) {
-                    strItem2 = item2Binary;
+                string item2Binary = item2BinaryAuto;
+                if (ShouldTryAlternateItem2OcrMode(item2BinaryAuto)) {
+                    string item2BinarySparse = PureDmWorker.Call(() =>
+                        App.myPureDM.CV.OCRString(
+                            item2X1, item2Y1, item2X2, item2Y2,
+                            CV.OCRType.Words, CV.OCRMode.Binary, false, "", CurrentOcrLanguage(),
+                            Emgu.CV.OCR.PageSegMode.SparseText));
+                    item2Binary = SelectPreferredItem2OcrRead(
+                        item2BinaryAuto,
+                        item2BinarySparse);
                 }
-                else if (!string.IsNullOrWhiteSpace(item2Binary)
-                    && item2Binary.Length >= 4
-                    && item2Binary.Length > strItem2.Length
-                    && (item2Binary.Contains("阶段") || item2Binary.Contains("階段")
-                        || item2Binary.Length >= strItem2.Length * 3)) {
-                    Log("[DIAG-item-ocr] slot2 Color garbage=\""
-                        + TruncForLog(strItem2, 16)
+
+                string selected = SelectPreferredItem2OcrRead(strItem2, item2Binary);
+                if (!string.Equals(selected, strItem2, StringComparison.Ordinal)) {
+                    Log("[DIAG-item-ocr] slot2 Color=\""
+                        + TruncForLog(strItem2, 24)
                         + "\" -> Binary=\"" + TruncForLog(item2Binary, 32) + "\"",
                         Brushes.DarkCyan);
-                    strItem2 = item2Binary;
+                    strItem2 = selected;
                 }
             }
-            if (string.IsNullOrWhiteSpace(strItem2)
-                && TryBuildRetryItem2OcrRectangle(
-                    pointPlusParley.X,
-                    pointPlusParley.Y,
-                    pointPlusParley.Size.Height,
-                    pointPlusRequired.X,
-                    App.myPureDM.WindowWidth,
-                    out int item2RetryX1,
-                    out int item2RetryY1,
-                    out int item2RetryX2,
-                    out int item2RetryY2)) {
-                // 2026-07-09: debug capture for item2 OCR (retry rect)
-                TrySaveOcrDebugCapture(item2RetryX1, item2RetryY1, item2RetryX2, item2RetryY2,
-                    CV.OCRType.Words, CV.OCRMode.Color,
-                    "item2R_y" + pointPlusAnchor.Y);
-                strItem2 = PureDmWorker.Call(() =>
-                    App.myPureDM.CV.OCRString(
-                        item2RetryX1,
-                        item2RetryY1,
-                        item2RetryX2,
-                        item2RetryY2,
-                        CV.OCRType.Words, CV.OCRMode.Color, false, "", CurrentOcrLanguage(),
-                        Emgu.CV.OCR.PageSegMode.Auto));
-                Log("[DIAG-item-ocr-retry] slot2 rect=(" + item2RetryX1 + "," + item2RetryY1
-                    + "," + item2RetryX2 + "," + item2RetryY2 + ") raw=\""
-                    + TruncForLog(strItem2, 48) + "\"", Brushes.LightSlateGray);
-            }
-
-            // PageSegMode.Auto preserves line breaks for wrapped slot2 names.
-            // The item catalog stores the same name as one logical line, so
-            // join only newline boundaries while preserving ordinary spaces
-            // used by English item names.
+            // SparseText may preserve separated wrapped-line glyphs.  The item
+            // catalog stores the same name as one logical line, so join only
+            // newline boundaries while preserving ordinary English spaces.
             strItem2 = JoinItem2OcrLines(strItem2);
 
             // 2026-07-08: always-fire diagnostic to surface the raw OCR

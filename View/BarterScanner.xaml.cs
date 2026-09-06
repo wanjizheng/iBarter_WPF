@@ -232,6 +232,9 @@ namespace iBarter.View {
 
             if (addedToPlanner) {
                 App.myRouteCoordinator?.Invalidate("planner-scanner-add");
+                // Keep the grid's public grouping descriptors and its internal
+                // view synchronized before the user can click Grouping.
+                App.myfmMain?.myPlannerControl?.ResetGroupingAfterScannerAdd();
             }
 
             // 2026-07-08: auto-save planner on Add. The user previously had
@@ -254,18 +257,6 @@ namespace iBarter.View {
                 var grid = App.myfmMain.myPlannerControl.DataGrid_Planner;
                 
                 if (grid == null) return;
-
-                grid.View.BeginInit();
-                try {
-                    grid.GroupColumnDescriptions.Clear();          // removes column-based grouping
-                    grid.View.GroupDescriptions?.Clear();          // defensive: clears any programmatic group descriptions
-                    grid.AutoExpandGroups = false;                 // optional: disable auto expand
-                }
-                finally {
-                    grid.View.EndInit();
-                }
-                grid.View.Refresh(); // or grid.UpdateLayout();
-
 
                 grid.UpdateLayout();
 

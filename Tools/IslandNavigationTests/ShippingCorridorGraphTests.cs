@@ -6,6 +6,12 @@ namespace IslandNavigationTests;
 public sealed class ShippingCorridorGraphTests {
     private static readonly NavigationPoint Halmad = new(558_999, 333_684);
     private static readonly NavigationPoint Hakoven = new(1_252_450, 547_567);
+    private static readonly NavigationPoint Pilava = new(248_520, 198_926);
+    private static readonly NavigationPoint Midnight = new(-321_664, -598_912);
+    private static readonly NavigationPoint Epheria = new(-355_616, 32_650);
+    private static readonly NavigationPoint Kuit = new(-348_843, 375_542);
+    private static readonly NavigationPoint Teyamal = new(-524_725, 66_122);
+    private static readonly NavigationPoint Grandiha = new(-559_743, -476_904);
 
     [Fact]
     public void Ordinary_sea_keeps_direct_segment() {
@@ -63,15 +69,35 @@ public sealed class ShippingCorridorGraphTests {
 
     [Fact]
     public void Grandiha_midnight_trip_uses_southern_corridor_in_both_directions() {
-        var grandiha = new NavigationPoint(-559_743, -476_904);
-        var midnight = new NavigationPoint(-321_664, -598_912);
-
-        var outbound = ShippingCorridorGraph.BuildPath("Grandiha", grandiha, "Midnight", midnight);
-        var inbound = ShippingCorridorGraph.BuildPath("Midnight", midnight, "Grandiha", grandiha);
+        var outbound = ShippingCorridorGraph.BuildPath("Grandiha", Grandiha, "Midnight", Midnight);
+        var inbound = ShippingCorridorGraph.BuildPath("Midnight", Midnight, "Grandiha", Grandiha);
 
         Assert.True(outbound.Count > 3);
         Assert.Equal(outbound.Reverse(), inbound);
         Assert.True(ShippingCorridorGraph.PathDistance(outbound)
-                    > IslandNavigationGeometry.Distance(grandiha, midnight));
+                    > IslandNavigationGeometry.Distance(Grandiha, Midnight));
+    }
+
+    [Fact]
+    public void Pilava_midnight_trip_uses_the_west_coast_in_both_directions() {
+        var outbound = ShippingCorridorGraph.BuildPath("Pilava", Pilava, "Midnight", Midnight);
+        var inbound = ShippingCorridorGraph.BuildPath("Midnight", Midnight, "Pilava", Pilava);
+
+        Assert.Equal(outbound.Reverse(), inbound);
+        Assert.Contains(Kuit, outbound);
+        Assert.Contains(Teyamal, outbound);
+        Assert.Contains(Grandiha, outbound);
+        Assert.True(ShippingCorridorGraph.PathDistance(outbound)
+                    > IslandNavigationGeometry.Distance(Pilava, Midnight) * 1.5);
+    }
+
+    [Fact]
+    public void Midnight_epheria_trip_returns_along_the_west_coast() {
+        var path = ShippingCorridorGraph.BuildPath("Midnight", Midnight, "Epheria", Epheria);
+
+        Assert.Contains(Grandiha, path);
+        Assert.Contains(Teyamal, path);
+        Assert.True(ShippingCorridorGraph.PathDistance(path)
+                    > IslandNavigationGeometry.Distance(Midnight, Epheria));
     }
 }

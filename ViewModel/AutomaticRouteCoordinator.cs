@@ -37,6 +37,11 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private DateTime focusPulseUntilUtc;
     private long focusRevision;
     private HashSet<string> completedBarterRowIds = new(StringComparer.Ordinal);
+    // Capacity-split barter tasks need finer progress than Planner's boolean
+    // CK field can represent. These exact task ids are persisted with the
+    // route snapshot; completedBarterRowIds is the effective union used by
+    // projection/rendering.
+    private HashSet<string> completedRouteTaskRowIds = new(StringComparer.Ordinal);
     private IReadOnlyList<AutomaticRouteStepViewModel> visibleAutomaticSteps = [];
     private IReadOnlyList<RouteSelectionOption> routeOptions = [];
     private volatile ExtremeSearchProgressSnapshot? extremeSearchProgress;
@@ -216,6 +221,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         currentPlanMode = generationMode;
         currentPlanRestoredFromDisk = false;
         currentPublicationRequest = request;
+        RetainTaskProgressPresentIn(prepared.Plan);
         Publish(prepared.Plan, preferredShowRouteGuides: showRouteGuides);
         SaveCurrentPlan();
         return true;
@@ -242,6 +248,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             currentPlanMode = exact.SavedOptimizationMode ?? RouteOptimizationMode.Balanced;
             currentPlanRestoredFromDisk = true;
             currentPublicationRequest = request;
+            RestoreTaskProgress(exact.Snapshot, prepared.Plan);
             if (prepared.Changed) {
                 if (!SavePreparedSnapshot(exact.Snapshot, prepared.Plan))
                     return exact with { Status = RoutePlanLoadStatus.FingerprintMismatch };
@@ -262,6 +269,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         if (RoutePlanPersistence.TryLoadAfterProgress(
                 PersistencePath, request, completedBarterRowIds, out var progressed)
             && progressed is not null) {
+            RestoreTaskProgress(progressed, progressed.Plan);
             var prepared = RoutePlanPublication.PreparePlanForPublication(
                 request,
                 progressed.Plan,
@@ -352,6 +360,9 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             .Where(x => x.ExchangeDone)
             .Select(x => x.PlannerRowId)
             .ToHashSet(StringComparer.Ordinal);
+        completedRouteTaskRowIds.RemoveWhere(taskRowId =>
+            refreshed.Contains(RouteTaskIdentity.PlannerRowId(taskRowId)));
+        refreshed.UnionWith(completedRouteTaskRowIds);
         if (completedBarterRowIds.SetEquals(refreshed)) return;
 
         completedBarterRowIds = refreshed;
@@ -382,8 +393,61 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         AutomaticRoutePlanningRequest? request,
         IReadOnlyList<Barter> plannerBarters,
         string rowId,
-        bool completed) {
+        bool completed,
+        string? completedTaskRowId = null) {
         if (string.IsNullOrWhiteSpace(rowId)) return currentPlan is not null;
+
+        bool isTaskCompletion = !string.IsNullOrWhiteSpace(completedTaskRowId);
+        Barter? taskPlannerRow = null;
+        int originalExchangeQuantity = 0;
+        bool originalExchangeDone = false;
+        var originalCompletedTaskRowIds = new HashSet<string>(
+            completedRouteTaskRowIds, StringComparer.Ordinal);
+        if (isTaskCompletion) {
+            string taskRowId = completedTaskRowId!;
+            if (!StringComparer.Ordinal.Equals(
+                    RouteTaskIdentity.PlannerRowId(taskRowId), rowId))
+                return currentPlan is not null;
+
+            taskPlannerRow = plannerBarters.FirstOrDefault(barter =>
+                StringComparer.Ordinal.Equals(barter.PlannerRowId, rowId));
+            BarterStep? taskStep = currentPlan?.Routes
+                .SelectMany(route => route.Steps.OfType<BarterStep>())
+                .FirstOrDefault(step => StringComparer.Ordinal.Equals(
+                    step.RowId, taskRowId));
+            if (taskPlannerRow is null || taskStep is null
+                || !RouteTaskIdentity.TryGetExchangeCount(
+                    taskStep,
+                    taskPlannerRow.Item1Number,
+                    taskPlannerRow.Item2Number,
+                    out int taskExchangeCount))
+                return currentPlan is not null;
+            var decision = RouteTaskIdentity.DecideCompletion(
+                taskPlannerRow.ExchangeQuantity, taskExchangeCount);
+            if (!decision.IsValid) return currentPlan is not null;
+
+            originalExchangeQuantity = taskPlannerRow.ExchangeQuantity;
+            originalExchangeDone = taskPlannerRow.ExchangeDone;
+            completedRouteTaskRowIds.Add(taskRowId);
+            completed = decision.CompletesPlannerRow;
+            if (completed) {
+                taskPlannerRow.ExchangeDone = true;
+                completedRouteTaskRowIds.RemoveWhere(taskId =>
+                    StringComparer.Ordinal.Equals(
+                        RouteTaskIdentity.PlannerRowId(taskId), rowId));
+            }
+            else {
+                taskPlannerRow.ExchangeQuantity = decision.RemainingExchangeQuantity;
+                taskPlannerRow.ExchangeDone = false;
+            }
+        }
+        else {
+            // A direct Planner CK toggle is intentionally whole-row authority.
+            // Undoing it also clears any saved partial segments for that row.
+            completedRouteTaskRowIds.RemoveWhere(taskId =>
+                StringComparer.Ordinal.Equals(
+                    RouteTaskIdentity.PlannerRowId(taskId), rowId));
+        }
 
         // Step 1: rebuild the authoritative completed set so any indirect
         // mutation (row reorder, edit, undo) is observed before we touch the
@@ -398,6 +462,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         // PlannerRowId the planner used to build the row.
         if (completed) refreshed.Add(rowId);
         else refreshed.Remove(rowId);
+        refreshed.UnionWith(completedRouteTaskRowIds);
         completedBarterRowIds = refreshed;
 
         // Completion is already authoritative in the Planner at this point.
@@ -428,6 +493,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 : publishedRequest
             : request;
         if (publicationRequest is null) {
+            RollBackTaskCompletion();
             App.myCFun?.Log(
                 Localization.LanguageService.Instance.Localize("str.Log.AutoRoute.ProgressInputMissing"),
                 System.Windows.Media.Brushes.OrangeRed);
@@ -440,6 +506,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             RoutePlanPublicationSource.CompletionProgress,
             completedBarterRowIds);
         if (!prepared.Success || prepared.Plan is null) {
+            RollBackTaskCompletion();
             LogPublicationFailure(prepared.Failure);
             return true;
         }
@@ -473,6 +540,21 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             }
         }
         return remainingRoutes.Count > 0;
+
+        void RollBackTaskCompletion() {
+            if (!isTaskCompletion || taskPlannerRow is null) return;
+            taskPlannerRow.ExchangeQuantity = originalExchangeQuantity;
+            taskPlannerRow.ExchangeDone = originalExchangeDone;
+            completedRouteTaskRowIds = new HashSet<string>(
+                originalCompletedTaskRowIds, StringComparer.Ordinal);
+            var restored = plannerBarters
+                .Where(barter => barter.ExchangeDone)
+                .Select(barter => barter.PlannerRowId)
+                .ToHashSet(StringComparer.Ordinal);
+            restored.UnionWith(completedRouteTaskRowIds);
+            completedBarterRowIds = restored;
+            RefreshCompletionDisplay();
+        }
     }
 
     private void RefreshCompletionDisplay() {
@@ -627,7 +709,9 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             ? []
             : RouteProgressFilter.RemainingMapSteps(route.Steps, completedBarterRowIds)
                 .Where(step => step is not WarehouseUnloadStep { Items.Count: 0 })
-                .Select(ToViewModel)
+                // Each card keeps its own post-step LT but reports the selected
+                // route's maximum LT, matching the user-facing "Peak" label.
+                .Select(step => ToViewModel(step, route.PeakLT))
                 .ToArray();
         if (route is not null) {
             cargoProperty.InitialLT = route.InitialLT;
@@ -639,17 +723,17 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         RaisePropertyChanged(nameof(VisibleAutomaticSteps));
     }
 
-    private AutomaticRouteStepViewModel ToViewModel(RouteStep step) => step switch {
+    private AutomaticRouteStepViewModel ToViewModel(RouteStep step, int routePeakLT) => step switch {
         WarehousePickupStep pickup => new WarehouseRouteStepViewModel(
             pickup.WarehouseId, pickup.IslandId, ResolveIslandDisplayName(pickup.IslandId), false,
-            pickup.Items, BuildItemLookup(pickup.Items), pickup.Load),
+            pickup.Items, BuildItemLookup(pickup.Items), pickup.Load, routePeakLT),
         WarehouseUnloadStep unload => new WarehouseRouteStepViewModel(
             unload.WarehouseId, unload.IslandId, ResolveIslandDisplayName(unload.IslandId), true,
-            unload.Items, BuildItemLookup(unload.Items), unload.Load),
+            unload.Items, BuildItemLookup(unload.Items), unload.Load, routePeakLT),
         BarterStep barter => new BarterRouteStepViewModel(
             barter, ResolveIslandDisplayName(barter.IslandId), currentPlan is null
             ? new Dictionary<string, RouteItem>()
-            : BuildItemLookup(barter)),
+            : BuildItemLookup(barter), routePeakLT),
         _ => throw new InvalidOperationException($"Unknown route step {step.GetType().Name}"),
     };
 
@@ -665,6 +749,37 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             id => id,
             id => new RouteItem(id, ResolveItemDisplayName(id), 0, 0),
             StringComparer.Ordinal);
+
+    private void RestoreTaskProgress(PersistedRoutePlan snapshot, RoutePlan plan) {
+        var validTaskIds = plan.Routes
+            .SelectMany(route => route.Steps.OfType<BarterStep>())
+            .Select(step => step.RowId)
+            .Where(RouteTaskIdentity.IsSegmentId)
+            .ToHashSet(StringComparer.Ordinal);
+        completedRouteTaskRowIds = (snapshot.CompletedTaskRowIds ?? [])
+            .Where(validTaskIds.Contains)
+            .ToHashSet(StringComparer.Ordinal);
+        RebuildEffectiveCompletionSet();
+    }
+
+    private void RetainTaskProgressPresentIn(RoutePlan plan) {
+        var validTaskIds = plan.Routes
+            .SelectMany(route => route.Steps.OfType<BarterStep>())
+            .Select(step => step.RowId)
+            .ToHashSet(StringComparer.Ordinal);
+        completedRouteTaskRowIds.IntersectWith(validTaskIds);
+        RebuildEffectiveCompletionSet();
+    }
+
+    private void RebuildEffectiveCompletionSet() {
+        var plannerCompleted = completedBarterRowIds
+            .Where(id => !RouteTaskIdentity.IsSegmentId(id))
+            .ToHashSet(StringComparer.Ordinal);
+        completedRouteTaskRowIds.RemoveWhere(taskId =>
+            plannerCompleted.Contains(RouteTaskIdentity.PlannerRowId(taskId)));
+        plannerCompleted.UnionWith(completedRouteTaskRowIds);
+        completedBarterRowIds = plannerCompleted;
+    }
 
     private static string ResolveItemDisplayName(string itemId) =>
         App.listItems?.FirstOrDefault(x => x.ItemID == itemId)?.ItemNameDisplay
@@ -683,7 +798,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 snapshot.ShowAll,
                 snapshot.SelectedBarterRowId,
                 currentPlanMode,
-                showRouteGuides: snapshot.ShowRouteGuides);
+                showRouteGuides: snapshot.ShowRouteGuides,
+                completedTaskRowIds: completedRouteTaskRowIds);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
@@ -733,7 +849,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
                 showAllRoutes,
                 selectedBarterRowId,
                 currentPlanMode,
-                showRouteGuides: showRouteGuides);
+                showRouteGuides: showRouteGuides,
+                completedTaskRowIds: completedRouteTaskRowIds);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             App.myCFun?.Log(ex.Message, System.Windows.Media.Brushes.OrangeRed);

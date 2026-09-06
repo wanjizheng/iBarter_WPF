@@ -8,7 +8,8 @@ public sealed record PersistedRoutePlan(
     int? SelectedRouteNumber,
     bool ShowAll,
     string? SelectedBarterRowId,
-    bool ShowRouteGuides = true);
+    bool ShowRouteGuides = true,
+    IReadOnlyList<string>? CompletedTaskRowIds = null);
 
 /// <summary>
 /// Discriminated result of an attempt to load a persisted route plan.
@@ -59,13 +60,15 @@ public static class RoutePlanPersistence {
         string? selectedBarterRowId = null,
         RouteOptimizationMode? optimizationMode = null,
         DateTimeOffset? savedAtUtc = null,
-        bool showRouteGuides = true) {
+        bool showRouteGuides = true,
+        IReadOnlySet<string>? completedTaskRowIds = null) {
         string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
         string temp = path + ".tmp";
         string backup = path + ".bak";
         var dto = ToDto(plan, selectedRouteNumber, showAll, selectedBarterRowId,
-            optimizationMode, savedAtUtc ?? DateTimeOffset.UtcNow, showRouteGuides);
+            optimizationMode, savedAtUtc ?? DateTimeOffset.UtcNow, showRouteGuides,
+            completedTaskRowIds);
         try {
             File.WriteAllText(temp, JsonSerializer.Serialize(dto, JsonOptions));
             if (File.Exists(path))
@@ -122,7 +125,8 @@ public static class RoutePlanPersistence {
                 selected,
                 dto.ShowAll && plan.Routes.Count > 0,
                 dto.SelectedBarterRowId,
-                dto.ShowRouteGuides ?? true);
+                dto.ShowRouteGuides ?? true,
+                dto.CompletedTaskRowIds ?? []);
             return new RoutePlanLoadResult(
                 RoutePlanLoadStatus.Loaded,
                 snapshot,
@@ -157,12 +161,15 @@ public static class RoutePlanPersistence {
             snapshot = null;
             return false;
         }
+        var effectiveCompletedRowIds = new HashSet<string>(
+            completedBarterRowIds, StringComparer.Ordinal);
+        effectiveCompletedRowIds.UnionWith(snapshot.CompletedTaskRowIds ?? []);
         // Audit round 7: with-CK restore.  If the user has marked
         // any barters done, the strict progress path is the right
         // one — every saved RowId must match a current task.
-        if (completedBarterRowIds.Count > 0) {
+        if (effectiveCompletedRowIds.Count > 0) {
             if (!RoutePlanRestoreCompatibility.IsCompatibleAfterProgress(
-                    currentRequest, snapshot.Plan, completedBarterRowIds)) {
+                    currentRequest, snapshot.Plan, effectiveCompletedRowIds)) {
                 snapshot = null;
                 return false;
             }
@@ -203,7 +210,8 @@ public static class RoutePlanPersistence {
                 snapshot.SelectedRouteNumber,
                 snapshot.ShowAll,
                 migratedSelected,
-                snapshot.ShowRouteGuides);
+                snapshot.ShowRouteGuides,
+                snapshot.CompletedTaskRowIds);
             return true;
         }
         // Log the precise mismatch so the user knows what to fix.
@@ -241,7 +249,8 @@ public static class RoutePlanPersistence {
                 selected,
                 dto.ShowAll && plan.Routes.Count > 0,
                 dto.SelectedBarterRowId,
-                dto.ShowRouteGuides ?? true);
+                dto.ShowRouteGuides ?? true,
+                dto.CompletedTaskRowIds ?? []);
             return true;
         }
         catch (Exception ex) when (ex is InvalidDataException
@@ -304,7 +313,8 @@ public static class RoutePlanPersistence {
         string? selectedBarterRowId,
         RouteOptimizationMode? optimizationMode,
         DateTimeOffset savedAtUtc,
-        bool showRouteGuides) => new(
+        bool showRouteGuides,
+        IReadOnlySet<string>? completedTaskRowIds) => new(
         SchemaVersion,
         plan.InputFingerprint,
         plan.Status,
@@ -324,7 +334,11 @@ public static class RoutePlanPersistence {
         selectedBarterRowId,
         optimizationMode,
         savedAtUtc,
-        showRouteGuides);
+        showRouteGuides,
+        completedTaskRowIds?
+            .Where(RouteTaskIdentity.IsSegmentId)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray() ?? []);
 
     private static StepDto ToDto(RouteStep step) => step switch {
         WarehousePickupStep pickup => new(
@@ -379,7 +393,8 @@ public static class RoutePlanPersistence {
         string? SelectedBarterRowId = null,
         RouteOptimizationMode? OptimizationMode = null,
         DateTimeOffset? SavedAtUtc = null,
-        bool? ShowRouteGuides = null);
+        bool? ShowRouteGuides = null,
+        string[]? CompletedTaskRowIds = null);
 
     private sealed record RouteDto(
         int Number,

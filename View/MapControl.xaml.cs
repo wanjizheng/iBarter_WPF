@@ -2254,12 +2254,17 @@ namespace iBarter.View {
                 }
             }
             if (targetBarter == null) return;
-            targetBarter.ExchangeDone = true;
-            CompleteBarterViaPipeline(targetBarter);
+            // A capacity-safe route can split one Planner row across several
+            // trips. Complete this exact route task first; the coordinator
+            // checks every sibling segment and flips Planner CK only after the
+            // final segment is done.
+            CompleteBarterViaPipeline(targetBarter, node.BarterRowId);
             e.Handled = true;
         }
 
-        private void CompleteBarterViaPipeline(Barter myBarter) {
+        private void CompleteBarterViaPipeline(
+            Barter myBarter,
+            string? completedTaskRowId = null) {
             // Audit round 3: row identity comes from the persistent
             // Barter.PlannerRowId; we never re-derive from index or
             // (Island, Item1, Item2).
@@ -2269,7 +2274,13 @@ namespace iBarter.View {
                     App.myfmMain.myPlannerControl.ResolveSelectedOptimizationProfileSafe()),
                 App.myPVM.BarterCollection,
                 rowId,
-                completed: true);
+                completed: true,
+                completedTaskRowId: completedTaskRowId);
+
+            // A partial route task reduces Planner.ExchangeQuantity (for
+            // example 10 -> 8). Recompute inventory projections and parley
+            // from that authoritative remaining quantity before saving.
+            App.myfmMain.myPlannerControl.RefreshDerivedValuesAfterRouteProgress();
 
             // Grouping performs the synchronous map rebuild. Do it only after
             // the coordinator has accepted the CK overlay; the old order

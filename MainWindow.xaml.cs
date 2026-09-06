@@ -15,10 +15,18 @@ namespace iBarter {
     /// </summary>
     public partial class MainWindow : ChromelessWindow {
         public MainWindow() {
+            // Apply the selected theme before any XAML control is created.
+            // ApplyStylesOnApplication makes Syncfusion merge the complete
+            // common and control dictionaries atomically at application scope.
+            SfSkinManager.SetTheme(
+                this,
+                new Theme(string.IsNullOrWhiteSpace(App.myMainWVM.SelectedThemeName)
+                    ? ViewModel.MainWindowViewModel.DefaultThemeName
+                    : App.myMainWVM.SelectedThemeName));
+            ViewModel.MainWindowViewModel.RefreshLegacyGradientColorAliases();
             InitializeComponent();
             this.DataContext = App.myMainWVM;
             App.myMainWVM.BlurVisibility = Visibility.Visible;
-            //SfSkinManager.SetTheme(this, new Theme("Windows11Light"));
             this.WindowState = WindowState.Minimized;
 
             Thread thread = new Thread(() => {
@@ -29,8 +37,6 @@ namespace iBarter {
             thread.SetApartmentState(ApartmentState.STA); // 设置线程为 STA
             thread.IsBackground = true;
             thread.Start();
-            App.myMainWVM.OnSelectedProductChanged();
-
             // Without this, closing the main window leaves SplashScreen
             // open (its Close() is only called inside the game-binding
             // success branch - on bind failure it never closes), and

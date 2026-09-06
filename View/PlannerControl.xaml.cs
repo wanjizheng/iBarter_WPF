@@ -752,13 +752,55 @@ namespace iBarter.View {
                 currentView.EndInit();
             }
 
-            if (!currentView.IsInDeferRefresh) {
+            // SfDataGrid 34.2 exposes neither RefreshTopLevelGroup nor the
+            // programmatic Refresh overload publicly.  A plain Refresh only
+            // repaints the flat records and can leave caption rows absent.
+            // Reassigning the same source is the public, side-effect-free way
+            // to recreate the view (the same part that save/load repaired),
+            // while preserving every Barter object and PlannerRowId.
+            object? plannerItemsSource = DataGrid_Planner.ItemsSource;
+            object? selectedItem = DataGrid_Planner.SelectedItem;
+            DataGrid_Planner.ItemsSource = null;
+            DataGrid_Planner.ItemsSource = plannerItemsSource;
+            currentView = DataGrid_Planner.View;
+            if (selectedItem != null) {
+                DataGrid_Planner.SelectedItem = selectedItem;
+            }
+
+            if (currentView != null && !currentView.IsInDeferRefresh) {
                 currentView.Refresh();
             }
 
-            if (currentView.TopLevelGroup != null
+            if (currentView?.TopLevelGroup != null
                 && currentView.Records.Count > 0) {
                 DataGrid_Planner.ExpandAllGroup();
+            }
+        }
+
+        public void ResetGroupingAfterScannerAdd() {
+            if (!Dispatcher.CheckAccess()) {
+                Dispatcher.BeginInvoke(new Action(ResetGroupingAfterScannerAdd));
+                return;
+            }
+
+            var currentView = DataGrid_Planner?.View;
+            currentView?.BeginInit(true);
+            try {
+                DataGrid_Planner?.GroupColumnDescriptions.Clear();
+                if (DataGrid_Planner != null) {
+                    DataGrid_Planner.AutoExpandGroups = false;
+                }
+            }
+            finally {
+                currentView?.EndInit();
+            }
+
+            // Do not mutate currentView.GroupDescriptions directly.  That
+            // bypasses SfDataGrid's descriptor synchronization and was the
+            // reason a later Grouping() needed a save/load cycle to show its
+            // expandable caption rows.
+            if (currentView != null && !currentView.IsInDeferRefresh) {
+                currentView.Refresh();
             }
         }
 
@@ -1900,6 +1942,11 @@ namespace iBarter.View {
                     EndExtremeSearchFeedback();
                 ButtonAdv_AutoPlan.IsEnabled = true;
             }
+        }
+
+        public void RefreshDerivedValuesAfterRouteProgress() {
+            UpdateInvChange(-1);
+            UpdateParley();
         }
 
         private void BeginExtremeSearchFeedback(RouteOptimizationProfile profile) {

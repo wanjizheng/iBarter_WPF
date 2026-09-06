@@ -117,6 +117,53 @@ if (args.Contains("--item-ocr-alias-only", StringComparer.Ordinal)) {
         "Observed truncated Top-Quality Coconut Syrup OCR alias contract passed.");
     return 0;
 }
+if (CFunctions.JoinItem2OcrLines("[7阶段]卡尔佩恩匠/\r\n珍珠项链\r\n")
+        != "[7阶段]卡尔佩恩匠/珍珠项链") {
+    Console.Error.WriteLine(
+        "Expected wrapped item2 OCR line breaks to be joined before catalog matching.");
+    return 1;
+}
+if (args.Contains("--item2-layout-only", StringComparer.Ordinal)) {
+    var item2RectMethod = typeof(CFunctions).GetMethod(
+        "TryBuildItem2OcrRectangle",
+        BindingFlags.Static | BindingFlags.NonPublic)
+        ?? throw new MissingMethodException("TryBuildItem2OcrRectangle");
+    object[] item2RectArgs = { 1116, 585, 25, 1182, 2560, 0, 0, 0, 0 };
+    bool item2RectOk = (bool)item2RectMethod.Invoke(null, item2RectArgs)!;
+    if (!item2RectOk
+        || (int)item2RectArgs[5] != 1492
+        || (int)item2RectArgs[6] != 560
+        || (int)item2RectArgs[7] != 1658
+        || (int)item2RectArgs[8] != 610) {
+        Console.Error.WriteLine(
+            $"Expected fixed two-line item2 rect 1492,560,1658,610 but got {item2RectArgs[5]},{item2RectArgs[6]},{item2RectArgs[7]},{item2RectArgs[8]} ok={item2RectOk}");
+        return 1;
+    }
+    var wrappedItem2PageSeg = CV.SelectPageSegMode(
+        CV.OCRType.Words,
+        Emgu.CV.OCR.PageSegMode.SparseText);
+    if (wrappedItem2PageSeg != Emgu.CV.OCR.PageSegMode.SparseText) {
+        Console.Error.WriteLine(
+            $"Expected fixed two-line item2 OCR to preserve SparseText segmentation, got {wrappedItem2PageSeg}.");
+        return 1;
+    }
+    if (!CFunctions.ShouldTryAlternateItem2OcrMode("ne")
+        || CFunctions.ShouldTryAlternateItem2OcrMode("中硬币")
+        || CFunctions.ShouldTryAlternateItem2OcrMode("[4阶段]偷窃的海贼团短刀")
+        || CFunctions.SelectPreferredItem2OcrRead(
+            "ne",
+            "[6阶段]南浦特产柿子箱\r\n子") != "[6阶段]南浦特产柿子箱\r\n子"
+        || CFunctions.SelectPreferredItem2OcrRead(
+            "他吧  上骑士团上",
+            "[4阶段]海上骑士团的头盔") != "[4阶段]海上骑士团的头盔") {
+        Console.Error.WriteLine(
+            "Expected Auto/SparseText item2 fallback to prefer a structured tier or Crow Coin read.");
+        return 1;
+    }
+    Console.WriteLine(
+        "Fixed two-line item2 OCR rectangle and Auto/SparseText fallback contract passed.");
+    return 0;
+}
 if (args.Contains("--island-fuzz-audit", StringComparer.Ordinal)) {
     var wrongMatches = new List<string>();
     var unknownMatches = new List<string>();
@@ -248,7 +295,10 @@ int plannerGroupReinitializeIndex = plannerGroupingSource.IndexOf(
     "currentView.BeginInit(true);", plannerGroupSearchStart,
     StringComparison.Ordinal);
 int plannerGroupProgrammaticRefreshIndex = plannerGroupingSource.IndexOf(
-    "currentView.Refresh();", Math.Max(0, plannerGroupReinitializeIndex),
+    "DataGrid_Planner.ItemsSource = null;", Math.Max(0, plannerGroupReinitializeIndex),
+    StringComparison.Ordinal);
+int plannerGroupForcedRefreshIndex = plannerGroupingSource.IndexOf(
+    "DataGrid_Planner.ItemsSource = plannerItemsSource;", Math.Max(0, plannerGroupProgrammaticRefreshIndex),
     StringComparison.Ordinal);
 int plannerGroupDeferredRefreshIndex = plannerGroupingSource.IndexOf(
     "new Action(RefreshPlannerGroupingView)", plannerGroupSearchStart,
@@ -258,6 +308,7 @@ if (plannerGroupEndInitIndex < 0
     || plannerGroupProgrammaticBeginIndex > plannerGroupEndInitIndex
     || plannerGroupReinitializeIndex < plannerGroupEndInitIndex
     || plannerGroupProgrammaticRefreshIndex < plannerGroupReinitializeIndex
+    || plannerGroupForcedRefreshIndex < plannerGroupProgrammaticRefreshIndex
     || plannerGroupDeferredRefreshIndex < plannerGroupEndInitIndex) {
     Console.Error.WriteLine(
         "Expected Planner grouping to rebuild and programmatically refresh the existing view " +
@@ -461,6 +512,39 @@ if (onStartupIndex < 0 || mainWindowConstructionIndex < onStartupIndex) {
     return 1;
 }
 
+string themeLifecycleSource = File.ReadAllText(Path.Combine(
+    FindIBarterRepoRoot(), "ViewModel", "MainWindowViewModel.cs"));
+string mainWindowThemeSource = File.ReadAllText(Path.Combine(
+    FindIBarterRepoRoot(), "MainWindow.xaml.cs"));
+int earlyWindowThemeIndex = mainWindowThemeSource.IndexOf(
+    "SfSkinManager.SetTheme(", StringComparison.Ordinal);
+int mainWindowInitializeComponentIndex = mainWindowThemeSource.IndexOf(
+    "InitializeComponent();", StringComparison.Ordinal);
+if (themeLifecycleSource.Contains(
+        "SfSkinManager.ApplicationTheme", StringComparison.Ordinal)
+    || !themeLifecycleSource.Contains(
+        "SfSkinManager.SetTheme(window", StringComparison.Ordinal)
+    || !themeLifecycleSource.Contains(
+        "SfSkinManager.RegisterThemeSettings(theme, (IThemeSetting)themeSettings)", StringComparison.Ordinal)
+    || !themeLifecycleSource.Contains(
+        "RefreshLegacyGradientColorAliases()", StringComparison.Ordinal)
+    || !themeLifecycleSource.Contains(
+        "\"BorderGradient\", \"ContentBackground\"", StringComparison.Ordinal)
+    || !themeLifecycleSource.Contains(
+        "Application.Current.Resources[$\"{brushKey}.Color\"] = brush.Color", StringComparison.Ordinal)
+    || earlyWindowThemeIndex < 0
+    || mainWindowInitializeComponentIndex < 0
+    || earlyWindowThemeIndex > mainWindowInitializeComponentIndex) {
+    Console.Error.WriteLine(
+        "Expected Syncfusion 34.2.6 application-resource theming before MainWindow InitializeComponent.");
+    return 1;
+}
+if (args.Contains("--theme-lifecycle-only", StringComparer.Ordinal)) {
+    Console.WriteLine(
+        "Syncfusion 34.2.6 application-resource theme lifecycle contract passed.");
+    return 0;
+}
+
 string fluentControlsSource = File.ReadAllText(Path.Combine(
     FindIBarterRepoRoot(), "Resources", "Styles", "FluentControls.xaml"));
 if (!fluentControlsSource.Contains(
@@ -644,17 +728,11 @@ if (numberPageSeg != Emgu.CV.OCR.PageSegMode.Auto) {
 }
 var item2PageSeg = CV.SelectPageSegMode(
     CV.OCRType.Words,
-    Emgu.CV.OCR.PageSegMode.Auto);
-if (item2PageSeg != Emgu.CV.OCR.PageSegMode.Auto) {
-    Console.Error.WriteLine($"Expected an explicit item2 OCR segmentation override to select Auto, got {item2PageSeg}.");
+    Emgu.CV.OCR.PageSegMode.SparseText);
+if (item2PageSeg != Emgu.CV.OCR.PageSegMode.SparseText) {
+    Console.Error.WriteLine($"Expected an explicit wrapped-item2 OCR segmentation override to select SparseText, got {item2PageSeg}.");
     return 1;
 }
-if (CFunctions.JoinItem2OcrLines("[7阶段]卡尔佩恩匠/\r\n珍珠项链\r\n")
-    != "[7阶段]卡尔佩恩匠/珍珠项链") {
-    Console.Error.WriteLine("Expected item2 OCR line breaks to be joined before catalog matching.");
-    return 1;
-}
-
 // Remaining count is a bounded 0..10 domain. A semantic "N次" read wins;
 // otherwise a short digit crop protects 0..9 and the long crop can only add
 // the one valid two-digit value, 10.
@@ -678,7 +756,6 @@ if (CFunctions.ResolveQuantityPipelineVotes(9, 3, -1, 2, true) != 2
     Console.Error.WriteLine("Expected quantity voting to count independent OCR pipelines once each.");
     return 1;
 }
-
 var numericLanguageMethod = typeof(CFunctions).GetMethod(
     "NumericOcrLanguage",
     BindingFlags.Static | BindingFlags.NonPublic);
@@ -932,9 +1009,9 @@ finally {
 
 Console.WriteLine("Capture file stable-length wait passed.");
 var item2RetryRectMethod = typeof(CFunctions).GetMethod(
-    "TryBuildRetryItem2OcrRectangle",
+    "TryBuildItem2OcrRectangle",
     BindingFlags.Static | BindingFlags.NonPublic)
-    ?? throw new MissingMethodException("TryBuildRetryItem2OcrRectangle");
+    ?? throw new MissingMethodException("TryBuildItem2OcrRectangle");
 
 object[] item2Args = { 1116, 585, 25, 1182, 2560, 0, 0, 0, 0 };
 bool item2Ok = (bool)item2RetryRectMethod.Invoke(null, item2Args)!;
@@ -942,9 +1019,9 @@ if (!item2Ok
     || (int)item2Args[5] != 1492
     || (int)item2Args[6] != 560
     || (int)item2Args[7] != 1658
-    || (int)item2Args[8] != 586) {
+    || (int)item2Args[8] != 610) {
     Console.Error.WriteLine(
-        $"Expected retry item2 rect 1492,560,1658,586 but got {item2Args[5]},{item2Args[6]},{item2Args[7]},{item2Args[8]} ok={item2Ok}");
+        $"Expected fixed two-line item2 rect 1492,560,1658,610 but got {item2Args[5]},{item2Args[6]},{item2Args[7]},{item2Args[8]} ok={item2Ok}");
     return 1;
 }
 

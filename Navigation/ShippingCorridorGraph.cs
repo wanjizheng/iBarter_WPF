@@ -51,15 +51,31 @@ public static class ShippingCorridorGraph {
         ]),
     ];
 
-    private static readonly CorridorEdge SouthernEdge = new(
-        "Grandiha", "Midnight",
-        JoinEndpoints(
-            new NavigationPoint(-559_743, -476_904),
-            [
-                (4952,8387),(4958,8411),(4919,8579),(4919,8597),
-                (5033,8702),(5543,8705),(5732,8792),
-            ],
-            new NavigationPoint(-321_664, -598_912)));
+    private static readonly IReadOnlyDictionary<string, NavigationPoint> WestCoastNodes =
+        new Dictionary<string, NavigationPoint>(StringComparer.Ordinal) {
+            ["Pilava"] = new(248_520, 198_926),
+            ["Kuit"] = new(-348_843, 375_542),
+            ["Teyamal"] = new(-524_725, 66_122),
+            ["Epheria"] = new(-355_616, 32_650),
+            ["Grandiha"] = new(-559_743, -476_904),
+            ["Midnight"] = new(-321_664, -598_912),
+        };
+
+    private static readonly CorridorEdge[] WestCoastEdges = [
+        DirectEdge("Pilava", "Kuit", WestCoastNodes),
+        DirectEdge("Kuit", "Teyamal", WestCoastNodes),
+        DirectEdge("Teyamal", "Epheria", WestCoastNodes),
+        DirectEdge("Teyamal", "Grandiha", WestCoastNodes),
+        new(
+            "Grandiha", "Midnight",
+            JoinEndpoints(
+                WestCoastNodes["Grandiha"],
+                [
+                    (4952,8387),(4958,8411),(4919,8579),(4919,8597),
+                    (5033,8702),(5543,8705),(5732,8792),
+                ],
+                WestCoastNodes["Midnight"])),
+    ];
 
     public static IReadOnlyList<NavigationPoint> BuildPath(
         string fromIslandId,
@@ -70,22 +86,21 @@ public static class ShippingCorridorGraph {
         bool toRight = RightRegion.Contains(toIslandId);
 
         if (fromRight && toRight)
-            return ReplaceEndpoints(BuildRightPath(fromIslandId, toIslandId), from, to);
+            return ReplaceEndpoints(BuildGraphPath(RightNodes, RightEdges, fromIslandId, toIslandId), from, to);
 
         if (!fromRight && toRight) {
-            var inside = BuildRightPath("Halmad", toIslandId);
+            var inside = BuildGraphPath(RightNodes, RightEdges, "Halmad", toIslandId);
             return Collapse([from, .. inside, to]);
         }
 
         if (fromRight && !toRight) {
-            var inside = BuildRightPath(fromIslandId, "Halmad");
+            var inside = BuildGraphPath(RightNodes, RightEdges, fromIslandId, "Halmad");
             return Collapse([from, .. inside, to]);
         }
 
-        if (Matches(SouthernEdge, fromIslandId, toIslandId)) {
-            var path = Oriented(SouthernEdge, fromIslandId);
-            return ReplaceEndpoints(path, from, to);
-        }
+        if (WestCoastNodes.ContainsKey(fromIslandId) && WestCoastNodes.ContainsKey(toIslandId))
+            return ReplaceEndpoints(
+                BuildGraphPath(WestCoastNodes, WestCoastEdges, fromIslandId, toIslandId), from, to);
 
         return Collapse([from, to]);
     }
@@ -104,20 +119,24 @@ public static class ShippingCorridorGraph {
         return result;
     }
 
-    private static IReadOnlyList<NavigationPoint> BuildRightPath(string fromId, string toId) {
+    private static IReadOnlyList<NavigationPoint> BuildGraphPath(
+        IReadOnlyDictionary<string, NavigationPoint> nodes,
+        IReadOnlyList<CorridorEdge> edges,
+        string fromId,
+        string toId) {
         if (StringComparer.Ordinal.Equals(fromId, toId))
-            return [RightNodes[fromId]];
+            return [nodes[fromId]];
 
-        var distances = RightNodes.Keys.ToDictionary(x => x, _ => double.PositiveInfinity, StringComparer.Ordinal);
+        var distances = nodes.Keys.ToDictionary(x => x, _ => double.PositiveInfinity, StringComparer.Ordinal);
         var previous = new Dictionary<string, CorridorEdge>(StringComparer.Ordinal);
-        var unvisited = new HashSet<string>(RightNodes.Keys, StringComparer.Ordinal);
+        var unvisited = new HashSet<string>(nodes.Keys, StringComparer.Ordinal);
         distances[fromId] = 0;
 
         while (unvisited.Count > 0) {
             string current = unvisited.OrderBy(x => distances[x]).ThenBy(x => x, StringComparer.Ordinal).First();
             unvisited.Remove(current);
             if (current == toId || double.IsPositiveInfinity(distances[current])) break;
-            foreach (var edge in RightEdges.Where(x => x.A == current || x.B == current)) {
+            foreach (var edge in edges.Where(x => x.A == current || x.B == current)) {
                 string neighbour = edge.A == current ? edge.B : edge.A;
                 if (!unvisited.Contains(neighbour)) continue;
                 double candidate = distances[current] + PathDistance(edge.Points);
@@ -127,24 +146,31 @@ public static class ShippingCorridorGraph {
             }
         }
 
-        if (!previous.ContainsKey(toId)) throw new InvalidOperationException($"No right corridor from {fromId} to {toId}.");
-        var edges = new List<(CorridorEdge Edge, string From)>();
+        if (!previous.ContainsKey(toId))
+            throw new InvalidOperationException($"No shipping corridor from {fromId} to {toId}.");
+        var routeEdges = new List<(CorridorEdge Edge, string From)>();
         string cursor = toId;
         while (cursor != fromId) {
             var edge = previous[cursor];
             string prior = edge.A == cursor ? edge.B : edge.A;
-            edges.Add((edge, prior));
+            routeEdges.Add((edge, prior));
             cursor = prior;
         }
-        edges.Reverse();
+        routeEdges.Reverse();
         var points = new List<NavigationPoint>();
-        foreach (var (edge, start) in edges)
+        foreach (var (edge, start) in routeEdges)
             points.AddRange(Oriented(edge, start));
         return Collapse(points);
     }
 
     private static CorridorEdge Edge(string a, string b, (int X, int Y)[] geoPoints) =>
         new(a, b, JoinEndpoints(RightNodes[a], geoPoints, RightNodes[b]));
+
+    private static CorridorEdge DirectEdge(
+        string a,
+        string b,
+        IReadOnlyDictionary<string, NavigationPoint> nodes) =>
+        new(a, b, [nodes[a], nodes[b]]);
 
     private static IReadOnlyList<NavigationPoint> JoinEndpoints(
         NavigationPoint from,
@@ -153,9 +179,6 @@ public static class ShippingCorridorGraph {
 
     private static NavigationPoint GeoToWorld((int X, int Y) point) =>
         new(point.X * 301.25 - 2_048_500, 2_048_500 - point.Y * 301.25);
-
-    private static bool Matches(CorridorEdge edge, string from, string to) =>
-        edge.A == from && edge.B == to || edge.A == to && edge.B == from;
 
     private static IReadOnlyList<NavigationPoint> Oriented(CorridorEdge edge, string from) =>
         edge.A == from ? edge.Points : edge.Points.Reverse().ToArray();

@@ -89,6 +89,11 @@
             <SolidColorBrush x:Key="AppAccentBrush" Color="#176F7F" />
             <SolidColorBrush x:Key="AppAccentTextBrush" Color="#FFFFFF" />
             <ResourceDictionary.MergedDictionaries>
+                <!-- Syncfusion 34.2.6 Windows11 control dictionaries contain
+                     StaticResource references to colors in Common/Brushes.
+                     Load that package-owned base dictionary first so those
+                     references are valid while MainWindow XAML is parsed. -->
+                <ResourceDictionary Source="/Syncfusion.Themes.Windows11Light.WPF;component/Common/Brushes.xaml" />
                 <ResourceDictionary Source="/Resources/Styles/FluentControls.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
