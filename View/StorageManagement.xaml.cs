@@ -1,6 +1,8 @@
-﻿using Newtonsoft.Json;
+﻿using iBarter.Localization;
+using Syncfusion.UI.Xaml.Grid;
 using Syncfusion.Windows.Shared;
-using System.IO;
+using System.ComponentModel;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace iBarter.View {
@@ -8,131 +10,141 @@ namespace iBarter.View {
     /// Interaction logic for StorageManagement.xaml
     /// </summary>
     public partial class StorageManagement : ChromelessWindow {
+        private const double ZoomStep = 0.1;
+        private const double MinZoom = 0.5;
+        private const double MaxZoom = 2.0;
+
+        private double zoomFactor = 1.0;
+        private bool loadingMaxLevelCaps;
+
+        private bool IsDesignMode => DesignerProperties.GetIsInDesignMode(this);
+
+        // Phase 2 (i18n): SfDataGrid GridTextColumn.MappingName -> resource key.
+        // HeaderText is a CLR property (not a DP) so {DynamicResource} cannot
+        // refresh it on language flip; we override via this map in code-behind
+        // on every LanguageService.LanguageChanged.
+        private static readonly IReadOnlyDictionary<string, string> _headerKeyMap =
+            new Dictionary<string, string> {
+                ["ItemNameDisplay"]                   = "str.Grid.Storage.Col.Inventory",
+                ["ItemIcon"]                          = "str.Grid.Storage.Col.Icon",
+                ["ItemTierDisplay"]                   = "str.Grid.Storage.Col.Tier",
+                ["StorageVeliaQuantity_Velia"]       = "str.Grid.Storage.Col.Velia",
+                ["StorageVeliaQuantity_Iliya"]       = "str.Grid.Storage.Col.Iliya",
+                ["StorageVeliaQuantity_Epheria"]     = "str.Grid.Storage.Col.Epheria",
+                ["StorageVeliaQuantity_Ancado"]      = "str.Grid.Storage.Col.Ancado",
+            };
+
         public StorageManagement() {
             InitializeComponent();
+            if (IsDesignMode) return;
             DataContext = App.myStorageVM;
             DataGrid_Storage.ItemsSource = App.myStorageVM.StorageCollection;
+            LoadSavedMaxLevelCaps();
             RefreshData();
+            ApplyTypography();
+            Loaded += (_, _) => ApplyTypography();
+
+            ApplyLocalization();
+            LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalization();
+        }
+
+        private void ApplyLocalization() {
+            ApplyTypography();
+            ApplyLocalizedHeaders();
+            RefreshLocalizedDisplay();
+        }
+
+        private void LoadSavedMaxLevelCaps() {
+            loadingMaxLevelCaps = true;
+            try {
+                ComboBox_MaxLV5.SelectedIndex = Math.Clamp(Properties.Settings.Default.SelectedComboBoxValueLV5, 0, 10);
+                ComboBox_MaxLV6.SelectedIndex = Math.Clamp(Properties.Settings.Default.SelectedComboBoxValueLV6, 0, 10);
+                ComboBox_MaxLV7.SelectedIndex = Math.Clamp(Properties.Settings.Default.SelectedComboBoxValueLV7, 0, 10);
+            }
+            finally {
+                loadingMaxLevelCaps = false;
+            }
+        }
+
+        private void ComboBox_MaxLV5_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
+            SaveMaxLevelCap(ComboBox_MaxLV5.SelectedIndex, value => Properties.Settings.Default.SelectedComboBoxValueLV5 = value);
+        }
+
+        private void ComboBox_MaxLV6_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
+            SaveMaxLevelCap(ComboBox_MaxLV6.SelectedIndex, value => Properties.Settings.Default.SelectedComboBoxValueLV6 = value);
+        }
+
+        private void ComboBox_MaxLV7_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
+            SaveMaxLevelCap(ComboBox_MaxLV7.SelectedIndex, value => Properties.Settings.Default.SelectedComboBoxValueLV7 = value);
+        }
+
+        private void SaveMaxLevelCap(int value, Action<int> save) {
+            if (loadingMaxLevelCaps || value < 0) return;
+            save(value);
+            Properties.Settings.Default.Save();
+        }
+
+        private void ApplyTypography() {
+            SfDataGridTypography.Apply(DataGrid_Storage);
+        }
+
+        private void ApplyLocalizedHeaders() {
+            GridHeaderLocalization.ApplyHeaders(DataGrid_Storage, _headerKeyMap);
+        }
+
+        private void RefreshLocalizedDisplay() {
+            if (DataGrid_Storage == null) {
+                return;
+            }
+            if (!Dispatcher.CheckAccess()) {
+                Dispatcher.Invoke(RefreshLocalizedDisplay);
+                return;
+            }
+
+            // Re-bind storage items to the current catalog so ItemNameDisplay /
+            // ItemNameZhTw reflect the active language. The bulk-replace happens
+            // inside StorageViewModel.RefreshCatalogBindings which suppresses
+            // auto-save, so a single language flip won't cascade 80+ saves.
+            App.myStorageVM.RefreshCatalogBindings();
+            DataGrid_Storage.View?.Refresh();
+            DataGrid_Storage.InvalidateVisual();
         }
 
         public void RefreshData() {
-            string strPath_Data = AppDomain.CurrentDomain.BaseDirectory + "Resources\\myStorage_Data.json";
-            FileInfo fileInfo = new FileInfo(strPath_Data);
-
-            if (File.Exists(strPath_Data) && fileInfo.Length > 0) {
-                try {
-                    string readJsonData = File.ReadAllText(strPath_Data);
-                    List<Items> dataSource = JsonConvert.DeserializeObject<List<Items>>(readJsonData);
-
-                    DataGrid_Storage.BeginInit();
-                    for (int i = 0; i < dataSource.Count; i++) {
-                        Items myItem = dataSource[i];
-                        if (App.myStorageVM.StorageCollection.FirstOrDefault(i => i.ItemName.Equals(myItem.ItemName)) == null) {
-                            App.myStorageVM.StorageCollection.Add(myItem);
-                        }
-                    }
-
-                    DataGrid_Storage.EndInit();
-                    //RefreshDataGrid();
-                    App.myCFun.Log("Loaded...", Brushes.Blue);
-                }
-                catch (Exception exception) {
-                    App.myCFun.Log(exception.Message, Brushes.Red);
-                }
-                //myPlannerControl.DataGrid_Planner.ItemsSource = dataSource;
-            }
-            else {
-                List<string> listItems = new List<string>();
-                listItems.Add("Mysterious Rock");
-                listItems.Add("Luxury Patterned Fabric");
-                listItems.Add("Elixir of Youth");
-                listItems.Add("Portrait of the Ancient");
-                listItems.Add("102 Year Old Golden Herb");
-                listItems.Add("Golden Fish Scale");
-                listItems.Add("Stuffed White Caterpillar");
-                listItems.Add("Faded Gold Dragon Figurine");
-                listItems.Add("Supreme Gold Candlestick");
-                listItems.Add("Statues Tear");
-                listItems.Add("Stuffed Morpho Butterfly");
-                listItems.Add("Azure Quartz");
-                listItems.Add("37 Year Old Herbal Wine");
-                listItems.Add("Octagonal Box");
-                listItems.Add("Pirates Key");
-                listItems.Add("Bronze Candlestick");
-                listItems.Add("Headless Dragon Figurine");
-                listItems.Add("Panacea");
-                listItems.Add("Seashell Deco");
-                listItems.Add("Old Chest with Gold Coins");
-                listItems.Add("Boatmans Manual");
-                listItems.Add("Green Salt Lump");
-                listItems.Add("Solidified Lava");
-                listItems.Add("Marine Knights Spear");
-                listItems.Add("Amethyst Fragment");
-                listItems.Add("Opulent Thread Spool");
-                listItems.Add("Stolen Pirate Dagger");
-                listItems.Add("Marine Knights Helm");
-                listItems.Add("Blue Candle Bundle");
-                listItems.Add("Ancient Orders");
-                listItems.Add("Lopters Fishnet");
-                listItems.Add("Rare Herb Pile");
-                listItems.Add("Skull Symbol Carpet");
-                listItems.Add("Weasel Leather Coat");
-                listItems.Add("Gooey Monster Blood");
-                listItems.Add("Round Knife");
-                listItems.Add("Skull Decorated Teacup");
-                listItems.Add("Stalactite Fragment");
-                listItems.Add("Scout Binoculars");
-                listItems.Add("Pirates Supply Box");
-                listItems.Add("Torn Pirate Treasure Map");
-                listItems.Add("Old Hourglass");
-                listItems.Add("Urchin Spine");
-                listItems.Add("Pirate Gold Coin");
-                listItems.Add("Monster Tentacle");
-                listItems.Add("Sea Survival Kit");
-                listItems.Add("Balanced Stone Pagoda");
-                listItems.Add("Narvo Sea Cucumber");
-                listItems.Add("Big Stone Slab");
-                listItems.Add("Supreme Oyster Box");
-                listItems.Add("Conch Shell Ornament");
-                listItems.Add("Filtered Drinking Water");
-                listItems.Add("Opulent Marble");
-                listItems.Add("Pirate Ship Mast");
-                listItems.Add("Cron Castle Gold Coin");
-                listItems.Add("Islanders Lunchbox");
-                listItems.Add("Pirates Gunpowder");
-                listItems.Add("Fertile Soil");
-                listItems.Add("Rakeflower Seed Pouch");
-                listItems.Add("Roa Flower Seed Pouch");
-                listItems.Add("Golden Sand");
-                listItems.Add("Cherry Tree Seed Pouch");
-                listItems.Add("Unidentified Ancient Mural");
-                listItems.Add("Ancient Urn Piece");
-                listItems.Add("Chewy Raw Gizzard");
-                listItems.Add("Raft Toy");
-                listItems.Add("Stained Seagull Figurine");
-                listItems.Add("Naval Ration");
-                listItems.Add("Giant Fish Bone");
-                listItems.Add("Dried Blue Rose");
-
-                DataGrid_Storage.BeginInit();
-                for (int i = 0; i < listItems.Count; i++) {
-                    string strName = listItems[i].Replace("'", "").Replace("(", "").Replace(")", "");
-                    Items myItem = App.listItems.FirstOrDefault(i => i.ItemName.Equals(strName));
-                    if (myItem != null) {
-                        App.myStorageVM.StorageCollection.Add(myItem);
-                    }
-                    else {
-                        App.myCFun.Log("Cannot find the item: " + strName, Brushes.Red);
-                    }
-                }
-                //Items myItems = App.listItems.FirstOrDefault(i => i.ItemName.Equals("Mysterious_Rock"));
-
-                DataGrid_Storage.EndInit();
-            }
+            // Storage data is loaded once at app startup (App.OnStartup -> myStorageVM.LoadData()).
+            // Re-invoking here is safe and idempotent: LoadData's dedup checks skip
+            // already-present items. We still call it so the window reflects the latest
+            // JSON state (e.g. if the user manually edited myStorage_Data.json while
+            // the app was running). The bulk-add is internally suppressed, so a refresh
+            // no longer cascades into 80+ mid-load SaveData() writes.
+            App.myStorageVM.LoadData();
         }
+
+        // The Hydrate / SeedHardcodedFallback helpers used to live here but moved to
+        // StorageViewModel so the load path doesn't depend on a UI window being open.
+        // Barter.InvQuantity used to call `new StorageManagement()` to force this load
+        // on first read, which had the side effect of cascading 80+ saves on the first
+        // click of the scanner's "Add to Planner" button. See StorageViewModel.LoadData
+        // and Model/Barter.InvQuantity for the fix.
+
+        // _ = HydrateStorageCollection; // (silence unused-helper reference: kept as a
+        // comment marker in case a future UI-only hydration pass wants to reuse the
+        // per-item catalog-resolution logic from StorageViewModel.HydrateStorageItem.)
+
 
         private void DataGrid_Storage_CurrentCellEndEdit(object sender, Syncfusion.UI.Xaml.Grid.CurrentCellEndEditEventArgs e) {
             App.myStorageVM.SaveData();
+        }
+
+        private void DataGrid_Storage_PreviewMouseWheel(object sender, MouseWheelEventArgs e) {
+            if (!Keyboard.IsKeyDown(Key.LeftCtrl) && !Keyboard.IsKeyDown(Key.RightCtrl)) {
+                return;
+            }
+
+            zoomFactor += e.Delta > 0 ? ZoomStep : -ZoomStep;
+            zoomFactor = Math.Clamp(zoomFactor, MinZoom, MaxZoom);
+            DataGrid_Storage.LayoutTransform = new ScaleTransform(zoomFactor, zoomFactor);
+            e.Handled = true;
         }
 
         private void PinWindow_Click(object sender, System.Windows.RoutedEventArgs e) {

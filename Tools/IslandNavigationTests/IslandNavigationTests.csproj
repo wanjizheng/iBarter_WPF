@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.mtp-v2" Version="3.2.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Mapping\*.cs" Link="Mapping\%(Filename)%(Extension)" />
+    <Compile Include="..\..\Navigation\IslandNavigationGeometry.cs" Link="Navigation\IslandNavigationGeometry.cs" />
+    <Compile Include="..\..\Navigation\RouteDisplayGeometry.cs" Link="Navigation\RouteDisplayGeometry.cs" />
+    <Compile Include="..\..\Navigation\ShippingCorridorGraph.cs" Link="Navigation\ShippingCorridorGraph.cs" />
+    <Compile Include="..\..\View\RouteStepMarkerFactory.cs" Link="View\RouteStepMarkerFactory.cs" />
+    <!-- Resize-reflow fix: pure reflow pipeline + projection helper.
+         MapIslandVisualCleanup uses Grid/Panel so this test project
+         (which targets net10.0-windows with UseWPF) is the only
+         one with WPF references reachable. Routing/*.cs is NOT
+         included here — MapControl.Reflow.cs does not depend on
+         Routing, and the WPF partial MapControl.ReflowPipeline.cs
+         is intentionally NOT compiled into this test project. -->
+    <Compile Include="..\..\View\MapControl.Reflow.cs" Link="View\MapControl.Reflow.cs" Condition="Exists('..\..\View\MapControl.Reflow.cs')" />
+  </ItemGroup>
+</Project>

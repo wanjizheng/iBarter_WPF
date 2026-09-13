@@ -2,6 +2,7 @@
 using PureDM.Logging;
 using Syncfusion.SfSkinManager;
 using Syncfusion.Windows.Shared;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -14,10 +15,18 @@ namespace iBarter {
     /// </summary>
     public partial class MainWindow : ChromelessWindow {
         public MainWindow() {
+            // Apply the selected theme before any XAML control is created.
+            // ApplyStylesOnApplication makes Syncfusion merge the complete
+            // common and control dictionaries atomically at application scope.
+            SfSkinManager.SetTheme(
+                this,
+                new Theme(string.IsNullOrWhiteSpace(App.myMainWVM.SelectedThemeName)
+                    ? ViewModel.MainWindowViewModel.DefaultThemeName
+                    : App.myMainWVM.SelectedThemeName));
+            ViewModel.MainWindowViewModel.RefreshLegacyGradientColorAliases();
             InitializeComponent();
             this.DataContext = App.myMainWVM;
             App.myMainWVM.BlurVisibility = Visibility.Visible;
-            //SfSkinManager.SetTheme(this, new Theme("Windows11Light"));
             this.WindowState = WindowState.Minimized;
 
             Thread thread = new Thread(() => {
@@ -28,9 +37,70 @@ namespace iBarter {
             thread.SetApartmentState(ApartmentState.STA); // 设置线程为 STA
             thread.IsBackground = true;
             thread.Start();
-            App.myMainWVM.OnSelectedProductChanged();
+            // Without this, closing the main window leaves SplashScreen
+            // open (its Close() is only called inside the game-binding
+            // success branch - on bind failure it never closes), and
+            // App.ShutdownMode = OnLastWindowClose keeps the process
+            // alive for that open SplashScreen. Force-close splash +
+            // shut down its background Dispatcher here regardless.
+            this.Closing += MainWindow_Closing;
+            Localization.LanguageService.Instance.LanguageChanged += (_, _) => ApplyLocalizedChrome();
             //var mapCenterPoint = new MapPoint(14, 21, SpatialReferences.Wgs84);
             //MainMapView.SetViewpoint(new Viewpoint(mapCenterPoint, 52541284));
+        }
+
+        // Ensure the splash screen and its background STA Dispatcher shut
+        // down when the main window closes - otherwise OnLastWindowClose
+        // sees SplashScreen still open and never exits the process.
+        private void MainWindow_Closing(object? sender, CancelEventArgs e) {
+            // Final-safety-net flush of the automatic-route plan so a crash
+            // or forced shutdown does not lose the most recently displayed
+            // route. SaveCurrentPlan is a no-op when there is no active
+            // plan, so this never overwrites a saved file with empty data.
+            try {
+                App.myRouteCoordinator?.SaveCurrentPlan();
+            }
+            catch (Exception exception) {
+                // The shutdown path must keep moving even if the safety-net
+                // save fails (disk full, ACL, antivirus lock, etc.), but the
+                // failure should still be observable in the log so the user
+                // knows the last route may not have been persisted.
+                try {
+                    System.IO.File.AppendAllText(
+                        AppDomain.CurrentDomain.BaseDirectory + "crash.log",
+                        "==== " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                            + " (shutdown-save-failed) ====\r\n"
+                            + exception + "\r\n\r\n");
+                }
+                catch { /* last-resort logger must never throw */ }
+            }
+
+            try {
+                if (App.mySplashScreen != null && App.mySplashScreen.IsLoaded) {
+                    var splash = App.mySplashScreen;
+                    splash.Dispatcher.Invoke(() => {
+                        try { splash.Close(); } catch { }
+                    });
+                    // InvokeShutdown() must be called from outside the Invoke
+                    // callback - it terminates Dispatcher.Run() and lets the
+                    // STA thread unwind cleanly.
+                    splash.Dispatcher.InvokeShutdown();
+                }
+            }
+            catch { }
+
+            // Release the DM COM object on the same STA thread that created it,
+            // then stop that thread. Stopping first would leave DmAutomation's
+            // finalizer to run on an arbitrary GC thread, outside its COM apartment.
+            try {
+                if (PureDmWorker.IsRunning && App.myPureDM != null) {
+                    PureDmWorker.Call(() => App.myPureDM.Dispose());
+                }
+            }
+            catch { }
+            finally {
+                try { PureDmWorker.Stop(); } catch { }
+            }
         }
 
         // [DllImport("user32.dll")]
@@ -41,26 +111,10 @@ namespace iBarter {
         //     var w32Mouse = new Win32Point();
         //     GetCursorPos(ref w32Mouse);
         //
-        //     return new PointPlus(w32Mouse.X, w32Mouse.Y);
-        // }
-
-        private void Timer_Tick(object sender, EventArgs e) {
-            //statusBarItem_XY.Text = "X: " + GetMousePosition().X + " | Y: " + GetMousePosition().Y;
-            int intX, intY;
-            App.myPureDM.DM.GetCursorPos(out intX, out intY);
-            statusBarItem_XY.Text = "X: " + intX + " | Y: " + intY;
-
-
-            int intWidth, intHeight;
-            App.myPureDM.DM.GetClientSize((int)App.myPureDM.WindowHandle, out intWidth, out intHeight);
-            if (intWidth > 0 && intHeight > 0) {
-                App.myPureDM.WindowWidth = intWidth;
-                App.myPureDM.WindowHeight = intHeight;
-                double x = (double)intX / App.myPureDM.WindowWidth;
-                double y = (double)intY / App.myPureDM.WindowHeight;
-                //toolStripStatusLabel_WinPercentage.Text = "X: " + x + " | Y: " + y;
-            }
-        }
+        // 2026-07-10: Timer_Tick method removed - it was the 200 calls/sec
+        // culprit calling DM.GetCursorPos + DM.GetClientSize on the UI
+        // thread. PureDmWorker.Call funnels the equivalent reads through
+        // the dedicated STA worker instead.
 
 
         /// <summary>
@@ -69,10 +123,27 @@ namespace iBarter {
         /// <param name="sender"></param>
         /// <param name="e"></param>
         private void OnActivateWindow(object sender, RoutedEventArgs e) {
-            // var name = (sender as MenuItem).Tag as string;
-            // dockingManager_Main.ActivateWindow(name);
+            if (App.myBarterScanner != null && App.myBarterScanner.IsLoaded) {
+                App.myBarterScanner.InitializeScannerState();
+                App.myBarterScanner.Activate();
+                return;
+            }
             App.myBarterScanner = new BarterScanner();
+            App.myBarterScanner.Closed += (_, _) => App.myBarterScanner = null;
+            App.myMainWVM.ApplyCurrentThemeToWindow(App.myBarterScanner);
             App.myBarterScanner.Show();
+        }
+
+        public void ActivateShipCargoSelection() {
+            try {
+                Syncfusion.Windows.Tools.Controls.DockingManager.SelectTab(dockRight_ShipCargo);
+                dockingManager_Main.ActivateWindow(nameof(dockRight_ShipCargo));
+            }
+            catch { }
+            dockRight_ShipCargo.BringIntoView();
+            Dispatcher.BeginInvoke(
+                new Action(myShipCargo.FocusSelectedAutomaticStep),
+                DispatcherPriority.Loaded);
         }
 
         private void Test_Click(object sender, RoutedEventArgs e) {
@@ -117,85 +188,151 @@ namespace iBarter {
 
 
         private void Window_Loaded(object sender, RoutedEventArgs e) {
+            // Phase 8 (i18n): sync the language menu's IsChecked marks
+            // with whatever AppLanguage was loaded by LanguageService
+            // InitializeAtStartup (which read it from Properties.Settings
+            // in Phase 1).  The click handlers maintain the marks from
+            // here on; we only seed the initial state.
+            ApplyLocalizedChrome();
+
+            // Saved cargo capacity is application state, not game-process
+            // state. Load it before PureDM attachment so Planner auto-routing
+            // has valid ExtraLT/TotalLT even when Black Desert is not running.
+            myShipCargo.RefreshData();
+
+            // Phase 9 hotfix 8: the dropdown is empty when clicked and the
+            // user has been unable to see the diagnostic from PlannerControl
+            // ctor because Syncfusion's DockingManager lazily creates
+            // document content only when the panel is first activated.  Print
+            // the data counts here so the user can confirm App.listItems /
+            // ItemsCollection actually have rows when the UI starts up.
+            try {
+                int appList = App.listItems?.Count ?? -1;
+                int itemsCol = App.myPVM?.ItemsCollection?.Count ?? -1;
+                int islandsCol = App.myPVM?.IslandsCollection?.Count ?? -1;
+                int storageItems = App.listStorage?.Count ?? -1;
+                App.myCFun?.Log(
+                    $"[Diagnostic] App.listItems={appList}, myPVM.ItemsCollection={itemsCol}, " +
+                    $"IslandsCollection={islandsCol}, listStorage={storageItems}",
+                    System.Windows.Media.Brushes.Gray);
+            }
+            catch (Exception ex) {
+                App.myCFun?.Log("[Diagnostic] failed: " + ex.Message, System.Windows.Media.Brushes.Red);
+            }
+
             try {
                 // App.mySplashScreen.worker.ReportProgress(10);
-                Logging.SaveConsoleLog = false;
+                // 2026-07-10: turn ON file logging so that if init hangs
+                // before any UI log line is written we still have something
+                // on disk to diagnose from.
+                Logging.SaveConsoleLog = true;
                 Logging.myTextBoxWriter = new TextBoxWriter(richTextBox_Log);
-                App.myPureDM = new PureDM.DmAutomation("wanjizheng1c1f9b855a9f822cbf24afa526dfca3c");
-                App.myPureDM.AttachToProcessByName("BlackDesert64");
-                App.myPureDM.BindMode = 103;
-                // App.myPureDM.MouseMode = "dx.public.active.api|dx.public.active.message|dx.mouse.position.lock.api|dx.mouse.state.api|dx.mouse.api|dx.mouse.focus.input.api|dx.mouse.focus.input.message|dx.mouse.clip.lock.api|dx.mouse.input.lock.api| dx.mouse.cursor";
+                App.myCFun.Log("[INIT] 0 before PureDmWorker.Start", Brushes.Gray);
+                // Start the owner STA first, then construct DmAutomation on it.
+                // Its constructor creates the dm.dmsoft COM object immediately;
+                // constructing it on the WPF UI STA and merely calling it from
+                // this worker would still cross COM apartment boundaries.
+                PureDmWorker.Start();
+                App.myCFun.Log("[INIT] 1 after PureDmWorker.Start", Brushes.Gray);
+                App.myCFun.Log("[INIT] 2 before new DmAutomation", Brushes.Gray);
+                App.myPureDM = PureDmWorker.Call(() =>
+                    new PureDM.DmAutomation("wanjizheng1c1f9b855a9f822cbf24afa526dfca3c"));
+                App.myCFun.Log("[INIT] 3 after new DmAutomation", Brushes.Gray);
 
-
-
-
-                App.myPureDM.DisplayMode = "dx.graphic.3d.10plus";
-
-
-
-
-
-
-
-
-
-
-                App.myPureDM.MouseMode = "dx.mouse.position.lock.api|dx.mouse.focus.input.api|dx.mouse.focus.input.message|dx.mouse.clip.lock.api|dx.mouse.state.api|dx.mouse.api|dx.mouse.cursor";
-                App.myPureDM.KeyboardMode = "dx.keypad.input.lock.api|dx.keypad.state.api|dx.keypad.api";
-                App.myPureDM.PublicMode = "dx.public.graphic.protect|dx.public.anti.api|dx.public.km.protect|dx.public.input.ime|dx.public.focus.message";
-
-                // App.myPureDM.DisplayMode = "normal";
-                // App.myPureDM.MouseMode = "normal";
-                // App.myPureDM.KeyboardMode = "normal";
-                // App.myPureDM.PublicMode = "";
-
+                // All initialization and binding stays on the owner STA.
+                PureDmWorker.Call(() => {
+                    App.myPureDM.AttachToProcessByName("BlackDesert64");
+                    App.myCFun.Log("[INIT] 4 after AttachToProcessByName hwnd=" + App.myPureDM.WindowHandle, Brushes.Gray);
+                    App.myPureDM.BindMode = 103;
+                    App.myPureDM.DisplayMode = "dx.graphic.3d.10plus";
+                    App.myPureDM.MouseMode = "dx.mouse.position.lock.api|dx.mouse.focus.input.api|dx.mouse.focus.input.message|dx.mouse.clip.lock.api|dx.mouse.state.api|dx.mouse.api|dx.mouse.cursor";
+                    App.myPureDM.KeyboardMode = "dx.keypad.input.lock.api|dx.keypad.state.api|dx.keypad.api";
+                    App.myPureDM.PublicMode = "dx.public.graphic.protect|dx.public.anti.api|dx.public.km.protect|dx.public.input.ime|dx.public.focus.message";
+                });
 
                 // App.mySplashScreen.worker.ReportProgress(50);
                 if ((int)App.myPureDM.WindowHandle > 0) {
-                    App.myPureDM.DM.SetWindowState((int)App.myPureDM.WindowHandle, 1);
-                    //int bindResult = App.dmSoft.BindWindowEx((int)App.myHwnd, "dx.graphic.3d.10plus", "dx.mouse.cursor|dx.mouse.raw.input", "windows", "dx.mouse.raw.input", 101);
-
-                    int bindResult = App.myPureDM.CV.BindWindow((int)App.myPureDM.WindowHandle);
-
+                    App.myCFun.Log("[INIT] 5 before BindWindow hwnd=" + App.myPureDM.WindowHandle, Brushes.Gray);
+                    int bindResult = PureDmWorker.Call(() => {
+                        App.myPureDM.DM.SetWindowState((int)App.myPureDM.WindowHandle, 1);
+                        return App.myPureDM.CV.BindWindow((int)App.myPureDM.WindowHandle);
+                    });
+                    App.myCFun.Log("[INIT] 6 after BindWindow bindResult=" + bindResult, Brushes.Gray);
 
                     // App.mySplashScreen.worker.ReportProgress(90);
-                    //int bindResult = App.dmSoft.BindWindowEx((int)App.myHwnd, "dx2", "normal", "normal", "dx.public.km.protect|dx.public.anti.api|dx.public.inject.super|", 101);
                     if (bindResult == 1) {
-                        App.myCFun.Log("Game window binding success!", Brushes.Blue);
-                        // App.myPureDM.DM.SetWindowState((int)App.myPureDM.Hwnd, 4); //Maximize the window
+                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Binding.Success"), Brushes.Blue);
                     }
                     else {
-                        App.myCFun.Log("Fail to bind the game window.", Brushes.Red);
+                        App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Binding.Failed"), Brushes.Red);
                     }
 
-                    // App.mySplashScreen.worker.ReportProgress(100);
-                    var timer = new DispatcherTimer();
-
-                    timer.Interval = TimeSpan.FromMilliseconds(10);
-                    timer.Tick += Timer_Tick;
-                    timer.Start();
+                    // 2026-07-10: REMOVED the 10ms DispatcherTimer that
+                    // called DM.GetCursorPos + DM.GetClientSize on the
+                    // UI thread ~200 times/sec. Those calls are now
+                    // funnelled through the STA worker via the scan
+                    // path's TryRefreshGameWindowSize, which is plenty
+                    // for keeping WindowWidth/WindowHeight current.
+                    //
+                    // The status-bar XY readout is also removed - it
+                    // served no functional purpose and was the main
+                    // source of COM cross-thread contention.
                 }
                 else {
-                    App.myCFun.Log("Cannot find the game process.", Brushes.Red);
+                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.Binding.NoProcess"), Brushes.Red);
+                    // Offline use is supported: Planner, storage, map and
+                    // route planning do not require a live game process.
+                    // The shared finally block closes the splash and restores
+                    // the main window before this method returns.
+                    return;
                 }
 
-                myShipCargo.RefreshData();
-
-                App.mySplashScreen.Dispatcher.Invoke(new Action(() => App.mySplashScreen.Close()));
-                //SfSkinManager.ApplyStylesOnApplication = true;
-                this.WindowState = WindowState.Normal;
-                this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-                double screenWidth = SystemParameters.PrimaryScreenWidth;
-                double screenHeight = SystemParameters.PrimaryScreenHeight;
-                double windowWidth = this.Width;
-                double windowHeight = this.Height;
-                this.Left = (screenWidth / 2) - (windowWidth / 2);
-                this.Top = (screenHeight / 2) - (windowHeight / 2);
+                App.myCFun.Log("[INIT] 7 initialization complete", Brushes.Gray);
                 App.myCFun.DownloadMissingIcon();
             }
             catch (Exception exception) {
-                App.myCFun.Log(exception.Message, Brushes.Red);
+                App.myCFun.Log("[INIT] EXCEPTION: " + exception.Message, Brushes.Red);
             }
+            finally {
+                FinishStartupPresentation();
+            }
+        }
+
+        /// <summary>
+        /// Completes startup presentation independently of game binding.
+        /// The window starts minimized while the splash is visible, so every
+        /// exit path (bound, no process, bind failure or exception) must pass
+        /// through here or the application remains an invisible taskbar item.
+        /// </summary>
+        private void FinishStartupPresentation() {
+            try {
+                var splash = App.mySplashScreen;
+                if (splash is not null) {
+                    var dispatcher = splash.Dispatcher;
+                    if (!dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished) {
+                        dispatcher.Invoke(() => {
+                            try { splash.Close(); } catch { }
+                        });
+                        if (!dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished)
+                            dispatcher.InvokeShutdown();
+                    }
+                }
+            }
+            catch (Exception splashException) {
+                App.myCFun?.Log(
+                    "[INIT] splash shutdown fail: " + splashException.Message,
+                    Brushes.Red);
+            }
+
+            WindowState = WindowState.Normal;
+            WindowStartupLocation = WindowStartupLocation.Manual;
+
+            Rect workArea = SystemParameters.WorkArea;
+            double windowWidth = Double.IsNaN(Width) || Width <= 0 ? ActualWidth : Width;
+            double windowHeight = Double.IsNaN(Height) || Height <= 0 ? ActualHeight : Height;
+            Left = workArea.Left + Math.Max(0, (workArea.Width - windowWidth) / 2);
+            Top = workArea.Top + Math.Max(0, (workArea.Height - windowHeight) / 2);
+            Activate();
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -205,11 +342,82 @@ namespace iBarter {
         }
 
         private void MenuItem_StorageManagement_Click(object sender, RoutedEventArgs e) {
-            if (App.myStorageVM != null) {
-                App.myStorageVM.StorageCollection.Clear();
+            if (App.myStorageManagement != null && App.myStorageManagement.IsLoaded) {
+                App.myStorageManagement.Activate();
+                return;
             }
             App.myStorageManagement = new StorageManagement();
+            App.myStorageManagement.Closed += (_, _) => App.myStorageManagement = null;
+            App.myMainWVM.ApplyCurrentThemeToWindow(App.myStorageManagement);
             App.myStorageManagement.Show();
+        }
+
+        // Strict sync between Items.csv and Resources/Images/Items/*.bmp.
+        // CFunctions.SyncImages handles the actual work; downloads are
+        // async so we offload to a worker thread so the click handler
+        // returns immediately and the UI log keeps streaming progress.
+        private void MenuItem_SyncImages_Click(object sender, RoutedEventArgs e) {
+            App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.Starting"), Brushes.Gold);
+            System.Threading.Tasks.Task.Run(() => {
+                try {
+                    App.myCFun.SyncImages();
+                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.Done"), Brushes.Gold);
+                }
+                catch (Exception ex) {
+                    App.myCFun.Log(Localization.LanguageService.Instance.Localize("str.Log.SyncImages.Failed", ex.Message), Brushes.Red);
+                }
+            });
+        }
+
+        // 2026-07-08: manual re-bind menu item removed per user request.
+        // Rebinding the game window from the UI thread crashes the game
+        // client on the user's dx.graphic.3d.10plus build (see commit
+        // df859cc + the [DIAG-capture-down] message that says "DO NOT
+        // manually rebind via the menu"). The auto-unbind in the scan
+        // path is the only safe recovery - the user just waits 5-15 s
+        // and re-clicks Scan.
+
+        // Phase 4 (i18n): one-shot bdocodex.com/tw/item/{id}/ scraper. Hits
+        // every ItemID in App.listItems, extracts the zh-TW H1, and rewrites
+        // Resources/Items.zh-TW.csv.  User-controlled; the user keeps this
+        // menu item around because they occasionally edit Items.csv and want
+        // a re-pull.
+        // (Phase 9 hotfix 6: the menu item was removed per user request -
+        // the importer is now triggered by re-running
+        // 'Tools/scrape_bdocodex_all_names.js' at author time, and the
+        // .csv is committed.  The .cs importer is still in the codebase
+        // for future use but is no longer wired to a menu entry.)
+
+        // Phase 8 (i18n): live language toggle.  Setting
+        // LanguageService.Current = X swaps the active merged dictionary
+        // and raises LanguageChanged; every subscriber (Items.ItemNameDisplay
+        // / ItemTierDisplay, Islands.IslandsNameDisplay, Barter.*NameDisplay
+        // via underlying INPC, and the three View's ApplyLocalizedHeaders
+        // for Syncfusion GridColumn.HeaderText) re-renders in place.  The
+        // setters also persist the choice via Properties.Settings so the
+        // selection survives restart.
+        private void MenuItem_LangEnglish_Click(object sender, RoutedEventArgs e) {
+            iBarter.Localization.LanguageService.Instance.Current = iBarter.Localization.AppLanguage.English;
+            ApplyLocalizedChrome();
+        }
+
+        private void MenuItem_LangZhTw_Click(object sender, RoutedEventArgs e) {
+            iBarter.Localization.LanguageService.Instance.Current = iBarter.Localization.AppLanguage.TraditionalChinese;
+            ApplyLocalizedChrome();
+        }
+
+        private void ApplyLocalizedChrome() {
+            SyncLangCheckmarks();
+            if (statusBarItem_Version != null) {
+                statusBarItem_Version.Text =
+                    Localization.LanguageService.Instance.Localize("str.StatusBar.VersionLabel") + App.DisplayVersion;
+            }
+        }
+
+        private void SyncLangCheckmarks() {
+            var current = iBarter.Localization.LanguageService.Instance.Current;
+            if (MenuItem_LangEnglish != null) MenuItem_LangEnglish.IsChecked = current == iBarter.Localization.AppLanguage.English;
+            if (MenuItem_LangZhTw != null) MenuItem_LangZhTw.IsChecked = current == iBarter.Localization.AppLanguage.TraditionalChinese;
         }
 
         private void dockingManager_Main_ActiveWindowChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) {

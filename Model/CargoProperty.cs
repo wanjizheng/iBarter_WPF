@@ -8,7 +8,7 @@ using Syncfusion.Windows.PropertyGrid;
 
 namespace iBarter.Model {
     public class CargoProperty : INotifyPropertyChanged {
-        private double propExtraLT, propTotalLT, doubCurrentLT, doubInitialLT;
+        private double propExtraLT, propTotalLT, doubCurrentLT, doubInitialLT, doubPeakLT;
 
         public CargoProperty(double _extralLT = -1, double _totalLT = -1, double _currentLT = 0, double _initialLT = 0) {
             propExtraLT = _extralLT;
@@ -53,31 +53,57 @@ namespace iBarter.Model {
             }
         }
 
+        [Category("CargoProperty"), Description("Peak LT"), DisplayName("PeakLT")]
+        public double PeakLT {
+            get { return doubPeakLT; }
+            set {
+                doubPeakLT = value;
+                OnPropertyChanged();
+            }
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
-            Application.Current.Dispatcher.Invoke(() => {
-                if (App.myfmMain != null) {
-                    if (CurrentLT > TotalLT && CurrentLT <= TotalLT * 1.7 && InitialLT <= TotalLT) {
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Red;
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.FontWeight = FontWeights.Bold;
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.ViewBackgroundColor = Brushes.IndianRed;
-                    }
-                    else if (CurrentLT > TotalLT * 1.7 || InitialLT > TotalLT) {
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Red;
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.FontWeight = FontWeights.Bold;
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.ViewBackgroundColor = Brushes.DarkRed;
-                    }
-                    else {
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.Foreground = Brushes.Black;
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.FontWeight = FontWeights.Normal;
-                        App.myfmMain.myShipCargo.PropertyGrid_Ship.ViewBackgroundColor = Brushes.White;
-                    }
+            Application.Current?.Dispatcher.Invoke(() => {
+                var pg = App.myfmMain?.myShipCargo?.PropertyGrid_Ship;
+                if (pg == null) return;
 
+                // UX-researched palette: avoid green (low readability on
+                // both white PropertyGrid and the dark map background);
+                // use blue for safe, orange for warning, crimson for
+                // danger. All three have high contrast on both light
+                // and dark surrounds. AfterRunLT was removed (duplicates
+                // CurrentLT) so this logic now keys off CurrentLT directly.
+                if (CurrentLT > TotalLT && CurrentLT <= TotalLT * 1.7 && InitialLT <= TotalLT) {
+                    // warning group: amber foreground, soft amber
+                    // background (no green, no flat-red clash with the
+                    // map's red island markers)
+                    pg.Foreground = new SolidColorBrush(Color.FromRgb(0xE6, 0x8A, 0x00)); // DarkOrange
+                    pg.FontWeight = FontWeights.SemiBold;
+                    pg.ViewBackgroundColor = new SolidColorBrush(Color.FromRgb(0xFF, 0xE5, 0xCC));
+                }
+                else if (CurrentLT > TotalLT * 1.7 || InitialLT > TotalLT) {
+                    // danger group: crimson foreground, light-pink
+                    // background (clear alert without being garish red)
+                    pg.Foreground = new SolidColorBrush(Color.FromRgb(0xC8, 0x10, 0x2E)); // Crimson
+                    pg.FontWeight = FontWeights.Bold;
+                    pg.ViewBackgroundColor = new SolidColorBrush(Color.FromRgb(0xFF, 0xD6, 0xD6));
+                }
+                else {
+                    // safe group: deep blue (high contrast on both
+                    // PropertyGrid white and the map's dark navy)
+                    pg.Foreground = new SolidColorBrush(Color.FromRgb(0x1E, 0x5A, 0xA8)); // DarkSlateBlue
+                    pg.FontWeight = FontWeights.Normal;
+                    pg.ViewBackgroundColor = new SolidColorBrush(Color.FromRgb(0xF5, 0xF8, 0xFC)); // very light blue
+                }
+
+                bool isAutomaticDisplayValue = App.myRouteCoordinator?.Mode == ViewModel.CargoMode.AutomaticRoute
+                    && propertyName is nameof(InitialLT) or nameof(CurrentLT) or nameof(PeakLT);
+                if (!isAutomaticDisplayValue)
                     SaveData();
-                }
             });
         }
 

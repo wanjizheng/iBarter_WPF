@@ -4,14 +4,18 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="clr-namespace:iBarter.View"
+    xmlns:domain="clr-namespace:iBarter"
+    xmlns:vm="clr-namespace:iBarter.ViewModel"
+    xmlns:controls="clr-namespace:iBarter.Controls"
+    xmlns:loc="clr-namespace:iBarter.Localization"
     xmlns:Syncfusion="http://schemas.syncfusion.com/wpf" x:Class="iBarter.View.ShipCargoControl"
     xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
     mc:Ignorable="d"
     d:DesignHeight="850" d:DesignWidth="300">
     <Control.Resources>
-        <DataTemplate x:Key="ListBoxTemplate">
+        <DataTemplate DataType="{x:Type domain:Barter}">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Text="{Binding IsLandName, StringFormat='{}{0}: '}" FontWeight="Bold"
+                <TextBlock Text="{Binding IsLandNameDisplay, StringFormat='{}{0}: '}" FontWeight="Bold"
                            VerticalAlignment="Center" />
                 <TextBlock Text="{Binding TotalItem1ExchangeQuantity, StringFormat='[{0}]'}" FontWeight="Bold"
                            VerticalAlignment="Center" />
@@ -23,19 +27,95 @@
                 <StackPanel.ToolTip>
                     <ToolTip>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Item1Name}" FontWeight="Bold" FontStyle="Italic" />
+                            <TextBlock Text="{Binding Item1NameDisplay}" FontWeight="Bold" FontStyle="Italic" />
                             <TextBlock Text=" => " FontWeight="Bold" FontStyle="Italic" />
-                            <TextBlock Text="{Binding Item2Name}" FontWeight="Bold" FontStyle="Italic" />
+                            <TextBlock Text="{Binding Item2NameDisplay}" FontWeight="Bold" FontStyle="Italic" />
                         </StackPanel>
                     </ToolTip>
                 </StackPanel.ToolTip>
             </StackPanel>
         </DataTemplate>
 
+        <DataTemplate DataType="{x:Type vm:WarehouseRouteStepViewModel}">
+            <Border Padding="7" Margin="3,2" Background="{DynamicResource AppCardBrush}" BorderBrush="{DynamicResource AppCardBorderBrush}" BorderThickness="1" CornerRadius="3">
+                <StackPanel>
+                    <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}" />
+                    <ItemsControl ItemsSource="{Binding Items}" Margin="0,4,0,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Vertical" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4" ToolTip="{Binding DisplayName}">
+                                    <Image Source="{Binding Icon}" Width="24" Height="24" />
+                                    <TextBlock Margin="5,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource AppTextBrush}">
+                                        <Run Text="{Binding DisplayName}" />
+                                        <Run Text=" × " />
+                                        <Run Text="{Binding Quantity}" />
+                                    </TextBlock>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding LoadText}" Margin="0,3,0,0" FontFamily="{DynamicResource AppFontFamily}" Foreground="{DynamicResource AppMutedTextBrush}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:BarterRouteStepViewModel}">
+            <Border Padding="7" Margin="3,2" CornerRadius="3">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="{DynamicResource AppCardBrush}" />
+                        <Setter Property="BorderBrush" Value="{DynamicResource AppCardBorderBrush}" />
+                        <Setter Property="BorderThickness" Value="1" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
+                                         Value="True">
+                                <Setter Property="Background" Value="{DynamicResource AppRaisedSurfaceBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+                                <Setter Property="BorderThickness" Value="2" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel>
+                    <Grid>
+                        <TextBlock Text="{Binding Title}" Margin="0,0,70,0"
+                                   FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}" />
+                        <Border HorizontalAlignment="Right" Padding="5,1" CornerRadius="2"
+                                Background="{DynamicResource AppAccentBrush}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
+                                                     Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{loc:Localize str.ShipCargo.CurrentSelection}"
+                                       Foreground="{DynamicResource AppAccentTextBrush}" FontWeight="Bold" FontSize="10" />
+                        </Border>
+                    </Grid>
+                    <StackPanel Margin="0,3,0,0" Orientation="Horizontal">
+                        <Image Source="{Binding Item1Icon}" Width="24" Height="24" />
+                        <TextBlock Text="{Binding Detail}" Margin="6,0" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource AppTextBrush}" />
+                        <Image Source="{Binding Item2Icon}" Width="24" Height="24" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding LoadText}" Margin="0,3,0,0" FontFamily="{DynamicResource AppFontFamily}" Foreground="{DynamicResource AppMutedTextBrush}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
         <Style TargetType="Syncfusion:PropertyGrid" x:Key="PropertyStyle">
-            <Setter Property="Foreground" Value="Black" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}" />
             <Setter Property="FontWeight" Value="Normal" />
-            <Setter Property="ViewBackgroundColor" Value="White" />
+            <Setter Property="ViewBackgroundColor" Value="{DynamicResource AppSurfaceBrush}" />
         </Style>
 
     </Control.Resources>
@@ -47,20 +127,29 @@
             <RowDefinition Height="300" />
         </Grid.RowDefinitions>
         <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0">
-            <Syncfusion:ButtonAdv
-                x:Name="ButtonAdv_Clean"
-                Margin="4,0,4,0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                IconWidth="26" IconHeight="26"
-                Label="Clean"
-                ToolTip="Clean"
-                SizeMode="Small"
-                FontFamily="Microsoft YaHei"
-                SmallIcon="/Images/clean.png" Click="ButtonAdv_Clean_Click" />
+            <StackPanel x:Name="Panel_AutomaticRouteSelector" Margin="6,0" VerticalAlignment="Center" Visibility="Visible">
+                <TextBlock Text="{loc:Localize str.ShipCargo.AutoRoute.Selector}" FontSize="10" Foreground="{DynamicResource AppMutedTextBrush}" />
+                <ComboBox x:Name="ComboBoxAdv_RouteSelector" Width="126"
+                          IsEnabled="False"
+                          ItemsSource="{Binding RouteOptions}" DisplayMemberPath="DisplayName"
+                          SelectionChanged="ComboBoxAdv_RouteSelector_SelectionChanged" />
+                <CheckBox x:Name="CheckBox_ShowRouteGuides"
+                          Margin="0,3,0,0"
+                          IsChecked="True"
+                          IsEnabled="False"
+                          Foreground="{DynamicResource AppTextBrush}"
+                          Content="{loc:Localize str.ShipCargo.AutoRoute.ShowGuides}"
+                          Checked="CheckBox_ShowRouteGuides_Changed"
+                          Unchecked="CheckBox_ShowRouteGuides_Changed" />
+            </StackPanel>
+            <Separator />
+            <controls:FluentIconButton x:Name="ButtonAdv_Clean" IconData="{StaticResource FluentIcon.Delete}"
+                Label="{loc:Localize str.ShipCargo.Btn.Clean}" ToolTip="{loc:Localize str.ShipCargo.Btn.CleanTip}" Click="ButtonAdv_Clean_Click" />
         </Syncfusion:ToolBarAdv>
-        <ListBox x:Name="ListBox_ShipCargo" Grid.Row="1" ItemTemplate="{StaticResource ListBoxTemplate}"
-                 AllowDrop="True" PreviewMouseLeftButtonDown="ListBox_PreviewMouseLeftButtonDown" Drop="ListBox_Drop">
+        <ListBox x:Name="ListBox_ShipCargo" Grid.Row="1" Background="{DynamicResource AppRaisedSurfaceBrush}" Foreground="{DynamicResource AppTextBrush}" BorderThickness="0"
+                 AllowDrop="True" ScrollViewer.CanContentScroll="True" SelectionMode="Single"
+                 PreviewMouseWheel="ListBox_ShipCargo_PreviewMouseWheel"
+                 PreviewMouseLeftButtonDown="ListBox_PreviewMouseLeftButtonDown" Drop="ListBox_Drop">
             <ListBox.ItemContainerStyle>
                 <Style TargetType="ListBoxItem">
                     <Setter Property="AllowDrop" Value="True" />

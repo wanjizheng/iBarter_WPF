@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "schema": "bdo-map-tile-regions/v1",
+  "regions": [
+    {
+      "id": "main",
+      "displayName": "Main World",
+      "isMain": true,
+      "zoomRange": [
+        2,
+        7
+      ],
+      "worldLatRange": [
+        -65.83877570688917,
+        79.8974485549638
+      ],
+      "worldLonRange": [
+        -142.38281250000003,
+        150.64453125
+      ],
+      "defaultCenterLat": 0,
+      "defaultCenterLon": 0,
+      "defaultZoom": 3,
+      "boundsSource": "user-declared",
+      "containingIslands": [],
+      "paddingFraction": 0.15
+    },
+    {
+      "id": "north-west-inset",
+      "displayName": "North-west Inset",
+      "isMain": false,
+      "zoomRange": [
+        3,
+        6
+      ],
+      "defaultZoom": 3,
+      "boundsSource": "derived-from-bdf-islands",
+      "containingIslands": [
+        "Dallae",
+        "Haemo",
+        "Unfinished",
+        "Pakio",
+        "Lantinia",
+        "Carrack",
+        "Wandering",
+        "Haran",
+        "Crow",
+        "Cholace",
+        "Ancient",
+        "Rickun",
+        "Marine",
+        "Cox_Pirate"
+      ],
+      "paddingFraction": 0.2
+    },
+    {
+      "id": "north-east-inset",
+      "displayName": "North-east Inset",
+      "isMain": false,
+      "zoomRange": [
+        3,
+        6
+      ],
+      "worldLatRange": [
+        -3.0987029821529384,
+        41.73205955808094
+      ],
+      "worldLonRange": [
+        63.9228515625,
+        158.5283203125
+      ],
+      "defaultCenterLat": 19.316678287964,
+      "defaultCenterLon": 111.2255859375,
+      "defaultZoom": 3,
+      "boundsSource": "derived-from-bdf-islands",
+      "containingIslands": [
+        "Hakoven",
+        "Derko",
+        "Arehaza",
+        "Kashuma",
+        "Halmad"
+      ],
+      "paddingFraction": 0.2
+    }
+  ]
+}

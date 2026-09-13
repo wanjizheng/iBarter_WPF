@@ -11,10 +11,69 @@
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 	<RuntimeIdentifier>win-x86</RuntimeIdentifier>
 	<PackageIcon>iBarterIcon.ico</PackageIcon>
-	<ApplicationIcon>Images\iBarterIcon.ico</ApplicationIcon>
+    <ApplicationIcon>Images\iBarterIcon.ico</ApplicationIcon>
 	<ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>6.0.0-beta</Version>
+    <AssemblyVersion>6.0.0.0</AssemblyVersion>
+    <FileVersion>6.0.0.0</FileVersion>
+    <InformationalVersion>Beta6.0</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
-  
+
+  <ItemGroup>
+    <!-- Review bundles retain source snapshots for audit, but must not be compiled by the WPF app. -->
+    <Compile Remove="artifacts\review-bundles\**\*.cs" />
+    <Compile Remove="Tools\CaptureRectGuardTest\**\*.cs" />
+    <None Remove="Tools\CaptureRectGuardTest\**\*" />
+    <Content Remove="Tools\CaptureRectGuardTest\**\*" />
+    <Compile Remove="Tools\PlannerAutoPlannerTests\**\*.cs" />
+    <None Remove="Tools\PlannerAutoPlannerTests\**\*" />
+    <Content Remove="Tools\PlannerAutoPlannerTests\**\*" />
+    <Compile Remove="Tools\IslandNavigationTests\**\*.cs" />
+    <None Remove="Tools\IslandNavigationTests\**\*" />
+    <Content Remove="Tools\IslandNavigationTests\**\*" />
+    <Compile Remove="Tools\AutomaticRoutePlanningTests\**\*.cs" />
+    <None Remove="Tools\AutomaticRoutePlanningTests\**\*" />
+    <Content Remove="Tools\AutomaticRoutePlanningTests\**\*" />
+    <Compile Remove="Tools\ExtremeRouteSolver\**\*.cs" />
+    <None Remove="Tools\ExtremeRouteSolver\**\*" />
+    <Content Remove="Tools\ExtremeRouteSolver\**\*" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <ExtremeRouteSolverProject>$(MSBuildProjectDirectory)\Tools\ExtremeRouteSolver\ExtremeRouteSolver.csproj</ExtremeRouteSolverProject>
+    <ExtremeRouteSolverBuildDir>$(MSBuildProjectDirectory)\Tools\ExtremeRouteSolver\bin\$(Configuration)\net10.0\win-x64\</ExtremeRouteSolverBuildDir>
+  </PropertyGroup>
+
+  <!-- OR-Tools ships a win-x64 native runtime while the WPF/PureDM process must
+       remain win-x86. Build and stage the isolated solver beside the app. -->
+  <Target Name="BuildExtremeRouteSolver" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <MSBuild Projects="$(ExtremeRouteSolverProject)" Targets="Build" Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=win-x64" />
+    <ItemGroup>
+      <ExtremeRouteSolverFiles Include="$(ExtremeRouteSolverBuildDir)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ExtremeRouteSolverFiles)" DestinationFiles="@(ExtremeRouteSolverFiles->'$(TargetDir)ExtremeSolver\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="PublishExtremeRouteSolver" AfterTargets="Publish" Condition="'$(DesignTimeBuild)' != 'true'">
+    <MSBuild Projects="$(ExtremeRouteSolverProject)" Targets="Publish" Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=win-x64;SelfContained=true;PublishDir=$(PublishDir)ExtremeSolver\" />
+  </Target>
+
+  <!--
+    iBarter must remain x86 because its native automation/OCR dependencies are
+    x86. On 64-bit Windows, IMAGE_FILE_LARGE_ADDRESS_AWARE raises the process
+    user-mode address-space ceiling from about 2 GB to about 4 GB. The helper
+    edits only the COFF Characteristics field and verifies that the PE32 data
+    directory count remains intact.
+  -->
+  <Target Name="SetLargeAddressAwareOnBuild" AfterTargets="Build" Condition="'$(RuntimeIdentifier)' == 'win-x86' and Exists('$(TargetDir)$(TargetName).exe')">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\Tools\SetLargeAddressAware.ps1&quot; -Path &quot;$(TargetDir)$(TargetName).exe&quot;" />
+  </Target>
+
+  <Target Name="SetLargeAddressAwareOnPublish" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'win-x86' and Exists('$(PublishDir)$(TargetName).exe')">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\Tools\SetLargeAddressAware.ps1&quot; -Path &quot;$(PublishDir)$(TargetName).exe&quot;" />
+  </Target>
+
 <PropertyGroup Condition="'$(Configuration)'=='Debug'">
   <DebugType>full</DebugType>
 </PropertyGroup>
@@ -33,6 +92,7 @@
     <None Remove="Images\iBarterMap.png" />
     <None Remove="Images\load.png" />
     <None Remove="Images\new-document.png" />
+    <None Remove="Images\pilot.png" />
     <None Remove="Images\pin.png" />
     <None Remove="Images\refresh.png" />
     <None Remove="Images\save.png" />
@@ -44,14 +104,22 @@
     <None Remove="Resources\Images\edge.bmp" />
     <None Remove="Resources\Images\Parley.bmp" />
     <None Remove="Resources\Images\Parley2.bmp" />
+    <None Remove="Resources\Images\Parley_CN.bmp" />
     <None Remove="Resources\Images\Remaining.bmp" />
     <None Remove="Resources\Images\Remaining2.bmp" />
+    <None Remove="Resources\Images\Remaining_CN.bmp" />
     <None Remove="Resources\Images\Required.bmp" />
     <None Remove="Resources\Images\Required2.bmp" />
+    <None Remove="Resources\Images\Required_CN.bmp" />
     <None Remove="Resources\Islands.csv" />
     <None Remove="Resources\Items.csv" />
     <None Remove="Resources\Storage.csv" />
     <None Remove="tessdata\eng_best.traineddata" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <Resource Include="Images\pilot.png" />
   </ItemGroup>
 
   <ItemGroup>
@@ -70,10 +138,16 @@
     <Content Include="Resources\Images\Parley2.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Images\Parley_CN.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\Images\Remaining.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Resources\Images\Remaining2.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Images\Remaining_CN.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Resources\Images\Required.bmp">
@@ -82,8 +156,15 @@
     <Content Include="Resources\Images\Required2.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Resources\Images\Required_CN.bmp">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Resources\Islands.csv">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\IslandBarterLocations.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>
     <Content Include="Resources\Items.csv">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
@@ -91,41 +172,85 @@
     <Content Include="Resources\Storage.csv">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <!-- Phase 4 (i18n): zh-TW sidecar catalogs loaded by Phase 5's
+         Display getters. Items.zh-TW.csv is regenerated by
+         Tools\ImportBdocodexNames (also available via the in-app
+         "Import Bdocodex Names" menu item). Islands.zh-TW.csv is
+         hand-curated because bdocodex has no per-island page. -->
+    <Content Include="Resources\Islands.zh-TW.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\Items.zh-TW.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <!-- Chinese UI font supplied by the user.  Keep it beside the executable
+         so every window uses the same file and no game-directory dependency
+         remains at runtime. -->
+    <Content Include="Resources\Fonts\pearl.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <!-- Phase 1 (i18n): WPF XAML resource dictionaries.  We mark them as
+         <Content> with CopyToOutputDirectory=PreserveNewest so the original
+         .xaml text is copied to bin (rather than getting Page-compiled
+         into embedded BAML).  Loading via pack:// then parses the .xaml
+         with the runtime XAML reader, which is robust against the
+         clr-namespace+System.String edge case on .NET 10. -->
+    <Content Include="Resources\i18n\Strings.en-US.xaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\i18n\Strings.zh-TW.xaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\eng.traineddata">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="tessdata\eng_best.traineddata">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <!-- Phase 9 (i18n): Chinese OCR dictionaries.  Loaded by the
+         local Tesseract engine when LanguageService.Current == TraditionalChinese
+         and PureDM's OCR pass.  The game can render some zh-TW labels with
+         simplified glyphs, so ship chi_sim alongside chi_tra and request both
+         languages when both traineddata files are present. -->
+    <Content Include="tessdata\chi_sim.traineddata">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tessdata\chi_tra.traineddata">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Costura.Fody" Version="6.2.0">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="FuzzySharp" Version="2.0.2" />
-    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.14.0" />
+    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.17.1" />
     <PackageReference Include="MaterialDesignThemes" Version="5.3.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="Syncfusion.Licensing" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Shared.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.FluentDark.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.MaterialDark.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.MaterialDarkBlue.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.MaterialLight.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.MaterialLightBlue.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Metro.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Office2019Black.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Office2019Colorful.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Office2019DarkGray.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Office2019HighContrast.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Office2019HighContrastWhite.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Office2019White.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.SystemTheme.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Windows11Dark.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Themes.Windows11Light.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.Tools.WPF" Version="33.2.15" />
-    <PackageReference Include="Syncfusion.UI.WPF.NET" Version="33.2.15" />
-    <PackageReference Include="System.Drawing.Common" Version="10.0.9" />
-    <PackageReference Include="System.Private.Uri" Version="4.3.2" />
-    <PackageReference Include="System.Text.Json" Version="10.0.9" />
+    <PackageReference Include="Syncfusion.Licensing" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Shared.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.FluentDark.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.MaterialDark.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.MaterialDarkBlue.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.MaterialLight.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.MaterialLightBlue.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Metro.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Office2019Black.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Office2019Colorful.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Office2019DarkGray.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Office2019HighContrast.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Office2019HighContrastWhite.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Office2019White.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.SystemTheme.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Windows11Dark.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Windows11Light.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Tools.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.UI.WPF.NET" Version="34.2.7" />
   </ItemGroup>
 
   <ItemGroup>
@@ -134,6 +259,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PureDM\PureDM.csproj" />
+  </ItemGroup>
+
+  <!-- Optional local HD map payload. The canonical runtime cache lives in
+       iBarter's Resources\MapTiles tree and is copied beside the executable. -->
+  <ItemGroup Condition="Exists('Resources\MapTiles')">
+    <Content Include="Resources\MapTiles\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
@@ -226,6 +360,18 @@
     <None Update="Resources\Images\Items\10.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Images\Items\2.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\3.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\4.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\4004.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\Images\Items\4007.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -241,10 +387,19 @@
     <None Update="Resources\Images\Items\4061.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Images\Items\4064.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\Images\Items\4066.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Images\Items\4067.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\Images\Items\4070.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\4086.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\4207.bmp">
@@ -277,10 +432,19 @@
     <None Update="Resources\Images\Items\4494.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Images\Items\45152.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\Images\Items\45153.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\45506.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\45507.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\4612.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\4655.bmp">
@@ -298,10 +462,19 @@
     <None Update="Resources\Images\Items\4667.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Images\Items\4671.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\Images\Items\4674.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\4677.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\4683.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\4695.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\4698.bmp">
@@ -310,16 +483,46 @@
     <None Update="Resources\Images\Items\4702.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Images\Items\4711.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\4722.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\4725.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\Images\Items\4801.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\4802.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\4803.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Images\Items\4804.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\Images\Items\4805.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Images\Items\5.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\Images\Items\5005.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\5006.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\5008.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\5011.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\5012.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\5013.bmp">
@@ -335,6 +538,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\5407.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\5802.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\5803.bmp">
@@ -451,10 +657,34 @@
     <None Update="Resources\Images\Items\6152.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Images\Items\6153.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\Images\Items\6155.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\6157.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\6158.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\6159.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\6160.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\6161.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\6163.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\6165.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\6166.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\6185.bmp">
@@ -475,6 +705,9 @@
     <None Update="Resources\Images\Items\6657.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Images\Items\7016.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\Images\Items\7017.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -488,6 +721,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\7021.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\7026.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\7202.bmp">
@@ -530,6 +766,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\7958.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\7959.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\800001.bmp">
@@ -757,10 +996,160 @@
     <None Update="Resources\Images\Items\800075.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\Images\Items\800201.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800202.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800203.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800204.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800205.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800206.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800207.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800208.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800209.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800210.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800211.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800212.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800213.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800214.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800215.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800216.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800217.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800218.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800219.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800220.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800221.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800222.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800223.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800224.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800225.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800226.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800227.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800228.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800229.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800230.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800231.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800232.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800233.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800234.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800235.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800236.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800237.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800238.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800239.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800240.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800241.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800242.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800243.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800244.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800245.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800246.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800247.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\800248.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\8008.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\Images\Items\8009.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\8010.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\8011.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\8025.bmp">
@@ -773,6 +1162,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\820157.bmp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Images\Items\820158.bmp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Images\Items\9057.bmp">

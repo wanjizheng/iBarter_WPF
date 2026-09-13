@@ -4,19 +4,27 @@
                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                              xmlns:local="clr-namespace:iBarter.View"
+                             xmlns:loc="clr-namespace:iBarter.Localization"
                              xmlns:Syncfusion="http://schemas.syncfusion.com/wpf"
                              xmlns:Syncfusion1="clr-namespace:Syncfusion.UI.Xaml.Grid;assembly=Syncfusion.SfGrid.WPF"
                              xmlns:collections="clr-namespace:System.Collections;assembly=System.Runtime"
                              mc:Ignorable="d"
+                             AllowsTransparency="True" WindowStyle="None"
                              Icon="/Images/storage.png"
                              TitleBarBackground="{Binding TitleBarBackground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              TitleBarForeground="{Binding TitleBarForeground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              CloseButtonTemplate="{DynamicResource ProductsWindowCloseButtonTemplate}"
                              MaximizeButtonTemplate="{DynamicResource ProductsWindowMaximizeButtonTemplate}"
                              MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
-                             ResizeBorderThickness="0"
+                             ResizeBorderThickness="4"
                              RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
-                             Title="StorageManagement" Height="450" Width="800">
+                             Title="{loc:Localize str.Menu.StorageManager}" Height="450" Width="800"
+                             FontFamily="{DynamicResource AppFontFamily}"
+                             FontSize="13"
+                             FontWeight="Normal"
+                             TextOptions.TextFormattingMode="{DynamicResource AppTextFormattingMode}"
+                             TextOptions.TextRenderingMode="{DynamicResource AppTextRenderingMode}"
+                             TextOptions.TextHintingMode="{DynamicResource AppTextHintingMode}">
     <Syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -35,9 +43,8 @@
                           HorizontalContentAlignment="Center"
                           VerticalContentAlignment="Center" Click="PinWindow_Click">
                 <ToggleButton.Content>
-                    <StackPanel Orientation="Horizontal">
-                        <Image Source="/Images/pin.png" Height="15" Width="15"></Image>
-                    </StackPanel>
+                    <Viewbox Height="16" Width="16"><Path Data="{StaticResource FluentIcon.Pin}"
+                        Fill="{Binding TitleBarForeground, RelativeSource={RelativeSource AncestorType=Window}}" /></Viewbox>
                 </ToggleButton.Content>
                 <ToggleButton.Style>
                     <Style TargetType="{x:Type ToggleButton}">
@@ -69,38 +76,75 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0"><Label Content="Default Storage:" />
+        <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0"><Label Content="{loc:Localize str.Storage.DefaultSeedCity}" />
             <Syncfusion:ComboBoxAdv x:Name="ComboBoxAdv_DefaultStorage" SelectedIndex="1" >
-                <Syncfusion:ComboBoxItemAdv Content="Velia" />
-                <Syncfusion:ComboBoxItemAdv Content="Illiya" />
-                <Syncfusion:ComboBoxItemAdv Content="Epheria" />
-                <Syncfusion:ComboBoxItemAdv Content="Ancado" />
+                <Syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Grid.Storage.Col.Velia}" />
+                <Syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Grid.Storage.Col.Iliya}" />
+                <Syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Grid.Storage.Col.Epheria}" />
+                <Syncfusion:ComboBoxItemAdv Content="{loc:Localize str.Grid.Storage.Col.Ancado}" />
+            </Syncfusion:ComboBoxAdv>
+            <Separator Margin="12,0" />
+            <Label Content="{loc:Localize str.Planner.MaxLV5}" VerticalAlignment="Center" />
+            <Syncfusion:ComboBoxAdv x:Name="ComboBox_MaxLV5" Width="48" SelectionChanged="ComboBox_MaxLV5_SelectionChanged">
+                <Syncfusion:ComboBoxItemAdv Content="0" /><Syncfusion:ComboBoxItemAdv Content="1" />
+                <Syncfusion:ComboBoxItemAdv Content="2" /><Syncfusion:ComboBoxItemAdv Content="3" />
+                <Syncfusion:ComboBoxItemAdv Content="4" /><Syncfusion:ComboBoxItemAdv Content="5" />
+                <Syncfusion:ComboBoxItemAdv Content="6" /><Syncfusion:ComboBoxItemAdv Content="7" />
+                <Syncfusion:ComboBoxItemAdv Content="8" /><Syncfusion:ComboBoxItemAdv Content="9" />
+                <Syncfusion:ComboBoxItemAdv Content="10" />
+            </Syncfusion:ComboBoxAdv>
+            <Label Content="{loc:Localize str.Planner.MaxLV6}" VerticalAlignment="Center" />
+            <Syncfusion:ComboBoxAdv x:Name="ComboBox_MaxLV6" Width="48" SelectionChanged="ComboBox_MaxLV6_SelectionChanged">
+                <Syncfusion:ComboBoxItemAdv Content="0" /><Syncfusion:ComboBoxItemAdv Content="1" />
+                <Syncfusion:ComboBoxItemAdv Content="2" /><Syncfusion:ComboBoxItemAdv Content="3" />
+                <Syncfusion:ComboBoxItemAdv Content="4" /><Syncfusion:ComboBoxItemAdv Content="5" />
+                <Syncfusion:ComboBoxItemAdv Content="6" /><Syncfusion:ComboBoxItemAdv Content="7" />
+                <Syncfusion:ComboBoxItemAdv Content="8" /><Syncfusion:ComboBoxItemAdv Content="9" />
+                <Syncfusion:ComboBoxItemAdv Content="10" />
+            </Syncfusion:ComboBoxAdv>
+            <Label Content="{loc:Localize str.Planner.MaxLV7}" VerticalAlignment="Center" />
+            <Syncfusion:ComboBoxAdv x:Name="ComboBox_MaxLV7" Width="48" SelectionChanged="ComboBox_MaxLV7_SelectionChanged">
+                <Syncfusion:ComboBoxItemAdv Content="0" /><Syncfusion:ComboBoxItemAdv Content="1" />
+                <Syncfusion:ComboBoxItemAdv Content="2" /><Syncfusion:ComboBoxItemAdv Content="3" />
+                <Syncfusion:ComboBoxItemAdv Content="4" /><Syncfusion:ComboBoxItemAdv Content="5" />
+                <Syncfusion:ComboBoxItemAdv Content="6" /><Syncfusion:ComboBoxItemAdv Content="7" />
+                <Syncfusion:ComboBoxItemAdv Content="8" /><Syncfusion:ComboBoxItemAdv Content="9" />
+                <Syncfusion:ComboBoxItemAdv Content="10" />
             </Syncfusion:ComboBoxAdv>
         </Syncfusion:ToolBarAdv>
         <Syncfusion:SfDataGrid x:Name="DataGrid_Storage" Height="NaN" Width="NaN" AutoGenerateColumns="False"
+                               FontSize="14"
+                               FontWeight="Normal"
+                               CellStyle="{StaticResource ReadableSfDataGridCellStyle}"
+                               HeaderStyle="{StaticResource ReadableSfDataGridHeaderStyle}"
+                               RowHeight="30"
+                               HeaderRowHeight="32"
                                AllowEditing="True"
                                ColumnSizer="AutoWithLastColumnFill"
                                RowSelectionBrush="DarkBlue"
-                               SelectionForegroundBrush="Bisque"
+                               SelectionForegroundBrush="White"
                                AllowDraggingRows="True"
                                ShowRowHeader="True"
                                AlternatingRowStyle="{StaticResource alternatingRowStyle}"
                                RowStyle="{StaticResource rowStyle}"
-                               AllowDrop="False" LiveDataUpdateMode="AllowChildViewUpdate" AllowSorting="False" CurrentCellEndEdit="DataGrid_Storage_CurrentCellEndEdit" Grid.Row="1">
+                               AllowDrop="False" LiveDataUpdateMode="AllowChildViewUpdate" AllowSorting="False"
+                               CurrentCellEndEdit="DataGrid_Storage_CurrentCellEndEdit"
+                               PreviewMouseWheel="DataGrid_Storage_PreviewMouseWheel"
+                               local:SfDataGridSelectionHoverGuard.IsEnabled="True" Grid.Row="1">
             <Syncfusion:SfDataGrid.Columns>
-                <Syncfusion:GridTextColumn HeaderText="Inventory" MappingName="ItemName" AllowResizing="True"
+                <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Inventory}" MappingName="ItemNameDisplay" AllowResizing="True"
                                    AllowEditing="False" ColumnSizer="Auto"/>
-                <Syncfusion:GridImageColumn HeaderText="Icon" MappingName="ItemIcon" Width="40"
+                <Syncfusion:GridImageColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Icon}" MappingName="ItemIcon" Width="40"
                                     TextAlignment="Center" AllowEditing="False" />
-                <Syncfusion:GridTextColumn HeaderText="Tier" Width="70" MappingName="ItemTier"
+                <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Tier}" Width="70" MappingName="ItemTierDisplay"
                                    AllowEditing="False" AllowResizing="True"/>
-                <Syncfusion:GridTextColumn HeaderText="Velia" MappingName="StorageVeliaQuantity_Velia"
+                <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Velia}" MappingName="StorageVeliaQuantity_Velia"
                                            AllowEditing="True" AllowResizing="True"/>
-                <Syncfusion:GridTextColumn HeaderText="Iliya" MappingName="StorageVeliaQuantity_Iliya"
+                <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Iliya}" MappingName="StorageVeliaQuantity_Iliya"
                                            AllowEditing="True" AllowResizing="True"/>
-                <Syncfusion:GridTextColumn HeaderText="Epheria" MappingName="StorageVeliaQuantity_Epheria"
+                <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Epheria}" MappingName="StorageVeliaQuantity_Epheria"
                                            AllowEditing="True" AllowResizing="True"/>
-                <Syncfusion:GridTextColumn HeaderText="Ancado" MappingName="StorageVeliaQuantity_Ancado"
+                <Syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Storage.Col.Ancado}" MappingName="StorageVeliaQuantity_Ancado"
                                            AllowEditing="True" AllowResizing="True"/>
             </Syncfusion:SfDataGrid.Columns>
 

@@ -1,9 +1,10 @@
-﻿<syncfusion:ChromelessWindow
+<syncfusion:ChromelessWindow
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:local="clr-namespace:iBarter"
+             xmlns:loc="clr-namespace:iBarter.Localization"
     xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
     xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:esri="http://schemas.esri.com/arcgis/runtime/2013"
@@ -21,16 +22,26 @@
     CloseButtonTemplate="{DynamicResource ProductsWindowCloseButtonTemplate}"
     MaximizeButtonTemplate="{DynamicResource ProductsWindowMaximizeButtonTemplate}"
     MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
-    ResizeBorderThickness="0"
+    ResizeBorderThickness="4"
+    ResizeMode="CanResize"
     RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
     AllowsTransparency="True"
+    SnapsToDevicePixels="True"
+    UseLayoutRounding="True"
     Visibility="Visible"
-    Title="iBarter" Height="868" Width="1254" Loaded="Window_Loaded">
+    Title="{loc:Localize str.MainWindow.Title}" Height="868" Width="1254" Loaded="Window_Loaded"
+    Background="{DynamicResource AppSurfaceBrush}"
+    Foreground="{DynamicResource AppTextBrush}"
+    FontFamily="{DynamicResource AppFontFamily}"
+    FontSize="14"
+    FontWeight="Normal"
+    TextOptions.TextFormattingMode="{DynamicResource AppTextFormattingMode}"
+    TextOptions.TextRenderingMode="{DynamicResource AppTextRenderingMode}"
+    TextOptions.TextHintingMode="{DynamicResource AppTextHintingMode}">
     <syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="/View/WindowStyle.xaml"></ResourceDictionary>
-                <ResourceDictionary Source="/PresentationFramework.Aero2;component/themes/Aero2.NormalColor.xaml"/>
             </ResourceDictionary.MergedDictionaries>
             <CollectionViewSource x:Key="ThemeList"
                                   Source="{Binding Path=DataContext.ThemeList, ElementName=ThemeList}">
@@ -58,7 +69,7 @@
                         <TextBlock Grid.Column="2"
                                    Height="16"
                                    FontSize="12"
-                                   Text="Themes"
+                                   Text="{loc:Localize str.MainWindow.ThemesToggle}"
                                    Foreground="{Binding TitleBarForeground, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                 </ToggleButton.Content>
@@ -70,7 +81,7 @@
             </ToggleButton>
         </collections:ArrayList>
     </syncfusion:ChromelessWindow.RightHeaderItemsSource>
-    <Border Background="White" BorderThickness="1" BorderBrush="LightGray">
+    <Border Background="{DynamicResource AppSurfaceBrush}" BorderThickness="1" BorderBrush="{DynamicResource AppBorderBrush}">
         <Border.Effect>
             <DropShadowEffect ShadowDepth="5" Direction="320" Color="Gray"/>
         </Border.Effect>
@@ -98,19 +109,45 @@
                     <Menu SnapsToDevicePixels="True" VerticalAlignment="Bottom"
                       HorizontalContentAlignment="Stretch">
                         <!--Windows Menu-->
-                        <MenuItem Header="Windows">
-                            <MenuItem x:Name="MenuItem_BarterScanner" Header="Barter Scanner"
+                        <MenuItem Header="{loc:Localize str.Menu.Windows}">
+                            <MenuItem x:Name="MenuItem_BarterScanner" Header="{loc:Localize str.Menu.BarterScanner}"
                                   Tag="BarterScanner" Click="OnActivateWindow" Height="30" Width="180">
                                 <MenuItem.Icon>
-                                    <Image Source="Images\barter.png" />
+                                    <!-- MenuItem.Icon is hosted by a Popup, so it cannot reliably inherit
+                                         Foreground through the normal MenuItem visual tree. Use a
+                                         contrast-safe menu icon color instead of an ancestor binding. -->
+                                    <Viewbox Width="18" Height="18"><Path Data="{StaticResource FluentIcon.Scan}"
+                                        Fill="#176F7F" /></Viewbox>
                                 </MenuItem.Icon>
                             </MenuItem>
-                            <MenuItem x:Name="MenuItem_StorageManagement" Header="Storage Manager"
+                            <MenuItem x:Name="MenuItem_StorageManagement" Header="{loc:Localize str.Menu.StorageManager}"
                                   Tag="StorageManagement" Click="MenuItem_StorageManagement_Click" Height="30" Width="180">
                                 <MenuItem.Icon>
-                                    <Image Source="Images\storage.png" />
+                                    <Viewbox Width="18" Height="18"><Path Data="{StaticResource FluentIcon.BuildingBank}"
+                                        Fill="#176F7F" /></Viewbox>
                                 </MenuItem.Icon>
                             </MenuItem>
+                            <MenuItem x:Name="MenuItem_SyncImages" Header="{loc:Localize str.Menu.SyncImages}"
+                                  Tag="SyncImages" Click="MenuItem_SyncImages_Click" Height="30" Width="180">
+                                <MenuItem.Icon>
+                                    <Viewbox Width="18" Height="18"><Path Data="{StaticResource FluentIcon.ArrowSync}"
+                                        Fill="#176F7F" /></Viewbox>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </MenuItem>
+                        <MenuItem Header="{loc:Localize str.Menu.Language}">
+                            <!-- Phase 8 (i18n): live language toggle.  Click swaps
+                                 Application.Resources.MergedDictionaries + raises
+                                 LanguageChanged; model + view layers subscribed to
+                                 that event re-render.  The two siblings carry an
+                                 IsChecked mutual-exclusion maintained in code-behind
+                                 because WPF's two-way IsChecked binding on a static
+                                 enum isn't worth wiring through an IValueConverter
+                                 here (we'd still need a one-shot sync on startup). -->
+                            <MenuItem x:Name="MenuItem_LangEnglish" Header="English"
+                                  IsCheckable="True" Click="MenuItem_LangEnglish_Click" Height="30" Width="180" />
+                            <MenuItem x:Name="MenuItem_LangZhTw" Header="简体中文"
+                                  IsCheckable="True" Click="MenuItem_LangZhTw_Click" Height="30" Width="180" />
                         </MenuItem>
                     </Menu>
                 </StackPanel>
@@ -120,14 +157,14 @@
                                    UseDocumentContainer="True" UseNativeFloatWindow="True"
                                    Margin="0,0,0,0"
                                    ActiveWindowChanged="dockingManager_Main_ActiveWindowChanged">
-                <ContentControl x:Name="dockRight_ShipCargo" syncfusion:DockingManager.Header="Ship Cargo"
+                <ContentControl x:Name="dockRight_ShipCargo" syncfusion:DockingManager.Header="{loc:Localize str.Dock.ShipCargo}"
                             syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Right"
                             MinWidth="0.3" ScrollViewer.HorizontalScrollBarVisibility="Auto"
                             ScrollViewer.VerticalScrollBarVisibility="Auto"
                             syncfusion:DockingManager.DesiredWidthInDockedMode="300">
                     <view:ShipCargoControl x:Name="myShipCargo"></view:ShipCargoControl>
                 </ContentControl>
-                <ContentControl x:Name="dockBottom" syncfusion:DockingManager.Header="Log"
+                <ContentControl x:Name="dockBottom" syncfusion:DockingManager.Header="{loc:Localize str.Dock.Log}"
                             syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Bottom">
                     <RichTextBox x:Name="richTextBox_Log" x:FieldModifier="public" VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Auto">
@@ -148,12 +185,12 @@
                 <!--                 syncfusion:DockingManager.Header="Document1.xaml" -->
                 <!--                 syncfusion:DockingManager.State="Document" /> -->
                 <ContentControl x:Name="document_Planner" syncfusion:DockingManager.CanDocument="True"
-                            syncfusion:DockingManager.Header="Planner"
+                            syncfusion:DockingManager.Header="{loc:Localize str.Dock.Planner}"
                             syncfusion:DockingManager.State="Document">
                     <view:PlannerControl x:Name="myPlannerControl"></view:PlannerControl>
                 </ContentControl>
                 <ContentControl x:Name="document_Map" syncfusion:DockingManager.CanDocument="True"
-                            syncfusion:DockingManager.Header="Map"
+                            syncfusion:DockingManager.Header="{loc:Localize str.Dock.Map}"
                             syncfusion:DockingManager.State="Document">
                     <view:MapControl x:Name="myMapControl" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
                 </ContentControl>
@@ -180,7 +217,7 @@
                     <DockPanel Grid.Row="0">
                         <Separator DockPanel.Dock="Bottom" />
                         <Label Margin="16,4,16,4" FontSize="14" DockPanel.Dock="Left" FontWeight="SemiBold"
-                           VerticalContentAlignment="Center" HorizontalContentAlignment="Left" Content="Themes" />
+                           VerticalContentAlignment="Center" HorizontalContentAlignment="Left" Content="{loc:Localize str.MainWindow.ThemesPanelHeader}" />
                         <Button DockPanel.Dock="Right" x:Name="Close" Width="24" Height="24"
                             Style="{DynamicResource WPFGlyphButtonStyle}"
                             Command="{Binding ThemePanelVisibilityCommand}"
@@ -269,7 +306,7 @@
                                     <Separator
                                     Visibility="{Binding ColorPaletteVisibility ,Converter={StaticResource BooleanToVisibilityConverter}}"
                                     Margin="2,2,2,5" DockPanel.Dock="Bottom" />
-                                    <Label Content="Choose Palette" Margin="16,0" VerticalAlignment="Center"
+                                    <Label Content="{loc:Localize str.MainWindow.ChoosePalette}" Margin="16,0" VerticalAlignment="Center"
                                        Visibility="{Binding ColorPaletteVisibility, Converter={StaticResource BooleanToVisibilityConverter}}"
                                        FontWeight="SemiBold" FontSize="14" />
                                 </DockPanel>
