@@ -229,28 +229,28 @@
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.17.1" />
     <PackageReference Include="MaterialDesignThemes" Version="5.3.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="Syncfusion.Licensing" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Shared.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.FluentDark.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.MaterialDark.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.MaterialDarkBlue.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.MaterialLight.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.MaterialLightBlue.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.Metro.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.Office2019Black.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.Office2019Colorful.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.Office2019DarkGray.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.Office2019HighContrast.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.Office2019HighContrastWhite.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.Office2019White.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.SystemTheme.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.Windows11Dark.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Themes.Windows11Light.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.Tools.WPF" Version="34.2.6" />
-    <PackageReference Include="Syncfusion.UI.WPF.NET" Version="34.2.6" />
+    <PackageReference Include="Syncfusion.Licensing" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.SfGrid.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.SfSkinManager.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Shared.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.FluentDark.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.MaterialDark.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.MaterialDarkBlue.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.MaterialLight.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.MaterialLightBlue.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Metro.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Office2019Black.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Office2019Colorful.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Office2019DarkGray.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Office2019HighContrast.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Office2019HighContrastWhite.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Office2019White.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.SystemTheme.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Windows11Dark.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Themes.Windows11Light.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.Tools.WPF" Version="34.2.7" />
+    <PackageReference Include="Syncfusion.UI.WPF.NET" Version="34.2.7" />
   </ItemGroup>
 
   <ItemGroup>
