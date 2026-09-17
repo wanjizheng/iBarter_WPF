@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "schema": "bdo-ibarter-bdf-aliases/v1",
+  "note": "BDF always appends qualifiers like ' Island' / ' Pier' / ' Rogue Den' to island names. iBarter enum uses bare names. This table is the EXPLICIT, AUDITABLE bridge that BdfAnchorsMatcher consults before declaring an inset island unmatched.",
+  "exclusions": {
+    "comment": "These iBarter inset names have NO real coordinate in any BDF data layer we have access to.",
+    "missingFromBdf": {
+      "leftInset": [
+        "Unfinished",
+        "Pakio",
+        "Lantinia",
+        "Carrack",
+        "Haran",
+        "Crow",
+        "Cholace",
+        "Rickun",
+        "Marine",
+        "Cox_Pirate"
+      ],
+      "rightInset": [],
+      "bottomEdge": [
+        "Midnight"
+      ]
+    }
+  },
+  "aliases": [
+    {
+      "iBarter": "Dallae",
+      "bdfSourceName": "Dallae Pier",
+      "bdfSourceUrl": "/wp-content/themes/gameaddict/js/connect.js"
+    },
+    {
+      "iBarter": "Haemo",
+      "bdfSourceName": "Haemo Island",
+      "bdfSourceUrl": "/wp-content/themes/gameaddict/js/connect.js"
+    },
+    {
+      "iBarter": "Wandering",
+      "bdfSourceName": "Wandering Rogue Den",
+      "bdfSourceUrl": "/wp-content/themes/gameaddict/js/connect.js",
+      "note": "The only 'Wandering' node in BDF; the iBarter inset centers on this."
+    },
+    {
+      "iBarter": "Ancient",
+      "bdfSourceName": "Ancient Stone Chamber",
+      "bdfSourceUrl": "/wp-content/themes/gameaddict/js/connect.js",
+      "note": "Three 'Ancient *' nodes exist; we pick the most central for inset framing."
+    },
+    {
+      "iBarter": "Hakoven",
+      "bdfSourceName": "Hakoven Island",
+      "bdfSourceUrl": "/wp-content/themes/gameaddict/js/connect.js"
+    },
+    {
+      "iBarter": "Derko",
+      "bdfSourceName": "Derko Island",
+      "bdfSourceUrl": "/wp-content/themes/gameaddict/js/connect.js"
+    },
+    {
+      "iBarter": "Arehaza",
+      "bdfSourceName": "Arehaza",
+      "bdfSourceUrl": "/wp-content/themes/gameaddict/js/village.js",
+      "note": "Exact-match on village.js; listed for symmetry."
+    },
+    {
+      "iBarter": "Kashuma",
+      "bdfSourceName": "Kashuma Island",
+      "bdfSourceUrl": "/wp-content/themes/gameaddict/js/connect.js"
+    },
+    {
+      "iBarter": "Halmad",
+      "bdfSourceName": "Halmad Island",
+      "bdfSourceUrl": "/wp-content/themes/gameaddict/js/connect.js"
+    },
+    {
+      "iBarter": "Grandiha",
+      "bdfSourceName": "Grandiha",
+      "bdfSourceUrl": "/wp-content/themes/gameaddict/js/trade.js"
+    }
+  ]
+}

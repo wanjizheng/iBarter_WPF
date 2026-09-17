@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "schema": "bdo-map-tile-cache/v1",
+  "generatedBy": "MapTileDownloader 1.0.0",
+  "generatedAtUtc": "2026-07-16T10:45:03.5521455Z",
+  "source": {
+    "name": "Black Desert Foundry",
+    "attribution": "Map data (c) Black Desert Foundry, used with permission. Underlying game IP (c) Pearl Abyss. Authorization scope: tile assets + map configuration + island metadata endpoints."
+  },
+  "projection": {
+    "name": "WebMercator",
+    "verified": true,
+    "verifiedFrom": "https://www.blackdesertfoundry.com/map/",
+    "verifiedAtUtc": "2026-07-16T10:45:03.551829Z",
+    "verificationNote": "Operator confirmed via visual inspection of smoke-mosaic-z3.png (512x512, sha256=3719737a2097...).",
+    "visualVerification": {
+      "acceptedAtUtc": "2026-07-16T10:45:03.5514428Z",
+      "toolVersion": "MapTileDownloader/1.0.0+verify",
+      "mosaicPath": "E:\\wanjizheng\\MyProject\\BDOMap\\output\\smoke-mosaic-z3.png",
+      "mosaicSha256": "3719737a2097575ec1cf06fbc2e7f810676b892300fddb64949fd0c3eab3d375",
+      "mosaicWidth": 512,
+      "mosaicHeight": 512,
+      "anchorsSha256": "242a09e25e20b0cb4dd535f5098bf16b57f18b43dcd4514a419d50dbd312dd3b",
+      "method": "operator-visual-mosaic"
+    }
+  },
+  "tileScheme": "XYZ",
+  "tileSize": 256,
+  "tileFormat": "jpg",
+  "minZoom": 2,
+  "maxZoom": 7,
+  "coverage": {},
+  "counts": {
+    "expected": 0,
+    "present": 0,
+    "missing": 0,
+    "bytesOnDisk": 0
+  },
+  "lastRun": {}
+}

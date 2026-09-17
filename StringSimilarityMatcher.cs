@@ -82,7 +82,7 @@ namespace iBarter {
             }
             text = new string(array, 0, idx).Normalize(NormalizationForm.FormC);
         }
-        return text;
+        return ChineseTextNormalizer.NormalizeForMatching(text);
     }
 
     // 归一化 Levenshtein 相似度：score = (1 - dist / maxLen) * 100
@@ -91,16 +91,78 @@ namespace iBarter {
         int maxLen = Math.Max(a.Length, b.Length);
         if (maxLen == 0) return 100;
 
-        int dist = LevenshteinDistance(a, b);
+        bool cjk = ContainsCjk(a) || ContainsCjk(b);
+        int minPartialLength = cjk ? 2 : 3;
+        if (Math.Min(a.Length, b.Length) >= minPartialLength && (a.Contains(b) || b.Contains(a))) {
+            int lengthGap = Math.Abs(a.Length - b.Length);
+            if (cjk) {
+                return Math.Max(80, 100 - Math.Min(20, lengthGap * 2));
+            }
+
+            // For Latin names, a short exact prefix is weak evidence when
+            // the OCR text contains more words. The old 80-point floor made
+            // "Crow" beat the near-exact "Crow's Nest". Preserve a strong
+            // score for one-character truncation while making the score
+            // reflect how much of the full phrase the candidate covers.
+            int minLen = Math.Min(a.Length, b.Length);
+            int coverageScore = (int)Math.Round(
+                (double)minLen / maxLen * 100,
+                MidpointRounding.AwayFromZero);
+            int gapScore = Math.Max(0, 100 - lengthGap * 8);
+            return Math.Max(coverageScore, gapScore);
+        }
+
+        int dist = DamerauLevenshteinDistance(a, b);
         double sim = 1.0 - (double)dist / maxLen;
         int score = (int)Math.Round(sim * 100, MidpointRounding.AwayFromZero);
+        if (cjk && Math.Min(a.Length, b.Length) >= 3) {
+            int minLen = Math.Min(a.Length, b.Length);
+            int lcs = LongestCommonSubsequenceLength(a, b);
+            if (lcs >= minLen - 1) {
+                score = Math.Max(score, 75);
+            }
+            else if (minLen >= 5 && lcs >= minLen - 2) {
+                score = Math.Max(score, 72);
+            }
+        }
         if (score < 0) score = 0;
         if (score > 100) score = 100;
         return score;
     }
 
+    private static int LongestCommonSubsequenceLength(string s, string t) {
+        int n = s.Length, m = t.Length;
+        if (n == 0 || m == 0) return 0;
+        if (n > m) { var tmp = s; s = t; t = tmp; n = s.Length; m = t.Length; }
+
+        var prev = new int[n + 1];
+        var curr = new int[n + 1];
+
+        for (int j = 1; j <= m; j++) {
+            for (int i = 1; i <= n; i++) {
+                curr[i] = s[i - 1] == t[j - 1]
+                    ? prev[i - 1] + 1
+                    : Math.Max(prev[i], curr[i - 1]);
+            }
+            var tmp = prev; prev = curr; curr = tmp;
+            Array.Clear(curr, 0, curr.Length);
+        }
+
+        return prev[n];
+    }
+
+    private static bool ContainsCjk(string input) {
+        if (string.IsNullOrEmpty(input)) return false;
+        foreach (char ch in input) {
+            if (ch >= 0x4E00 && ch <= 0x9FFF) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // O(mn) 时间，O(min(m,n)) 空间的两行 DP 实现
-    private static int LevenshteinDistance(string s, string t) {
+    private static int DamerauLevenshteinDistance(string s, string t) {
         int n = s.Length, m = t.Length;
         if (n == 0) return m;
         if (m == 0) return n;
@@ -108,6 +170,7 @@ namespace iBarter {
         // 始终让 t 为较长串，节省空间
         if (n > m) { var tmpS = s; s = t; t = tmpS; n = s.Length; m = t.Length; }
 
+        var prevPrev = new int[n + 1];
         var prev = new int[n + 1];
         var curr = new int[n + 1];
 
@@ -122,10 +185,20 @@ namespace iBarter {
                 int ins = curr[i - 1] + 1;
                 int sub = prev[i - 1] + cost;
                 int val = Math.Min(Math.Min(del, ins), sub);
+                if (i > 1 && j > 1
+                    && s[i - 1] == t[j - 2]
+                    && s[i - 2] == t[j - 1]) {
+                    val = Math.Min(val, prevPrev[i - 2] + 1);
+                }
                 curr[i] = val;
             }
-            // 交换 prev/curr
-            var tmp = prev; prev = curr; curr = tmp;
+            // Rotate three rows so adjacent transposition can reference
+            // distance[i-2,j-2] without allocating a full matrix.
+            var tmp = prevPrev;
+            prevPrev = prev;
+            prev = curr;
+            curr = tmp;
+            Array.Clear(curr, 0, curr.Length);
         }
         return prev[n];
     }

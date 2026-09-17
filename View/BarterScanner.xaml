@@ -5,6 +5,9 @@
                              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                              xmlns:local="clr-namespace:iBarter"
+                             xmlns:view="clr-namespace:iBarter.View"
+                             xmlns:controls="clr-namespace:iBarter.Controls"
+             xmlns:loc="clr-namespace:iBarter.Localization"
                              xmlns:collections="clr-namespace:System.Collections;assembly=System.Runtime"
                              mc:Ignorable="d"
                              AllowsTransparency="True" WindowStyle="None"
@@ -14,9 +17,15 @@
                              CloseButtonTemplate="{DynamicResource ProductsWindowCloseButtonTemplate}"
                              MaximizeButtonTemplate="{DynamicResource ProductsWindowMaximizeButtonTemplate}"
                              MinimizeButtonTemplate="{DynamicResource ProductsWindowMinimizeButtonTemplate}"
-                             ResizeBorderThickness="0"
+                             ResizeBorderThickness="4"
                              RestoreButtonTemplate="{DynamicResource ProductsWindowRestoreButtonTemplate}"
-                             Title="BarterScanner" Height="350" Width="750">
+                             Title="{loc:Localize str.Menu.BarterScanner}" Height="350" Width="750"
+                             FontFamily="{DynamicResource AppFontFamily}"
+                             FontSize="13"
+                             FontWeight="Normal"
+                             TextOptions.TextFormattingMode="{DynamicResource AppTextFormattingMode}"
+                             TextOptions.TextRenderingMode="{DynamicResource AppTextRenderingMode}"
+                             TextOptions.TextHintingMode="{DynamicResource AppTextHintingMode}">
     <syncfusion:ChromelessWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -35,9 +44,8 @@
                       HorizontalContentAlignment="Center"
                       VerticalContentAlignment="Center" Click="PinWindow_Click">
                 <ToggleButton.Content>
-                    <StackPanel Orientation="Horizontal">
-                        <Image Source="/Images/pin.png" Height="15" Width="15"></Image>
-                    </StackPanel>
+                    <Viewbox Height="16" Width="16"><Path Data="{StaticResource FluentIcon.Pin}"
+                        Fill="{Binding TitleBarForeground, RelativeSource={RelativeSource AncestorType=Window}}" /></Viewbox>
                 </ToggleButton.Content>
                 <ToggleButton.Style>
                     <Style TargetType="{x:Type ToggleButton}">
@@ -55,40 +63,30 @@
         </Grid.ColumnDefinitions>
         <StackPanel Grid.ColumnSpan="2">
             <syncfusion:ToolBarAdv x:Name="ScannerToolBar">
-                <syncfusion:ButtonAdv
-                    Name="ButtonAdv_Scan"
-                    Margin="4,0,4,0"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    IconWidth="26" IconHeight="26"
-                    Label="Scan"
-                    ToolTip="Scan"
-                    SizeMode="Small"
-                    FontFamily="Microsoft YaHei"
-                    SmallIcon="/Images/scan.png" Click="ButtonAdv_Scan_ClickAsync" />
-                <syncfusion:ButtonAdv
-                    Name="ButtonAdv_Add"
-                    Margin="4,0,4,0"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    IconWidth="26" IconHeight="26"
-                    Label="Add"
-                    ToolTip="Add"
-                    SizeMode="Small"
-                    FontFamily="Microsoft YaHei"
-                    SmallIcon="/Images/add.png" Click="ButtonAdv_Add_Click" />
+                <controls:FluentIconButton x:Name="ButtonAdv_Scan" IconData="{StaticResource FluentIcon.Scan}"
+                    Label="{loc:Localize str.Scanner.Btn.Scan}" ToolTip="{loc:Localize str.Scanner.Btn.ScanTip}" Click="ButtonAdv_Scan_ClickAsync" />
+                <controls:FluentIconButton x:Name="ButtonAdv_Add" IconData="{StaticResource FluentIcon.AddSquare}"
+                    Label="{loc:Localize str.Scanner.Btn.Add}" ToolTip="{loc:Localize str.Scanner.Btn.AddTip}" Click="ButtonAdv_Add_Click" />
             </syncfusion:ToolBarAdv>
 
             <syncfusion:SfDataGrid x:Name="BarterScanResults" Height="NaN" Width="NaN" AutoGenerateColumns="False"
+                                   FontSize="14"
+                                   FontWeight="Normal"
+                                   CellStyle="{StaticResource ReadableSfDataGridCellStyle}"
+                                   HeaderStyle="{StaticResource ReadableSfDataGridHeaderStyle}"
+                                   RowHeight="30"
+                                   HeaderRowHeight="32"
                                    AllowEditing="True"
                                    ColumnSizer="AutoWithLastColumnFill"
                                    RowSelectionBrush="DarkBlue"
-                                   SelectionForegroundBrush="Bisque"
+                                   SelectionForegroundBrush="White"
                                    AllowDraggingRows="False"
                                    ShowRowHeader="True"
                                    AllowDrop="True" LiveDataUpdateMode="AllowDataShaping"
                                    CurrentCellEndEdit="BarterScanResults_CurrentCellEndEdit"
-                                   CurrentCellDropDownSelectionChanged="BarterScanResults_CurrentCellDropDownSelectionChanged">
+                                   CurrentCellDropDownSelectionChanged="BarterScanResults_CurrentCellDropDownSelectionChanged"
+                                   PreviewMouseWheel="BarterScanResults_PreviewMouseWheel"
+                                   view:SfDataGridSelectionHoverGuard.IsEnabled="True">
                 <syncfusion:SfDataGrid.Columns>
                     <!-- <syncfusion:GridTextColumn HeaderText="Island1" MappingName="IsLandName" UseBindingValue="True" -->
                     <!--                            AllowResizing="True" AllowEditing="True"> -->
@@ -97,83 +95,101 @@
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Islands"
                                                             AllowAutoComplete="True"
                                                             AutoGenerateColumns="False"
-                                                            DisplayMember="IslandsName"
-                                                            HeaderText="Islands"
+                                                            DisplayMember="IslandsNameDisplay"
+                                                            HeaderText="{loc:Localize str.Grid.Scanner.Col.IslandsSub}"
                                                             MappingName="IsLandName"
                                                             ValueMember="IslandsName"
                                                             AllowResizing="True"
-                                                            AllowIncrementalFiltering="True" AllowEditing="True">
+                                                            AllowIncrementalFiltering="True" AllowEditing="True"
+                                                            SearchCondition="Contains">
+                        <syncfusion:GridMultiColumnDropDownList.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding IsLandNameDisplay}" VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </syncfusion:GridMultiColumnDropDownList.CellTemplate>
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
-                                <syncfusion:GridTextColumn HeaderText="Islands" MappingName="IslandsName" />
-                                <syncfusion:GridTextColumn HeaderText="Parley" MappingName="Parley" />
-                                <syncfusion:GridTextColumn HeaderText="Remaining" MappingName="Remaining" />
+                                <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.IslandsSub}" MappingName="IslandsNameDisplay" />
+                                <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.Parley}" MappingName="Parley" />
+                                <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.Remaining}" MappingName="Remaining" />
                             </syncfusion:Columns>
                         </syncfusion:GridMultiColumnDropDownList.Columns>
                     </syncfusion:GridMultiColumnDropDownList>
 
 
-                    <syncfusion:GridTextColumn HeaderText="No." MappingName="IslandRemaining" AllowResizing="True"
+                    <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.No}" MappingName="IslandRemaining" AllowResizing="True"
                                                AllowEditing="True">
                     </syncfusion:GridTextColumn>
-                    <syncfusion:GridTextColumn HeaderText="Parley" MappingName="Parley" AllowResizing="True"
+                    <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.Parley}" MappingName="Parley" AllowResizing="True"
                                                AllowEditing="True">
                     </syncfusion:GridTextColumn>
-                    <syncfusion:GridTextColumn HeaderText="I1 No." Width="60" MappingName="Item1Number"
+                    <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.I1No}" Width="60" MappingName="Item1Number"
                                                AllowEditing="True" AllowResizing="True">
                     </syncfusion:GridTextColumn>
-                    <syncfusion:GridImageColumn HeaderText="Icon" MappingName="Item1Icon" Width="40"
+                    <syncfusion:GridImageColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.Icon1}" MappingName="Item1Icon" Width="40"
                                                 TextAlignment="Center" AllowEditing="True" />
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Item1"
-                                                            AllowAutoComplete="True" 
+                                                            AllowAutoComplete="True"
                                                             AutoGenerateColumns="False"
-                                                            DisplayMember="ItemName"
-                                                            HeaderText="Item1 Name"
+                                                            DisplayMember="ItemNameDisplay"
+                                                            HeaderText="{loc:Localize str.Grid.Scanner.Col.Item1Name}"
                                                             MappingName="Item1Name"
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
                                                             AllowIncrementalFiltering="True" AllowEditing="True"
-                                                            AllowFiltering="True">
+                                                            AllowFiltering="True"
+                                                            SearchCondition="Contains">
+                        <syncfusion:GridMultiColumnDropDownList.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Item1NameDisplay}" VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </syncfusion:GridMultiColumnDropDownList.CellTemplate>
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
                                 <syncfusion:GridTextColumn
-                                    HeaderText="ItemID"
+                                    HeaderText="{loc:Localize str.Grid.Scanner.Col.DropdownItemID}"
                                     MappingName="ItemID" />
-                                <syncfusion:GridTextColumn HeaderText="Item Name" MappingName="ItemName" />
-                                <syncfusion:GridTextColumn HeaderText="Item LV" MappingName="ItemLV" />
-                                <syncfusion:GridTextColumn HeaderText="Item Number" MappingName="ItemNumber" />
+                                <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.DropdownItemName}" MappingName="ItemNameDisplay" />
+                                <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.DropdownItemLV}" MappingName="ItemLV" />
+                                <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.DropdownItemNumber}" MappingName="ItemNumber" />
                             </syncfusion:Columns>
                         </syncfusion:GridMultiColumnDropDownList.Columns>
                     </syncfusion:GridMultiColumnDropDownList>
 
 
-                    <!-- <syncfusion:GridTextColumn HeaderText="Item1 Name" MappingName="Item1Name" AllowEditing="True" AllowResizing="True"></syncfusion:GridTextColumn> -->
-                    <syncfusion:GridTextColumn HeaderText="I2 No." Width="60" MappingName="Item2Number"
+                    <!-- <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.Item1Name}" MappingName="Item1Name" AllowEditing="True" AllowResizing="True"></syncfusion:GridTextColumn> -->
+                    <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.I2No}" Width="60" MappingName="Item2Number"
                                                AllowEditing="True" AllowResizing="True">
                     </syncfusion:GridTextColumn>
-                    <syncfusion:GridImageColumn HeaderText="Icon" MappingName="Item2Icon" TextAlignment="Center"
+                    <syncfusion:GridImageColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.Icon1}" MappingName="Item2Icon" TextAlignment="Center"
                                                 Width="42">
                     </syncfusion:GridImageColumn>
                     <syncfusion:GridMultiColumnDropDownList x:Name="GridMultiColumnDropDownList_Item2"
                                                             AllowAutoComplete="True"
                                                             AutoGenerateColumns="False"
-                                                            DisplayMember="ItemName"
-                                                            HeaderText="Item2 Name"
+                                                            DisplayMember="ItemNameDisplay"
+                                                            HeaderText="{loc:Localize str.Grid.Scanner.Col.Item2Name}"
                                                             MappingName="Item2Name"
                                                             ValueMember="ItemName"
                                                             AllowResizing="True"
                                                             AllowIncrementalFiltering="True" AllowEditing="True"
-                                                            AllowFiltering="True">
+                                                            AllowFiltering="True"
+                                                            SearchCondition="Contains">
+                        <syncfusion:GridMultiColumnDropDownList.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Item2NameDisplay}" VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </syncfusion:GridMultiColumnDropDownList.CellTemplate>
                         <syncfusion:GridMultiColumnDropDownList.Columns>
                             <syncfusion:Columns>
                                 <syncfusion:GridTextColumn
-                                    HeaderText="ItemID"
+                                    HeaderText="{loc:Localize str.Grid.Scanner.Col.DropdownItemID}"
                                     MappingName="ItemID" AllowSorting="True" />
-                                <syncfusion:GridTextColumn HeaderText="Item Name" MappingName="ItemName"
+                                <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.DropdownItemName}" MappingName="ItemNameDisplay"
                                                            AllowSorting="True" />
-                                <syncfusion:GridTextColumn HeaderText="Item LV" MappingName="ItemLV"
+                                <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.DropdownItemLV}" MappingName="ItemLV"
                                                            AllowSorting="True" />
-                                <syncfusion:GridTextColumn HeaderText="Item Number" MappingName="ItemNumber"
+                                <syncfusion:GridTextColumn HeaderText="{loc:Localize str.Grid.Scanner.Col.DropdownItemNumber}" MappingName="ItemNumber"
                                                            AllowSorting="True" />
                             </syncfusion:Columns>
                         </syncfusion:GridMultiColumnDropDownList.Columns>

@@ -1,5 +1,6 @@
-﻿using iBarter.View;
+﻿using Newtonsoft.Json;
 using Syncfusion.Windows.Shared;
+using System.ComponentModel;
 using System.IO;
 
 namespace iBarter {
@@ -14,19 +15,72 @@ namespace iBarter {
         int intChange = 0, intInv = 0;
         private volatile int totalitem1ExchangeQuantity, totalitem2ExchangeQuantity;
         private bool tofGrouped = false;
+        // Persistent identity assigned exactly once on construction and
+        // round-tripped through myPlan_Data.json. The Planner's row
+        // index, sort order, filter, and grouping MUST NOT change this
+        // value. The only allowed regeneration is the one-shot loader
+        // migration for old files that lack the field.
+        [JsonProperty("PlannerRowId")]
+        private string plannerRowId = null!;
 
-        public Barter() {
+public Barter() {
+        }
+
+        /// <summary>
+        /// Audit round 7: explicit clone constructor that preserves
+        /// the source row's <see cref="PlannerRowId"/>. The
+        /// <c>RefreshDataGrid</c> code path (and any other reload /
+        /// re-clone site) must use this rather than the parameter
+        /// constructor, so a save → reload → fingerprint round trip
+        /// produces a byte-identical <c>RoutePlanFingerprint</c>.
+        /// </summary>
+        public Barter(Barter source) {
+            if (source is null) throw new ArgumentNullException(nameof(source));
+            isLand = ResolveCatalogIsland(source.IsLand, source.IsLand?.IslandsName);
+            WireUpIsland(isLand);
+
+            item1 = ResolveCatalogItem(source.Item1, source.Item1?.ItemName);
+            WireUpItem1(item1);
+            item2 = ResolveCatalogItem(source.Item2, source.Item2?.ItemName);
+            WireUpItem2(item2);
+
+            item1Name = item1?.ItemName ?? "";
+            icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+            item2Name = item2?.ItemName ?? "";
+            icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+
+            exchangeQuantity = source.ExchangeQuantity;
+            barterGroup = source.BarterGroup;
+            exchangeDone = source.ExchangeDone;
+            usingALT = source.UsingALT;
+            intInv = source.InvQuantity;
+            intChange = source.InvQuantityChange;
+            calculatedAlready = source.CalculatedAlready;
+
+            totalitem1ExchangeQuantity = source.TotalItem1ExchangeQuantity;
+            if (InvQuantityChange == 0) {
+                InvQuantityChange = InvQuantity;
+            }
+
+            // Preserve identity. Source already has a stable id; do NOT
+            // generate a new one.
+            plannerRowId = string.IsNullOrEmpty(source.plannerRowId)
+                ? "br-" + Guid.NewGuid().ToString("N")
+                : source.plannerRowId;
         }
 
         public Barter(Islands _isLand, Items _item1, Items _item2, int _exchangeQuantity = 0, bool _exchangeDone = false, int _barterGroup = 0, int _intInv = 0, int _intChange = 0, bool _usingALT = false, bool _calculatedAlready = false, int _totalitem1ExchangeQuantity = -1) {
-            isLand = _isLand;
+            isLand = ResolveCatalogIsland(_isLand, _isLand?.IslandsName);
+            WireUpIsland(isLand);
 
-            item1 = _item1;
-            item2 = _item2;
+            item1 = ResolveCatalogItem(_item1, _item1?.ItemName);
+            WireUpItem1(item1);
+            item2 = ResolveCatalogItem(_item2, _item2?.ItemName);
+            WireUpItem2(item2);
 
-            item1Name = item1.ItemName;
+            item1Name = item1?.ItemName ?? "";
             icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
-            item2Name = item2.ItemName;
+            item2Name = item2?.ItemName ?? "";
             icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
 
             exchangeQuantity = _exchangeQuantity;
@@ -41,6 +95,78 @@ namespace iBarter {
             if (InvQuantityChange == 0) {
                 InvQuantityChange = InvQuantity;
             }
+
+            // New rows get a fresh GUID. Existing rows loaded from
+            // myPlan_Data.json keep their PlannerRowId via the JSON
+            // setter (string is deserialized into the field directly).
+            if (string.IsNullOrEmpty(plannerRowId)) {
+                plannerRowId = "br-" + Guid.NewGuid().ToString("N");
+            }
+        }
+
+        /// <summary>
+        /// Stable, unique identity for the row. Assigned on first
+        /// construction and persisted through <c>myPlan_Data.json</c>.
+        /// All Planner/CK/map/progress paths read this directly
+        /// instead of re-deriving from list position or business
+        /// keys. Never null on a constructed instance.
+        /// </summary>
+        [JsonIgnore]
+        public string PlannerRowId {
+            get {
+                // Audit round 7: the v1 getter had a side-effecting
+                // fallback (assigning a fresh Guid when the backing
+                // field was empty). That made "is the id missing?" an
+                // unsafe question — every read could materialise a new
+                // id. The migration site now uses
+                // <see cref="HasPlannerRowId"/> (side-effect-free
+                // check) and <see cref="EnsurePlannerRowId"/> (single
+                // side-effecting call).
+                if (string.IsNullOrEmpty(plannerRowId)) {
+                    throw new InvalidOperationException(
+                        "Barter.PlannerRowId is empty; call EnsurePlannerRowId() " +
+                        "or load the row through the migration path first.");
+                }
+                return plannerRowId;
+            }
+            set => plannerRowId = value;
+        }
+
+        /// <summary>
+        /// Side-effect-free check: does the row already have a
+        /// non-empty <see cref="PlannerRowId"/>?  Used by the
+        /// loader to decide whether migration is required without
+        /// triggering the v1 getter's hidden materialisation.
+        /// </summary>
+        [JsonIgnore]
+        public bool HasPlannerRowId => !string.IsNullOrEmpty(plannerRowId);
+
+        /// <summary>
+        /// Audit round 7: the only sanctioned way to materialise a
+        /// fresh <see cref="PlannerRowId"/>.  Returns true when a
+        /// new id was assigned; false when the row already had one.
+        /// Use this in the one-shot loader migration path.  Do NOT
+        /// use it for the reload / RefreshDataGrid path; the row is
+        /// already supposed to have an id (loaded from disk) and a
+        /// new one would change the RoutePlanFingerprint.
+        /// </summary>
+        public bool EnsurePlannerRowId() {
+            if (!string.IsNullOrEmpty(plannerRowId)) return false;
+            plannerRowId = "br-" + Guid.NewGuid().ToString("N");
+            return true;
+        }
+
+        /// <summary>
+        /// Audit round 8: regenerates the <see cref="PlannerRowId"/>
+        /// unconditionally.  Use only for collision repair on load
+        /// (duplicate ids, the "INVALID:" sentinel from the
+        /// migration path, or any malformed value the loader
+        /// decides to replace).  Do NOT call this in the
+        /// RefreshDataGrid path; the user explicitly required the
+        /// reload/clone to keep the persisted id.
+        /// </summary>
+        public void RegeneratePlannerRowId() {
+            plannerRowId = "br-" + Guid.NewGuid().ToString("N");
         }
 
         public bool CalculatedAlready {
@@ -51,29 +177,47 @@ namespace iBarter {
         public Islands IsLand {
             get { return isLand; }
             set {
-                isLand = value;
+                var resolved = ResolveCatalogIsland(value, value?.IslandsName);
+                if (!ReferenceEquals(isLand, resolved)) {
+                    WireUpIsland(resolved);
+                }
+                isLand = resolved;
                 RaisePropertyChanged("IsLand");
+                RaisePropertyChanged(nameof(IsLandName));
+                RaisePropertyChanged(nameof(IsLandNameDisplay));
             }
         }
 
         public int BarterGroup {
             get { return barterGroup; }
-            set { barterGroup = value; }
+            set {
+                barterGroup = value;
+                RaisePropertyChanged("BarterGroup");
+            }
         }
 
         public bool Grouped {
             get { return tofGrouped; }
-            set { tofGrouped = value; }
+            set {
+                tofGrouped = value;
+                RaisePropertyChanged("Grouped");
+            }
         }
 
         public bool ExchangeDone {
             get { return exchangeDone; }
-            set { exchangeDone = value; }
+            set {
+                exchangeDone = value;
+                RaisePropertyChanged("ExchangeDone");
+            }
         }
 
         public bool UsingALT {
             get { return usingALT; }
-            set { usingALT = value; }
+            set {
+                usingALT = value;
+                RaisePropertyChanged("UsingALT");
+            }
         }
 
         public int ExchangeQuantity {
@@ -86,7 +230,18 @@ namespace iBarter {
                     value = 0;
                 }
 
+                if (exchangeQuantity == value) {
+                    return;
+                }
+
                 exchangeQuantity = value;
+                // Automatic planning updates this property in code rather than
+                // through the grid editor.  Without a change notification the
+                // persisted value and generated route are correct, but an already
+                // materialized SfDataGrid cell keeps displaying its old value.
+                RaisePropertyChanged(nameof(ExchangeQuantity));
+                RaisePropertyChanged(nameof(TotalItem1ExchangeQuantity));
+                RaisePropertyChanged(nameof(TotalItem2ExchangeQuantity));
                 // if (Item1 != null && Item2 != null) {
                 //     Barter myBarter = App.myPVM.BarterCollection.FirstOrDefault(b => b.BarterGroup == this.BarterGroup && b.Item1Name.Equals(Item2Name));
                 //     if (myBarter != null) {
@@ -120,45 +275,71 @@ namespace iBarter {
         }
 
         public int Parley {
-            get { return IsLand.Parley; }
+            get { return IsLand?.Parley ?? 0; }
             set {
+                if (IsLand == null) {
+                    return;
+                }
                 IsLand.Parley = value;
                 RaisePropertyChanged("Parley");
             }
         }
 
         public string IsLandName {
-            get { return IsLand.IslandsName; }
+            get { return IsLand?.IslandsName ?? ""; }
             set {
-                int intParley = Parley;
-                //Islands myIslands = new Islands(App.myCFun.IslandEnum(value), App.listIslands.Where(land => land.Island == App.myCFun.IslandEnum(value)).Select(land => land.Parley).FirstOrDefault());
-                Islands myIslands = App.listIslands.FirstOrDefault(i => i.IslandsName == value);
-                IsLand = myIslands;
-                IsLand.Parley = intParley;
+                int intParley = IsLand?.Parley ?? 0;
+                Islands? myIslands = FindCatalogIsland(value);
+                if (myIslands != null) {
+                    IsLand = myIslands;
+                    IsLand.Parley = intParley;
+                }
+                RaisePropertyChanged(nameof(IsLandName));
+                RaisePropertyChanged(nameof(IsLandNameDisplay));
             }
         }
 
         public int IslandRemaining {
-            get { return IsLand.Remaining; }
+            get { return IsLand?.Remaining ?? 0; }
             set {
+                if (IsLand == null) {
+                    return;
+                }
                 IsLand.Remaining = value;
-                RaisePropertyChanged("remainingChange");
+                RaisePropertyChanged("IslandRemaining");
             }
         }
 
         public Items Item1 {
             get { return item1; }
             set {
-                item1 = value;
+                var resolved = ResolveCatalogItem(value, value?.ItemName ?? item1Name);
+                if (!ReferenceEquals(item1, resolved)) {
+                    WireUpItem1(resolved);
+                }
+                item1 = resolved;
+                item1Name = item1?.ItemName ?? item1Name;
                 RaisePropertyChanged("Item1");
+                RaisePropertyChanged(nameof(Item1Name));
+                RaisePropertyChanged(nameof(Item1NameDisplay));
+                RaisePropertyChanged(nameof(Item1LV));
+                RaisePropertyChanged(nameof(Item1Icon));
             }
         }
 
         public Items Item2 {
             get { return item2; }
             set {
-                item2 = value;
+                var resolved = ResolveCatalogItem(value, value?.ItemName ?? item2Name);
+                if (!ReferenceEquals(item2, resolved)) {
+                    WireUpItem2(resolved);
+                }
+                item2 = resolved;
+                item2Name = item2?.ItemName ?? item2Name;
                 RaisePropertyChanged("Item2");
+                RaisePropertyChanged(nameof(Item2Name));
+                RaisePropertyChanged(nameof(Item2NameDisplay));
+                RaisePropertyChanged(nameof(Item2Icon));
             }
         }
 
@@ -171,15 +352,26 @@ namespace iBarter {
         }
 
         public string Item1Name {
-            get {
-                if (item1Name.Equals("") && Item1 != null)
-                    item1Name = Item1.ItemName;
-                return item1Name;
-            }
+            // Pure read with on-read fallback. The legacy version wrote
+            // `item1Name = Item1.ItemName` from inside the getter, which
+            // (a) broke WPF TwoWay binding invariants by mutating the
+            // backing field without raising PropertyChanged, and
+            // (b) caused "clear has no effect" in the Scanner grid:
+            //   user types Chinese -> UpdateItem() resolves Item1 ->
+            //   user clears the cell -> binding writes "" via setter ->
+            //   WPF re-reads for any consumer -> getter rewrites the
+            //   backing field to Item1.ItemName -> cell shows old name
+            //   -> user perceives "delete did nothing" / "frozen".
+            // The Item1 setter (line ~188) and UpdateItem() (line ~398)
+            // are the only legitimate writers to item1Name; the getter
+            // computes the display value lazily and never mutates state.
+            get { return item1?.ItemName ?? item1Name; }
             set {
                 item1Name = value;
                 UpdateItem();
                 RaisePropertyChanged("Item1NameChange");
+                RaisePropertyChanged(nameof(Item1Name));
+                RaisePropertyChanged(nameof(Item1NameDisplay));
             }
         }
 
@@ -220,14 +412,31 @@ namespace iBarter {
             }
         }
 
+        // See Items.ItemIcon for why this is [JsonIgnore]d. Persisting the
+        // absolute path in myShipCargoItems_Data.json bakes whichever
+        // BaseDirectory the program happened to be running from at save-time
+        // into the JSON; on the next run from a different directory the stale
+        // path fails File.Exists, which makes the getter call RefreshItems,
+        // which spams 'Download icon for: ...' and runs a bdocodex fetch
+        // even though the bmp is sitting on disk at the new BaseDirectory.
+        [JsonIgnore]
         public string Item1Icon {
             get {
                 if (icon1 == null || !icon1.Contains(Item1.ItemID)) {
                     icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
                 }
 
-                if (!File.Exists(icon1) && item1 != null && int.Parse(Item1.ItemID) > 0) {
-                    App.myCFun.RefreshItems(item1.ItemID);
+                if (!File.Exists(icon1) && item1 != null && int.TryParse(Item1.ItemID, out int id1) && id1 > 0) {
+                    try {
+                        App.myCFun.RefreshItems(item1.ItemID);
+                    }
+                    catch (Exception ex) {
+                        // One bad item shouldn't take down the whole
+                        // getter - the previous int.Parse(...) would throw
+                        // FormatException out of a property accessor and
+                        // blank the Barter UI.
+                        System.Diagnostics.Debug.WriteLine("Item1Icon refresh fail " + item1.ItemID + ": " + ex.Message);
+                    }
                 }
 
                 return icon1;
@@ -247,26 +456,34 @@ namespace iBarter {
         }
 
         public string Item2Name {
-            get {
-                if (item2Name.Equals("") && Item2 != null)
-                    item2Name = Item2.ItemName;
-                return item2Name;
-            }
+            // See Item1Name above for why the getter must not mutate
+            // the backing field. Item2 setter + UpdateItem() own the
+            // write-side; this getter only computes the display value.
+            get { return item2?.ItemName ?? item2Name; }
             set {
                 item2Name = value;
                 UpdateItem();
                 RaisePropertyChanged("Item2NameChange");
+                RaisePropertyChanged(nameof(Item2Name));
+                RaisePropertyChanged(nameof(Item2NameDisplay));
             }
         }
 
+        // See Item1Icon / Items.ItemIcon for why this is [JsonIgnore]d.
+        [JsonIgnore]
         public string Item2Icon {
             get {
                 if (icon2 == null || !icon2.Contains(Item2.ItemID)) {
                     icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
                 }
 
-                if (!File.Exists(icon2) && item2 != null && int.Parse(Item2.ItemID) > 0) {
-                    App.myCFun.RefreshItems(item2.ItemID);
+                if (!File.Exists(icon2) && item2 != null && int.TryParse(Item2.ItemID, out int id2) && id2 > 0) {
+                    try {
+                        App.myCFun.RefreshItems(item2.ItemID);
+                    }
+                    catch (Exception ex) {
+                        System.Diagnostics.Debug.WriteLine("Item2Icon refresh fail " + item2.ItemID + ": " + ex.Message);
+                    }
                 }
 
                 return icon2;
@@ -279,36 +496,66 @@ namespace iBarter {
 
         public int InvQuantity {
             get {
-                if (App.myStorageManagement == null) {
-                    App.myStorageManagement = new StorageManagement();
+                // Pure read: query the shared App.myStorageVM.StorageCollection
+                // without side effects. The previous version lazily `new`-ed a
+                // StorageManagement window on first access to guarantee the
+                // collection was loaded, but that had two bad consequences:
+                //   1. WPF data-binding fires this getter during render, so the
+                //      first time a Barter was bound (e.g. after a scan + "Add to
+                //      Planner" click) it would silently create and show a
+                //      Storage window, which then ran SeedHardcodedFallback and
+                //      triggered 80+ CollectionChanged -> SaveData cascades.
+                //   2. InvQuantity became coupled to a UI window existing,
+                //      making the data layer untestable on its own.
+                // The load now happens once at App.OnStartup via
+                // App.myStorageVM.LoadData(), so this getter can be a pure read.
+                var storage = App.myStorageVM?.StorageCollection;
+                if (storage == null) {
+                    return intInv;
                 }
 
-                Items myItem = App.myStorageVM.StorageCollection.FirstOrDefault(i => i.ItemName.Equals(Item1Name));
+                Items myItem = storage.FirstOrDefault(i => i.ItemName.Equals(Item1Name));
                 if (myItem != null) {
                     intInv = (myItem.StorageVeliaQuantity_Iliya + myItem.StorageVeliaQuantity_Velia + myItem.StorageVeliaQuantity_Epheria + myItem.StorageVeliaQuantity_Ancado);
                 }
 
                 return intInv;
             }
-            set { intInv = value; }
+            set {
+                intInv = value;
+                RaisePropertyChanged("InvQuantity");
+            }
         }
 
         public int InvQuantityChange {
             get { return intChange; }
-            set { intChange = value; }
+            set {
+                intChange = value;
+                RaisePropertyChanged("InvQuantityChange");
+            }
         }
 
         private void UpdateItem() {
-            if (item1Name != "" && !item1Name.Equals(Item1.ItemName)) {
-                Items item1 = new Items(App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemName, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemID, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item1Name)).ItemLV);
-                Item1 = item1;
-                icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+            if (item1Name != "" && (Item1 == null || !item1Name.Equals(Item1.ItemName))) {
+                Items? resolvedItem1 = FindCatalogItem(item1Name);
+                if (resolvedItem1 != null) {
+                    item1Name = resolvedItem1.ItemName;
+                    Item1 = CreateItemFromCatalog(resolvedItem1, item1);
+                }
+                if (Item1 != null) {
+                    icon1 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item1.ItemID + ".bmp";
+                }
             }
 
-            if (item2Name != "" && !item2Name.Equals(Item2.ItemName)) {
-                Items item2 = new Items(App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemName, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemID, App.listItems.FirstOrDefault(i => i.ItemName.Equals(item2Name)).ItemLV);
-                Item2 = item2;
-                icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+            if (item2Name != "" && (Item2 == null || !item2Name.Equals(Item2.ItemName))) {
+                Items? resolvedItem2 = FindCatalogItem(item2Name);
+                if (resolvedItem2 != null) {
+                    item2Name = resolvedItem2.ItemName;
+                    Item2 = CreateItemFromCatalog(resolvedItem2, item2);
+                }
+                if (Item2 != null) {
+                    icon2 = AppDomain.CurrentDomain.BaseDirectory + "Resources\\Images\\Items\\" + Item2.ItemID + ".bmp";
+                }
             }
 
             //RaisePropertyChanged("ItemChange");
@@ -341,5 +588,172 @@ namespace iBarter {
         // public void SetItem2(Items _item) {
         //     item2 = _item;
         // }
+
+        // ====================================================================
+        // Phase 5 (i18n): display getters + PropertyChanged relay
+        // ====================================================================
+        // Barter stores canonical English names (Item1Name, IsLandName) so
+        // the JSON persisted to myShipCargoItems_Data.json stays stable
+        // across language switches.  UI bindings now read these *Display
+        // variants instead; they read the language-aware getter on the
+        // underlying Items/Islands instance and re-fire whenever the
+        // underlying object raises PropertyChanged (which is how Items /
+        // Islands broadcast language flips).  Underlying-INPC subscription
+        // is wired in the ctor + setter so a re-assigned item still
+        // refreshes the cell.
+
+        [JsonIgnore]
+        public string Item1NameDisplay {
+            get { return item1?.ItemNameDisplay ?? Item1Name; }
+            set { Item1Name = value; }
+        }
+
+        [JsonIgnore]
+        public string Item2NameDisplay {
+            get { return item2?.ItemNameDisplay ?? Item2Name; }
+            set { Item2Name = value; }
+        }
+
+        [JsonIgnore]
+        public string IsLandNameDisplay {
+            get { return isLand?.IslandsNameDisplay ?? IsLandName; }
+            set { IsLandName = value; }
+        }
+
+        private static Items ResolveCatalogItem(Items? candidate, string? name) {
+            if (App.listItems != null) {
+                Items? byName = FindCatalogItem(name)
+                    ?? FindCatalogItem(candidate?.ItemName)
+                    ?? FindCatalogItem(candidate?.ItemNameZhTw);
+                if (byName != null) {
+                    return CreateItemFromCatalog(byName, candidate);
+                }
+
+                if (!string.IsNullOrWhiteSpace(candidate?.ItemID)) {
+                    Items? byId = App.listItems.FirstOrDefault(i => i.ItemID == candidate.ItemID);
+                    if (byId != null) {
+                        return CreateItemFromCatalog(byId, candidate);
+                    }
+                }
+            }
+
+            return candidate ?? new Items(name ?? string.Empty, "0", "0");
+        }
+
+        private static Items CreateItemFromCatalog(Items catalog, Items? candidate) {
+            var item = new Items(
+                catalog.ItemName,
+                catalog.ItemID,
+                catalog.ItemLV,
+                candidate?.ItemNumber ?? catalog.ItemNumber,
+                candidate?.StorageVeliaQuantity_Velia ?? catalog.StorageVeliaQuantity_Velia,
+                candidate?.StorageVeliaQuantity_Iliya ?? catalog.StorageVeliaQuantity_Iliya,
+                candidate?.StorageVeliaQuantity_Epheria ?? catalog.StorageVeliaQuantity_Epheria,
+                candidate?.StorageVeliaQuantity_Ancado ?? catalog.StorageVeliaQuantity_Ancado);
+            item.ItemNameZhTw = catalog.ItemNameZhTw;
+            return item;
+        }
+
+        private static Items? FindCatalogItem(string? name) {
+            if (string.IsNullOrWhiteSpace(name) || App.listItems == null) {
+                return null;
+            }
+
+            return App.listItems.FirstOrDefault(i =>
+                string.Equals(i.ItemName, name, StringComparison.Ordinal) ||
+                string.Equals(i.ItemNameDisplay, name, StringComparison.Ordinal) ||
+                string.Equals(i.ItemNameZhTw, name, StringComparison.Ordinal));
+        }
+
+        private static Islands ResolveCatalogIsland(Islands? candidate, string? name) {
+            if (App.listIslands != null) {
+                Islands? byName = FindCatalogIsland(name)
+                    ?? FindCatalogIsland(candidate?.IslandsName)
+                    ?? FindCatalogIsland(candidate?.IslandsNameZhTw);
+                if (byName != null) {
+                    return CreateIslandFromCatalog(byName, candidate);
+                }
+
+                if (candidate != null) {
+                    Islands? byEnum = App.listIslands.FirstOrDefault(i => i.Island == candidate.Island);
+                    if (byEnum != null) {
+                        return CreateIslandFromCatalog(byEnum, candidate);
+                    }
+                }
+            }
+
+            return candidate ?? new Islands(EnumLists.Island.Unfinished, 0);
+        }
+
+        private static Islands CreateIslandFromCatalog(Islands catalog, Islands? candidate) {
+            var island = new Islands(
+                catalog.Island,
+                candidate?.Parley ?? catalog.Parley,
+                candidate?.Remaining ?? catalog.Remaining);
+            island.IslandsNameZhTw = catalog.IslandsNameZhTw;
+            island.NavigationX = catalog.NavigationX;
+            island.NavigationY = catalog.NavigationY;
+            island.NavigationSource = catalog.NavigationSource;
+            return island;
+        }
+
+        private static Islands? FindCatalogIsland(string? name) {
+            if (string.IsNullOrWhiteSpace(name) || App.listIslands == null) {
+                return null;
+            }
+
+            return App.listIslands.FirstOrDefault(i =>
+                string.Equals(i.IslandsName, name, StringComparison.Ordinal) ||
+                string.Equals(i.IslandsNameDisplay, name, StringComparison.Ordinal) ||
+                string.Equals(i.IslandsNameZhTw, name, StringComparison.Ordinal));
+        }
+
+        private void WireUpItem1(Items? newItem) {
+            if (item1 != null) {
+                item1.PropertyChanged -= OnItem1PropertyChanged;
+            }
+            if (newItem != null) {
+                newItem.PropertyChanged += OnItem1PropertyChanged;
+            }
+        }
+
+        private void WireUpItem2(Items? newItem) {
+            if (item2 != null) {
+                item2.PropertyChanged -= OnItem2PropertyChanged;
+            }
+            if (newItem != null) {
+                newItem.PropertyChanged += OnItem2PropertyChanged;
+            }
+        }
+
+        private void WireUpIsland(Islands? newIsland) {
+            if (isLand != null) {
+                isLand.PropertyChanged -= OnIslandPropertyChanged;
+            }
+            if (newIsland != null) {
+                newIsland.PropertyChanged += OnIslandPropertyChanged;
+            }
+        }
+
+        private void OnItem1PropertyChanged(object? sender, PropertyChangedEventArgs e) {
+            if (e.PropertyName == nameof(Items.ItemNameDisplay)
+                || e.PropertyName == nameof(Items.ItemName)) {
+                RaisePropertyChanged(nameof(Item1NameDisplay));
+            }
+        }
+
+        private void OnItem2PropertyChanged(object? sender, PropertyChangedEventArgs e) {
+            if (e.PropertyName == nameof(Items.ItemNameDisplay)
+                || e.PropertyName == nameof(Items.ItemName)) {
+                RaisePropertyChanged(nameof(Item2NameDisplay));
+            }
+        }
+
+        private void OnIslandPropertyChanged(object? sender, PropertyChangedEventArgs e) {
+            if (e.PropertyName == nameof(Islands.IslandsNameDisplay)
+                || e.PropertyName == nameof(Islands.IslandsName)) {
+                RaisePropertyChanged(nameof(IsLandNameDisplay));
+            }
+        }
     }
 }

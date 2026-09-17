@@ -83,23 +83,12 @@ namespace iBarter.ViewModel {
         #region Method
 
         private ObservableCollection<Items> PopulateItems() {
-            ObservableCollection<Items> itemsList = new ObservableCollection<Items>();
-            List<Items> myList = App.myCFun.LoadItemsCSV();
-            foreach (Items item in myList) {
-                itemsList.Add(item);
-            }
-
-            return itemsList;
+            // Reuse App.listItems populated at startup; CSV was read 3x before this fix.
+            return new ObservableCollection<Items>(App.listItems);
         }
 
         private ObservableCollection<Islands> PopulateIslands() {
-            ObservableCollection<Islands> islandsList = new ObservableCollection<Islands>();
-            List<Islands> myList = App.myCFun.LoadIslandsCSV();
-            foreach (Islands item in myList) {
-                islandsList.Add(item);
-            }
-
-            return islandsList;
+            return new ObservableCollection<Islands>(App.listIslands);
         }
 
         private ObservableCollection<AltLevel> PopulateALT() {

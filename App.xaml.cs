@@ -1,9 +1,13 @@
-﻿using iBarter.Model;
+﻿using iBarter.Localization;
+using iBarter.Model;
 using iBarter.View;
 using iBarter.ViewModel;
+using iBarter.Routing;
 using Syncfusion.Licensing;
 using Syncfusion.SfSkinManager;
+using System.IO;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Navigation;
 
 namespace iBarter {
@@ -19,6 +23,12 @@ namespace iBarter {
     ///     Interaction logic for App.xaml
     /// </summary>
     public partial class App : Application {
+        public const string DisplayVersion = "Beta6.0";
+        private static readonly string PackagedPearlFontPath = Path.Combine(
+            AppContext.BaseDirectory, "Resources", "Fonts", "pearl.ttf");
+        private const string LegacyPearlFontPath = @"D:\Games\BDOLanguage\Font\pearl.ttf";
+        private const string PearlFontFamilyName = "Bauhaus ITC";
+
         public static global::PureDM.DmAutomation myPureDM = null!;
         public static CFunctions myCFun = null!;
         public static MainWindow myfmMain = null!;
@@ -38,16 +48,54 @@ namespace iBarter {
         public static StorageViewModel myStorageVM = null!;
         public static ShipCargoViewModel myCVM = null!;
         public static CargoProperty myCargoProperty = null;
+        public static AutomaticRouteCoordinator myRouteCoordinator = null!;
+
+        // Single lock guarding all App.list* mutations. Children windows / scanner threads
+        // take this around any read-then-mutate of the shared lists (e.g.
+        // IdentifyBarterAsync on Task.Run worker threads, SaveData on UI threads).
+        public static readonly object _listLock = new object();
 
 
         public App() {
-            SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JHaF5cWWdCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdlWXlceXVdR2BZVEJ3W0FWYEo=");
-            
-            //SfSkinManager.ApplyStylesOnApplication = true;
+            SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JAaF5cX2pCd1p/TH5YfUNzdUVEY1ZUTXxaS1ZhSXxVdkJjX35edXJRRGhcWEd9XEY=");
+
+            // Global safety net: an unhandled exception on the UI thread
+            // (e.g. a bad cell edit in the Planner grid) otherwise tears down
+            // the whole process. Log the full stack to crash.log and mark it
+            // handled so a single failed action no longer crashes the app.
+            this.DispatcherUnhandledException += App_DispatcherUnhandledException;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+
+            // Keep one Syncfusion theme path. With application-level resources,
+            // SetTheme loads the complete common/control dictionaries together;
+            // mixing ApplicationTheme/default-style loading with SetTheme leaves
+            // DockingManager templates temporarily missing Windows11 brush keys.
+            SfSkinManager.ApplyStylesOnApplication = true;
+
+            // Phase 9 hotfix: install the i18n dictionary FIRST, before
+            // MainWindow is constructed below.  The XAML parser evaluates
+            // {loc:Localize str.X} markup extensions synchronously at parse
+            // time; if the dict is still null the ProvideValue returns the
+            // raw key (which is what made the user see 'str.Banner.Title'
+            // text instead of the localized value).  Moving this ABOVE
+            // the new MainWindow() call fixes the order: dict populated
+            // first, then the XAML parses, then ProvideValue finds the
+            // key in the dict and returns the localized text.
+            iBarter.Localization.LanguageService.Instance.InitializeAtStartup();
 
             myCFun = new CFunctions();
             listItems = myCFun.LoadItemsCSV();
             listIslands = myCFun.LoadIslandsCSV();
+            // Phase 5 (i18n): re-read the zh-TW sidecars so every Item /
+            // Islands instance has its display field populated before any
+            // view binds against it.  The display getter (ItemNameDisplay
+            // / IslandsNameDisplay) returns English or zh-TW based on
+            // LanguageService.Current at read time, so the order relative
+            // to InitializeAtStartup() does not matter — but doing it
+            // here keeps the Log() messages visible in the bottom dock.
+            myCFun.LoadItemsZhTw();
+            myCFun.LoadIslandsZhTw();
+
             listStorage = new List<Items>();
             listCargoItems = new List<Barter>();
 
@@ -56,20 +104,170 @@ namespace iBarter {
             myStorageVM = new StorageViewModel();
             myCVM = new ShipCargoViewModel();
             myMainWVM = new MainWindowViewModel();
+        }
 
-            //mySplashScreen = new SplashScreen();
-            myfmMain = new MainWindow();
+        private static void ApplyLocalizedTypography() {
+            if (Current == null) {
+                return;
+            }
 
-            myfmMain.statusBarItem_Version.Text = "Version: Beta_4.4";
+            bool isChinese = LanguageService.Instance.Current == AppLanguage.TraditionalChinese;
+            Current.Resources["AppFontFamily"] = isChinese
+                ? CreateChineseFontFamily()
+                : new FontFamily("Segoe UI");
 
-            this.ShutdownMode = ShutdownMode.OnMainWindowClose;
+            // pearl.ttf was built for the game renderer and has only partial
+            // TrueType hinting data. Display/ClearType grid-fitting at 14px
+            // snaps nominally equal strokes to different pixel widths. Use
+            // outline-faithful grayscale rendering for Chinese only; retain
+            // Windows' normal Segoe UI rendering in English.
+            Current.Resources["AppTextFormattingMode"] = isChinese
+                ? TextFormattingMode.Ideal
+                : TextFormattingMode.Display;
+            Current.Resources["AppTextRenderingMode"] = isChinese
+                ? TextRenderingMode.Grayscale
+                : TextRenderingMode.ClearType;
+            Current.Resources["AppTextHintingMode"] = isChinese
+                ? TextHintingMode.Animated
+                : TextHintingMode.Fixed;
+        }
+
+        private static FontFamily CreateChineseFontFamily() {
+            try {
+                string? pearlFontPath = File.Exists(PackagedPearlFontPath)
+                    ? PackagedPearlFontPath
+                    : File.Exists(LegacyPearlFontPath)
+                        ? LegacyPearlFontPath
+                        : null;
+                if (pearlFontPath != null) {
+                    string directory = Path.GetDirectoryName(pearlFontPath)!;
+                    var baseUri = new Uri(directory + Path.DirectorySeparatorChar, UriKind.Absolute);
+                    string familyReference = $"./{Path.GetFileName(pearlFontPath)}#{PearlFontFamilyName}";
+                    return new FontFamily(baseUri, familyReference);
+                }
+            }
+            catch (Exception exception) {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Typography] Unable to load pearl.ttf: {exception.Message}");
+            }
+
+            // Keep Chinese text readable when the user-provided font is moved
+            // or unavailable; the application must still be able to start.
+            return new FontFamily("Microsoft JhengHei UI");
         }
 
         protected override void OnStartup(StartupEventArgs e) {
             base.OnStartup(e);
 
+            // App.xaml resources are loaded by generated Main() after App's
+            // constructor returns. Applying the language font in the
+            // constructor is therefore too early: App.xaml subsequently
+            // overwrites AppFontFamily with its Segoe UI design-time default.
+            // Set it here, after resources exist and before any window parses
+            // its DynamicResource reference.
+            ApplyLocalizedTypography();
+            LanguageService.Instance.LanguageChanged += (_, _) =>
+                ApplyLocalizedTypography();
+
+            // Register the initial palette and application theme before the
+            // first Window is constructed. Syncfusion then applies the theme
+            // while each control initializes instead of restyling the complete
+            // DockingManager tree after InitializeComponent.
+            myMainWVM.InitializeThemeAtStartup();
+
+            // App.xaml is initialized before OnStartup runs. MainWindow and its
+            // nested controls use Fluent icon resources merged by App.xaml, so
+            // constructing the window in App's constructor is too early.
+            myfmMain = new MainWindow();
+            myRouteCoordinator = new AutomaticRouteCoordinator(myStorageVM, myCargoProperty, myCVM);
+
+            // Phase 6 (i18n): the "Version: " prefix is now a resource key
+            // so the status-bar label flips with the active language; the
+            // version number itself stays as a build-time
+            // constant so the localized prefix and the version string can
+            // concatenate in any culture.
+            myfmMain.statusBarItem_Version.Text = iBarter.Localization.LanguageService.Instance.Localize("str.StatusBar.VersionLabel") + DisplayVersion;
+
+            // OnMainWindowClose: closing the main window exits the entire process
+            // immediately, regardless of whether child windows (BarterScanner,
+            // StorageManagement, SplashScreen, docked panels) are still open.
+            // WPF auto-closes docked children; SplashScreen's background STA
+            // Dispatcher is shut down explicitly in MainWindow_Closing.
+            this.ShutdownMode = ShutdownMode.OnMainWindowClose;
+
+            // Load storage data once at startup, before any UI renders. Previously
+            // this happened lazily inside Barter.InvQuantity (which `new`-ed a
+            // StorageManagement window on first read) and again every time the
+            // Storage window was opened. That had two visible problems:
+            //   1. First scanner "Add to Planner" click would silently trigger 80+
+            //      "资料已储存" log lines because the lazy-init load cascaded through
+            //      CollectionChanged -> SaveData for every hardcoded seed item.
+            //   2. Storage quantities were unavailable to Barter.InvQuantity until
+            //      the user opened the Storage window at least once.
+            // Hoisting the load to startup makes the data ready before any binding
+            // reads it and confines the seed cascade to a single, controlled load.
+            if (myStorageVM != null) {
+                myStorageVM.LoadData();
+            }
+
             myfmMain.Show();
+            // Request startup restore now; PlannerControl defers the actual work
+            // until its Loaded event and the Dispatcher idle queue. Show() does
+            // not guarantee that Syncfusion's document/grid visual tree is ready.
+            myfmMain.myPlannerControl.LoadSavedDataAndAutomaticRouteAtStartup();
             //mySplashScreen.Show();
+        }
+
+        private void App_DispatcherUnhandledException(object sender,
+            System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e) {
+            // Detect the known WPF Popup + GDI/font memory exhaustion pattern:
+            //   NullReferenceException (thrown by Popup.OnWindowResize when _positionInfo
+            //   is null) wrapping a COMException 0x80070008 "Not enough memory resources"
+            //   from GlyphTypeface.GetGlyphMetricsOptimized.
+            // This is a system-level GDI resource issue, not a code bug — log it as a
+            // warning and continue rather than treating it as a hard crash.
+            bool isPopupGdiOom = e.Exception is NullReferenceException
+                && e.Exception.InnerException is System.Runtime.InteropServices.COMException com
+                && (uint)com.HResult == 0x80070008
+                && (e.Exception.StackTrace?.Contains("Popup.OnWindowResize") == true
+                    || e.Exception.StackTrace?.Contains("OnWindowResize") == true);
+
+            if (isPopupGdiOom) {
+                LogCrash("WPF-Popup-GDI-OOM [non-fatal, system resource exhaustion]", e.Exception);
+                e.Handled = true;
+                return;
+            }
+
+            LogCrash("UI-thread", e.Exception);
+            // Keep the app alive; the failed action is aborted but the user
+            // doesn't lose their whole planning session to one bad edit.
+            e.Handled = true;
+        }
+
+        private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e) {
+            LogCrash("non-UI-thread", e.ExceptionObject as Exception);
+        }
+
+        private static void LogCrash(string origin, Exception? ex) {
+            // Write the full exception to crash.log (no WPF involvement).
+            try {
+                string logPath = AppDomain.CurrentDomain.BaseDirectory + "crash.log";
+                string entry = "==== " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " (" + origin + ") ====\r\n"
+                    + (ex?.ToString() ?? "(null exception)") + "\r\n\r\n";
+                System.IO.File.AppendAllText(logPath, entry);
+            }
+            catch {
+                // last-resort logger must never throw
+            }
+            // Note: we deliberately do NOT call myCFun?.Log() here. The
+            // crash path fires AFTER WPF's text renderer has already
+            // OOM'd in the Log() call (or worse, recursively from
+            // Dispatcher processing itself). Any further Log() call
+            // goes back through WPF text rendering and can NRE - the
+            // user sees a "NullReferenceException: object reference
+            // not set" flood on the next scan as WPF's internal error
+            // handler tries to log the secondary NRE. Writing to
+            // crash.log is enough; the user reads it from disk.
         }
     }
 }

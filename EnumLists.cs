@@ -80,6 +80,7 @@
             Tigris,
             Tinberra,
             Tulu,
+            Velia,
             Wandering,
             Weita,
             Marine,
@@ -92,7 +93,8 @@
             Epheria,
             Sausan,
             Sanctuary,
-            UnKnown
+            UnKnown,
+            Nampo, Byukgye, Cheongsa, Ancado, Oquilla, Outpost
         }
 
         public enum Items {

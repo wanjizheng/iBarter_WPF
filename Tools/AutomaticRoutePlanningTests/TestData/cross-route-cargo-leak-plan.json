@@ -1,0 +1,148 @@
+{
+  "Comment": [
+    "Anonymized fixture mirroring the field scenario: a Route 1 that picks",
+    "up item I_A (analogous to 800061 / Statue Tear) at warehouse W_A",
+    "without any of its barters consuming I_A, then unloads it back at W_A",
+    "as a phantom round-trip. Route 3 is the route that legitimately",
+    "consumes I_A. The fix must (a) strip I_A from Route 1's pickup and",
+    "unload at W_A and (b) leave Route 2 unchanged.",
+    "",
+    "All item/warehouse IDs are anonymized; cargo weights are normalized",
+    "to small integers so the test runs identically on any machine."
+  ],
+  "Plan": {
+    "Fingerprint": "anonymized-fixture-v1",
+    "Status": "Optimal",
+    "Routes": [
+      {
+        "Number": 1,
+        "StartWarehouseId": "W_A",
+        "EndWarehouseId": "W_B",
+        "Distance": 0,
+        "InitialLT": 0,
+        "CurrentLT": 0,
+        "PeakLT": 0,
+        "Steps": [
+          {
+            "Kind": "pickup",
+            "IslandId": "W_A",
+            "WarehouseId": "W_A",
+            "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 },
+            "Items": [
+              { "ItemId": "I_A",  "Quantity": 5 },
+              { "ItemId": "I_B",  "Quantity": 1 },
+              { "ItemId": "I_C",  "Quantity": 5 },
+              { "ItemId": "I_D",  "Quantity": 2 }
+            ]
+          },
+          { "Kind": "barter", "IslandId": "Isle_C", "RowId": "task-1", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Consumed": { "ItemId": "I_C", "Quantity": 5 }, "Produced": { "ItemId": "I_E", "Quantity": 5 } },
+          { "Kind": "barter", "IslandId": "Isle_D", "RowId": "task-2", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Consumed": { "ItemId": "I_E", "Quantity": 5 }, "Produced": { "ItemId": "I_F", "Quantity": 5 } },
+          { "Kind": "barter", "IslandId": "Isle_E", "RowId": "task-3", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Consumed": { "ItemId": "I_B", "Quantity": 1 }, "Produced": { "ItemId": "I_G", "Quantity": 213 } },
+          { "Kind": "barter", "IslandId": "Isle_F", "RowId": "task-4", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Consumed": { "ItemId": "I_D", "Quantity": 2 }, "Produced": { "ItemId": "I_H", "Quantity": 2 } },
+          { "Kind": "barter", "IslandId": "Isle_G", "RowId": "task-5", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Consumed": { "ItemId": "I_F", "Quantity": 5 }, "Produced": { "ItemId": "I_J", "Quantity": 5 } },
+          { "Kind": "barter", "IslandId": "Isle_H", "RowId": "task-6", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Consumed": { "ItemId": "I_H", "Quantity": 2 }, "Produced": { "ItemId": "I_K", "Quantity": 2 } },
+          { "Kind": "barter", "IslandId": "Isle_I", "RowId": "task-7", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Consumed": { "ItemId": "I_K", "Quantity": 1 }, "Produced": { "ItemId": "I_L", "Quantity": 1 } },
+          {
+            "Kind": "unload",
+            "IslandId": "W_A",
+            "WarehouseId": "W_A",
+            "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 },
+            "Items": [
+              { "ItemId": "I_A",  "Quantity": 5 },
+              { "ItemId": "I_J",  "Quantity": 5 },
+              { "ItemId": "I_L",  "Quantity": 1 }
+            ]
+          },
+          {
+            "Kind": "unload",
+            "IslandId": "W_B",
+            "WarehouseId": "W_B",
+            "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 },
+            "Items": [
+              { "ItemId": "I_K",  "Quantity": 1 }
+            ]
+          }
+        ]
+      },
+      {
+        "Number": 2,
+        "StartWarehouseId": "W_B",
+        "EndWarehouseId": "W_B",
+        "Distance": 0,
+        "InitialLT": 0,
+        "CurrentLT": 0,
+        "PeakLT": 0,
+        "Steps": [
+          { "Kind": "pickup", "IslandId": "W_B", "WarehouseId": "W_B", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Items": [ { "ItemId": "I_O", "Quantity": 2 } ] },
+          { "Kind": "barter", "IslandId": "Isle_O", "RowId": "task-route2-a", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Consumed": { "ItemId": "I_O", "Quantity": 2 }, "Produced": { "ItemId": "I_P", "Quantity": 2 } },
+          { "Kind": "barter", "IslandId": "Isle_P", "RowId": "task-route2-b", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Consumed": { "ItemId": "I_P", "Quantity": 2 }, "Produced": { "ItemId": "I_Q", "Quantity": 2 } },
+          { "Kind": "unload", "IslandId": "W_B", "WarehouseId": "W_B", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Items": [ { "ItemId": "I_Q", "Quantity": 2 } ] }
+        ]
+      },
+      {
+        "Number": 3,
+        "StartWarehouseId": "W_A",
+        "EndWarehouseId": "W_B",
+        "Distance": 0,
+        "InitialLT": 0,
+        "CurrentLT": 0,
+        "PeakLT": 0,
+        "Steps": [
+          {
+            "Kind": "pickup",
+            "IslandId": "W_A",
+            "WarehouseId": "W_A",
+            "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 },
+            "Items": [ { "ItemId": "I_A", "Quantity": 5 } ]
+          },
+          { "Kind": "barter", "IslandId": "Isle_X", "RowId": "task-consume-A", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Consumed": { "ItemId": "I_A", "Quantity": 5 }, "Produced": { "ItemId": "I_M", "Quantity": 5 } },
+          { "Kind": "barter", "IslandId": "Isle_Y", "RowId": "task-consume-M", "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 }, "Consumed": { "ItemId": "I_M", "Quantity": 5 }, "Produced": { "ItemId": "I_N", "Quantity": 5 } },
+          {
+            "Kind": "unload",
+            "IslandId": "W_B",
+            "WarehouseId": "W_B",
+            "Load": { "CargoLT": 0, "TotalWithExtraLT": 0, "PeakTotalLT": 0 },
+            "Items": [ { "ItemId": "I_N", "Quantity": 5 } ]
+          }
+        ]
+      }
+    ]
+  },
+  "Items": {
+    "I_A": { "Level": 5, "UnitWeight": 1000 },
+    "I_B": { "Level": 4, "UnitWeight": 1000 },
+    "I_C": { "Level": 4, "UnitWeight": 1360 },
+    "I_D": { "Level": 1, "UnitWeight": 100 },
+    "I_E": { "Level": 3, "UnitWeight": 2000 },
+    "I_F": { "Level": 2, "UnitWeight": 800 },
+    "I_G": { "Level": 1, "UnitWeight": 0 },
+    "I_H": { "Level": 2, "UnitWeight": 400 },
+    "I_J": { "Level": 3, "UnitWeight": 600 },
+    "I_K": { "Level": 3, "UnitWeight": 2000 },
+    "I_L": { "Level": 4, "UnitWeight": 1000 },
+    "I_M": { "Level": 2, "UnitWeight": 100 },
+    "I_N": { "Level": 1, "UnitWeight": 0 },
+    "I_O": { "Level": 1, "UnitWeight": 100 },
+    "I_P": { "Level": 2, "UnitWeight": 400 },
+    "I_Q": { "Level": 3, "UnitWeight": 800 }
+  },
+  "Warehouses": [
+    { "Id": "W_A", "X": 0,    "Y": 0,    "Stock": { "I_A": 7, "I_B": 10, "I_C": 10, "I_D": 10 } },
+    { "Id": "W_B", "X": 1000, "Y": 0,    "Stock": { "I_O": 2 } }
+  ],
+  "ExtraLT": 2411,
+  "TotalLT": 100000,
+  "Tasks": [
+    { "RowId": "task-1",          "IslandId": "Isle_C", "Item1Id": "I_C", "InputQuantity": 5, "Item2Id": "I_E", "OutputQuantity": 5, "X": 200, "Y": 100 },
+    { "RowId": "task-2",          "IslandId": "Isle_D", "Item1Id": "I_E", "InputQuantity": 5, "Item2Id": "I_F", "OutputQuantity": 5, "X": 300, "Y": 200 },
+    { "RowId": "task-3",          "IslandId": "Isle_E", "Item1Id": "I_B", "InputQuantity": 1, "Item2Id": "I_G", "OutputQuantity": 213, "X": 400, "Y": 300 },
+    { "RowId": "task-4",          "IslandId": "Isle_F", "Item1Id": "I_D", "InputQuantity": 2, "Item2Id": "I_H", "OutputQuantity": 2, "X": 500, "Y": 400 },
+    { "RowId": "task-5",          "IslandId": "Isle_G", "Item1Id": "I_F", "InputQuantity": 5, "Item2Id": "I_J", "OutputQuantity": 5, "X": 600, "Y": 500 },
+    { "RowId": "task-6",          "IslandId": "Isle_H", "Item1Id": "I_H", "InputQuantity": 2, "Item2Id": "I_K", "OutputQuantity": 2, "X": 700, "Y": 600 },
+    { "RowId": "task-7",          "IslandId": "Isle_I", "Item1Id": "I_K", "InputQuantity": 1, "Item2Id": "I_L", "OutputQuantity": 1, "X": 800, "Y": 700 },
+    { "RowId": "task-consume-A",  "IslandId": "Isle_X", "Item1Id": "I_A", "InputQuantity": 5, "Item2Id": "I_M", "OutputQuantity": 5, "X": 100, "Y": 100 },
+    { "RowId": "task-consume-M",  "IslandId": "Isle_Y", "Item1Id": "I_M", "InputQuantity": 5, "Item2Id": "I_N", "OutputQuantity": 5, "X": 200, "Y": 100 },
+    { "RowId": "task-route2-a",   "IslandId": "Isle_O", "Item1Id": "I_O", "InputQuantity": 2, "Item2Id": "I_P", "OutputQuantity": 2, "X": 300, "Y": 100 },
+    { "RowId": "task-route2-b",   "IslandId": "Isle_P", "Item1Id": "I_P", "InputQuantity": 2, "Item2Id": "I_Q", "OutputQuantity": 2, "X": 400, "Y": 100 }
+  ]
+}

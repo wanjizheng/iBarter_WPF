@@ -2,7 +2,7 @@
 <SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="iBarter.Properties" GeneratedClassName="Settings">
   <Profiles />
   <Settings>
-    <Setting Name="SelectedComboBoxValue" Type="System.Int32" Scope="User">
+    <Setting Name="SelectedComboBoxValueLV5" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">0</Value>
     </Setting>
     <Setting Name="SelectedComboBoxValueLV6" Type="System.Int32" Scope="User">
@@ -10,6 +10,16 @@
     </Setting>
     <Setting Name="SelectedComboBoxValueLV7" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">0</Value>
+    </Setting>
+    <!-- AppLanguage (i18n): the active LanguageService enum value.
+         0 = English, 1 = TraditionalChinese. Persisted to user.config via
+         the standard Settings infrastructure; read once at App startup by
+         LanguageService.InitializeAtStartup. -->
+    <Setting Name="AppLanguage" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">0</Value>
+    </Setting>
+    <Setting Name="CustomRouteSearchMinutes" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">10</Value>
     </Setting>
   </Settings>
 </SettingsFile>
