@@ -24,6 +24,10 @@ namespace iBarter.View {
             InitializeComponent();
             if (IsDesignMode) return;
             DataContext = App.myCVM;
+            TaggedRoutePanel.DisplayChanged += (_, _) => {
+                RefreshRouteMode();
+                App.myRouteCoordinator?.NotifyTaggedDisplayChanged();
+            };
             //PropertyGrid_Ship.Items = App.myCVM.CargoProperty;
 
             if (App.myCargoProperty == null)
@@ -39,6 +43,9 @@ namespace iBarter.View {
         }
 
         private bool updatingRouteSelector;
+        private bool? taggedLayoutMode;
+        private GridLength normalPropertyHeight = new(300);
+        private GridLength taggedPropertyHeight = new(300);
 
         // PropertyGrid caches its view surface internally, so the dynamic
         // resource in XAML alone is not enough after a live skin change.
@@ -79,6 +86,9 @@ namespace iBarter.View {
 
         private void RefreshRouteMode() {
             if (IsDesignMode || App.myCVM is null) return;
+            bool tagged = TaggedRoutePanel.IsEnabledMode;
+            ApplyCargoPropertyLayout(tagged);
+            LegacyCargoPanel.Visibility = tagged ? Visibility.Collapsed : Visibility.Visible;
             var coordinator = App.myRouteCoordinator;
             bool automatic = coordinator?.Mode == CargoMode.AutomaticRoute;
             ListBox_ShipCargo.ItemsSource = automatic
@@ -111,6 +121,38 @@ namespace iBarter.View {
             PropertyGrid_Ship.SelectedObject = App.myCargoProperty;
             CollectionViewSource.GetDefaultView(ListBox_ShipCargo.ItemsSource)?.Refresh();
             Dispatcher.BeginInvoke(FocusSelectedAutomaticStep, System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        private void ApplyCargoPropertyLayout(bool tagged) {
+            // The splitter must sit directly between the active content row
+            // and the property row.  In standard mode the TAG header occupies
+            // row 0 and cargo occupies row 1.  In TAG mode row 0 becomes the
+            // content area, so leaving the splitter in row 2 makes it resize
+            // the collapsed legacy row instead of the visible route panel.
+            if (taggedLayoutMode == tagged) return;
+
+            if (taggedLayoutMode == true)
+                taggedPropertyHeight = SplitterRow.Height;
+            else if (taggedLayoutMode == false)
+                normalPropertyHeight = PropertyRow.Height;
+
+            if (tagged) {
+                TaggedRow.Height = new GridLength(1, GridUnitType.Star);
+                LegacyRow.Height = GridLength.Auto;
+                SplitterRow.Height = taggedPropertyHeight;
+                PropertyRow.Height = new GridLength(0);
+                Grid.SetRow(ShipPropertySplitter, 1);
+                Grid.SetRow(ShipPropertyHost, 2);
+            }
+            else {
+                TaggedRow.Height = GridLength.Auto;
+                LegacyRow.Height = new GridLength(1, GridUnitType.Star);
+                SplitterRow.Height = GridLength.Auto;
+                PropertyRow.Height = normalPropertyHeight;
+                Grid.SetRow(ShipPropertySplitter, 2);
+                Grid.SetRow(ShipPropertyHost, 3);
+            }
+            taggedLayoutMode = tagged;
         }
 
         public void RefreshAfterRouteProgress() {
@@ -450,6 +492,7 @@ namespace iBarter.View {
         }
 
         public void FocusSelectedAutomaticStep() {
+            if (TaggedRoutePanel.IsEnabledMode) { TaggedRoutePanel.FocusSelectedStep(); return; }
             if (IsDesignMode
                 || App.myRouteCoordinator?.Mode != CargoMode.AutomaticRoute
                 || string.IsNullOrWhiteSpace(App.myRouteCoordinator.SelectedBarterRowId))
@@ -467,7 +510,8 @@ namespace iBarter.View {
                 container.BringIntoView();
         }
 
-        private static Barter? ResolveAutomaticBarter(string rowId) {
+        internal static Barter? ResolveAutomaticBarter(string rowId) {
+            if (App.myPVM is null) return null;
             string plannerRowId = RouteTaskIdentity.PlannerRowId(rowId);
             var current = App.myPVM.BarterCollection.FirstOrDefault(barter =>
                 StringComparer.Ordinal.Equals(barter.PlannerRowId, plannerRowId));
@@ -478,6 +522,18 @@ namespace iBarter.View {
             return index >= 0 && index < App.myPVM.BarterCollection.Count
                 ? App.myPVM.BarterCollection[index]
                 : null;
+        }
+
+        internal static void CopyAutomaticBarterItem(string rowId, bool output) {
+            try {
+                var barter = ResolveAutomaticBarter(rowId);
+                if (barter is null) return;
+                string name = output ? barter.Item2Name : barter.Item1Name;
+                Clipboard.SetText(name);
+                App.myCFun?.Log(Localization.LanguageService.Instance.Localize("str.Log.ShipCargo.CopiedToClipboard",
+                    output ? barter.Item2NameDisplay : barter.Item1NameDisplay), Brushes.DarkGreen);
+            }
+            catch (Exception error) { App.myCFun?.Log(error.Message, Brushes.Red); }
         }
 
         private static Barter? ResolveContentBarter(object? content) => content switch {

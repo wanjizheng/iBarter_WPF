@@ -20,6 +20,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private CargoMode mode = CargoMode.Manual;
     private RouteOptimizationMode selectedOptimizationMode = RouteOptimizationMode.Balanced;
     private RoutePlan? currentPlan;
+    private bool displayCleared;
     private AutomaticRoutePlanningRequest? currentPublicationRequest;
     // Mode that the currently published plan was generated under. Tracked
     // separately from `selectedOptimizationMode` (which mirrors the live
@@ -45,11 +46,13 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     private IReadOnlyList<AutomaticRouteStepViewModel> visibleAutomaticSteps = [];
     private IReadOnlyList<RouteSelectionOption> routeOptions = [];
     private volatile ExtremeSearchProgressSnapshot? extremeSearchProgress;
+    private readonly Func<iBarter.View.TaggedRouteControl?> taggedDisplayProvider;
 
     public AutomaticRouteCoordinator(
         StorageViewModel storageViewModel,
         CargoProperty cargoProperty,
-        ShipCargoViewModel cargoViewModel) {
+        ShipCargoViewModel cargoViewModel, Func<iBarter.View.TaggedRouteControl?>? taggedDisplayProvider = null) {
+        this.taggedDisplayProvider = taggedDisplayProvider ?? (() => App.myfmMain?.myShipCargo?.TaggedRoutePanel);
         this.storageViewModel = storageViewModel;
         this.cargoProperty = cargoProperty;
         storageViewModel.StorageChanged += StorageChanged;
@@ -60,17 +63,24 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     public CargoMode Mode => mode;
     public RouteOptimizationMode SelectedOptimizationMode => selectedOptimizationMode;
     public RoutePlan? CurrentPlan => currentPlan;
+    private iBarter.View.TaggedRouteControl? TaggedDisplay => taggedDisplayProvider() is { IsEnabledMode: true } panel ? panel : null;
+    public RoutePlan? DisplayPlan => TaggedDisplay is { } tagged ? tagged.DisplayPlan : displayCleared ? null : currentPlan;
+    public bool IsDisplayCleared => TaggedDisplay is { } tagged ? tagged.IsDisplayCleared : displayCleared;
+    public bool HasAutomaticDisplay => TaggedDisplay is not null || displayCleared || mode == CargoMode.AutomaticRoute;
+    public bool DisplayShowAllRoutes => TaggedDisplay?.ShowAllRoutes ?? showAllRoutes;
+    public int? DisplaySelectedRouteNumber => TaggedDisplay is { } tagged ? tagged.SelectedRouteNumber : selectedRouteNumber;
+    public IReadOnlySet<string> DisplayCompletedBarterRowIds => TaggedDisplay is null ? completedBarterRowIds : new HashSet<string>();
     public int? SelectedRouteNumber => selectedRouteNumber;
     public bool ShowAllRoutes => showAllRoutes;
     public bool ShowRouteGuides => showRouteGuides;
     public string? SelectedBarterRowId => selectedBarterRowId;
     public IReadOnlySet<string> CompletedBarterRowIds => completedBarterRowIds;
-    public int? FocusedRouteNumber => focusedRouteNumber;
-    public string? FocusedFromIslandId => focusedFromIslandId;
-    public string? FocusedToIslandId => focusedToIslandId;
+    public int? FocusedRouteNumber => TaggedDisplay is { } tagged ? tagged.FocusedSegment?.Route : focusedRouteNumber;
+    public string? FocusedFromIslandId => TaggedDisplay is { } tagged ? tagged.FocusedSegment?.From : focusedFromIslandId;
+    public string? FocusedToIslandId => TaggedDisplay is { } tagged ? tagged.FocusedSegment?.To : focusedToIslandId;
     public long FocusRevision => focusRevision;
-    public IReadOnlyList<AutomaticRouteStepViewModel> VisibleAutomaticSteps => visibleAutomaticSteps;
-    public IReadOnlyList<RouteSelectionOption> RouteOptions => routeOptions;
+    public IReadOnlyList<AutomaticRouteStepViewModel> VisibleAutomaticSteps => displayCleared ? [] : visibleAutomaticSteps;
+    public IReadOnlyList<RouteSelectionOption> RouteOptions => displayCleared ? [] : routeOptions;
     public ExtremeSearchProgressSnapshot? ExtremeSearchProgress => extremeSearchProgress;
     public event EventHandler? RouteDisplayChanged;
 
@@ -87,15 +97,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         string fingerprint = RoutePlanFingerprint.Compute(request);
         RoutePlan? preferredIncumbent = null;
         lock (gate) {
-            if (useCurrentPlanAsIncumbent
-                && profile.UsesExtremeSearch
-                && currentPlanMode is RouteOptimizationMode.Deep
-                    or RouteOptimizationMode.Extreme
-                    or RouteOptimizationMode.Custom
-                && StringComparer.Ordinal.Equals(
-                    currentPlan?.InputFingerprint, fingerprint)) {
-                preferredIncumbent = currentPlan;
-            }
+            if (useCurrentPlanAsIncumbent)
+                preferredIncumbent = RouteIncumbentReuse.ForSearchBudget(request, currentPublicationRequest, currentPlan);
             cancellation?.Cancel();
             cancellation?.Dispose();
             cancellation = ownCancellation = new CancellationTokenSource();
@@ -222,7 +225,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         currentPlanRestoredFromDisk = false;
         currentPublicationRequest = request;
         RetainTaskProgressPresentIn(prepared.Plan);
-        Publish(prepared.Plan, preferredShowRouteGuides: showRouteGuides);
+        Publish(prepared.Plan, selectedRouteNumber, showAllRoutes, preferredShowRouteGuides: showRouteGuides);
         SaveCurrentPlan();
         return true;
     }
@@ -344,6 +347,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     }
 
     public void ActivateManual() {
+        displayCleared = false;
         mode = CargoMode.Manual;
         showAllRoutes = false;
         ClearFocus();
@@ -565,6 +569,16 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    public void ClearRouteDisplayForPlanning() {
+        // CurrentPlan remains an internal, revalidated search incumbent.
+        // Empty automatic mode also prevents fallback to the manual cargo UI.
+        displayCleared = true;
+        mode = CargoMode.AutomaticRoute;
+        ClearFocus();
+        TaggedDisplay?.ClearRouteDisplayForPlanning();
+        NotifyAll();
+    }
+
     public void Invalidate(string reason) {
         lock (gate) {
             cancellation?.Cancel();
@@ -579,7 +593,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         showAllRoutes = false;
         visibleAutomaticSteps = [];
         routeOptions = [];
-        mode = CargoMode.Manual;
+        mode = displayCleared ? CargoMode.AutomaticRoute : CargoMode.Manual;
         ClearFocus();
         NotifyAll();
     }
@@ -599,6 +613,8 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         int routeNumber,
         string fromIslandId,
         string toIslandId) {
+        if (TaggedDisplay is { } tagged)
+            return tagged.FocusRouteSegment(routeNumber, fromIslandId, toIslandId);
         var route = currentPlan?.Routes.FirstOrDefault(
             candidate => candidate.Number == routeNumber);
         if (route is null) return false;
@@ -623,18 +639,25 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
     }
 
     public bool IsFocusedSegment(int routeNumber, string fromIslandId, string toIslandId) =>
-        focusedRouteNumber == routeNumber
+        TaggedDisplay is { } tagged
+        ? tagged.IsFocusedSegment(routeNumber, fromIslandId, toIslandId)
+        : focusedRouteNumber == routeNumber
         && StringComparer.Ordinal.Equals(focusedFromIslandId, fromIslandId)
         && StringComparer.Ordinal.Equals(focusedToIslandId, toIslandId);
 
     public bool IsFocusedMarker(int routeNumber, string islandId) =>
-        focusedRouteNumber == routeNumber
+        TaggedDisplay is { } tagged
+        ? tagged.IsFocusedMarker(routeNumber, islandId)
+        : focusedRouteNumber == routeNumber
         && (StringComparer.Ordinal.Equals(focusedFromIslandId, islandId)
             || StringComparer.Ordinal.Equals(focusedToIslandId, islandId));
 
     public bool IsFocusPulseActive => DateTime.UtcNow < focusPulseUntilUtc;
 
     public RouteRenderSnapshot GetRenderSnapshot(IReadOnlyList<Barter> manualCargo) {
+        if (TaggedDisplay?.RenderSnapshot() is { } tagged)
+            return tagged;
+        if (displayCleared) return new(false, false, []);
         if (mode == CargoMode.Manual || currentPlan is null) {
             var islandIds = new List<string>();
             var start = ShipCargoViewModel.ResolveStartIslandFromCargo(manualCargo);
@@ -659,6 +682,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         bool preferredShowAll = false,
         string? preferredBarterRowId = null,
         bool preferredShowRouteGuides = true) {
+        displayCleared = false;
         currentPlan = plan;
         ClearFocus();
         showRouteGuides = preferredShowRouteGuides;
@@ -701,6 +725,11 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             || !remainingRoutes.Any(route => route.Number == selectedRouteNumber))
             selectedRouteNumber = remainingRoutes.FirstOrDefault()?.Number;
         if (remainingRoutes.Count == 0) showAllRoutes = false;
+    }
+
+    public void NotifyTaggedDisplayChanged() {
+        focusRevision++;
+        RouteDisplayChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void UpdateVisibleRoute() {

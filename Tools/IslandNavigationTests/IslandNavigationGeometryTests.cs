@@ -6,16 +6,18 @@ namespace IslandNavigationTests;
 public sealed class IslandNavigationGeometryTests {
     [Fact]
     public void Special_display_groups_are_exact_and_disjoint() {
-        Assert.Equal(14, IslandNavigationGeometry.LeftInsetNames.Count);
-        Assert.Equal(5, IslandNavigationGeometry.RightInsetNames.Count);
+        Assert.Equal(19, IslandNavigationGeometry.LeftInsetNames.Count);
+        Assert.Equal(6, IslandNavigationGeometry.RightInsetNames.Count);
         Assert.Equal(2, IslandNavigationGeometry.BottomEdgeNames.Count);
-        Assert.Equal(21, IslandNavigationGeometry.LeftInsetNames
+        Assert.Equal(27, IslandNavigationGeometry.LeftInsetNames
             .Concat(IslandNavigationGeometry.RightInsetNames)
             .Concat(IslandNavigationGeometry.BottomEdgeNames).Distinct().Count());
         Assert.Equal(SpecialDisplayGroup.LeftInset, IslandNavigationGeometry.GetDisplayGroup("Rickun"));
         Assert.Equal(SpecialDisplayGroup.RightInset, IslandNavigationGeometry.GetDisplayGroup("Hakoven"));
         Assert.Equal(SpecialDisplayGroup.BottomEdge, IslandNavigationGeometry.GetDisplayGroup("Midnight"));
         Assert.Equal(SpecialDisplayGroup.MainMap, IslandNavigationGeometry.GetDisplayGroup("Iliya"));
+        Assert.Equal(SpecialDisplayGroup.LeftInset, IslandNavigationGeometry.GetDisplayGroup("Nampo"));
+        Assert.Equal(SpecialDisplayGroup.RightInset, IslandNavigationGeometry.GetDisplayGroup("Ancado"));
     }
     [Fact]
     public void Distance_uses_world_coordinates() {

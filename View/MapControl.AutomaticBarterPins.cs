@@ -120,18 +120,18 @@ public partial class MapControl {
 
     private IReadOnlyList<RouteStepBarterPin> PlanAutomaticBarterPins() {
         var coordinator = App.myRouteCoordinator;
-        if (coordinator?.Mode != CargoMode.AutomaticRoute
-            || coordinator.CurrentPlan is not { } plan) {
+        if (coordinator?.HasAutomaticDisplay != true
+            || coordinator.DisplayPlan is not { } plan) {
             return Array.Empty<RouteStepBarterPin>();
         }
 
         IReadOnlyList<RouteStepMapLabel> labels = RouteStepLabelPlanner.PlanLabels(
             plan,
-            coordinator.ShowAllRoutes,
-            coordinator.SelectedRouteNumber,
+            coordinator.DisplayShowAllRoutes,
+            coordinator.DisplaySelectedRouteNumber,
             BuildItemDisplayNameLookup(),
             BuildBarterGroupLookup(),
-            coordinator.CompletedBarterRowIds);
+            coordinator.DisplayCompletedBarterRowIds);
         return RouteStepBarterPinPlanner.Plan(labels);
     }
 

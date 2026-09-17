@@ -93,7 +93,8 @@
             Epheria,
             Sausan,
             Sanctuary,
-            UnKnown
+            UnKnown,
+            Nampo, Byukgye, Cheongsa, Ancado, Oquilla, Outpost
         }
 
         public enum Items {

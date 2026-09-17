@@ -167,7 +167,10 @@
                 <ContentControl x:Name="dockBottom" syncfusion:DockingManager.Header="{loc:Localize str.Dock.Log}"
                             syncfusion:DockingManager.State="Dock" syncfusion:DockingManager.SideInDockedMode="Bottom">
                     <RichTextBox x:Name="richTextBox_Log" x:FieldModifier="public" VerticalScrollBarVisibility="Auto"
-                             HorizontalScrollBarVisibility="Auto">
+                             HorizontalScrollBarVisibility="Auto" IsReadOnly="True"
+                             Background="{DynamicResource AppSurfaceBrush}" Foreground="{DynamicResource AppTextBrush}"
+                             BorderBrush="{DynamicResource AppBorderBrush}">
+                        <FlowDocument Background="{DynamicResource AppSurfaceBrush}" Foreground="{DynamicResource AppTextBrush}"/>
                         <RichTextBox.Resources>
                             <Style TargetType="{x:Type Paragraph}">
                                 <Setter Property="Margin" Value="0" />

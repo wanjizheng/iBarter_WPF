@@ -133,10 +133,7 @@ namespace iBarter {
                         var strTime = "[ " + myDT.ToString("hh:mm:ss") + " ]  ";
                         var logBox = App.myfmMain.richTextBox_Log;
 
-                        logBox.AppendText(strTime);
-                        var tr = new TextRange(logBox.Document.ContentEnd, logBox.Document.ContentEnd);
-                        tr.Text = _message + "\r\n";
-                        tr.ApplyPropertyValue(TextElement.ForegroundProperty, _color);
+                        View.LogAppearance.Append(logBox, strTime, _message, _color);
 
                         TrimLogToMaxBlocks(logBox);
 
@@ -805,6 +802,11 @@ namespace iBarter {
             }
 
             ApplyIslandBarterLocations(listIslands);
+            foreach (var port in Routing.TaggedPortCatalog.Additional.Where(p => listIslands.All(i => i.IslandsName != p.Island)))
+                listIslands.Add(new Islands(Enum.Parse<EnumLists.Island>(port.Island), 0) {
+                    NavigationX = port.X, NavigationY = port.Y, NavigationSource = "bdocodex-calibrated",
+                    IslandsNameZhTw = port.ChineseIsland, IslandsThickness = new Thickness(0.5, 0.5, 0.49, 0.49)
+                });
             return listIslands;
         }
 
@@ -3558,14 +3560,20 @@ namespace iBarter {
                 islandOcrY2,
                 CV.OCRType.Words, CV.OCRMode.Color, CurrentOcrLanguage(),
                 debugTag);
-            if (string.IsNullOrWhiteSpace(strIsland)) {
-                strIsland = OcrStringSafe(
+            EnumLists.Island islandEnum = IslandEnumSmart(strIsland);
+            if (ShouldTryAlternateIslandOcrMode(strIsland, islandEnum)) {
+                string binaryIsland = OcrStringSafe(
                     islandOcrX1,
                     islandOcrY1,
                     islandOcrX2,
                     islandOcrY2,
                     CV.OCRType.Words, CV.OCRMode.Binary, CurrentOcrLanguage(),
                     debugTag);
+                EnumLists.Island binaryIslandEnum = IslandEnumSmart(binaryIsland);
+                if (binaryIslandEnum != EnumLists.Island.UnKnown) {
+                    strIsland = binaryIsland;
+                    islandEnum = binaryIslandEnum;
+                }
             }
             if (string.IsNullOrWhiteSpace(strIsland)) {
                 Log("[DIAG-empty-island-ocr] anchor=(" + pointPlusAnchor.X + "," + pointPlusAnchor.Y + ")"
@@ -3582,7 +3590,6 @@ namespace iBarter {
             // island name. Skip the row silently with a clear log instead of
             // letting the rest of the identify path burn a parley/required
             // FindPicture + icon OCR pipeline on a row that isn't a barter.
-            EnumLists.Island islandEnum = IslandEnumSmart(strIsland);
             if (islandEnum == EnumLists.Island.UnKnown) {
                 Log("[DIAG-skip-empty-island-row] anchor=(" + pointPlusAnchor.X + "," + pointPlusAnchor.Y + ")"
                     + " - OCR text is not a known island: \"" + strIsland + "\"",
@@ -4378,6 +4385,20 @@ namespace iBarter {
             return start <= end
                 ? trimmed.Substring(start, end - start + 1)
                 : string.Empty;
+        }
+
+        internal static bool ShouldTryAlternateIslandOcrMode(
+            string? ocrText,
+            EnumLists.Island resolvedIsland) {
+            // A non-empty OCR result is not necessarily a successful read.
+            // Game-font strokes can produce short garbage such as
+            // "PR 1过 才-" for 洋朱岛.  In that case the former code skipped
+            // Binary mode because Color technically returned text, then
+            // discarded the row as an unknown island.  Retry whenever the
+            // catalog cannot resolve the primary read as well as when it is
+            // empty.
+            return string.IsNullOrWhiteSpace(ocrText)
+                || resolvedIsland == EnumLists.Island.UnKnown;
         }
 
         internal static string NormalizeEnglishIslandMatcherText(string value) {
@@ -5466,6 +5487,11 @@ namespace iBarter {
                 AddZhTwIslandAlias(zhTw, zhTwAliases, "酷斯海賊團", EnumLists.Island.Cox_Pirate);
                 AddZhTwIslandAlias(zhTw, zhTwAliases, "柯魯之巢", EnumLists.Island.Crows_Nest);
                 AddZhTwIslandAlias(zhTw, zhTwAliases, "西奧尼爾", EnumLists.Island.Theonil);
+                // Observed OCR for 洋朱岛 in the white-on-dark barter row.
+                // Color mode returned this stable mixed Latin/CJK fragment;
+                // keep the alias narrow so unrelated unknown rows still fail
+                // closed instead of being assigned to an arbitrary island.
+                AddZhTwIslandAlias(zhTw, zhTwAliases, "PR 1过 才-", EnumLists.Island.Angie);
                 // Observed OCR for 莎莎島: the game font caused both 莎
                 // characters to be read as 蘇. Keep this as a narrow alias;
                 // otherwise fuzzy matching prefers 塔蘇島 because "蘇島"

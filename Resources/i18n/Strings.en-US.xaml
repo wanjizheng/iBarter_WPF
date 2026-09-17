@@ -91,7 +91,7 @@
     <sys:String x:Key="str.Planner.Extreme.CancelButton">Cancel search</sys:String>
     <sys:String x:Key="str.Planner.Extreme.ElapsedRunning">Elapsed: {0}</sys:String>
     <sys:String x:Key="str.Planner.Extreme.ElapsedCompleted">Total elapsed: {0}</sys:String>
-    <sys:String x:Key="str.Planner.Extreme.BestDistance">Best found route distance: {0:N0}</sys:String>
+    <sys:String x:Key="str.Planner.Extreme.BestDistance">Best found route distance: {0}</sys:String>
     <sys:String x:Key="str.Planner.Extreme.NoValidResult">No feasible route found yet</sys:String>
     <sys:String x:Key="str.Planner.Extreme.LastImprovement">Last improvement: {0}</sys:String>
     <sys:String x:Key="str.Planner.Extreme.SinceImprovement">Since last improvement: {0}</sys:String>
@@ -106,7 +106,7 @@
     <sys:String x:Key="str.Planner.AutoPlan.ManualSelection">Manual Selection</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlan">Auto Plan</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlanTip">Automatic strategies fill exchange counts; Manual Selection only optimizes the route for the current counts</sys:String>
-    <sys:String x:Key="str.Msg.Planner.AutoPlan.Success">Auto Plan ({0}): {1} parley used across {2} route(s).</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.Success">Auto Plan ({0}): {1} parley used across {2} selected exchange(s).</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.NoRows">Auto Plan: no rows to plan.</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ManualNoSelection">Enter an exchange count greater than zero in Planner first; the existing automatic route was not changed.</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.Invalid">Auto Plan failed: invalid input ({0}).</sys:String>
@@ -322,8 +322,8 @@
     <sys:String x:Key="str.ShipCargo.AutoRoute.LoadFormat">LT after step: {0:N0} · Peak: {1:N0}</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.PeakLT">Peak LT</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Solving">Finding automatic routes…</sys:String>
-    <sys:String x:Key="str.Log.AutoRoute.Optimal">Optimal automatic plan: {0} route(s), distance {1:N1}.</sys:String>
-    <sys:String x:Key="str.Log.AutoRoute.BestKnown">Best known automatic plan ({0}): {1} route(s), distance {2:N1}; stop: {3}; {4}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.Optimal">Optimal automatic plan: {0} route(s), distance {1}.</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.BestKnown">Best known automatic plan ({0}): {1} route(s), distance {2}; stop: {3}; {4}</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.NotOptimal">verified best so far; not proven globally optimal.</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.StopCompleted">completed</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.StopParentBudget">parent-state budget reached</sys:String>

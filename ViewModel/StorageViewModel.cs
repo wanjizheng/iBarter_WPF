@@ -404,6 +404,15 @@ namespace iBarter.ViewModel {
                 .Concat(StorageCollection.Where(item => !priority.ContainsKey(item.ItemID)))
                 .ToList();
 
+            // These two LV1 seed pouches are intentionally displayed in the
+            // opposite order from their numeric IDs. Apply it after restoring
+            // the saved ledger too, so existing users see the same order as a
+            // fresh install without changing any quantities.
+            int rakeflower = ordered.FindIndex(item => item.ItemID == "800011");
+            int roaFlower = ordered.FindIndex(item => item.ItemID == "800012");
+            if (rakeflower >= 0 && roaFlower >= 0 && rakeflower < roaFlower)
+                (ordered[rakeflower], ordered[roaFlower]) = (ordered[roaFlower], ordered[rakeflower]);
+
             if (StorageCollection.Select(item => item.ItemID)
                 .SequenceEqual(ordered.Select(item => item.ItemID), StringComparer.Ordinal)) {
                 return;
@@ -481,8 +490,8 @@ namespace iBarter.ViewModel {
             listItems.Add("Islanders Lunchbox");
             listItems.Add("Pirates Gunpowder");
             listItems.Add("Fertile Soil");
-            listItems.Add("Rakeflower Seed Pouch");
             listItems.Add("Roa Flower Seed Pouch");
+            listItems.Add("Rakeflower Seed Pouch");
             listItems.Add("Golden Sand");
             listItems.Add("Cherry Tree Seed Pouch");
             listItems.Add("Unidentified Ancient Mural");

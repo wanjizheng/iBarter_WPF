@@ -36,6 +36,7 @@ namespace iBarter.View {
         private System.Diagnostics.Stopwatch? extremeSearchUiWatch;
         private ExtremeSearchProgressSnapshot? extremeSearchUiOverride;
         private RouteOptimizationProfile? activeExtremeSearchProfile;
+        private TaggedSearchFeedback? activeTaggedSearch;
 
         // Phase 2 (i18n): column-header MappingName -> resource key for every
         // direct GridTextColumn on DataGrid_Planner. HeaderText is a plain CLR
@@ -143,6 +144,9 @@ namespace iBarter.View {
 
         private void TryRestoreAutomaticRouteAfterLoad() {
             try {
+                var tagged = App.myfmMain?.myShipCargo?.TaggedRoutePanel;
+                tagged?.ValidateRestoredWorkspace();
+                bool taggedMode = tagged?.IsEnabledMode == true;
                 App.myRouteCoordinator?.RefreshCompletedBarters(App.myPVM.BarterCollection);
 
                 // Discover the optimization mode that was used to generate the
@@ -181,7 +185,7 @@ namespace iBarter.View {
                     var result = App.myRouteCoordinator!.TryRestore(request);
                     lastResult = result;
                     if (result.Status == RoutePlanLoadStatus.Loaded) {
-                        LogRestoreSuccess(result);
+                        if (!taggedMode) LogRestoreSuccess(result);
                         App.myfmMain?.ActivateShipCargoSelection();
                         return;
                     }
@@ -190,8 +194,9 @@ namespace iBarter.View {
                 // No mode matched (or no request could be built). Log the
                 // most informative failure we saw so the user knows whether
                 // to retry AutoPlan or whether the save file is broken.
+                App.myRouteCoordinator?.Invalidate("restore-mismatch");
                 if (lastResult is not null) {
-                    LogRestoreFailure(lastResult);
+                    if (!taggedMode) LogRestoreFailure(lastResult);
                 }
             }
             catch (Exception exception) {
@@ -1046,7 +1051,9 @@ namespace iBarter.View {
             SaveData();
         }
 
-        public void SaveData() {
+        public void SaveData() => TrySaveData();
+
+        public bool TrySaveData() {
             try {
                 string resourceDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources");
                 string settingPath = Path.Combine(resourceDirectory, "myPlan_Setting.xml");
@@ -1065,9 +1072,11 @@ namespace iBarter.View {
                 App.listBarterPlanner.Clear();
                 App.listBarterPlanner.AddRange(snapshot);
                 WorkspaceSnapshotService.CaptureCompletedState("planner-save");
+                return true;
             }
             catch (Exception exception) {
                 App.myCFun.Log(exception.Message, Brushes.Red);
+                return false;
             }
         }
 
@@ -1594,11 +1603,13 @@ namespace iBarter.View {
         private async void ButtonAdv_AutoPlan_Click(object sender, RoutedEventArgs e) {
             var svc = Localization.LanguageService.Instance;
             if (extremeSearchRunning) {
-                App.myRouteCoordinator?.CancelActiveSearch();
+                if (activeTaggedSearch is not null) App.myfmMain?.myShipCargo?.TaggedRoutePanel.CancelSearch();
+                else App.myRouteCoordinator?.CancelActiveSearch();
                 ButtonAdv_AutoPlan.IsEnabled = false;
                 return;
             }
             var profile = ResolveSelectedOptimizationProfile();
+            App.myRouteCoordinator?.ClearRouteDisplayForPlanning();
             ButtonAdv_AutoPlan.IsEnabled = profile.UsesExtremeSearch;
             try {
 
@@ -1702,7 +1713,7 @@ namespace iBarter.View {
             AutomaticRoutePlanningRequest? restoredContinuationRequest = null;
             bool continuingRestoredSearch = false;
             bool useCurrentPlanAsIncumbent = true;
-            if (profile.UsesExtremeSearch
+            if (App.myfmMain?.myShipCargo?.TaggedRoutePanel.IsEnabledMode != true && profile.UsesExtremeSearch
                 && (restoredContinuationRequest = App.myRouteCoordinator
                     .GetRestoredExtremeContinuationRequest()) is not null) {
                 MessageBoxResult resumeChoice = MessageBox.Show(
@@ -1783,6 +1794,58 @@ namespace iBarter.View {
                     new RoutePoint(island.NavigationX!.Value, island.NavigationY!.Value)))
                 .ToArray();
             var cargo = new CargoCapacitySnapshot(extraLT, totalLT);
+            if (App.myfmMain?.myShipCargo?.TaggedRoutePanel is { IsEnabledMode: true } taggedPanel) {
+                BeginExtremeSearchFeedback(profile, tagged: true);
+                var taggedRequest = TaggedTransportRequest.Build(routeRows, storageRows, islandRows,
+                    App.myCargoProperty.TotalLT, App.myCargoProperty.ExtraLT, taggedPanel.Settings);
+                string SourceVersion() => JsonConvert.SerializeObject(new {
+                    Rows = App.myPVM.BarterCollection.Select(x => new { x.PlannerRowId, x.ExchangeQuantity, x.ExchangeDone,
+                        x.IsLandName, Input = x.Item1.ItemID, Output = x.Item2.ItemID, x.Item1Number, x.Item2Number }),
+                    Stock = App.myStorageVM.StorageCollection.Select(x => new { x.ItemID, x.StorageVeliaQuantity_Velia,
+                        x.StorageVeliaQuantity_Iliya, x.StorageVeliaQuantity_Epheria, x.StorageVeliaQuantity_Ancado }),
+                    App.myCargoProperty.TotalLT, App.myCargoProperty.ExtraLT
+                });
+                string sourceVersion = SourceVersion();
+                TaggedTransportResult? taggedResult = null;
+                try {
+                    taggedResult = await taggedPanel.GenerateAsync(taggedRequest, stillCurrent: () => sourceVersion == SourceVersion(), profile: profile,
+                        searchProgress: p => { activeTaggedSearch?.Update(p); RefreshExtremeSearchFeedback(); });
+                }
+                finally { activeTaggedSearch?.Finish(taggedResult, extremeSearchUiWatch?.Elapsed ?? TimeSpan.Zero); }
+                if (taggedResult.Plan is not null) {
+                    using (WorkspaceSnapshotService.BeginBatch("tagged-auto-plan")) {
+                        if (!manualSelection) {
+                            DataGrid_Planner.BeginInit();
+                            try {
+                                foreach (var row in liveRows)
+                                    if (calculation.ApplySet.Multipliers.TryGetValue(row.PlannerRowId, out int multiplier))
+                                        row.ExchangeQuantity = multiplier;
+                            }
+                            finally { DataGrid_Planner.EndInit(); }
+                        }
+                        UpdateInvChange(-1); UpdateParley(); SaveData(); UpdateMapControl();
+                    }
+                }
+                if (taggedResult.Plan is { } taggedPlan && taggedResult.PlannedRequest is { } planned) {
+                    string stop = svc.Localize(ExtremeSearchPresentation.TerminationLocalizationKey(taggedResult.Search?.Termination ?? ExtremeSearchTerminationReason.Completed));
+                    string details = TaggedRouteControl.L(
+                        $"{planned.Trades.Length} exchanges; elapsed {taggedResult.Search?.ElapsedSeconds:N1}s; {taggedResult.Search?.Candidates:N0} candidates; {stop}",
+                        $"{planned.Trades.Length} 筆交換；耗時 {taggedResult.Search?.ElapsedSeconds:N1} 秒；{taggedResult.Search?.Candidates:N0} 個候選；{stop}");
+                    if (taggedResult.Search?.OrdinaryReferenceAccepted is bool accepted)
+                        details += accepted ? TaggedRouteControl.L("; previous ship plan verified and reused", "；已驗證並復用原單船方案")
+                            : TaggedRouteControl.L("; previous ship plan is incompatible with these TAG inputs / constraints", "；原單船方案未通過本次 TAG 輸入／限制的驗證");
+                    App.myCFun.Log("[TAG] " + svc.Localize("str.Log.AutoRoute.BestKnown", OptimModeDisplay(profile, svc),
+                        TaggedTransportRoutes.Build(planned, taggedPlan).Length, RouteDistanceDisplay.Tagged(taggedPlan.Distance), details,
+                        svc.Localize("str.Log.AutoRoute.NotOptimal")), Brushes.DarkOliveGreen);
+                    string departure = App.listIslands.FirstOrDefault(i => i.IslandsName == planned.Settings.StartIsland)?.IslandsNameDisplay ?? planned.Settings.StartIsland;
+                    App.myCFun.Log(TaggedRouteControl.L("TAG departure: ", "TAG 計算起點：") + departure
+                        + (planned.Settings.StartFromSelectedLocation ? TaggedRouteControl.L(" (includes travel from the recorded location)", "（包含從記錄位置開始的航程）")
+                            : TaggedRouteControl.L(" (first loading warehouse)", "（首個裝貨倉庫）"))
+                        + (taggedPlan.ShipOnlyDistance is double baseline ? TaggedRouteControl.L("; ship-only reference under the same TAG inputs: ", "；相同 TAG 輸入下的單船參考：") + RouteDistanceDisplay.Tagged(baseline) : ""), Brushes.SteelBlue);
+                }
+                else App.myCFun.Log(TaggedRouteControl.L("TAG search did not publish a new route: ", "TAG 搜尋未發布新路線：") + taggedResult.Message, Brushes.OrangeRed);
+                return;
+            }
             var request = continuingRestoredSearch
                 ? restoredContinuationRequest!
                 : AutomaticRoutePlanningAdapter.BuildRequest(
@@ -1879,13 +1942,13 @@ namespace iBarter.View {
                         App.myCFun.Log(svc.Localize("str.Log.AutoRoute.BestKnown",
                             OptimModeDisplay(profile, svc),
                             routePlan.Routes.Count,
-                            routePlan.Objective?.TotalDistance ?? 0,
+                            RouteDistanceDisplay.Ordinary(routePlan.Objective?.TotalDistance ?? 0),
                             routePlan.Diagnostics.FirstOrDefault()?.Detail ?? "",
                             svc.Localize("str.Log.AutoRoute.NotOptimal")), Brushes.DarkOliveGreen);
                     }
                     else {
                         App.myCFun.Log(svc.Localize("str.Log.AutoRoute.Optimal",
-                            routePlan.Routes.Count, routePlan.Objective?.TotalDistance ?? 0), Brushes.DarkOliveGreen);
+                            routePlan.Routes.Count, RouteDistanceDisplay.Ordinary(routePlan.Objective?.TotalDistance ?? 0)), Brushes.DarkOliveGreen);
                     }
                     break;
                 case RoutePlanStatus.BestKnownWithinLimit:
@@ -1899,7 +1962,7 @@ namespace iBarter.View {
                     App.myCFun.Log(svc.Localize("str.Log.AutoRoute.BestKnown",
                         modeName,
                         routePlan.Routes.Count,
-                        routePlan.Objective?.TotalDistance ?? 0,
+                        RouteDistanceDisplay.Ordinary(routePlan.Objective?.TotalDistance ?? 0),
                         stopReason,
                         svc.Localize("str.Log.AutoRoute.NotOptimal")), Brushes.Orange);
                     break;
@@ -1938,7 +2001,7 @@ namespace iBarter.View {
                 App.myCFun.Log(svc.Localize("str.Log.AutoRoute.MapRenderFailed", exception.Message), Brushes.OrangeRed);
             }
             finally {
-                if (profile.UsesExtremeSearch)
+                if (extremeSearchRunning)
                     EndExtremeSearchFeedback();
                 ButtonAdv_AutoPlan.IsEnabled = true;
             }
@@ -1949,7 +2012,8 @@ namespace iBarter.View {
             UpdateParley();
         }
 
-        private void BeginExtremeSearchFeedback(RouteOptimizationProfile profile) {
+        private void BeginExtremeSearchFeedback(RouteOptimizationProfile profile, bool tagged = false) {
+            activeTaggedSearch = tagged ? new TaggedSearchFeedback() : null;
             extremeSearchRunning = true;
             activeExtremeSearchProfile = profile;
             extremeSearchUiOverride = null;
@@ -1973,7 +2037,8 @@ namespace iBarter.View {
             extremeSearchUiTimer?.Stop();
             extremeSearchUiTimer = null;
             ExtremeSearchProgressSnapshot? snapshot =
-                App.myRouteCoordinator?.ExtremeSearchProgress;
+                activeTaggedSearch?.Snapshot ?? App.myRouteCoordinator?.ExtremeSearchProgress;
+            if (activeTaggedSearch is not null) extremeSearchUiOverride = snapshot;
             if (snapshot is null || !snapshot.IsTerminal) {
                 TimeSpan elapsed = snapshot?.Elapsed
                     ?? extremeSearchUiWatch?.Elapsed
@@ -1995,6 +2060,7 @@ namespace iBarter.View {
         private void RefreshExtremeSearchFeedback() {
             var svc = Localization.LanguageService.Instance;
             ExtremeSearchProgressSnapshot snapshot = extremeSearchUiOverride
+                ?? activeTaggedSearch?.Snapshot
                 ?? App.myRouteCoordinator?.ExtremeSearchProgress
                 ?? new ExtremeSearchProgressSnapshot(
                     extremeSearchUiWatch?.Elapsed ?? TimeSpan.Zero,
@@ -2022,7 +2088,7 @@ namespace iBarter.View {
                     : "str.Planner.Extreme.ElapsedRunning",
                 FormatExtremeElapsed(elapsed));
             Text_ExtremeSearchBest.Text = snapshot.BestObjective is { } objective
-                ? svc.Localize("str.Planner.Extreme.BestDistance", objective.TotalDistance)
+                ? svc.Localize("str.Planner.Extreme.BestDistance", RouteDistanceDisplay.Ordinary(objective.TotalDistance))
                 : svc.Localize("str.Planner.Extreme.NoValidResult");
             Text_ExtremeSearchLastImprovement.Text = snapshot.LastImprovementElapsed is TimeSpan last
                 ? svc.Localize("str.Planner.Extreme.LastImprovement", FormatExtremeElapsed(last))
@@ -2047,6 +2113,9 @@ namespace iBarter.View {
                 && !extremeSearchRunning
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+            if (activeTaggedSearch is not null)
+                Text_ExtremeSearchHeader.Text = "TAG · " + OptimModeDisplay(activeExtremeSearchProfile!, svc)
+                    + TaggedRouteControl.L(snapshot.IsTerminal ? " — search finished" : " — searching…", snapshot.IsTerminal ? " — 搜尋結束" : " — 正在搜尋…");
         }
 
         private void Button_DismissExtremeSearchStatus_Click(
@@ -2054,6 +2123,7 @@ namespace iBarter.View {
             if (extremeSearchRunning) return;
             Border_ExtremeSearchStatus.Visibility = Visibility.Collapsed;
             extremeSearchUiOverride = null;
+            activeTaggedSearch = null;
             activeExtremeSearchProfile = null;
         }
 

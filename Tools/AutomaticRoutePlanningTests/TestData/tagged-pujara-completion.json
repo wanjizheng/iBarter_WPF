@@ -1,0 +1,2810 @@
+{
+  "Version": 1,
+  "Request": {
+    "Settings": {
+      "Enabled": true,
+      "StartIsland": "Iliya",
+      "ActiveCharacter": "main",
+      "HomeWarehouseId": "Iliya",
+      "StartFromSelectedLocation": true,
+      "SearchProfile": {
+        "Mode": 4,
+        "TotalTarget": "00:10:00",
+        "FinalizationReserve": "00:00:00",
+        "MaxBeamParents": 100000,
+        "MaxSuccessors": 4000000,
+        "MaxLocalEvaluations": 2000,
+        "BeamWidth": 1024,
+        "ExtremeMaxSearchDuration": "00:10:00",
+        "ExtremeNoImprovementTimeout": "00:00:00",
+        "UsesExtremeConvergence": false,
+        "UsesExtremeSearch": true
+      },
+      "Carriers": [
+        {
+          "Id": "main",
+          "Name": "Main",
+          "LimitLT": 3442,
+          "OccupiedLT": 800,
+          "Slots": 114
+        },
+        {
+          "Id": "alt",
+          "Name": "TAG",
+          "LimitLT": 3213,
+          "OccupiedLT": 120,
+          "Slots": 67
+        },
+        {
+          "Id": "main-elephant",
+          "Name": "Main elephant",
+          "LimitLT": 830,
+          "OccupiedLT": 0,
+          "Slots": 16
+        },
+        {
+          "Id": "alt-elephant",
+          "Name": "TAG elephant",
+          "LimitLT": 1200,
+          "OccupiedLT": 0,
+          "Slots": 16
+        }
+      ],
+      "Ports": [
+        {
+          "IslandId": "Velia",
+          "Npc": "Croix",
+          "Enabled": true,
+          "WarehouseId": "Velia",
+          "Evidence": "Warehouse base"
+        },
+        {
+          "IslandId": "Iliya",
+          "Npc": "Dario",
+          "Enabled": true,
+          "WarehouseId": "Iliya",
+          "Evidence": "Warehouse base"
+        },
+        {
+          "IslandId": "Epheria",
+          "Npc": "Bartholomeo",
+          "Enabled": true,
+          "WarehouseId": "Epheria",
+          "Evidence": "Warehouse base"
+        },
+        {
+          "IslandId": "Kuit",
+          "Npc": "Gafur",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "Player transfer reports; https://www.reddit.com/r/blackdesertonline/comments/kypdnx/"
+        },
+        {
+          "IslandId": "Lema",
+          "Npc": "Bolhi",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "Wharf menu; no direct warehouse assumed"
+        },
+        {
+          "IslandId": "Arehaza",
+          "Npc": "Luicy",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "NPC found; cargo menu unverified"
+        },
+        {
+          "IslandId": "Grandiha",
+          "Npc": "Derensha",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "NPC found; cargo menu unverified"
+        },
+        {
+          "IslandId": "Midnight",
+          "Npc": "Neltia",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "NPC found; cargo menu unverified"
+        },
+        {
+          "IslandId": "Dallae",
+          "Npc": "Sungoo",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "NPC found; cargo menu unverified"
+        },
+        {
+          "IslandId": "Haemo",
+          "Npc": "Gurong",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "NPC found; cargo menu unverified"
+        },
+        {
+          "IslandId": "Sausan",
+          "Npc": "",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "Cargo-menu exception reported; no Ancado storage link"
+        },
+        {
+          "IslandId": "Nampo",
+          "Npc": "Yooan",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "Personal wharf NPC: https://bdocodex.com/us/npc/47209/1/"
+        },
+        {
+          "IslandId": "Byukgye",
+          "Npc": "Darirong",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "Personal wharf NPC: https://bdocodex.com/us/npc/47332/1/"
+        },
+        {
+          "IslandId": "Cheongsa",
+          "Npc": "Gangman",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "Personal wharf NPC: https://bdocodex.com/us/npc/47772/1/"
+        },
+        {
+          "IslandId": "Ancado",
+          "Npc": "Samia",
+          "Enabled": true,
+          "WarehouseId": "Ancado",
+          "Evidence": "Personal wharf NPC: https://bdocodex.com/us/npc/45301/1/"
+        },
+        {
+          "IslandId": "Oquilla",
+          "Npc": "Ravikel",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "Personal wharf NPC: https://bdocodex.com/us/npc/49579/1/"
+        },
+        {
+          "IslandId": "Outpost",
+          "Npc": "Flanche",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "Personal wharf NPC: https://bdocodex.com/us/npc/49558/1/"
+        },
+        {
+          "IslandId": "Crows_Nest",
+          "Npc": "Anax",
+          "Enabled": true,
+          "WarehouseId": "",
+          "Evidence": "https://bdocodex.com/us/npc/50810/1/"
+        }
+      ],
+      "InitialCargo": [],
+      "NormalMetersPerSecond": 12,
+      "OverloadedMetersPerSecond": 3,
+      "DockSeconds": 15,
+      "SwitchSeconds": 15,
+      "ElephantSummonSeconds": 10,
+      "TransferSeconds": 5,
+      "BarterSeconds": 3,
+      "AllowOverloadedSailing": true,
+      "BarterOutputRatio": 1.7,
+      "CharacterReceiveRatio": 1.7,
+      "ShipSlots": 40,
+      "SearchSeconds": 15,
+      "MaxStates": 50000
+    },
+    "Items": {
+      "800224": {
+        "ItemId": "800224",
+        "DisplayName": "锋利的红花刀箱子",
+        "Level": 6,
+        "UnitWeight": 2000
+      },
+      "800220": {
+        "ItemId": "800220",
+        "DisplayName": "大路村覆盆莓箱子",
+        "Level": 6,
+        "UnitWeight": 2000
+      },
+      "800216": {
+        "ItemId": "800216",
+        "DisplayName": "暗影装饰镜子",
+        "Level": 6,
+        "UnitWeight": 2000
+      },
+      "800212": {
+        "ItemId": "800212",
+        "DisplayName": "银色树木苔藓装饰",
+        "Level": 6,
+        "UnitWeight": 2000
+      },
+      "800208": {
+        "ItemId": "800208",
+        "DisplayName": "金色仙人掌花束",
+        "Level": 6,
+        "UnitWeight": 2000
+      },
+      "800204": {
+        "ItemId": "800204",
+        "DisplayName": "黄金沙漠的沙子戒指",
+        "Level": 6,
+        "UnitWeight": 2000
+      },
+      "800068": {
+        "ItemId": "800068",
+        "DisplayName": "青春秘药",
+        "Level": 5,
+        "UnitWeight": 1000
+      },
+      "800067": {
+        "ItemId": "800067",
+        "DisplayName": "古代人肖像画",
+        "Level": 5,
+        "UnitWeight": 1000
+      },
+      "800066": {
+        "ItemId": "800066",
+        "DisplayName": "102年黄金草",
+        "Level": 5,
+        "UnitWeight": 1000
+      },
+      "800063": {
+        "ItemId": "800063",
+        "DisplayName": "褪色的黄金龙雕像",
+        "Level": 5,
+        "UnitWeight": 1000
+      },
+      "800062": {
+        "ItemId": "800062",
+        "DisplayName": "最高级黄金烛台",
+        "Level": 5,
+        "UnitWeight": 1000
+      },
+      "800060": {
+        "ItemId": "800060",
+        "DisplayName": "弄蝶标本",
+        "Level": 5,
+        "UnitWeight": 1000
+      },
+      "800059": {
+        "ItemId": "800059",
+        "DisplayName": "蓝光石英",
+        "Level": 5,
+        "UnitWeight": 1000
+      },
+      "800054": {
+        "ItemId": "800054",
+        "DisplayName": "被截断脖颈的龙雕像",
+        "Level": 4,
+        "UnitWeight": 1000
+      },
+      "800053": {
+        "ItemId": "800053",
+        "DisplayName": "万灵药",
+        "Level": 4,
+        "UnitWeight": 1000
+      },
+      "800052": {
+        "ItemId": "800052",
+        "DisplayName": "贝壳装饰",
+        "Level": 4,
+        "UnitWeight": 1000
+      },
+      "800051": {
+        "ItemId": "800051",
+        "DisplayName": "装有金币的破旧箱子",
+        "Level": 4,
+        "UnitWeight": 1000
+      },
+      "800049": {
+        "ItemId": "800049",
+        "DisplayName": "青绿盐块",
+        "Level": 4,
+        "UnitWeight": 1000
+      },
+      "800046": {
+        "ItemId": "800046",
+        "DisplayName": "紫水晶碎片",
+        "Level": 4,
+        "UnitWeight": 1000
+      },
+      "800045": {
+        "ItemId": "800045",
+        "DisplayName": "五彩线团",
+        "Level": 4,
+        "UnitWeight": 1000
+      },
+      "800228": {
+        "ItemId": "800228",
+        "DisplayName": "巴雷诺斯传统锚装饰",
+        "Level": 7,
+        "UnitWeight": 2000
+      },
+      "800247": {
+        "ItemId": "800247",
+        "DisplayName": "巴雷诺斯彩虹珊瑚",
+        "Level": 7,
+        "UnitWeight": 2000
+      },
+      "800244": {
+        "ItemId": "800244",
+        "DisplayName": "巴雷诺斯雪花盐",
+        "Level": 7,
+        "UnitWeight": 2000
+      },
+      "800230": {
+        "ItemId": "800230",
+        "DisplayName": "卡尔佩恩骑士团的战斗教本",
+        "Level": 7,
+        "UnitWeight": 2000
+      },
+      "800240": {
+        "ItemId": "800240",
+        "DisplayName": "艾达纳王位的纪录书",
+        "Level": 7,
+        "UnitWeight": 2000
+      },
+      "800233": {
+        "ItemId": "800233",
+        "DisplayName": "萨扇军需品箱子",
+        "Level": 7,
+        "UnitWeight": 2000
+      }
+    },
+    "Points": {
+      "Ajir": {
+        "X": 82489.4,
+        "Y": 331711,
+        "IsFinite": true
+      },
+      "Albresser": {
+        "X": -337319,
+        "Y": 165872,
+        "IsFinite": true
+      },
+      "Almai": {
+        "X": -398897,
+        "Y": 328306,
+        "IsFinite": true
+      },
+      "Al_Naha": {
+        "X": 42910,
+        "Y": 365158,
+        "IsFinite": true
+      },
+      "Ancient": {
+        "X": -660687,
+        "Y": 800424,
+        "IsFinite": true
+      },
+      "Angie": {
+        "X": -134064,
+        "Y": 230748,
+        "IsFinite": true
+      },
+      "Arakil": {
+        "X": 93295.4,
+        "Y": 221473,
+        "IsFinite": true
+      },
+      "Arehaza": {
+        "X": 1267170,
+        "Y": 177948,
+        "IsFinite": true
+      },
+      "Arita": {
+        "X": -224859,
+        "Y": 319478,
+        "IsFinite": true
+      },
+      "Baeza": {
+        "X": -445068,
+        "Y": 86059.6,
+        "IsFinite": true
+      },
+      "Balvege": {
+        "X": -99659.3,
+        "Y": 269228,
+        "IsFinite": true
+      },
+      "Barater": {
+        "X": -327700,
+        "Y": 143567,
+        "IsFinite": true
+      },
+      "Baremi": {
+        "X": 18570,
+        "Y": 289848,
+        "IsFinite": true
+      },
+      "Beiruwa": {
+        "X": 84194.3,
+        "Y": 170787,
+        "IsFinite": true
+      },
+      "Boa": {
+        "X": 415906,
+        "Y": 368609,
+        "IsFinite": true
+      },
+      "Haran": {
+        "X": -713074,
+        "Y": 954403,
+        "IsFinite": true
+      },
+      "Carrack": {
+        "X": -866279,
+        "Y": 1086770,
+        "IsFinite": true
+      },
+      "Cholace": {
+        "X": -850730,
+        "Y": 890994,
+        "IsFinite": true
+      },
+      "Cox_Pirate": {
+        "X": -747393,
+        "Y": 504292,
+        "IsFinite": true
+      },
+      "Crow": {
+        "X": -516857,
+        "Y": 862281,
+        "IsFinite": true
+      },
+      "Crows_Nest": {
+        "X": 262036,
+        "Y": 613392,
+        "IsFinite": true
+      },
+      "Dallae": {
+        "X": -993972,
+        "Y": 1342696,
+        "IsFinite": true
+      },
+      "Daton": {
+        "X": -429818,
+        "Y": 211687,
+        "IsFinite": true
+      },
+      "Delinghart": {
+        "X": 212122,
+        "Y": 200931,
+        "IsFinite": true
+      },
+      "Derko": {
+        "X": 830713,
+        "Y": 431559,
+        "IsFinite": true
+      },
+      "Duch": {
+        "X": -91255.5,
+        "Y": 204008,
+        "IsFinite": true
+      },
+      "Dunde": {
+        "X": -380165,
+        "Y": 175864,
+        "IsFinite": true
+      },
+      "Eberdeen": {
+        "X": -365516,
+        "Y": 182628,
+        "IsFinite": true
+      },
+      "Ephde_Rune": {
+        "X": 9147.63,
+        "Y": 166138,
+        "IsFinite": true
+      },
+      "Epheria": {
+        "X": -355616,
+        "Y": 32650,
+        "IsFinite": true
+      },
+      "Esfah": {
+        "X": 420309,
+        "Y": 233817,
+        "IsFinite": true
+      },
+      "Eveto": {
+        "X": -79348.4,
+        "Y": 228303,
+        "IsFinite": true
+      },
+      "Grandiha": {
+        "X": -559743,
+        "Y": -476904,
+        "IsFinite": true
+      },
+      "Ginburrey": {
+        "X": -456251,
+        "Y": 145955,
+        "IsFinite": true
+      },
+      "Haemo": {
+        "X": -1322062,
+        "Y": 1041781,
+        "IsFinite": true
+      },
+      "Hakoven": {
+        "X": 1238470,
+        "Y": 568950,
+        "IsFinite": true
+      },
+      "Halmad": {
+        "X": 553045,
+        "Y": 337673,
+        "IsFinite": true
+      },
+      "Iliya": {
+        "X": 155666,
+        "Y": 290833,
+        "IsFinite": true
+      },
+      "Unfinished": {
+        "X": -710250,
+        "Y": 1235670,
+        "IsFinite": true
+      },
+      "Invernen": {
+        "X": -111036,
+        "Y": 291644,
+        "IsFinite": true
+      },
+      "Kanvera": {
+        "X": 79638.9,
+        "Y": 245154,
+        "IsFinite": true
+      },
+      "Kashuma": {
+        "X": 573272,
+        "Y": 353727,
+        "IsFinite": true
+      },
+      "Kuit": {
+        "X": -348179,
+        "Y": 373507,
+        "IsFinite": true
+      },
+      "Lantinia": {
+        "X": -634678,
+        "Y": 1133150,
+        "IsFinite": true
+      },
+      "Lema": {
+        "X": -47615.7,
+        "Y": 414824,
+        "IsFinite": true
+      },
+      "Lerao": {
+        "X": 274177,
+        "Y": 543532,
+        "IsFinite": true
+      },
+      "Lisz": {
+        "X": -222335,
+        "Y": 274173,
+        "IsFinite": true
+      },
+      "Louruve": {
+        "X": -222752,
+        "Y": 234951,
+        "IsFinite": true
+      },
+      "Luivano": {
+        "X": -51480.9,
+        "Y": 189837,
+        "IsFinite": true
+      },
+      "Mariveno": {
+        "X": -28371.3,
+        "Y": 230997,
+        "IsFinite": true
+      },
+      "Marka": {
+        "X": -184386,
+        "Y": 241230,
+        "IsFinite": true
+      },
+      "Marlene": {
+        "X": -65382.6,
+        "Y": 273178,
+        "IsFinite": true
+      },
+      "Midnight": {
+        "X": -321664,
+        "Y": -598912,
+        "IsFinite": true
+      },
+      "Modric": {
+        "X": -462146,
+        "Y": 98759.2,
+        "IsFinite": true
+      },
+      "Narvo": {
+        "X": -176154,
+        "Y": 288222,
+        "IsFinite": true
+      },
+      "Netnume": {
+        "X": -417829,
+        "Y": 200920,
+        "IsFinite": true
+      },
+      "Oben": {
+        "X": -406830,
+        "Y": 213194,
+        "IsFinite": true
+      },
+      "Olvia": {
+        "X": -117326,
+        "Y": 186708,
+        "IsFinite": true
+      },
+      "Velia": {
+        "X": 7143,
+        "Y": 94116,
+        "IsFinite": true
+      },
+      "Orffs": {
+        "X": -61251.2,
+        "Y": 322911,
+        "IsFinite": true
+      },
+      "Orisha": {
+        "X": 430010,
+        "Y": 340800,
+        "IsFinite": true
+      },
+      "Ostra": {
+        "X": 145777,
+        "Y": 217465,
+        "IsFinite": true
+      },
+      "Padix": {
+        "X": -349081,
+        "Y": 347470,
+        "IsFinite": true
+      },
+      "Pakio": {
+        "X": -336963,
+        "Y": 1158840,
+        "IsFinite": true
+      },
+      "Paratama": {
+        "X": 37870.6,
+        "Y": 198626,
+        "IsFinite": true
+      },
+      "Pilava": {
+        "X": 248520,
+        "Y": 198926,
+        "IsFinite": true
+      },
+      "Portanen": {
+        "X": 287435,
+        "Y": 455084,
+        "IsFinite": true
+      },
+      "Pujara": {
+        "X": 254262,
+        "Y": 291255,
+        "IsFinite": true
+      },
+      "Racid": {
+        "X": 73863.2,
+        "Y": 416644,
+        "IsFinite": true
+      },
+      "Rameda": {
+        "X": -505698,
+        "Y": 154459,
+        "IsFinite": true
+      },
+      "Randis": {
+        "X": -390138,
+        "Y": 116541,
+        "IsFinite": true
+      },
+      "Rickun": {
+        "X": -816036,
+        "Y": 669629,
+        "IsFinite": true
+      },
+      "Riyed": {
+        "X": 383490,
+        "Y": 180907,
+        "IsFinite": true
+      },
+      "Rosevan": {
+        "X": 299933,
+        "Y": 409357,
+        "IsFinite": true
+      },
+      "Sanctuary": {
+        "X": 429740,
+        "Y": 475516,
+        "IsFinite": true
+      },
+      "Sausan": {
+        "X": 255291,
+        "Y": 142486,
+        "IsFinite": true
+      },
+      "Serca": {
+        "X": -381353,
+        "Y": 91954,
+        "IsFinite": true
+      },
+      "Shasha": {
+        "X": 254636,
+        "Y": 393934,
+        "IsFinite": true
+      },
+      "Shirna": {
+        "X": 449598,
+        "Y": 262469,
+        "IsFinite": true
+      },
+      "Sokota": {
+        "X": 336628,
+        "Y": 147292,
+        "IsFinite": true
+      },
+      "Staren": {
+        "X": -249942,
+        "Y": 197543,
+        "IsFinite": true
+      },
+      "Taramura": {
+        "X": 140409,
+        "Y": 189790,
+        "IsFinite": true
+      },
+      "Tashu": {
+        "X": -123642,
+        "Y": 440757,
+        "IsFinite": true
+      },
+      "Teste": {
+        "X": -426798,
+        "Y": 320396,
+        "IsFinite": true
+      },
+      "Teyamal": {
+        "X": -527216,
+        "Y": 78037.6,
+        "IsFinite": true
+      },
+      "Theonil": {
+        "X": -490565,
+        "Y": 98492,
+        "IsFinite": true
+      },
+      "Tigris": {
+        "X": 406466,
+        "Y": 258086,
+        "IsFinite": true
+      },
+      "Tinberra": {
+        "X": 231604,
+        "Y": 528006,
+        "IsFinite": true
+      },
+      "Tulu": {
+        "X": -90667.9,
+        "Y": 326926,
+        "IsFinite": true
+      },
+      "Wandering": {
+        "X": -543126,
+        "Y": 1030920,
+        "IsFinite": true
+      },
+      "Weita": {
+        "X": 37806.3,
+        "Y": 252302,
+        "IsFinite": true
+      },
+      "Marine": {
+        "X": -941523,
+        "Y": 555876,
+        "IsFinite": true
+      },
+      "Nampo": {
+        "X": -1297330,
+        "Y": 1127450,
+        "IsFinite": true
+      },
+      "Byukgye": {
+        "X": -1213770,
+        "Y": 1053360,
+        "IsFinite": true
+      },
+      "Cheongsa": {
+        "X": -876607.5,
+        "Y": 1332851.875,
+        "IsFinite": true
+      },
+      "Ancado": {
+        "X": 978133,
+        "Y": 343900,
+        "IsFinite": true
+      },
+      "Oquilla": {
+        "X": -105511,
+        "Y": 628806,
+        "IsFinite": true
+      },
+      "Outpost": {
+        "X": -453240,
+        "Y": 34677.2,
+        "IsFinite": true
+      }
+    },
+    "Warehouses": {
+      "Velia": {
+        "800224": 5,
+        "800220": 5,
+        "800216": 5,
+        "800212": 5,
+        "800208": 5,
+        "800204": 5,
+        "800068": 0,
+        "800067": 0,
+        "800066": 0,
+        "800063": 0,
+        "800062": 0,
+        "800060": 0,
+        "800059": 0,
+        "800054": 0,
+        "800053": 0,
+        "800052": 0,
+        "800051": 0,
+        "800049": 0,
+        "800046": 0,
+        "800045": 0
+      },
+      "Iliya": {
+        "800224": 0,
+        "800220": 0,
+        "800216": 0,
+        "800212": 0,
+        "800208": 0,
+        "800204": 0,
+        "800068": 7,
+        "800067": 7,
+        "800066": 7,
+        "800063": 6,
+        "800062": 7,
+        "800060": 7,
+        "800059": 7,
+        "800054": 42,
+        "800053": 52,
+        "800052": 47,
+        "800051": 57,
+        "800049": 56,
+        "800046": 56,
+        "800045": 74
+      },
+      "Epheria": {
+        "800224": 0,
+        "800220": 0,
+        "800216": 0,
+        "800212": 0,
+        "800208": 0,
+        "800204": 0,
+        "800068": 0,
+        "800067": 0,
+        "800066": 0,
+        "800063": 0,
+        "800062": 0,
+        "800060": 0,
+        "800059": 0,
+        "800054": 0,
+        "800053": 0,
+        "800052": 0,
+        "800051": 0,
+        "800049": 0,
+        "800046": 0,
+        "800045": 0
+      },
+      "Ancado": {
+        "800224": 0,
+        "800220": 0,
+        "800216": 0,
+        "800212": 0,
+        "800208": 0,
+        "800204": 0,
+        "800068": 0,
+        "800067": 0,
+        "800066": 0,
+        "800063": 0,
+        "800062": 0,
+        "800060": 0,
+        "800059": 0,
+        "800054": 0,
+        "800053": 0,
+        "800052": 0,
+        "800051": 0,
+        "800049": 0,
+        "800046": 0,
+        "800045": 0
+      }
+    },
+    "Trades": [
+      {
+        "RowId": "br-12d7798ff5cb4595bbd8f1f8a155edc8",
+        "IslandId": "Olvia",
+        "InputId": "800212",
+        "InputPerExchange": 1,
+        "OutputId": "800228",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-e849eaa2f6ae4ab0bfd3417b47b54e42",
+        "IslandId": "Arehaza",
+        "InputId": "800059",
+        "InputPerExchange": 1,
+        "OutputId": "800208",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-4595a773a6914be19ed4372d3100736b",
+        "IslandId": "Lema",
+        "InputId": "800220",
+        "InputPerExchange": 1,
+        "OutputId": "800247",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-2b4328f9a73249a381dd67f899d07656",
+        "IslandId": "Iliya",
+        "InputId": "800224",
+        "InputPerExchange": 1,
+        "OutputId": "800244",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-d7e3a19298504746b63a8da53d0435b2",
+        "IslandId": "Epheria",
+        "InputId": "800216",
+        "InputPerExchange": 1,
+        "OutputId": "800230",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-766b61d5783646d39941eaf94882ff50",
+        "IslandId": "Grandiha",
+        "InputId": "800066",
+        "InputPerExchange": 1,
+        "OutputId": "800212",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-2fbd64d983e24472a36bee2c8a5f73c0",
+        "IslandId": "Orffs",
+        "InputId": "800052",
+        "InputPerExchange": 1,
+        "OutputId": "800066",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-00f9e22c5db549299be03d88f1a4c2fb",
+        "IslandId": "Baremi",
+        "InputId": "800046",
+        "InputPerExchange": 1,
+        "OutputId": "800060",
+        "OutputPerExchange": 1,
+        "Exchanges": 6
+      },
+      {
+        "RowId": "br-cf7613877b3349679eb82a192bd11207",
+        "IslandId": "Ajir",
+        "InputId": "800054",
+        "InputPerExchange": 1,
+        "OutputId": "800063",
+        "OutputPerExchange": 1,
+        "Exchanges": 6
+      },
+      {
+        "RowId": "br-dfcae206dd5d4da4b15acbb3ad7be09c",
+        "IslandId": "Pujara",
+        "InputId": "800053",
+        "InputPerExchange": 1,
+        "OutputId": "800062",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-18484e116ba24ea3a577d04126af0f05",
+        "IslandId": "Narvo",
+        "InputId": "800051",
+        "InputPerExchange": 1,
+        "OutputId": "800059",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-9af710eb32f742bb8205efe576e64235",
+        "IslandId": "Sanctuary",
+        "InputId": "800208",
+        "InputPerExchange": 1,
+        "OutputId": "800240",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-14939b850ba04358b5fdcc33670c33d2",
+        "IslandId": "Rameda",
+        "InputId": "800045",
+        "InputPerExchange": 1,
+        "OutputId": "800068",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-4f1782f2632e472894c6e644f987c859",
+        "IslandId": "Sausan",
+        "InputId": "800204",
+        "InputPerExchange": 1,
+        "OutputId": "800233",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-91d75880f8bf4c858882fcb748be60d1",
+        "IslandId": "Hakoven",
+        "InputId": "800068",
+        "InputPerExchange": 1,
+        "OutputId": "800204",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-bda90b0537f64db7a3d889ec792a3377",
+        "IslandId": "Padix",
+        "InputId": "800049",
+        "InputPerExchange": 1,
+        "OutputId": "800067",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-c14777dedd5d4c3aa512f9c52c6b0009",
+        "IslandId": "Midnight",
+        "InputId": "800063",
+        "InputPerExchange": 1,
+        "OutputId": "800216",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-15e680fb620440c287b4ab8394782563",
+        "IslandId": "Haemo",
+        "InputId": "800062",
+        "InputPerExchange": 1,
+        "OutputId": "800220",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      },
+      {
+        "RowId": "br-5f0c087cdabe4c19a10445f4a17a36c7",
+        "IslandId": "Dallae",
+        "InputId": "800067",
+        "InputPerExchange": 1,
+        "OutputId": "800224",
+        "OutputPerExchange": 1,
+        "Exchanges": 5
+      }
+    ],
+    "ShipLimitLT": 26410,
+    "ShipOccupiedLT": 2411
+  },
+  "Plan": {
+    "Fingerprint": "866D90DABE2FB2027FEDFD3A49FB4C64F56F630DCFA4ECBC876D384ECD4FAE15",
+    "Steps": [
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800053",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 5,
+        "ShipLT": 7411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800068",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 10,
+        "ShipLT": 12411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800059",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 15,
+        "ShipLT": 17411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Pujara",
+          "From": "Iliya",
+          "To": "Pujara",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 82.1640859128177,
+        "TotalSeconds": 97.1640859128177,
+        "ShipLT": 17411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Pujara",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 9
+        },
+        "Seconds": 3,
+        "TotalSeconds": 100.1640859128177,
+        "ShipLT": 17411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Hakoven",
+          "From": "Pujara",
+          "To": "Hakoven",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 1113.2679853230745,
+        "TotalSeconds": 1213.4320712358922,
+        "ShipLT": 17411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Hakoven",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 14
+        },
+        "Seconds": 3,
+        "TotalSeconds": 1216.4320712358922,
+        "ShipLT": 22411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Arehaza",
+          "From": "Hakoven",
+          "To": "Arehaza",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 353.8052157367006,
+        "TotalSeconds": 1570.2372869725928,
+        "ShipLT": 22411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Arehaza",
+          "From": "ship",
+          "To": "main",
+          "ItemId": "800062",
+          "Quantity": 2,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 1575.2372869725928,
+        "ShipLT": 20411,
+        "MainLT": 2800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Arehaza",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 1
+        },
+        "Seconds": 3,
+        "TotalSeconds": 1578.2372869725928,
+        "ShipLT": 25411,
+        "MainLT": 2800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Sanctuary",
+          "From": "Arehaza",
+          "To": "Sanctuary",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 1212.31994748129,
+        "TotalSeconds": 2790.5572344538828,
+        "ShipLT": 25411,
+        "MainLT": 2800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Sanctuary",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 11
+        },
+        "Seconds": 3,
+        "TotalSeconds": 2793.5572344538828,
+        "ShipLT": 25411,
+        "MainLT": 2800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Sausan",
+          "From": "Sanctuary",
+          "To": "Sausan",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 328.29502702568993,
+        "TotalSeconds": 3121.852261479573,
+        "ShipLT": 25411,
+        "MainLT": 2800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Sausan",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 13
+        },
+        "Seconds": 3,
+        "TotalSeconds": 3124.852261479573,
+        "ShipLT": 25411,
+        "MainLT": 2800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Iliya",
+          "From": "Sausan",
+          "To": "Iliya",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 163.91266324128082,
+        "TotalSeconds": 3288.7649247208537,
+        "ShipLT": 25411,
+        "MainLT": 2800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "ship",
+          "To": "warehouse:Iliya",
+          "ItemId": "800062",
+          "Quantity": 3,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 3293.7649247208537,
+        "ShipLT": 22411,
+        "MainLT": 2800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "ship",
+          "To": "warehouse:Iliya",
+          "ItemId": "800233",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 3298.7649247208537,
+        "ShipLT": 12411,
+        "MainLT": 2800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "ship",
+          "To": "warehouse:Iliya",
+          "ItemId": "800240",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 3303.7649247208537,
+        "ShipLT": 2411,
+        "MainLT": 2800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "main",
+          "To": "warehouse:Iliya",
+          "ItemId": "800062",
+          "Quantity": 2,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 3308.7649247208537,
+        "ShipLT": 2411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800063",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 3313.7649247208537,
+        "ShipLT": 7411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800066",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 3318.7649247208537,
+        "ShipLT": 12411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800045",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 3323.7649247208537,
+        "ShipLT": 17411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800054",
+          "Quantity": 6,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 3328.7649247208537,
+        "ShipLT": 23411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Midnight",
+          "From": "Iliya",
+          "To": "Midnight",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 856.4150176294461,
+        "TotalSeconds": 4185.1799423503,
+        "ShipLT": 23411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Midnight",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 16
+        },
+        "Seconds": 3,
+        "TotalSeconds": 4188.1799423503,
+        "ShipLT": 28411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Grandiha",
+          "From": "Midnight",
+          "To": "Grandiha",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 1122.5805469379877,
+        "TotalSeconds": 5310.760489288287,
+        "ShipLT": 28411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Grandiha",
+          "From": "ship",
+          "To": "main",
+          "ItemId": "800216",
+          "Quantity": 1,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 5315.760489288287,
+        "ShipLT": 26411,
+        "MainLT": 2800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Grandiha",
+          "From": "ship",
+          "To": "main",
+          "ItemId": "800216",
+          "Quantity": 1,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 5320.760489288287,
+        "ShipLT": 24411,
+        "MainLT": 4800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Grandiha",
+          "From": "ship",
+          "To": "main",
+          "ItemId": "800216",
+          "Quantity": 1,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 5325.760489288287,
+        "ShipLT": 22411,
+        "MainLT": 6800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Grandiha",
+          "From": "main",
+          "To": "alt",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 5340.760489288287,
+        "ShipLT": 22411,
+        "MainLT": 6800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Grandiha",
+          "From": "ship",
+          "To": "alt",
+          "ItemId": "800216",
+          "Quantity": 1,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 5345.760489288287,
+        "ShipLT": 20411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Grandiha",
+          "From": "alt",
+          "To": "main",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 5360.760489288287,
+        "ShipLT": 20411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Grandiha",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 5
+        },
+        "Seconds": 3,
+        "TotalSeconds": 5363.760489288287,
+        "ShipLT": 25411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Rameda",
+          "From": "Grandiha",
+          "To": "Rameda",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 528.0599317535947,
+        "TotalSeconds": 5891.820421041882,
+        "ShipLT": 25411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Rameda",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 12
+        },
+        "Seconds": 3,
+        "TotalSeconds": 5894.820421041882,
+        "ShipLT": 25411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Epheria",
+          "From": "Rameda",
+          "To": "Epheria",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 176.07718820189214,
+        "TotalSeconds": 6070.897609243774,
+        "ShipLT": 25411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Epheria",
+          "From": "main",
+          "To": "alt",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 6085.897609243774,
+        "ShipLT": 25411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Epheria",
+          "From": "ship",
+          "To": "alt",
+          "ItemId": "800068",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6090.897609243774,
+        "ShipLT": 20411,
+        "MainLT": 6800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Epheria",
+          "From": "alt",
+          "To": "main",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 6105.897609243774,
+        "ShipLT": 20411,
+        "MainLT": 6800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Epheria",
+          "From": "main",
+          "To": "ship",
+          "ItemId": "800216",
+          "Quantity": 2,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6110.897609243774,
+        "ShipLT": 24411,
+        "MainLT": 2800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Epheria",
+          "From": "ship",
+          "To": "main",
+          "ItemId": "800212",
+          "Quantity": 1,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6115.897609243774,
+        "ShipLT": 22411,
+        "MainLT": 4800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Epheria",
+          "From": "main",
+          "To": "ship",
+          "ItemId": "800216",
+          "Quantity": 1,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6120.897609243774,
+        "ShipLT": 24411,
+        "MainLT": 2800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Epheria",
+          "From": "ship",
+          "To": "main",
+          "ItemId": "800212",
+          "Quantity": 1,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6125.897609243774,
+        "ShipLT": 22411,
+        "MainLT": 4800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Epheria",
+          "From": "main",
+          "To": "alt",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 6140.897609243774,
+        "ShipLT": 22411,
+        "MainLT": 4800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Epheria",
+          "From": "alt",
+          "To": "ship",
+          "ItemId": "800216",
+          "Quantity": 1,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6145.897609243774,
+        "ShipLT": 24411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Epheria",
+          "From": "alt",
+          "To": "main",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 6160.897609243774,
+        "ShipLT": 24411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Epheria",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 4
+        },
+        "Seconds": 3,
+        "TotalSeconds": 6163.897609243774,
+        "ShipLT": 24411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Epheria",
+          "From": "ship",
+          "To": "main",
+          "ItemId": "800230",
+          "Quantity": 1,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6168.897609243774,
+        "ShipLT": 22411,
+        "MainLT": 6800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Epheria",
+          "From": "main",
+          "To": "ship",
+          "ItemId": "800212",
+          "Quantity": 1,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6173.897609243774,
+        "ShipLT": 24411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Epheria",
+          "From": "ship",
+          "To": "main",
+          "ItemId": "800230",
+          "Quantity": 1,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6178.897609243774,
+        "ShipLT": 22411,
+        "MainLT": 6800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Epheria",
+          "From": "main",
+          "To": "ship",
+          "ItemId": "800212",
+          "Quantity": 1,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6183.897609243774,
+        "ShipLT": 24411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Olvia",
+          "From": "Epheria",
+          "To": "Olvia",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 236.46116586262346,
+        "TotalSeconds": 6420.358775106398,
+        "ShipLT": 24411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Olvia",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 0
+        },
+        "Seconds": 3,
+        "TotalSeconds": 6423.358775106398,
+        "ShipLT": 24411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Ajir",
+          "From": "Olvia",
+          "To": "Ajir",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 205.73726517589262,
+        "TotalSeconds": 6629.09604028229,
+        "ShipLT": 24411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Ajir",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 6,
+          "TradeIndex": 8
+        },
+        "Seconds": 3,
+        "TotalSeconds": 6632.09604028229,
+        "ShipLT": 24411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Iliya",
+          "From": "Ajir",
+          "To": "Iliya",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 84.85016539171544,
+        "TotalSeconds": 6716.946205674006,
+        "ShipLT": 24411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "ship",
+          "To": "warehouse:Iliya",
+          "ItemId": "800230",
+          "Quantity": 3,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6721.946205674006,
+        "ShipLT": 18411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "ship",
+          "To": "warehouse:Iliya",
+          "ItemId": "800228",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6726.946205674006,
+        "ShipLT": 8411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "ship",
+          "To": "warehouse:Iliya",
+          "ItemId": "800063",
+          "Quantity": 6,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6731.946205674006,
+        "ShipLT": 2411,
+        "MainLT": 4800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "main",
+          "To": "warehouse:Iliya",
+          "ItemId": "800230",
+          "Quantity": 2,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6736.946205674006,
+        "ShipLT": 2411,
+        "MainLT": 800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Iliya",
+          "From": "main",
+          "To": "alt",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 6751.946205674006,
+        "ShipLT": 2411,
+        "MainLT": 800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "alt",
+          "To": "warehouse:Iliya",
+          "ItemId": "800068",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6756.946205674006,
+        "ShipLT": 2411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Iliya",
+          "From": "alt",
+          "To": "main",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 6771.946205674006,
+        "ShipLT": 2411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800062",
+          "Quantity": 3,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6776.946205674006,
+        "ShipLT": 5411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "ship",
+          "To": "main",
+          "ItemId": "800062",
+          "Quantity": 3,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6781.946205674006,
+        "ShipLT": 2411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800046",
+          "Quantity": 6,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6786.946205674006,
+        "ShipLT": 8411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800052",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6791.946205674006,
+        "ShipLT": 13411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800051",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6796.946205674006,
+        "ShipLT": 18411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800049",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6801.946205674006,
+        "ShipLT": 23411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "warehouse:Iliya",
+          "To": "ship",
+          "ItemId": "800062",
+          "Quantity": 2,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 6806.946205674006,
+        "ShipLT": 25411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Baremi",
+          "From": "Iliya",
+          "To": "Baremi",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 114.24961536830466,
+        "TotalSeconds": 6921.195821042311,
+        "ShipLT": 25411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Baremi",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 6,
+          "TradeIndex": 7
+        },
+        "Seconds": 3,
+        "TotalSeconds": 6924.195821042311,
+        "ShipLT": 25411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Orffs",
+          "From": "Baremi",
+          "To": "Orffs",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 71.99819605398304,
+        "TotalSeconds": 6996.1940170962935,
+        "ShipLT": 25411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Orffs",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 6
+        },
+        "Seconds": 3,
+        "TotalSeconds": 6999.1940170962935,
+        "ShipLT": 25411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Narvo",
+          "From": "Orffs",
+          "To": "Narvo",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 100.02076231976928,
+        "TotalSeconds": 7099.214779416063,
+        "ShipLT": 25411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Narvo",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 10
+        },
+        "Seconds": 3,
+        "TotalSeconds": 7102.214779416063,
+        "ShipLT": 25411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Padix",
+          "From": "Narvo",
+          "To": "Padix",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 152.32930527360415,
+        "TotalSeconds": 7254.544084689667,
+        "ShipLT": 25411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Padix",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 15
+        },
+        "Seconds": 3,
+        "TotalSeconds": 7257.544084689667,
+        "ShipLT": 25411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Haemo",
+          "From": "Padix",
+          "To": "Haemo",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 1011.0895036905569,
+        "TotalSeconds": 8268.633588380224,
+        "ShipLT": 25411,
+        "MainLT": 3800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Haemo",
+          "From": "ship",
+          "To": "main",
+          "ItemId": "800060",
+          "Quantity": 6,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 8273.633588380224,
+        "ShipLT": 19411,
+        "MainLT": 9800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Haemo",
+          "From": "main",
+          "To": "ship",
+          "ItemId": "800062",
+          "Quantity": 3,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 8278.633588380224,
+        "ShipLT": 22411,
+        "MainLT": 6800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Haemo",
+          "From": "main",
+          "To": "alt",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 8293.633588380224,
+        "ShipLT": 22411,
+        "MainLT": 6800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Haemo",
+          "From": "ship",
+          "To": "alt",
+          "ItemId": "800066",
+          "Quantity": 2,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 8298.633588380224,
+        "ShipLT": 20411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Haemo",
+          "From": "alt",
+          "To": "main",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 8313.633588380224,
+        "ShipLT": 20411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Haemo",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 17
+        },
+        "Seconds": 3,
+        "TotalSeconds": 8316.633588380224,
+        "ShipLT": 25411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Dallae",
+          "From": "Haemo",
+          "To": "Dallae",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 385.99049602700217,
+        "TotalSeconds": 8702.624084407225,
+        "ShipLT": 25411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Dallae",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 18
+        },
+        "Seconds": 3,
+        "TotalSeconds": 8705.624084407225,
+        "ShipLT": 30411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Lema",
+          "From": "Dallae",
+          "To": "Lema",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 4432.813303904106,
+        "TotalSeconds": 13138.437388311331,
+        "ShipLT": 30411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Lema",
+          "From": "main",
+          "To": "alt",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 13153.437388311331,
+        "ShipLT": 30411,
+        "MainLT": 6800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Lema",
+          "From": "ship",
+          "To": "alt",
+          "ItemId": "800066",
+          "Quantity": 3,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 13158.437388311331,
+        "ShipLT": 27411,
+        "MainLT": 6800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Lema",
+          "From": "alt",
+          "To": "main",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 13173.437388311331,
+        "ShipLT": 27411,
+        "MainLT": 6800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Lema",
+          "From": "main",
+          "To": "alt",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 13188.437388311331,
+        "ShipLT": 27411,
+        "MainLT": 6800,
+        "AltLT": 5120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Lema",
+          "From": "ship",
+          "To": "alt",
+          "ItemId": "800059",
+          "Quantity": 2,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 13193.437388311331,
+        "ShipLT": 25411,
+        "MainLT": 6800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Lema",
+          "From": "alt",
+          "To": "main",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 13208.437388311331,
+        "ShipLT": 25411,
+        "MainLT": 6800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Lema",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 2
+        },
+        "Seconds": 3,
+        "TotalSeconds": 13211.437388311331,
+        "ShipLT": 25411,
+        "MainLT": 6800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 0,
+          "Location": "Iliya",
+          "From": "Lema",
+          "To": "Iliya",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 213.42647959055614,
+        "TotalSeconds": 13424.863867901888,
+        "ShipLT": 25411,
+        "MainLT": 6800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 3,
+          "Location": "Iliya",
+          "From": "",
+          "To": "",
+          "ItemId": "",
+          "Quantity": 5,
+          "TradeIndex": 3
+        },
+        "Seconds": 3,
+        "TotalSeconds": 13427.863867901888,
+        "ShipLT": 25411,
+        "MainLT": 6800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "ship",
+          "To": "warehouse:Iliya",
+          "ItemId": "800059",
+          "Quantity": 3,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 13432.863867901888,
+        "ShipLT": 22411,
+        "MainLT": 6800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "ship",
+          "To": "warehouse:Iliya",
+          "ItemId": "800244",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 13437.863867901888,
+        "ShipLT": 12411,
+        "MainLT": 6800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "ship",
+          "To": "warehouse:Iliya",
+          "ItemId": "800247",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 13442.863867901888,
+        "ShipLT": 2411,
+        "MainLT": 6800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "main",
+          "To": "warehouse:Iliya",
+          "ItemId": "800060",
+          "Quantity": 6,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 13447.863867901888,
+        "ShipLT": 2411,
+        "MainLT": 800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Iliya",
+          "From": "main",
+          "To": "alt",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 13462.863867901888,
+        "ShipLT": 2411,
+        "MainLT": 800,
+        "AltLT": 7120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "alt",
+          "To": "warehouse:Iliya",
+          "ItemId": "800066",
+          "Quantity": 5,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 13467.863867901888,
+        "ShipLT": 2411,
+        "MainLT": 800,
+        "AltLT": 2120
+      },
+      {
+        "Action": {
+          "Kind": 2,
+          "Location": "Iliya",
+          "From": "alt",
+          "To": "warehouse:Iliya",
+          "ItemId": "800059",
+          "Quantity": 2,
+          "TradeIndex": -1
+        },
+        "Seconds": 5,
+        "TotalSeconds": 13472.863867901888,
+        "ShipLT": 2411,
+        "MainLT": 800,
+        "AltLT": 120
+      },
+      {
+        "Action": {
+          "Kind": 1,
+          "Location": "Iliya",
+          "From": "alt",
+          "To": "main",
+          "ItemId": "",
+          "Quantity": 0,
+          "TradeIndex": -1
+        },
+        "Seconds": 15,
+        "TotalSeconds": 13487.863867901888,
+        "ShipLT": 2411,
+        "MainLT": 800,
+        "AltLT": 120
+      }
+    ],
+    "TotalSeconds": 13487.863867901888,
+    "SailingSeconds": 12945.863867901888,
+    "HandlingSeconds": 542,
+    "Distance": 103641.82175724379,
+    "Status": "BestKnownWithinLimit",
+    "ShipOnlySeconds": null,
+    "ShipOnlyRouteCount": null,
+    "ShipOnlyDistance": null
+  },
+  "CompletedSteps": 0,
+  "SettlementBaseline": null,
+  "Settled": false,
+  "MapPlanCompleted": false,
+  "WorkspaceInputs": null
+}

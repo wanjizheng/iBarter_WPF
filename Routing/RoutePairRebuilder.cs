@@ -10,9 +10,8 @@ using System.Numerics;
 /// moves back out, even when merging every task into one trip would be overweight.
 /// </summary>
 public static class RoutePairRebuilder {
-    // Original 3-arg entry: unchanged from baseline so existing tests see the
-    // exact same behavior. Budget-aware overload added below for the shared
-    // RouteSearchBudget path.
+    // Legacy entry retains its local-move cap; both paths use the same legal
+    // rebuild strategies and fully verify candidates before replacing a plan.
     public static RouteSimulationState Improve(
         AutomaticRoutePlanningRequest request,
         RouteSimulationState initial,
@@ -33,7 +32,7 @@ public static class RoutePairRebuilder {
                 for (int right = left + 1; right < routes.Length && attempted < request.Limits.MaxLocalMoves; right++) {
                     attempted++;
                     cancellationToken.ThrowIfCancellationRequested();
-                    var candidate = TryRebuild(request, routes, left, right);
+                    var candidate = TryRebuild(request, routes, left, right, () => cancellationToken.IsCancellationRequested);
                     if (candidate is null) continue;
                     var plan = RoutePlanFactory.FromState(
                         request, candidate, RoutePlanStatus.BestKnownWithinLimit, []);
@@ -74,7 +73,7 @@ public static class RoutePairRebuilder {
                     if (budget.TargetTimeExpired) { budgetExhausted = true; break; }
                     if (!budget.TryConsumeLocalEvaluation()) { budgetExhausted = true; break; }
                     cancellationToken.ThrowIfCancellationRequested();
-                    var candidate = TryRebuild(request, routes, left, right);
+                    var candidate = TryRebuild(request, routes, left, right, () => cancellationToken.IsCancellationRequested || budget.TargetTimeExpired);
                     if (candidate is null) continue;
                     var plan = RoutePlanFactory.FromState(
                         request, candidate, RoutePlanStatus.BestKnownWithinLimit, []);
@@ -100,20 +99,21 @@ public static class RoutePairRebuilder {
         AutomaticRoutePlanningRequest request,
         IReadOnlyList<PlannedRoute> routes,
         int left,
-        int right) {
-        RouteSimulationState? normal = TryRebuild(
-            request, routes, left, right, preferWarehouseBoundaryRelease: false);
-        RouteSimulationState? boundaryFirst = TryRebuild(
-            request, routes, left, right, preferWarehouseBoundaryRelease: true);
-        if (normal is null) return boundaryFirst;
-        if (boundaryFirst is null) return normal;
-        RoutePlanObjective normalObjective = RoutePlanFactory.FromState(
-            request, normal, RoutePlanStatus.BestKnownWithinLimit, []).Objective!.Value;
-        RoutePlanObjective boundaryObjective = RoutePlanFactory.FromState(
-            request, boundaryFirst, RoutePlanStatus.BestKnownWithinLimit, []).Objective!.Value;
-        return boundaryObjective.CompareTo(normalObjective) < 0
-            ? boundaryFirst
-            : normal;
+        int right, Func<bool> stopped) {
+        RouteSimulationState? best = null;
+        RoutePlanObjective? bestObjective = null;
+        // Retain both capacity-release strategies, and also try distance-first
+        // execution. A fixed weight-delta ordering can miss a shorter repartition.
+        foreach (bool distanceFirst in new[] { false, true })
+            foreach (bool boundaryFirst in new[] { false, true }) {
+                if (stopped()) return best;
+                var candidate = TryRebuild(request, routes, left, right, boundaryFirst, distanceFirst, stopped);
+                if (candidate is null) continue;
+                var objective = RoutePlanFactory.FromState(request, candidate, RoutePlanStatus.BestKnownWithinLimit, []).Objective!.Value;
+                if (bestObjective is not null && objective.CompareTo(bestObjective.Value) >= 0) continue;
+                best = candidate; bestObjective = objective;
+            }
+        return best;
     }
 
     private static RouteSimulationState? TryRebuild(
@@ -121,7 +121,7 @@ public static class RoutePairRebuilder {
         IReadOnlyList<PlannedRoute> routes,
         int left,
         int right,
-        bool preferWarehouseBoundaryRelease) {
+        bool preferWarehouseBoundaryRelease, bool distanceFirst, Func<bool> stopped) {
         var pooledIndexes = routes[left].Steps.OfType<BarterStep>()
             .Concat(routes[right].Steps.OfType<BarterStep>())
             .Select(x => FindTaskIndex(request, x.RowId))
@@ -130,12 +130,13 @@ public static class RoutePairRebuilder {
 
         var state = RouteSimulationState.CreateInitial(request);
         for (int routeIndex = 0; routeIndex < routes.Count; routeIndex++) {
+            if (stopped()) return null;
             if (routeIndex == left) {
                 var rebuilt = BuildPooledRoutes(
                     request,
                     state,
                     pooledIndexes,
-                    preferWarehouseBoundaryRelease);
+                    preferWarehouseBoundaryRelease, distanceFirst, stopped);
                 if (rebuilt is null) return null;
                 state = rebuilt;
                 continue;
@@ -152,19 +153,21 @@ public static class RoutePairRebuilder {
         AutomaticRoutePlanningRequest request,
         RouteSimulationState start,
         IReadOnlyList<int> taskIndexes,
-        bool preferWarehouseBoundaryRelease) {
+        bool preferWarehouseBoundaryRelease, bool distanceFirst, Func<bool> stopped) {
         ulong poolMask = taskIndexes.Aggregate(0UL, (mask, index) => mask | 1UL << index);
         var state = start;
         int guard = Math.Max(100, taskIndexes.Count * request.Warehouses.Count * 40);
 
         while ((state.CompletedMask & poolMask) != poolMask && guard-- > 0) {
+            if (stopped()) return null;
             ulong remaining = poolMask & ~state.CompletedMask;
             var executable = taskIndexes
                 .Where(index => (remaining & (1UL << index)) != 0)
                 .Select(index => (Index: index, Result: RouteStateTransition.TryBarter(request, state, index)))
                 .Where(x => x.Result.Success)
-                .OrderBy(x => WeightDelta(request, request.Tasks[x.Index]))
+                .OrderBy(x => distanceFirst ? x.Result.State.TotalDistance - state.TotalDistance : WeightDelta(request, request.Tasks[x.Index]))
                 .ThenBy(x => x.Result.State.TotalDistance - state.TotalDistance)
+                .ThenBy(x => WeightDelta(request, request.Tasks[x.Index]))
                 .ThenBy(x => request.Tasks[x.Index].RowId, StringComparer.Ordinal)
                 .FirstOrDefault();
             if (executable.Result is not null) {

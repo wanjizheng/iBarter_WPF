@@ -1,4 +1,4 @@
-﻿using Syncfusion.Windows.Controls.PivotGrid;
+using Syncfusion.Windows.Controls.PivotGrid;
 using Syncfusion.UI.Xaml.Grid;
 using System.ComponentModel;
 using System.Windows;
@@ -703,7 +703,7 @@ namespace iBarter.View {
             }
 
             var coordinator = App.myRouteCoordinator;
-            if (coordinator?.Mode == CargoMode.AutomaticRoute
+            if (coordinator?.HasAutomaticDisplay == true
                 && !coordinator.ShowRouteGuides)
                 return;
             IReadOnlyList<Barter> manualCargo = coordinator?.Mode == CargoMode.Manual
@@ -747,7 +747,7 @@ namespace iBarter.View {
                 if (island is null) {
                     string fingerprint = snapshot.IsManual
                         ? "manual"
-                        : App.myRouteCoordinator?.CurrentPlan?.InputFingerprint ?? "automatic";
+                        : App.myRouteCoordinator?.DisplayPlan?.InputFingerprint ?? "automatic";
                     string key = fingerprint + "|" + islandId;
                     if (routeResolutionDiagnostics.Add(key))
                         App.myCFun.Log(LanguageService.Instance.Localize(
@@ -767,9 +767,9 @@ namespace iBarter.View {
             Dictionary<string, int> markerOccurrences) {
             var coordinator = App.myRouteCoordinator;
             bool routeSelected = coordinator is null
-                || coordinator.Mode != CargoMode.AutomaticRoute
-                || coordinator.ShowAllRoutes
-                || (!coordinator.ShowAllRoutes && coordinator.SelectedRouteNumber == routeNumber);
+                || !coordinator.HasAutomaticDisplay
+                || coordinator.DisplayShowAllRoutes
+                || (!coordinator.DisplayShowAllRoutes && coordinator.DisplaySelectedRouteNumber == routeNumber);
             for (int step = 0; step < route.Count; step++) {
                 var island = route[step];
                 if (!TryGetIslandCenter(island, out Grid? host, out Point center)
@@ -861,7 +861,7 @@ namespace iBarter.View {
                     host.Children.Add(highlight);
                 }
 
-                if (App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute) {
+                if (App.myRouteCoordinator?.HasAutomaticDisplay == true) {
                     double length = Math.Sqrt(dx * dx + dy * dy);
                     double endpointInset = Math.Min(14, Math.Max(0, length / 2 - 2));
                     double unitX = length > 0 ? dx / length : 0;
@@ -1376,9 +1376,9 @@ namespace iBarter.View {
             // The fix is to skip Planner-barter nodes while in
             // AutomaticRoute mode (EnsureAutomaticWarehouseNodes handles
             // the route nodes, including the unload label).
-            bool suppressPlannerBarters = App.myRouteCoordinator?.Mode == CargoMode.AutomaticRoute
-                && App.myRouteCoordinator.CurrentPlan is not null
-                && App.myRouteCoordinator.CurrentPlan.Routes.Count > 0;
+            bool suppressPlannerBarters = App.myRouteCoordinator?.HasAutomaticDisplay == true
+                && (App.myRouteCoordinator.IsDisplayCleared
+                    || App.myRouteCoordinator.DisplayPlan is { Routes.Count: > 0 });
             if (!suppressPlannerBarters) {
                 foreach (Barter myBarter in App.myPVM.BarterCollection.Where(b =>
                     b.ExchangeDone == false && b.ExchangeQuantity > 0 &&
@@ -1388,6 +1388,7 @@ namespace iBarter.View {
             }
             EnsureAutomaticWarehouseNodes();
             EnsureRouteIslandLabels();
+            ReconcileAndPositionAutomaticBarterPins();
             // Audit round 6: explicit reposition at the end of every
             // IslandsButtonInitialisation. The reconcile pass above
             // already calls RepositionRouteStepLabels on the Empty
@@ -1470,8 +1471,8 @@ namespace iBarter.View {
             // round keys each label on (RouteNumber, StepIndex) so
             // every real route step gets its own label.
             var coordinator = App.myRouteCoordinator;
-            if (coordinator?.Mode != CargoMode.AutomaticRoute
-                || coordinator.CurrentPlan is not { } plan) {
+            if (coordinator?.HasAutomaticDisplay != true
+                || coordinator.DisplayPlan is not { } plan) {
                 // Mode exit or no plan: drop every route-step label
                 // so the manual-mode Planner map isn't polluted by
                 // automatic-route residues.
@@ -1481,11 +1482,11 @@ namespace iBarter.View {
 
             var planned = iBarter.Routing.RouteStepLabelPlanner.PlanLabels(
                 plan,
-                coordinator.ShowAllRoutes,
-                coordinator.SelectedRouteNumber,
+                coordinator.DisplayShowAllRoutes,
+                coordinator.DisplaySelectedRouteNumber,
                 BuildItemDisplayNameLookup(),
                 BuildBarterGroupLookup(),
-                coordinator.CompletedBarterRowIds);
+                coordinator.DisplayCompletedBarterRowIds);
 
             // Warehouse dedup pass: Iliya with both pickup AND
             // unload gets only one warehouse label.  Real Barter
@@ -1546,6 +1547,7 @@ namespace iBarter.View {
             // offset.
             var occurrenceByIsland = new Dictionary<string, int>(StringComparer.Ordinal);
             RepositionChildren(Grid_MapMain, occurrenceByIsland, ref updated, ref missing);
+            ReconcileAndPositionAutomaticBarterPins();
             if (RouteIslandLabelDiagnostics.Enabled) {
                 RouteIslandLabelDiagnostics.Log(
                     $"RepositionRouteStepLabels: updated={updated} missing={missing} " +
@@ -2126,13 +2128,13 @@ namespace iBarter.View {
 
         private void EnsureAutomaticWarehouseNodes() {
             var snapshot = CurrentRenderSnapshot();
-            if (App.myRouteCoordinator?.Mode != CargoMode.AutomaticRoute) return;
+            if (App.myRouteCoordinator?.HasAutomaticDisplay != true) return;
             foreach (string islandId in snapshot.WarehouseIslandIds.OrderBy(x => x, StringComparer.Ordinal)) {
                 var island = App.listIslands?.FirstOrDefault(candidate => candidate.IslandsName == islandId);
                 if (island is null) continue;
-                var roles = App.myRouteCoordinator.CurrentPlan?.Routes
-                    .Where(route => App.myRouteCoordinator.ShowAllRoutes
-                        || route.Number == App.myRouteCoordinator.SelectedRouteNumber)
+                var roles = App.myRouteCoordinator.DisplayPlan?.Routes
+                    .Where(route => App.myRouteCoordinator.DisplayShowAllRoutes
+                        || route.Number == App.myRouteCoordinator.DisplaySelectedRouteNumber)
                     .SelectMany(route => route.Steps)
                     .Where(step => step.IslandId == islandId)
                     .ToArray() ?? [];
@@ -2143,7 +2145,7 @@ namespace iBarter.View {
                 string unloadRole = language.Localize("str.Map.AutoRoute.UnloadRole");
                 string role = pickup && unload
                     ? $"{pickupRole}/{unloadRole}"
-                    : pickup ? pickupRole : unloadRole;
+                    : pickup ? pickupRole : unload ? unloadRole : TaggedRouteControl.L("Cargo transfer", "倒貨");
                 string label = $"{island.IslandsNameDisplay} · {role}";
 
                 var existingGrid = listGrid_Islands.FirstOrDefault(grid =>
@@ -2173,6 +2175,7 @@ namespace iBarter.View {
 
         private void MyGrid_Container_MouseDown(object sender, MouseButtonEventArgs e) {
             if (e.ChangedButton == MouseButton.Middle && e.ButtonState == MouseButtonState.Pressed) {
+                if (App.myfmMain?.myShipCargo?.TaggedRoutePanel?.IsEnabledMode == true) { e.Handled = true; return; }
                 App.myRouteCoordinator?.ActivateManual();
                 var clickedGrid = sender as Grid;
                 if (clickedGrid != null) {
@@ -2196,7 +2199,7 @@ namespace iBarter.View {
             }
         }
 
-        private void Islands_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
+        private async void Islands_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
             var clickedGrid = sender as Grid;
             if (clickedGrid == null || e.ClickCount != 2) return;
 
@@ -2214,6 +2217,7 @@ namespace iBarter.View {
                 return;  // legacy name-suffix guard
 
             if (node is null) {
+                if (App.myfmMain?.myShipCargo?.TaggedRoutePanel?.IsEnabledMode == true) return;
                 // Fallback for legacy grid layouts that don't yet carry a
                 // RouteMapNode. Resolve by island name, but ONLY when the
                 // grid is not a Warehouse/Temp variant.
@@ -2245,6 +2249,11 @@ namespace iBarter.View {
             // that would silently re-derive the wrong row whenever
             // the user had reordered the Planner collection.
             string targetRowId = RouteTaskIdentity.PlannerRowId(node.BarterRowId!);
+            if (App.myfmMain?.myShipCargo?.TaggedRoutePanel is { IsEnabledMode: true } tagged) {
+                e.Handled = true;
+                await tagged.CompleteMapStep(node.RouteNumber, node.StepIndex);
+                return;
+            }
             Barter? targetBarter = null;
             for (int i = 0; i < App.myPVM.BarterCollection.Count; i++) {
                 var b = App.myPVM.BarterCollection[i];
@@ -2261,6 +2270,7 @@ namespace iBarter.View {
             CompleteBarterViaPipeline(targetBarter, node.BarterRowId);
             e.Handled = true;
         }
+
 
         private void CompleteBarterViaPipeline(
             Barter myBarter,

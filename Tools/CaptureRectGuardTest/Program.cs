@@ -7,6 +7,24 @@ using PureDM.DmSoft;
 using Syncfusion.UI.Xaml.Grid;
 
 var islandResolver = new CFunctions();
+if (!CFunctions.ShouldTryAlternateIslandOcrMode(
+        "PR 1过 才-", EnumLists.Island.UnKnown)
+    || CFunctions.ShouldTryAlternateIslandOcrMode(
+        "洋朱岛", EnumLists.Island.Angie)) {
+    Console.Error.WriteLine(
+        "Expected unknown non-empty island OCR to retry the alternate mode, while a resolved island must not retry.");
+    return 1;
+}
+if (args.Contains("--island-ocr-fallback-contract", StringComparer.Ordinal)) {
+    if (islandResolver.IslandEnumSmart("PR 1过 才-") != EnumLists.Island.Angie) {
+        Console.Error.WriteLine(
+            "Expected the observed 洋朱岛 OCR fragment to resolve to Angie.");
+        return 1;
+    }
+    Console.WriteLine(
+        "Unknown island OCR retries the alternate mode and the observed 洋朱岛 fragment resolves to Angie.");
+    return 0;
+}
 if (islandResolver.IslandEnum("Velia") != EnumLists.Island.Velia) {
     Console.Error.WriteLine("Expected the canonical Velia catalog row to resolve to Velia.");
     return 1;

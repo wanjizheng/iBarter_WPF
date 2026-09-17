@@ -53,6 +53,9 @@ public sealed class AutomaticRoutePlanner {
                 return new RoutePlan(RoutePlanStatus.Optimal, [],
                     new RoutePlanObjective(0, 0, 0, request.ExtraLT, ""), [], fingerprint);
 
+            incumbent = VerifyPreferredIncumbent(request, preferredIncumbent);
+            if (incumbent is not null) firstVerifiedIncumbentTimestamp = budget.Clock();
+
             // 1) Heuristic: get a complete, verified incumbent as early as possible.
             var heuristicStart = Stopwatch.GetTimestamp();
             var heuristicIncumbent = AutomaticRouteHeuristic.TryBuildIncumbent(
@@ -60,7 +63,8 @@ public sealed class AutomaticRoutePlanner {
             if (RouteSearchProfiler.Current is { } hp) hp.HeuristicTicks += Stopwatch.GetTimestamp() - heuristicStart;
             if (heuristicIncumbent is not null) {
                 var checkedIncumbent = RoutePlanVerifier.Verify(request, heuristicIncumbent);
-                if (checkedIncumbent.Success) {
+                if (checkedIncumbent.Success && (incumbent?.Objective is null
+                    || checkedIncumbent.VerifiedPlan!.Objective!.Value.CompareTo(incumbent.Objective.Value) < 0)) {
                     incumbent = checkedIncumbent.VerifiedPlan;
                     firstVerifiedIncumbentTimestamp = budget.Clock();
                     if (RouteSearchProfiler.Current is { } f) {

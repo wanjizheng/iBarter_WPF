@@ -10,11 +10,11 @@ public enum SpecialDisplayGroup { MainMap, LeftInset, RightInset, BottomEdge }
 public static class IslandNavigationGeometry {
     public static readonly FrozenSet<string> LeftInsetNames = new[] {
         "Dallae", "Haemo", "Unfinished", "Pakio", "Lantinia", "Carrack", "Wandering",
-        "Haran", "Crow", "Cholace", "Ancient", "Rickun", "Marine", "Cox_Pirate",
+        "Haran", "Crow", "Cholace", "Ancient", "Rickun", "Marine", "Cox_Pirate", "Nampo", "Byukgye", "Cheongsa", "Oquilla", "Outpost",
     }.ToFrozenSet(StringComparer.Ordinal);
 
     public static readonly FrozenSet<string> RightInsetNames = new[] {
-        "Hakoven", "Derko", "Arehaza", "Kashuma", "Halmad",
+        "Hakoven", "Derko", "Arehaza", "Kashuma", "Halmad", "Ancado",
     }.ToFrozenSet(StringComparer.Ordinal);
 
     public static readonly FrozenSet<string> BottomEdgeNames = new[] {

@@ -121,10 +121,16 @@
     </Control.Resources>
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition x:Name="TaggedRow" Height="Auto" />
+            <RowDefinition x:Name="LegacyRow" Height="*" />
+            <RowDefinition x:Name="SplitterRow" Height="Auto" />
+            <RowDefinition x:Name="PropertyRow" Height="300" />
+        </Grid.RowDefinitions>
+        <local:TaggedRouteControl x:Name="TaggedRoutePanel" Grid.Row="0" />
+        <Grid x:Name="LegacyCargoPanel" Grid.Row="1">
+        <Grid.RowDefinitions>
             <RowDefinition Height=" Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="300" />
         </Grid.RowDefinitions>
         <Syncfusion:ToolBarAdv x:Name="ToolBarAdv_Planner" Grid.Row="0">
             <StackPanel x:Name="Panel_AutomaticRouteSelector" Margin="6,0" VerticalAlignment="Center" Visibility="Visible">
@@ -158,17 +164,17 @@
                 </Style>
             </ListBox.ItemContainerStyle>
         </ListBox>
-        <Syncfusion:SfGridSplitter Height="2" Grid.Row="2" HorizontalAlignment="Stretch"
+        </Grid>
+        <Syncfusion:SfGridSplitter x:Name="ShipPropertySplitter" Height="2" Grid.Row="2" HorizontalAlignment="Stretch"
                                    VerticalAlignment="Top"
                                    EnableCollapseButton="True"
                                    ResizeBehavior="PreviousAndNext"
                                    ShowsPreview="True" />
-        <Grid Grid.Row="3">
+        <Grid x:Name="ShipPropertyHost" Grid.Row="3">
             <Syncfusion:PropertyGrid x:Name="PropertyGrid_Ship" Style="{StaticResource PropertyStyle}">
 
             </Syncfusion:PropertyGrid>
         </Grid>
         <!-- <Syncfusion:SfGridSplitter  Margin="0,0,0,0" Grid.Row="1" VerticalAlignment="Center"/> -->
-
     </Grid>
 </UserControl>

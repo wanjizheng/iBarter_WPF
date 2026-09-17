@@ -79,7 +79,7 @@
     <sys:String x:Key="str.Planner.Extreme.CancelButton">取消搜尋</sys:String>
     <sys:String x:Key="str.Planner.Extreme.ElapsedRunning">已運行：{0}</sys:String>
     <sys:String x:Key="str.Planner.Extreme.ElapsedCompleted">總運行時間：{0}</sys:String>
-    <sys:String x:Key="str.Planner.Extreme.BestDistance">最佳已找到路線距離：{0:N0}</sys:String>
+    <sys:String x:Key="str.Planner.Extreme.BestDistance">最佳已找到路線距離：{0}</sys:String>
     <sys:String x:Key="str.Planner.Extreme.NoValidResult">尚未找到有效路線</sys:String>
     <sys:String x:Key="str.Planner.Extreme.LastImprovement">最後改善：{0}</sys:String>
     <sys:String x:Key="str.Planner.Extreme.SinceImprovement">距上次改善：{0}</sys:String>
@@ -94,7 +94,7 @@
     <sys:String x:Key="str.Planner.AutoPlan.ManualSelection">手动选择</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlan">自動規劃</sys:String>
     <sys:String x:Key="str.Planner.Btn.AutoPlanTip">自动策略会填写交换次数；手动选择策略只使用当前交换次数计算最优路线</sys:String>
-    <sys:String x:Key="str.Msg.Planner.AutoPlan.Success">自動規劃 ({0}):共 {1} 貢獻度,涵蓋 {2} 條路線。</sys:String>
+    <sys:String x:Key="str.Msg.Planner.AutoPlan.Success">自動規劃 ({0}):共 {1} 貢獻度,涵蓋 {2} 筆交換。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.NoRows">自動規劃:沒有可規劃的列。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.ManualNoSelection">请先在 Planner 中填写至少一条大于 0 的交换次数；现有自动路线没有改变。</sys:String>
     <sys:String x:Key="str.Msg.Planner.AutoPlan.Invalid">自動規劃失敗:輸入無效 ({0})。</sys:String>
@@ -286,8 +286,8 @@
     <sys:String x:Key="str.ShipCargo.AutoRoute.LoadFormat">步骤后 LT：{0:N0} · 峰值：{1:N0}</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.PeakLT">峰值 LT</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.Solving">正在计算自动路线…</sys:String>
-    <sys:String x:Key="str.Log.AutoRoute.Optimal">自动路线已达最优：{0} 条路线，距离 {1:N1}。</sys:String>
-    <sys:String x:Key="str.Log.AutoRoute.BestKnown">自动路线目前最佳（{0}）：{1} 条路线，距离 {2:N1}；停止原因：{3}；{4}</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.Optimal">自动路线已达最优：{0} 条路线，距离 {1}。</sys:String>
+    <sys:String x:Key="str.Log.AutoRoute.BestKnown">自动路线目前最佳（{0}）：{1} 条路线，距离 {2}；停止原因：{3}；{4}</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.NotOptimal">目前为已验证最佳结果，不保证为数学上的全局最优。</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.StopCompleted">完成</sys:String>
     <sys:String x:Key="str.Log.AutoRoute.StopParentBudget">达到状态搜索预算</sys:String>
