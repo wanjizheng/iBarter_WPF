@@ -82,10 +82,10 @@ public sealed record TaggedTransportRequest {
     public static TaggedTransportRequest Build(PlannerRouteSnapshot[] rows, StorageItemSnapshot[] storage,
         IslandRouteSnapshot[] islands, double limit, double occupied, TaggedTransportSettings settings) {
         var metadata = storage.ToDictionary(x => x.ItemId,
-            x => new RouteItem(x.ItemId, x.ItemId, x.Level, CargoWeightTable.GetWeightForLevel(x.Level)));
+            x => new RouteItem(x.ItemId, x.ItemId, x.Level, CargoWeightTable.GetWeight(x.ItemId, x.Level)));
         foreach (var row in rows) {
-            metadata[row.Item1Id] = new(row.Item1Id, row.Item1DisplayName, row.Item1Level, CargoWeightTable.GetWeightForLevel(row.Item1Level));
-            metadata[row.Item2Id] = new(row.Item2Id, row.Item2DisplayName, row.Item2Level, CargoWeightTable.GetWeightForLevel(row.Item2Level));
+            metadata[row.Item1Id] = new(row.Item1Id, row.Item1DisplayName, row.Item1Level, CargoWeightTable.GetWeight(row.Item1Id, row.Item1Level));
+            metadata[row.Item2Id] = new(row.Item2Id, row.Item2DisplayName, row.Item2Level, CargoWeightTable.GetWeight(row.Item2Id, row.Item2Level));
         }
         var warehouses = new Dictionary<string, Dictionary<string, int>> {
             ["Velia"] = storage.ToDictionary(x => x.ItemId, x => x.Velia),

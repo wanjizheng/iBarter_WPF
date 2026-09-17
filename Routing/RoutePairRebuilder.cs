@@ -183,7 +183,7 @@ public static class RoutePairRebuilder {
             }
 
             var pickups = new List<(bool BoundaryRelease, int Supported,
-                double Distance, int CargoLT, string WarehouseId,
+                double Distance, double CargoLT, string WarehouseId,
                 string StableKey, RouteTransitionResult Result)>();
             foreach (var warehouse in request.Warehouses.OrderBy(x => x.WarehouseId, StringComparer.Ordinal)) {
                 if (state.VisitedWarehouseIds.Contains(warehouse.WarehouseId)) continue;
@@ -288,9 +288,9 @@ public static class RoutePairRebuilder {
         return unload.Success ? unload.State : null;
     }
 
-    private static long WeightDelta(AutomaticRoutePlanningRequest request, RouteBarterTask task) =>
-        (long)request.Items[task.Item2Id].UnitWeight * task.OutputQuantity
-        - (long)request.Items[task.Item1Id].UnitWeight * task.InputQuantity;
+    private static double WeightDelta(AutomaticRoutePlanningRequest request, RouteBarterTask task) =>
+        request.Items[task.Item2Id].UnitWeight * task.OutputQuantity
+        - request.Items[task.Item1Id].UnitWeight * task.InputQuantity;
 
     private static int FindTaskIndex(AutomaticRoutePlanningRequest request, string rowId) {
         for (int i = 0; i < request.Tasks.Count; i++)

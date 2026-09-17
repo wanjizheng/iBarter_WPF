@@ -752,7 +752,7 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         RaisePropertyChanged(nameof(VisibleAutomaticSteps));
     }
 
-    private AutomaticRouteStepViewModel ToViewModel(RouteStep step, int routePeakLT) => step switch {
+    private AutomaticRouteStepViewModel ToViewModel(RouteStep step, double routePeakLT) => step switch {
         WarehousePickupStep pickup => new WarehouseRouteStepViewModel(
             pickup.WarehouseId, pickup.IslandId, ResolveIslandDisplayName(pickup.IslandId), false,
             pickup.Items, BuildItemLookup(pickup.Items), pickup.Load, routePeakLT),
@@ -762,7 +762,11 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
         BarterStep barter => new BarterRouteStepViewModel(
             barter, ResolveIslandDisplayName(barter.IslandId), currentPlan is null
             ? new Dictionary<string, RouteItem>()
-            : BuildItemLookup(barter), routePeakLT),
+            : BuildItemLookup(barter), routePeakLT,
+            App.myPVM?.BarterCollection.FirstOrDefault(row =>
+                StringComparer.Ordinal.Equals(
+                    row.PlannerRowId,
+                    RouteTaskIdentity.PlannerRowId(barter.RowId)))),
         _ => throw new InvalidOperationException($"Unknown route step {step.GetType().Name}"),
     };
 

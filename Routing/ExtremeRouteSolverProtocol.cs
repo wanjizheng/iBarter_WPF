@@ -2,6 +2,9 @@ namespace iBarter.Routing;
 
 public static class ExtremeRouteSolverProtocol {
     public const int Version = 1;
+    // Client sends both item weights and capacity in hundredths of LT.
+    // The solver treats these as homogeneous integer coefficients.
+    public const int WeightScale = 100;
     public const long DistanceScale = 1_000;
     public const int DefaultTimeLimitSeconds = 600;
     public const int DefaultNoImprovementTimeoutSeconds = 90;

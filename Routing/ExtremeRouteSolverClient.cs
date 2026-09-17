@@ -389,7 +389,7 @@ public static class ExtremeRouteSolverClient {
             long upper = request.InitialOnBoard.GetValueOrDefault(id);
             upper += request.Warehouses.Sum(warehouse => (long)warehouse.Inventory.GetValueOrDefault(id));
             upper += request.Tasks.Where(task => task.Item2Id == id).Sum(task => (long)task.OutputQuantity);
-            return new ExtremeSolverItemDto(id, item.UnitWeight, Math.Max(1, upper));
+            return new ExtremeSolverItemDto(id, checked((int)Math.Round(item.UnitWeight * ExtremeRouteSolverProtocol.WeightScale)), Math.Max(1, upper));
         }).ToArray();
         var warehouses = request.Warehouses.Select(warehouse => new ExtremeSolverWarehouseDto(
             warehouse.WarehouseId,
@@ -411,7 +411,7 @@ public static class ExtremeRouteSolverClient {
             Math.Max(256, resources.MemoryLimitMb),
             Math.Clamp(resources.WorkerCount, 1, Math.Max(1, Environment.ProcessorCount)),
             routeLimit,
-            checked(request.TotalLT - request.ExtraLT),
+            checked((request.TotalLT - request.ExtraLT) * ExtremeRouteSolverProtocol.WeightScale),
             items,
             warehouses,
             tasks,

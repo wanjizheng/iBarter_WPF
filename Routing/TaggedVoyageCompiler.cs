@@ -125,7 +125,7 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
         double free = R.ShipLimitLT - sim.Weight(state, "ship");
         int slots = R.Settings.ShipSlots - state.Cargo["ship"].Sum(i => R.Items[i.Key].UnitWeight == 0 ? 0 : sim.Stackable(i.Key) ? 1 : i.Value);
         foreach (var item in requirements) {
-            int weight = R.Items[item.Key].UnitWeight;
+            double weight = R.Items[item.Key].UnitWeight;
             int count = weight == 0 ? item.Value : Math.Min(item.Value, Math.Max(0, (int)Math.Floor(free / weight)));
             if (weight > 0) count = Math.Min(count, sim.Stackable(item.Key) ? slots > 0 ? count : 0 : slots);
             if (count > 0) { ship[item.Key] = count; free -= (double)weight * count; if (weight > 0) slots -= sim.Stackable(item.Key) ? 1 : count; }
@@ -133,7 +133,7 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
         }
         var allocation = R.Settings.Carriers.ToDictionary(c => c.Id, _ => new Dictionary<string, int>());
         foreach (var item in overflow) {
-            int left = item.Value; int weight = R.Items[item.Key].UnitWeight;
+            int left = item.Value; double weight = R.Items[item.Key].UnitWeight;
             foreach (string id in carrierOrders[packing % carrierOrders.Length]) {
                 var c = R.Settings.Carriers.Single(c => c.Id == id); var cargo = allocation[id];
                 double before = sim.Weight(state, id) + cargo.Sum(i => (double)R.Items[i.Key].UnitWeight * i.Value);
@@ -205,7 +205,7 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
     }
 
     private bool Pull(string item, int missing) {
-        int weight = R.Items[item].UnitWeight;
+        double weight = R.Items[item].UnitWeight;
         int room = weight == 0 ? missing : Math.Max(0, (int)Math.Floor((R.ShipLimitLT - sim.Weight(state, "ship")) / weight));
         if (room <= 0) return false;
         foreach (string id in new[] { "main", "alt", "main-elephant", "alt-elephant" }) {

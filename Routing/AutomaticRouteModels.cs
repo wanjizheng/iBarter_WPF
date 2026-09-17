@@ -6,7 +6,7 @@ public readonly record struct RoutePoint(double X, double Y) {
     public bool IsFinite => double.IsFinite(X) && double.IsFinite(Y);
 }
 
-public sealed record RouteItem(string ItemId, string DisplayName, int Level, int UnitWeight);
+public sealed record RouteItem(string ItemId, string DisplayName, int Level, double UnitWeight);
 
 public sealed record RouteItemQuantity(string ItemId, int Quantity);
 
@@ -91,7 +91,7 @@ public sealed record RouteDiagnostic(
     string ItemId = "",
     string Detail = "");
 
-public sealed record RouteLoadSnapshot(int CargoLT, int TotalWithExtraLT, int PeakTotalLT);
+public sealed record RouteLoadSnapshot(double CargoLT, double TotalWithExtraLT, double PeakTotalLT);
 
 public abstract record RouteStep {
     public string IslandId { get; init; }
@@ -154,9 +154,9 @@ public sealed class PlannedRoute {
     public string EndWarehouseId { get; }
     public IReadOnlyList<RouteStep> Steps { get; }
     public double Distance { get; }
-    public int InitialLT { get; }
-    public int CurrentLT { get; }
-    public int PeakLT { get; }
+    public double InitialLT { get; }
+    public double CurrentLT { get; }
+    public double PeakLT { get; }
 
     public PlannedRoute(
         int number,
@@ -164,9 +164,9 @@ public sealed class PlannedRoute {
         string endWarehouseId,
         IReadOnlyList<RouteStep> steps,
         double distance,
-        int initialLT,
-        int currentLT,
-        int peakLT) {
+        double initialLT,
+        double currentLT,
+        double peakLT) {
         Number = number;
         StartWarehouseId = startWarehouseId;
         EndWarehouseId = endWarehouseId;
@@ -182,7 +182,7 @@ public readonly record struct RoutePlanObjective(
     int RouteCount,
     double TotalDistance,
     int PickupStopCount,
-    int MaxPeakLT,
+    double MaxPeakLT,
     string StableTieBreak) : IComparable<RoutePlanObjective> {
     public int CompareTo(RoutePlanObjective other) {
         // The user-facing optimization contract is global sailing distance:

@@ -671,17 +671,17 @@ public static class WarehouseBoundaryOptimizer {
         RoutePlan plan) {
         RoutePlanObjective objective = plan.Objective
             ?? throw new InvalidOperationException("Route plan has no objective.");
-        long pickupLT = plan.Routes
+        double pickupLT = plan.Routes
             .SelectMany(route => route.Steps)
             .OfType<WarehousePickupStep>()
             .SelectMany(step => step.Items)
             .Sum(item => checked(
-                (long)request.Items[item.ItemId].UnitWeight * item.Quantity));
-        long totalPostPickupCargoLT = plan.Routes
+                request.Items[item.ItemId].UnitWeight * item.Quantity));
+        double totalPostPickupCargoLT = plan.Routes
             .SelectMany(route => route.Steps)
             .OfType<WarehousePickupStep>()
-            .Sum(step => (long)step.Load.CargoLT);
-        long totalPeakLT = plan.Routes.Sum(route => (long)route.PeakLT);
+            .Sum(step => step.Load.CargoLT);
+        double totalPeakLT = plan.Routes.Sum(route => route.PeakLT);
         return new BoundaryScore(
             objective.TotalDistance,
             objective.RouteCount,
@@ -718,10 +718,10 @@ public static class WarehouseBoundaryOptimizer {
         double TotalDistance,
         int RouteCount,
         int PickupStopCount,
-        int MaxPeakLT,
-        long TotalPickupLT,
-        long TotalPostPickupCargoLT,
-        long TotalPeakLT,
+        double MaxPeakLT,
+        double TotalPickupLT,
+        double TotalPostPickupCargoLT,
+        double TotalPeakLT,
         string StableTieBreak) : IComparable<BoundaryScore> {
         public int CompareTo(BoundaryScore other) {
             int result = TotalDistance.CompareTo(other.TotalDistance);

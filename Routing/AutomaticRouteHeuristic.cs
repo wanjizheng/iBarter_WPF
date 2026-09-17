@@ -110,7 +110,7 @@ public static class AutomaticRouteHeuristic {
     private sealed record PickupCandidate(
         double Distance,
         int SupportedTasks,
-        int TotalCargoLT,
+        double TotalCargoLT,
         string WarehouseId,
         string StableKey,
         RouteTransitionResult Result);

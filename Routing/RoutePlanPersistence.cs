@@ -402,9 +402,9 @@ public static class RoutePlanPersistence {
         string EndWarehouseId,
         StepDto[] Steps,
         double Distance,
-        int InitialLT,
-        int CurrentLT,
-        int PeakLT);
+        double InitialLT,
+        double CurrentLT,
+        double PeakLT);
 
     private sealed record StepDto(
         string Kind,

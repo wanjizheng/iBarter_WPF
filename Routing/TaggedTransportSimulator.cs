@@ -12,8 +12,8 @@ public sealed class TaggedTransportSimulator(TaggedTransportRequest request) {
     public static bool IsElephant(string id) => id.EndsWith("-elephant", StringComparison.Ordinal);
     public static string Owner(string id) => id.Split('-')[0];
     public bool Stackable(string item) => request.Items[item].Level < 5;
-    public double Weight(TaggedTransportState s, string container) => s.Cargo[container].Sum(x => (double)request.Items[x.Key].UnitWeight * x.Value)
-        + (container == "ship" ? request.ShipOccupiedLT : request.Settings.Carriers.FirstOrDefault(x => x.Id == container)?.OccupiedLT ?? 0);
+    public double Weight(TaggedTransportState s, string container) => Math.Round(s.Cargo[container].Sum(x => (double)request.Items[x.Key].UnitWeight * x.Value)
+        + (container == "ship" ? request.ShipOccupiedLT : request.Settings.Carriers.FirstOrDefault(x => x.Id == container)?.OccupiedLT ?? 0), 2);
     public int Count(TaggedTransportState s, string container, string item) => s.Cargo[container].GetValueOrDefault(item);
     public bool IsTerminalLevelSeven(TaggedTransportState s, string item) => request.Items.TryGetValue(item, out var metadata)
         && metadata.Level == 7 && !request.Trades.Where((t, i) => s.Remaining[i] > 0).Any(t => t.InputId == item);
@@ -142,7 +142,7 @@ public sealed class TaggedTransportSimulator(TaggedTransportRequest request) {
                     // A warehouse shuttle is a macro, restricted to the user's local elephant.
                     if (action.From != Warehouse(port.WarehouseId) || !IsElephant(action.To) || !Stackable(action.ItemId)) return false;
                     double carry = request.Settings.Carriers.First(x => x.Id == s.Active).LimitLT - Weight(s, s.Active);
-                    int weight = request.Items[action.ItemId].UnitWeight;
+                    double weight = request.Items[action.ItemId].UnitWeight;
                     var elephant = request.Settings.Carriers.First(x => x.Id == action.To);
                     double otherElephantWeight = Weight(s, action.To) - Count(s, action.To, action.ItemId) * (double)weight;
                     var transient = s.Copy(s.Active); Add(transient.Cargo[s.Active], action.ItemId, 1);

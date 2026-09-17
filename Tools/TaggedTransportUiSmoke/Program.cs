@@ -426,6 +426,19 @@ internal static class Program {
         }));
         using var coordinator = new iBarter.ViewModel.AutomaticRouteCoordinator(App.myStorageVM, App.myCargoProperty, App.myCVM, () => control);
         App.myRouteCoordinator = coordinator;
+        var presentedBarter = coordinator.DisplayPlan!.Routes.SelectMany(route => route.Steps)
+            .OfType<BarterStep>().First();
+        var presentedSource = App.myPVM.BarterCollection.Single(row =>
+            row.PlannerRowId == RouteTaskIdentity.PlannerRowId(presentedBarter.RowId));
+        var presentedItems = originalSession.Request.Items
+            .Where(pair => pair.Key == presentedBarter.Consumed.ItemId || pair.Key == presentedBarter.Produced.ItemId)
+            .ToDictionary();
+        var presentedCard = new iBarter.ViewModel.BarterRouteStepViewModel(
+            presentedBarter, presentedSource.IsLandNameDisplay, presentedItems,
+            presentedBarter.Load.PeakTotalLT, presentedSource);
+        if (presentedCard.ExchangeCount is not > 0
+            || !presentedCard.Title.Contains(presentedCard.ExchangeCount.Value.ToString(), StringComparison.Ordinal))
+            throw new Exception("The ship cargo exchange title does not show this step's exchange count.");
         var map = new MapControl();
         try {
             Render(map, 1000, 700, "tagged-map-initial.png");

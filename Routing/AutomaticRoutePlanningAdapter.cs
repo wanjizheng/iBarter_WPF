@@ -50,16 +50,16 @@ public static class AutomaticRoutePlanningAdapter {
         var items = new Dictionary<string, RouteItem>(StringComparer.Ordinal);
         foreach (var storage in storageItems.Where(x => !string.IsNullOrWhiteSpace(x.ItemId)))
             items[storage.ItemId] = new RouteItem(
-                storage.ItemId, storage.ItemId, storage.Level, CargoWeightTable.GetWeightForLevel(storage.Level));
+                storage.ItemId, storage.ItemId, storage.Level, CargoWeightTable.GetWeight(storage.ItemId, storage.Level));
         // Completed rows can leave their net positive output on board.  Keep
         // their item metadata too, even when storage has no record of it.
         foreach (var row in plannerRows) {
             items[row.Item1Id] = new RouteItem(
                 row.Item1Id, row.Item1DisplayName, row.Item1Level,
-                CargoWeightTable.GetWeightForLevel(row.Item1Level));
+                CargoWeightTable.GetWeight(row.Item1Id, row.Item1Level));
             items[row.Item2Id] = new RouteItem(
                 row.Item2Id, row.Item2DisplayName, row.Item2Level,
-                CargoWeightTable.GetWeightForLevel(row.Item2Level));
+                CargoWeightTable.GetWeight(row.Item2Id, row.Item2Level));
         }
 
         var carriedBalance = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -200,19 +200,19 @@ public static class AutomaticRoutePlanningAdapter {
         if (availableLT < 0) return 0;
         int input = LimitForSide(
             availableLT,
-            CargoWeightTable.GetWeightForLevel(row.Item1Level),
+            CargoWeightTable.GetWeight(row.Item1Id, row.Item1Level),
             row.Item1Number);
         int output = LimitForSide(
             availableLT,
-            CargoWeightTable.GetWeightForLevel(row.Item2Level),
+            CargoWeightTable.GetWeight(row.Item2Id, row.Item2Level),
             row.Item2Number);
         return Math.Min(input, output);
     }
 
-    private static int LimitForSide(long availableLT, int unitWeight, int quantity) {
+    private static int LimitForSide(long availableLT, double unitWeight, int quantity) {
         if (unitWeight <= 0 || quantity <= 0) return Int32.MaxValue;
-        long perExchange = checked((long)unitWeight * quantity);
-        long limit = availableLT / perExchange;
+        double perExchange = Math.Round(unitWeight * quantity, 2);
+        long limit = (long)Math.Floor(availableLT / perExchange);
         return limit >= Int32.MaxValue ? Int32.MaxValue : (int)Math.Max(0, limit);
     }
 }

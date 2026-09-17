@@ -472,7 +472,7 @@ public sealed class AutomaticRoutePlanner {
             ? ulong.MaxValue
             : (1UL << request.Tasks.Count) - 1);
         int routes = state.FinishedRoutes.Count + (currentHasBarter || remains ? 1 : 0);
-        int peak = Math.Max(
+        double peak = Math.Max(
             state.CurrentRoutePeakLT,
             state.FinishedRoutes.Count == 0 ? request.ExtraLT : state.FinishedRoutes.Max(x => x.PeakLT));
         return new RoutePlanObjective(routes, state.TotalDistance, state.PickupStopCount, peak, "");
@@ -521,7 +521,7 @@ public sealed class AutomaticRoutePlanner {
         new(status, plan.Routes, plan.Objective, plan.Diagnostics, plan.InputFingerprint);
 
     private readonly record struct SearchPriority(
-        double Distance, int Routes, int Pickups, int Peak, long Sequence) : IComparable<SearchPriority> {
+        double Distance, int Routes, int Pickups, double Peak, long Sequence) : IComparable<SearchPriority> {
         public int CompareTo(SearchPriority other) {
             int result = Distance.CompareTo(other.Distance);
             if (result != 0) return result;
@@ -535,7 +535,7 @@ public sealed class AutomaticRoutePlanner {
     }
 
     private readonly record struct SearchCost(
-        double Distance, int Pickups, int Peak, string StableKey) : IComparable<SearchCost> {
+        double Distance, int Pickups, double Peak, string StableKey) : IComparable<SearchCost> {
         public int CompareTo(SearchCost other) {
             int result = Distance.CompareTo(other.Distance);
             if (result != 0) return result;

@@ -9,8 +9,8 @@ public sealed class RouteSimulationState {
     public IReadOnlySet<string> VisitedWarehouseIds { get; }
     public IReadOnlyDictionary<string, int> OnBoard { get; }
     public IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>> WarehouseInventory { get; }
-    public int CargoLT { get; }
-    public int CurrentRoutePeakLT { get; }
+    public double CargoLT { get; }
+    public double CurrentRoutePeakLT { get; }
     public IReadOnlyList<RouteStep> CurrentRouteSteps { get; }
     public IReadOnlyList<PlannedRoute> FinishedRoutes { get; }
     public double TotalDistance { get; }
@@ -23,8 +23,8 @@ public sealed class RouteSimulationState {
         IEnumerable<string> visitedWarehouseIds,
         IEnumerable<KeyValuePair<string, int>> onBoard,
         IEnumerable<KeyValuePair<string, IReadOnlyDictionary<string, int>>> warehouseInventory,
-        int cargoLT,
-        int currentRoutePeakLT,
+        double cargoLT,
+        double currentRoutePeakLT,
         IEnumerable<RouteStep> currentRouteSteps,
         IEnumerable<PlannedRoute> finishedRoutes,
         double totalDistance,
@@ -48,13 +48,13 @@ public sealed class RouteSimulationState {
             new KeyValuePair<string, IReadOnlyDictionary<string, int>>(
                 warehouse.WarehouseId,
                 ModelCopies.Dictionary(warehouse.Inventory)));
-        long initialCargoLT = 0;
+        double initialCargoLT = 0;
         foreach (var pair in request.InitialOnBoard) {
             if (!request.Items.TryGetValue(pair.Key, out var item))
                 throw new InvalidOperationException($"Unknown route item '{pair.Key}'.");
-            initialCargoLT += (long)item.UnitWeight * pair.Value;
+            initialCargoLT += item.UnitWeight * pair.Value;
         }
-        int cargoLT = checked((int)initialCargoLT);
+        double cargoLT = Math.Round(initialCargoLT, 2);
         return new RouteSimulationState(
             "", 1, 0, [], request.InitialOnBoard, inventory, cargoLT,
             checked(request.ExtraLT + cargoLT),

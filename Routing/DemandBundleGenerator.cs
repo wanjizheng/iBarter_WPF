@@ -5,7 +5,7 @@ namespace iBarter.Routing;
 public sealed record DemandBundle(
     IReadOnlyList<RouteItemQuantity> Items,
     ulong SupportedTaskMask,
-    int TotalCargoLT,
+    double TotalCargoLT,
     string StableKey);
 
 public static class DemandBundleGenerator {
@@ -77,20 +77,20 @@ public static class DemandBundleGenerator {
                 if (required.Length == 0) continue;
                 if (required.Any(x => warehouseStock.GetValueOrDefault(x.Key) < x.Value)) continue;
 
-                long cargoLT = state.CargoLT;
+                double cargoLT = state.CargoLT;
                 foreach (var item in required) {
                     if (!request.Items.TryGetValue(item.Key, out var definition)) {
                         cargoLT = long.MaxValue;
                         break;
                     }
-                    cargoLT += (long)definition.UnitWeight * item.Value;
+                    cargoLT += definition.UnitWeight * item.Value;
                 }
-                if (cargoLT > int.MaxValue || request.ExtraLT + cargoLT > request.TotalLT) continue;
+                if (cargoLT > int.MaxValue || Math.Round(request.ExtraLT + cargoLT, 2) > request.TotalLT) continue;
 
                 string key = string.Join(";", required.Select(x => $"{x.Key}:{x.Value}"));
                 var bundle = new DemandBundle(
                     required.Select(x => new RouteItemQuantity(x.Key, x.Value)).ToArray(),
-                    pair.Key, (int)cargoLT, key);
+                    pair.Key, cargoLT, key);
                 if (!deduplicated.TryGetValue(key, out var existing) ||
                     BitOperations.PopCount(bundle.SupportedTaskMask) > BitOperations.PopCount(existing.SupportedTaskMask) ||
                     (BitOperations.PopCount(bundle.SupportedTaskMask) == BitOperations.PopCount(existing.SupportedTaskMask) &&
@@ -138,14 +138,14 @@ public static class DemandBundleGenerator {
                 next = null;
                 Dictionary<string, int>? selectedInventory = null;
                 Dictionary<string, int>? selectedRequired = null;
-                (int NeedsLoad, int AddedLT, string RowId) selectedRank = default;
+                (int NeedsLoad, double AddedLT, string RowId) selectedRank = default;
                 bool hasSelection = false;
                 foreach (int candidate in unused.OrderBy(i => request.Tasks[i].RowId, StringComparer.Ordinal)) {
                     int available = inventory.GetValueOrDefault(request.Tasks[candidate].Item1Id);
                     if (!TryAppendTask(request, state, warehouseStock, candidate,
                             inventory, required, out var candidateInventory, out var candidateRequired))
                         continue;
-                    int addedLT = RequiredLoadLT(request, candidateRequired) - RequiredLoadLT(request, required);
+                    double addedLT = RequiredLoadLT(request, candidateRequired) - RequiredLoadLT(request, required);
                     var rank = (
                         available >= request.Tasks[candidate].InputQuantity ? 0 : 1,
                         addedLT,
@@ -187,7 +187,7 @@ public static class DemandBundleGenerator {
         IReadOnlyDictionary<string, int> inventory,
         IReadOnlyDictionary<string, int> required) {
         int? selected = null;
-        (int NeedsLoad, int AddedLT, string RowId) selectedRank = default;
+        (int NeedsLoad, double AddedLT, string RowId) selectedRank = default;
         foreach (int candidate in unused.OrderBy(i => request.Tasks[i].RowId, StringComparer.Ordinal)) {
             int available = inventory.GetValueOrDefault(request.Tasks[candidate].Item1Id);
             if (!TryAppendTask(request, state, warehouseStock, candidate,
@@ -205,8 +205,8 @@ public static class DemandBundleGenerator {
     }
 
     private static int CompareRank(
-        (int NeedsLoad, int AddedLT, string RowId) left,
-        (int NeedsLoad, int AddedLT, string RowId) right) {
+        (int NeedsLoad, double AddedLT, string RowId) left,
+        (int NeedsLoad, double AddedLT, string RowId) right) {
         int result = left.NeedsLoad.CompareTo(right.NeedsLoad);
         if (result != 0) return result;
         result = left.AddedLT.CompareTo(right.AddedLT);
@@ -232,15 +232,15 @@ public static class DemandBundleGenerator {
             if (warehouseStock.GetValueOrDefault(task.Item1Id) < totalRequired) return false;
             required[task.Item1Id] = totalRequired;
             inventory[task.Item1Id] = available + shortage;
-            long pickupTotal = request.ExtraLT + state.CargoLT + RequiredLoadLT(request, required);
-            if (pickupTotal > request.TotalLT) return false;
+            double pickupTotal = request.ExtraLT + state.CargoLT + RequiredLoadLT(request, required);
+            if (Math.Round(pickupTotal, 2) > request.TotalLT) return false;
         }
 
         SetQuantity(inventory, task.Item1Id, inventory[task.Item1Id] - task.InputQuantity);
         SetQuantity(inventory, task.Item2Id,
             inventory.GetValueOrDefault(task.Item2Id) + task.OutputQuantity);
-        long afterBarter = request.ExtraLT + InventoryLT(request, inventory);
-        return afterBarter <= request.TotalLT;
+        double afterBarter = request.ExtraLT + InventoryLT(request, inventory);
+        return Math.Round(afterBarter, 2) <= request.TotalLT;
     }
 
     private static void AddBoundedBundle(
@@ -252,7 +252,7 @@ public static class DemandBundleGenerator {
         var items = required.Where(x => x.Value > 0)
             .OrderBy(x => x.Key, StringComparer.Ordinal).ToArray();
         if (items.Length == 0) return;
-        int cargoLT = checked(state.CargoLT + RequiredLoadLT(request, required));
+        double cargoLT = checked(state.CargoLT + RequiredLoadLT(request, required));
         string key = string.Join(";", items.Select(x => $"{x.Key}:{x.Value}"));
         var bundle = new DemandBundle(
             items.Select(x => new RouteItemQuantity(x.Key, x.Value)).ToArray(),
@@ -264,12 +264,12 @@ public static class DemandBundleGenerator {
             deduplicated[key] = bundle;
     }
 
-    private static int RequiredLoadLT(
+    private static double RequiredLoadLT(
         AutomaticRoutePlanningRequest request,
         IReadOnlyDictionary<string, int> required) => checked(required.Sum(pair =>
             request.Items[pair.Key].UnitWeight * pair.Value));
 
-    private static int InventoryLT(
+    private static double InventoryLT(
         AutomaticRoutePlanningRequest request,
         IReadOnlyDictionary<string, int> inventory) => checked(inventory.Sum(pair =>
             request.Items[pair.Key].UnitWeight * pair.Value));

@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using iBarter.Model;
 using iBarter.Routing;
 using iBarter.ViewModel;
@@ -391,13 +391,13 @@ namespace iBarter.View {
 
         }
 
-        private static int GetWeightFromLevel(string level) =>
-            int.TryParse(level, out int parsed) ? CargoWeightTable.GetWeightForLevel(parsed) : 0;
+        private static double GetItemWeight(Items item) =>
+            int.TryParse(item.ItemLV, out int parsed) ? CargoWeightTable.GetWeight(item.ItemID, parsed) : 0;
 
         private void IdentifyChain(Barter _barter, int _lv) {
             Barter myBarter = App.myCVM.CargoDetails.FirstOrDefault(b => b.Item1.ItemLV.Equals(Convert.ToString(_lv + 1)) && b.Item1Name.Equals(_barter.Item2Name))!;
             if (myBarter != null) {
-                App.myCargoProperty.CurrentLT += (_barter.TotalItem2ExchangeQuantity - myBarter.TotalItem1ExchangeQuantity) * GetWeightFromLevel(_barter.Item2.ItemLV);
+                App.myCargoProperty.CurrentLT += (_barter.TotalItem2ExchangeQuantity - myBarter.TotalItem1ExchangeQuantity) * GetItemWeight(_barter.Item2);
                 // App.myCargoProperty.InitialLT += _barter.TotalItem1ExchangeQuantity * GetWeight(_barter.Item1.ItemLV);
                 // Barter myBarter2 = App.myCVM.CargoDetails.FirstOrDefault(b => b.Item2Name.Equals(_barter.Item1Name) && b.CalculatedAlready == false)!;
                 // if (myBarter2 == null)
@@ -409,7 +409,7 @@ namespace iBarter.View {
             }
             else {
                 if (!_barter.CalculatedAlready) {
-                    App.myCargoProperty.CurrentLT += GetWeightFromLevel(_barter.Item2.ItemLV) * _barter.TotalItem2ExchangeQuantity;
+                    App.myCargoProperty.CurrentLT += GetItemWeight(_barter.Item2) * _barter.TotalItem2ExchangeQuantity;
                     // App.myCargoProperty.InitialLT += GetWeight(_barter.Item1.ItemLV) * _barter.TotalItem1ExchangeQuantity;
                     _barter.CalculatedAlready = true;
                     Barter barterTemp = App.myCVM.CargoDetails.FirstOrDefault(b => b.Item2Name.Equals(_barter.Item1Name));

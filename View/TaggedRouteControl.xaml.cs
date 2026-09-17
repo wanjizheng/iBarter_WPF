@@ -97,6 +97,10 @@ public partial class TaggedRouteControl : UserControl {
             if (!stockMatches) differences.Add(Island(wh.Key) + " · " + Item(item.Key) + L(" stock", "庫存"));
             valid &= stockMatches;
         }
+        bool weightsMatch = original.Items.Values.Concat(Session.Request.Items.Values)
+            .All(item => item.UnitWeight == CargoWeightTable.GetWeight(item.ItemId, item.Level));
+        if (!weightsMatch) differences.Add(L("item weights updated", "物品重量已更新"));
+        valid &= weightsMatch;
         if (valid) {
             if (original.Settings.StartFromSelectedLocation != Settings.StartFromSelectedLocation
                 || original.Settings.StartIsland != Settings.StartIsland) {

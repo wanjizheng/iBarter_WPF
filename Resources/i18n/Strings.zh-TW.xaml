@@ -282,6 +282,7 @@
     <sys:String x:Key="str.ShipCargo.AutoRoute.Pickup">在 {0} 装货</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.Unload">在 {0} 卸货</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.Barter">在 {0} 交换</sys:String>
+    <sys:String x:Key="str.ShipCargo.AutoRoute.BarterWithCount">在 {0} 交换（{1} 次）</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.UnknownItem">未知物品</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.LoadFormat">步骤后 LT：{0:N0} · 峰值：{1:N0}</sys:String>
     <sys:String x:Key="str.ShipCargo.AutoRoute.PeakLT">峰值 LT</sys:String>

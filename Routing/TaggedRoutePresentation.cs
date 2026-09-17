@@ -7,7 +7,7 @@ public static class TaggedRoutePresentation {
         var routes = TaggedTransportRoutes.Build(request, session.Plan).Select(route => {
             var steps = Enumerable.Range(route.Start, route.End - route.Start).Select(i => {
                 var step = session.Plan.Steps[i]; var a = step.Action;
-                var load = new RouteLoadSnapshot((int)Math.Ceiling(step.ShipLT - request.ShipOccupiedLT), (int)Math.Ceiling(step.ShipLT), (int)Math.Ceiling(step.ShipLT));
+                var load = new RouteLoadSnapshot(step.ShipLT - request.ShipOccupiedLT, step.ShipLT, step.ShipLT);
                 if (i < session.CompletedSteps) return (RouteStep)new HiddenStep(a.Location, load);
                 if (a.Kind == TaggedActionKind.Barter) {
                     var t = request.Trades[a.TradeIndex];

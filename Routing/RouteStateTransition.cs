@@ -38,13 +38,13 @@ public static class RouteStateTransition {
             SetQuantity(onboard, pair.Key, onboard.GetValueOrDefault(pair.Key) + pair.Value);
         }
 
-        int cargoLT = ComputeCargoLT(request, onboard);
-        int total = checked(request.ExtraLT + cargoLT);
+        double cargoLT = ComputeCargoLT(request, onboard);
+        double total = checked(request.ExtraLT + cargoLT);
         if (total > request.TotalLT)
             return Failure(state, "overweight", detail: total.ToString());
 
         double distance = DistanceFromCurrent(request, state.CurrentIslandId, warehouse.IslandId, warehouse.Point);
-        int peak = Math.Max(state.CurrentRoutePeakLT, total);
+        double peak = Math.Max(state.CurrentRoutePeakLT, total);
         var load = new RouteLoadSnapshot(cargoLT, total, peak);
         var normalizedItems = requested.OrderBy(x => x.Key, StringComparer.Ordinal)
             .Select(x => new RouteItemQuantity(x.Key, x.Value)).ToArray();
@@ -72,12 +72,12 @@ public static class RouteStateTransition {
         var task = request.Tasks[taskIndex];
         if (!state.OnBoard.TryGetValue(task.Item1Id, out int available) || available < task.InputQuantity)
             return false;
-        int inputWeight = request.Items[task.Item1Id].UnitWeight;
-        int outputWeight = request.Items[task.Item2Id].UnitWeight;
-        long total = (long)request.ExtraLT + state.CargoLT
-            + (long)outputWeight * task.OutputQuantity
-            - (long)inputWeight * task.InputQuantity;
-        return total <= request.TotalLT;
+        double inputWeight = request.Items[task.Item1Id].UnitWeight;
+        double outputWeight = request.Items[task.Item2Id].UnitWeight;
+        double total = (long)request.ExtraLT + state.CargoLT
+            + outputWeight * task.OutputQuantity
+            - inputWeight * task.InputQuantity;
+        return Math.Round(total, 2) <= request.TotalLT;
     }
 
     public static RouteTransitionResult TryBarter(
@@ -98,13 +98,13 @@ public static class RouteStateTransition {
         var onboard = Clone(state.OnBoard);
         SetQuantity(onboard, task.Item1Id, available - task.InputQuantity);
         SetQuantity(onboard, task.Item2Id, onboard.GetValueOrDefault(task.Item2Id) + task.OutputQuantity);
-        int cargoLT = ComputeCargoLT(request, onboard);
-        int total = checked(request.ExtraLT + cargoLT);
+        double cargoLT = ComputeCargoLT(request, onboard);
+        double total = checked(request.ExtraLT + cargoLT);
         if (total > request.TotalLT)
             return Failure(state, "overweight", task.RowId, task.Item2Id, total.ToString());
 
         double distance = DistanceFromCurrent(request, state.CurrentIslandId, task.IslandId, task.Point);
-        int peak = Math.Max(state.CurrentRoutePeakLT, total);
+        double peak = Math.Max(state.CurrentRoutePeakLT, total);
         var load = new RouteLoadSnapshot(cargoLT, total, peak);
         var step = new BarterStep(
             task.RowId, task.IslandId,
@@ -168,12 +168,12 @@ public static class RouteStateTransition {
             SetQuantity(target, pair.Key, target.GetValueOrDefault(pair.Key) + pair.Value);
 
         double legDistance = DistanceFromCurrent(request, state.CurrentIslandId, warehouse.IslandId, warehouse.Point);
-        int totalBeforeUnload = checked(request.ExtraLT + state.CargoLT);
-        int peak = Math.Max(state.CurrentRoutePeakLT, totalBeforeUnload);
+        double totalBeforeUnload = checked(request.ExtraLT + state.CargoLT);
+        double peak = Math.Max(state.CurrentRoutePeakLT, totalBeforeUnload);
         var unloadedItems = requested
             .OrderBy(x => x.Key, StringComparer.Ordinal)
             .Select(x => new RouteItemQuantity(x.Key, x.Value)).ToArray();
-        int remainingCargoLT = ComputeCargoLT(request, onboard);
+        double remainingCargoLT = ComputeCargoLT(request, onboard);
         var load = new RouteLoadSnapshot(
             remainingCargoLT,
             checked(request.ExtraLT + remainingCargoLT),
@@ -196,7 +196,7 @@ public static class RouteStateTransition {
             WarehouseUnloadStep unload => unload.WarehouseId,
             _ => firstPickup?.WarehouseId ?? warehouseId,
         };
-        int initialLT = routeSteps[0].Load.TotalWithExtraLT;
+        double initialLT = routeSteps[0].Load.TotalWithExtraLT;
         double finishedDistance = state.FinishedRoutes.Sum(x => x.Distance);
         double routeDistance = state.TotalDistance + legDistance - finishedDistance;
         var route = new PlannedRoute(
@@ -224,8 +224,8 @@ public static class RouteStateTransition {
         IEnumerable<string> visited,
         Dictionary<string, int> onboard,
         Dictionary<string, Dictionary<string, int>> inventory,
-        int cargoLT,
-        int peak,
+        double cargoLT,
+        double peak,
         IEnumerable<RouteStep> steps,
         IEnumerable<PlannedRoute> finished,
         double distance,
@@ -260,14 +260,14 @@ public static class RouteStateTransition {
         else dictionary[itemId] = quantity;
     }
 
-    private static int ComputeCargoLT(AutomaticRoutePlanningRequest request, IReadOnlyDictionary<string, int> onboard) {
-        long total = 0;
+    private static double ComputeCargoLT(AutomaticRoutePlanningRequest request, IReadOnlyDictionary<string, int> onboard) {
+        double total = 0;
         foreach (var pair in onboard) {
             if (!request.Items.TryGetValue(pair.Key, out var item))
                 throw new InvalidOperationException($"Unknown route item '{pair.Key}'.");
-            total += (long)item.UnitWeight * pair.Value;
+            total += item.UnitWeight * pair.Value;
         }
-        return checked((int)total);
+        return Math.Round(total, 2);
     }
 
     private static double DistanceFromCurrent(

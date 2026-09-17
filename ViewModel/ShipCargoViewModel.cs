@@ -42,10 +42,10 @@ namespace iBarter.ViewModel {
                 barter.IsLandName,
                 barter.Item1.ItemID,
                 barter.ExchangeQuantity * barter.Item1Number,
-                GetWeightFromLevel(barter.Item1.ItemLV),
+                GetItemWeight(barter.Item1),
                 barter.Item2.ItemID,
                 barter.ExchangeQuantity * barter.Item2Number,
-                GetWeightFromLevel(barter.Item2.ItemLV))).ToArray();
+                GetItemWeight(barter.Item2))).ToArray();
             var projection = ManualCargoProjector.Project(inputs, Math.Max(0, extraLT));
             manualSteps = projection.Steps.Select((projected, index) => {
                 var barter = barters[index];
@@ -69,8 +69,8 @@ namespace iBarter.ViewModel {
             return projection;
         }
 
-        private static int GetWeightFromLevel(string level) =>
-            int.TryParse(level, out int parsed) ? CargoWeightTable.GetWeightForLevel(parsed) : 0;
+        private static double GetItemWeight(Items item) =>
+            int.TryParse(item.ItemLV, out int parsed) ? CargoWeightTable.GetWeight(item.ItemID, parsed) : 0;
 
         public void AttachRouteCoordinator(AutomaticRouteCoordinator coordinator) {
             if (routeCoordinator is not null)

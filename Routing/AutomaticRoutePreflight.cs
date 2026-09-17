@@ -15,7 +15,7 @@ public static class AutomaticRoutePreflight {
         if (request.Limits.MaxExpandedStates <= 0 || request.Limits.MaxLocalMoves < 0)
             diagnostics.Add(new RouteDiagnostic("invalid-search-limits"));
 
-        long initialCargoLT = 0;
+        double initialCargoLT = 0;
         foreach (var pair in request.InitialOnBoard) {
             if (!request.Items.TryGetValue(pair.Key, out var item)) {
                 diagnostics.Add(new RouteDiagnostic("missing-item", ItemId: pair.Key, Detail: "initial-onboard"));
@@ -26,9 +26,9 @@ public static class AutomaticRoutePreflight {
             if (item.UnitWeight < 0)
                 diagnostics.Add(new RouteDiagnostic("invalid-item", ItemId: pair.Key, Detail: "initial-onboard"));
             if (pair.Value > 0)
-                initialCargoLT += (long)item.UnitWeight * pair.Value;
+                initialCargoLT += item.UnitWeight * pair.Value;
         }
-        if (request.ExtraLT + initialCargoLT > request.TotalLT)
+        if (Math.Round(request.ExtraLT + initialCargoLT, 2) > request.TotalLT)
             diagnostics.Add(new RouteDiagnostic("initial-cargo-overweight", Detail:
                 (request.ExtraLT + initialCargoLT).ToString()));
 
@@ -51,8 +51,8 @@ public static class AutomaticRoutePreflight {
             if (request.Items.TryGetValue(task.Item1Id, out var input) &&
                 request.Items.TryGetValue(task.Item2Id, out var output) &&
                 task.InputQuantity > 0 && task.OutputQuantity > 0) {
-                long inputLT = request.ExtraLT + (long)input.UnitWeight * task.InputQuantity;
-                long outputLT = request.ExtraLT + (long)output.UnitWeight * task.OutputQuantity;
+                double inputLT = Math.Round(request.ExtraLT + input.UnitWeight * task.InputQuantity, 2);
+                double outputLT = Math.Round(request.ExtraLT + output.UnitWeight * task.OutputQuantity, 2);
                 if (inputLT > request.TotalLT || outputLT > request.TotalLT)
                     diagnostics.Add(new RouteDiagnostic("task-overweight", task.RowId,
                         inputLT > request.TotalLT ? task.Item1Id : task.Item2Id,

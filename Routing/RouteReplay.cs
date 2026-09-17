@@ -145,17 +145,17 @@ public static class RouteReplay {
             newSteps.Add(result.Step);
             state = result.State;
         }
-        int initialLT = newSteps.Count > 0
+        double initialLT = newSteps.Count > 0
             ? newSteps[0].Load.TotalWithExtraLT
             : request.ExtraLT;
-        int currentLT = newSteps.Count > 0
+        double currentLT = newSteps.Count > 0
             ? newSteps[^1].Load.TotalWithExtraLT
             : request.ExtraLT;
         // Audit round 2: the simulator resets CurrentRoutePeakLT to 0
         // when a route finishes (TryUnload's finishRoute branch) so the
         // NEXT route can start fresh. We must capture the peak BEFORE
         // the reset, which lives on the last step's Load.
-        int peakLT = newSteps.Count > 0
+        double peakLT = newSteps.Count > 0
             ? newSteps.Max(s => s.Load.PeakTotalLT)
             : request.ExtraLT;
         var rebuilt = new PlannedRoute(
@@ -291,24 +291,25 @@ public static class RouteReplay {
         else onboard[consumed.ItemId] = newAvail;
         onboard[produced.ItemId] = onboard.GetValueOrDefault(produced.ItemId) + produced.Quantity;
 
-        long cargoLT = 0;
+        double cargoLT = 0;
         foreach (var pair in onboard) {
             if (!request.Items.TryGetValue(pair.Key, out var item)) continue;
-            cargoLT += (long)item.UnitWeight * pair.Value;
+            cargoLT += item.UnitWeight * pair.Value;
         }
-        int total = checked(request.ExtraLT + (int)cargoLT);
+        cargoLT = Math.Round(cargoLT, 2);
+        double total = request.ExtraLT + cargoLT;
         if (total > request.TotalLT) {
             return new RouteTransitionResult(false, state, null,
                 new RouteDiagnostic("replay-barter-overweight",
                     rowId, "", Detail: total.ToString()));
         }
-        int peak = Math.Max(state.CurrentRoutePeakLT, total);
-        var load = new RouteLoadSnapshot((int)cargoLT, total, peak);
+        double peak = Math.Max(state.CurrentRoutePeakLT, total);
+        var load = new RouteLoadSnapshot(cargoLT, total, peak);
         var step = new BarterStep(rowId, "", consumed, produced, load);
         var next = new RouteSimulationState(
             "", state.CurrentRouteNumber, state.CompletedMask,
             state.VisitedWarehouseIds, onboard, state.WarehouseInventory,
-            (int)cargoLT, peak,
+            cargoLT, peak,
             state.CurrentRouteSteps.Append(step), state.FinishedRoutes,
             state.TotalDistance, state.PickupStopCount);
         return new RouteTransitionResult(true, next, step, null);

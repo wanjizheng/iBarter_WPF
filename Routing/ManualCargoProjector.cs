@@ -5,10 +5,10 @@ public sealed record ManualCargoStepInput(
     string IslandId,
     string Item1Id,
     int InputQuantity,
-    int Item1UnitWeight,
+    double Item1UnitWeight,
     string Item2Id,
     int OutputQuantity,
-    int Item2UnitWeight);
+    double Item2UnitWeight);
 
 public sealed record ManualCargoProjectedStep(
     ManualCargoStepInput Step,
@@ -16,9 +16,9 @@ public sealed record ManualCargoProjectedStep(
 
 public sealed record ManualCargoProjection(
     IReadOnlyList<ManualCargoProjectedStep> Steps,
-    int InitialLT,
-    int CurrentLT,
-    int PeakLT);
+    double InitialLT,
+    double CurrentLT,
+    double PeakLT);
 
 /// <summary>
 /// Projects a manually ordered barter list without inventing warehouse stops.
@@ -31,7 +31,7 @@ public static class ManualCargoProjector {
         int extraLT) {
         if (extraLT < 0) throw new ArgumentOutOfRangeException(nameof(extraLT));
 
-        var weights = new Dictionary<string, int>(StringComparer.Ordinal);
+        var weights = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var step in steps) {
             Validate(step);
             AddWeight(weights, step.Item1Id, step.Item1UnitWeight);
@@ -52,8 +52,8 @@ public static class ManualCargoProjector {
         }
 
         var onboard = required.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-        int initial = checked(extraLT + CargoLT(onboard, weights));
-        int peak = initial;
+        double initial = checked(extraLT + CargoLT(onboard, weights));
+        double peak = initial;
         var projected = new List<ManualCargoProjectedStep>(steps.Count);
         foreach (var step in steps) {
             int available = onboard.GetValueOrDefault(step.Item1Id);
@@ -61,15 +61,15 @@ public static class ManualCargoProjector {
                 throw new InvalidOperationException($"Manual cargo projection is missing '{step.Item1Id}'.");
             AddQuantity(onboard, step.Item1Id, -step.InputQuantity);
             AddQuantity(onboard, step.Item2Id, step.OutputQuantity);
-            int cargoLT = CargoLT(onboard, weights);
-            int total = checked(extraLT + cargoLT);
+            double cargoLT = CargoLT(onboard, weights);
+            double total = checked(extraLT + cargoLT);
             peak = Math.Max(peak, total);
             projected.Add(new ManualCargoProjectedStep(
                 step,
                 new RouteLoadSnapshot(cargoLT, total, peak)));
         }
 
-        int current = projected.Count == 0 ? extraLT : projected[^1].Load.TotalWithExtraLT;
+        double current = projected.Count == 0 ? extraLT : projected[^1].Load.TotalWithExtraLT;
         return new ManualCargoProjection(projected.ToArray(), initial, current, peak);
     }
 
@@ -85,8 +85,8 @@ public static class ManualCargoProjector {
             throw new ArgumentException("Manual cargo step contains invalid item data.", nameof(step));
     }
 
-    private static void AddWeight(Dictionary<string, int> weights, string itemId, int unitWeight) {
-        if (weights.TryGetValue(itemId, out int existing) && existing != unitWeight)
+    private static void AddWeight(Dictionary<string, double> weights, string itemId, double unitWeight) {
+        if (weights.TryGetValue(itemId, out double existing) && existing != unitWeight)
             throw new ArgumentException($"Item '{itemId}' has inconsistent unit weights.");
         weights[itemId] = unitWeight;
     }
@@ -98,8 +98,7 @@ public static class ManualCargoProjector {
         else inventory[itemId] = quantity;
     }
 
-    private static int CargoLT(
+    private static double CargoLT(
         IReadOnlyDictionary<string, int> inventory,
-        IReadOnlyDictionary<string, int> weights) => checked(inventory.Sum(pair =>
-            checked(pair.Value * weights[pair.Key])));
+        IReadOnlyDictionary<string, double> weights) => Math.Round(inventory.Sum(pair => pair.Value * weights[pair.Key]), 2);
 }
