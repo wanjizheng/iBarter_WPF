@@ -729,7 +729,8 @@ namespace iBarter {
                     var line = reader.ReadLine();
                     if (string.IsNullOrWhiteSpace(line)) continue;
                     var results = SplitCsvLine(line);
-                    // Schema: Name, ID, LV, Number. Anything else is malformed.
+                    // Schema: Name, ID, LV, Number, WeightLT. Legacy four-column
+                    // files remain readable; CargoWeightTable resolves weights.
                     if (results.Count < 4) {
                         Log(Localization.LanguageService.Instance.Localize("str.Log.ItemsCSV.BadColumns", lineNo, results.Count, line), Brushes.OrangeRed);
                         continue;

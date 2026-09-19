@@ -12,7 +12,7 @@ namespace iBarter.Persistence;
 /// only the final, coherent state is captured when the outer batch completes.
 /// </summary>
 public static class WorkspaceSnapshotService {
-    private const int SchemaVersion = 2;
+    private const int SchemaVersion = 3;
     private const int LegacySchemaVersion = 1;
     private const int MaximumSnapshots = 30;
     private const string SnapshotDirectoryName = "StateSnapshots";
@@ -135,7 +135,8 @@ public static class WorkspaceSnapshotService {
             WorkspaceStateSnapshot? selected = snapshots
                 .Skip(startIndex)
                 .FirstOrDefault(snapshot =>
-                    IsRestorable(snapshot.State)
+                    IsRestorable(snapshot.State, snapshot.SchemaVersion)
+                    && IsCompatibleTaggedRestore(current, snapshot)
                     && !SnapshotMatchesState(snapshot, current));
 
             if (selected is null) {
@@ -177,6 +178,9 @@ public static class WorkspaceSnapshotService {
             string resources = ResolveResourcesDirectory(resourcesDirectory);
             WorkspaceState state = ReadCurrentState(resources);
             if (!IsSnapshotStateValid(state, SchemaVersion)) return false;
+            // A mixed Planner/TAG state cannot be restored safely. It may exist
+            // briefly while one side of a completion is being persisted.
+            if (IsTaggedModeEnabled(state) && !IsTaggedPlannerCoherent(state)) return false;
 
             string fingerprint = ComputeFingerprint(state, SchemaVersion);
             string snapshotDirectory = Path.Combine(resources, SnapshotDirectoryName);
@@ -224,7 +228,9 @@ public static class WorkspaceSnapshotService {
             ReadOptionalFile(Path.Combine(resourcesDirectory, "myPlan_Setting.xml")),
             ReadOptionalFile(Path.Combine(resourcesDirectory, "myStorage_Data.json")) ?? "[]",
             ReadOptionalFile(Path.Combine(resourcesDirectory, "automatic-route-plan.json")),
-            ReadOptionalFile(Path.Combine(resourcesDirectory, "myShipProperty_Data.json")));
+            ReadOptionalFile(Path.Combine(resourcesDirectory, "myShipProperty_Data.json")),
+            ReadOptionalFile(Path.Combine(resourcesDirectory, "tagged-transport-session.json")),
+            ReadOptionalFile(Path.Combine(resourcesDirectory, "tagged-transport-settings.json")));
 
     private static void ApplyState(
         string resourcesDirectory,
@@ -250,7 +256,7 @@ public static class WorkspaceSnapshotService {
             Path.Combine(resourcesDirectory, "automatic-route-plan.json"),
             state.AutomaticRouteJson,
             IsJsonDocument);
-        if (schemaVersion >= SchemaVersion) {
+        if (schemaVersion >= 2) {
             // The route-plan fingerprint includes ExtraLT and TotalLT. Restore
             // the same cargo-capacity file before the Planner reloads it,
             // otherwise a restored automatic-route JSON can never match the
@@ -260,6 +266,10 @@ public static class WorkspaceSnapshotService {
                 Path.Combine(resourcesDirectory, "myShipProperty_Data.json"),
                 state.CargoPropertyJson,
                 IsJsonDocument);
+        }
+        if (schemaVersion >= 3) {
+            RestoreOptionalFile(Path.Combine(resourcesDirectory, "tagged-transport-session.json"), state.TaggedSessionJson, IsJsonDocument);
+            RestoreOptionalFile(Path.Combine(resourcesDirectory, "tagged-transport-settings.json"), state.TaggedSettingsJson, IsJsonDocument);
         }
     }
 
@@ -316,7 +326,7 @@ public static class WorkspaceSnapshotService {
     }
 
     private static bool IsSupportedSchema(int schemaVersion) =>
-        schemaVersion is LegacySchemaVersion or SchemaVersion;
+        schemaVersion is LegacySchemaVersion or 2 or SchemaVersion;
 
     private static bool SnapshotMatchesState(
         WorkspaceStateSnapshot snapshot,
@@ -334,8 +344,12 @@ public static class WorkspaceSnapshotService {
             state.StorageJson,
             state.AutomaticRouteJson ?? "\u0000",
         };
-        if (schemaVersion >= SchemaVersion) {
+        if (schemaVersion >= 2) {
             values.Add(state.CargoPropertyJson ?? "\u0000");
+        }
+        if (schemaVersion >= 3) {
+            values.Add(state.TaggedSessionJson ?? "\u0000");
+            values.Add(state.TaggedSettingsJson ?? "\u0000");
         }
         string combined = string.Join(
             "\u001e",
@@ -350,11 +364,60 @@ public static class WorkspaceSnapshotService {
         && (state.AutomaticRouteJson is null || IsJsonDocument(state.AutomaticRouteJson))
         && (schemaVersion == LegacySchemaVersion
             || state.CargoPropertyJson is null
-            || IsJsonDocument(state.CargoPropertyJson));
+            || IsJsonDocument(state.CargoPropertyJson))
+        && (schemaVersion < 3 || ((state.TaggedSessionJson is null || IsJsonDocument(state.TaggedSessionJson))
+            && (state.TaggedSettingsJson is null || IsJsonDocument(state.TaggedSettingsJson))));
 
-    private static bool IsRestorable(WorkspaceState state) =>
-        IsSnapshotStateValid(state, SchemaVersion)
-        && CountPlannerRows(state.PlannerJson) > 0;
+    private static bool IsRestorable(WorkspaceState state, int schemaVersion) =>
+        IsSnapshotStateValid(state, schemaVersion)
+        && CountPlannerRows(state.PlannerJson) > 0
+        && IsTaggedPlannerCoherent(state);
+
+    // Restoring a Planner snapshot without its matching TAG session leaves the
+    // route pointing at a different exchange set. The UI then correctly rejects
+    // it, but that looks like Restore erased the route. Skip such snapshots
+    // before writing any file so Restore is transactional from the user's view.
+    private static bool IsCompatibleTaggedRestore(WorkspaceState current, WorkspaceStateSnapshot candidate) =>
+        !IsTaggedModeEnabled(current)
+        || candidate.SchemaVersion >= 3 && IsTaggedModeEnabled(candidate.State) && IsTaggedPlannerCoherent(candidate.State);
+
+    private static bool IsTaggedModeEnabled(WorkspaceState state) {
+        if (state.TaggedSessionJson is null || state.TaggedSettingsJson is null) return false;
+        try {
+            using var settings = JsonDocument.Parse(state.TaggedSettingsJson);
+            return settings.RootElement.TryGetProperty("Enabled", out var enabled) && enabled.ValueKind == JsonValueKind.True;
+        }
+        catch (JsonException) { return false; }
+    }
+
+    private static bool IsTaggedPlannerCoherent(WorkspaceState state) {
+        if (!IsTaggedModeEnabled(state)) return true;
+        try {
+            using var planner = JsonDocument.Parse(state.PlannerJson);
+            using var session = JsonDocument.Parse(state.TaggedSessionJson!);
+            JsonElement root = session.RootElement;
+            JsonElement source;
+            if (root.TryGetProperty("WorkspaceInputs", out var workspace) && workspace.ValueKind == JsonValueKind.Object) source = workspace;
+            else if (root.TryGetProperty("SettlementBaseline", out var baseline) && baseline.ValueKind == JsonValueKind.Object) source = baseline;
+            else if (root.TryGetProperty("Request", out var request) && request.ValueKind == JsonValueKind.Object) source = request;
+            else return true; // Older/non-route test payload; structural validation still applies.
+            if (!source.TryGetProperty("Trades", out var trades) || trades.ValueKind != JsonValueKind.Array) return true;
+
+            var tagged = trades.EnumerateArray()
+                .Where(t => t.TryGetProperty("RowId", out _))
+                .Select(t => t.GetProperty("RowId").GetString() ?? "")
+                .Where(id => id.Length > 0).ToHashSet(StringComparer.Ordinal);
+            var active = planner.RootElement.EnumerateArray().Where(row =>
+                    (!row.TryGetProperty("ExchangeDone", out var done) || done.ValueKind != JsonValueKind.True)
+                    && (!row.TryGetProperty("ExchangeQuantity", out var quantity) || quantity.GetInt32() > 0)
+                    && row.TryGetProperty("PlannerRowId", out var id) && !string.IsNullOrEmpty(id.GetString()))
+                .Select(row => row.GetProperty("PlannerRowId").GetString()!).ToHashSet(StringComparer.Ordinal);
+            return tagged.SetEquals(active);
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException) {
+            return false;
+        }
+    }
 
     private static bool IsValidSnapshotJson(string json) {
         try {
@@ -458,7 +521,9 @@ public static class WorkspaceSnapshotService {
         string? PlannerSettingsXml,
         string StorageJson,
         string? AutomaticRouteJson,
-        string? CargoPropertyJson = null);
+        string? CargoPropertyJson = null,
+        string? TaggedSessionJson = null,
+        string? TaggedSettingsJson = null);
 }
 
 public sealed record WorkspaceSnapshotRestoreResult(

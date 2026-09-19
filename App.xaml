@@ -87,6 +87,8 @@
             <SolidColorBrush x:Key="AppCardBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="AppCardBorderBrush" Color="#C3CDD8" />
             <SolidColorBrush x:Key="AppAccentBrush" Color="#176F7F" />
+            <SolidColorBrush x:Key="AppCargoLoadBrush" Color="#176B43" />
+            <SolidColorBrush x:Key="AppCargoUnloadBrush" Color="#A34C13" />
             <SolidColorBrush x:Key="AppAccentTextBrush" Color="#FFFFFF" />
             <ResourceDictionary.MergedDictionaries>
                 <!-- Syncfusion 34.2.6 Windows11 control dictionaries contain

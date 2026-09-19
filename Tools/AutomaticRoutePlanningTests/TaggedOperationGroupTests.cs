@@ -2,6 +2,16 @@ using iBarter.Routing;
 using Xunit;
 namespace AutomaticRoutePlanningTests;
 public class TaggedOperationGroupTests {
+    [Fact] public void OnlyConsecutiveEqualBatchesMergeAndFinalLargeStackStaysSeparate() {
+        var one = new TaggedAction(TaggedActionKind.Transfer, "Haemo", "ship", "main", "a", 1);
+        var plan = Plan(one, one, one, one with { Quantity = 30 });
+        var lines = TaggedOperationGroups.Summarize(plan, new(0, 4, "transfer"), 0);
+        Assert.Equal(new[] { 3, 30 }, lines.Select(l => l.Action.Quantity));
+        plan = Plan(one, one with { ItemId = "b" }, one);
+        Assert.Equal(3, TaggedOperationGroups.Summarize(plan, new(0, 3, "transfer"), 0).Length);
+        plan = Plan(one, one, one);
+        Assert.Equal(new[] { 1, 2 }, TaggedOperationGroups.Summarize(plan, new(0, 3, "transfer"), 1).Select(l => l.Action.Quantity));
+    }
     private static TaggedTransportPlan Plan(params TaggedAction[] actions) => new("", actions.Select(a => new TaggedTransportStep(a, 0, 0, 0, 0, 0)).ToArray(), 0, 0, 0, 0, "");
     [Fact] public void ElevenLoadsBecomeOneCardAndUnloadIsGroupedSeparately() {
         var actions = Enumerable.Range(0, 11).Select(i => new TaggedAction(TaggedActionKind.Transfer, "Velia", "warehouse:Velia", i % 2 == 0 ? "ship" : "main", "a", 1))

@@ -1033,6 +1033,7 @@ namespace iBarter.View {
 
                 App.myRouteCoordinator?.Invalidate("snapshot-restore");
                 App.myStorageVM?.LoadData();
+                App.myfmMain?.myShipCargo?.TaggedRoutePanel.ReloadSnapshotState();
                 ButtonAdv_Load_Click(ButtonAdv_Restore, new RoutedEventArgs());
                 UpdateParley();
                 UpdateMapControl();

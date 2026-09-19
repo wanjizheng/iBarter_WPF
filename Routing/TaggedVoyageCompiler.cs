@@ -19,7 +19,14 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
         if (jobs.Count == 0 || prepareAtWarehouse && sim.Port(initial.Location)?.WarehouseId.Length is not > 0) return null;
         state = initial;
         LastFailure = "preparing at " + state.Location;
-        if (prepareAtWarehouse && ((!KeepCargoHere && !UnloadAll()) || !Prepare(preloadJobs ?? jobs, packing))) return null;
+        if (prepareAtWarehouse) {
+            if (!KeepCargoHere && !UnloadAll()) return null;
+            var departure = state;
+            if (!Prepare(preloadJobs ?? jobs, packing)) {
+                state = departure;
+                if (!Prepare(preloadJobs ?? jobs, packing, prefill: false)) return null;
+            }
+        }
         for (int index = 0; index < jobs.Count; index++) {
             if (stopped()) return null;
             var job = jobs[index]; var trade = R.Trades[job.TradeIndex];
@@ -27,8 +34,13 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
             var future = jobs.Skip(index).ToArray();
             var before = state;
             TaggedTransportState? selected = null;
+            bool sellBeforeLaterPressure = CarriesTerminalLevelSeven(before)
+                && FutureShipWillNeedRelief(before, future);
             // First try the direct leg. If cargo needs handling, enumerate only real ports.
-            if (Move(trade.IslandId) && Ready(job, normalOutput: packing < 3 || !R.Settings.AllowOverloadedSailing)) selected = state;
+            // Terminal LV7 goods are sold at the earliest useful handling port when
+            // any later exchange in this voyage would otherwise make the ship tight.
+            if (!sellBeforeLaterPressure && Move(trade.IslandId)
+                && Ready(job, normalOutput: packing < 3 || !R.Settings.AllowOverloadedSailing)) selected = state;
             state = before;
             if (selected is null) {
                 foreach (var port in R.Settings.Ports.Where(p => p.Enabled).OrderBy(p =>
@@ -62,8 +74,12 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
         if (KeepCargoHere) {
             // Retain goods for the home warehouse; use characters first to free the ship.
             var needed = R.Trades.Where((t, i) => state.Remaining[i] > 0).Select(t => t.InputId).ToHashSet();
-            foreach (var item in state.Cargo["ship"].Where(i => R.Items[i.Key].UnitWeight > 0 && !needed.Contains(i.Key)).ToArray())
-                while (sim.Count(state, "ship", item.Key) > 0 && Park("", 0, needed, double.MaxValue, item.Key)) { }
+            // Pack all eligible goods together. Packing one item at a time can
+            // alternate TAG -> main -> TAG when the next item still fits TAG.
+            while (state.Cargo["ship"].Any(i => i.Value > 0 && R.Items[i.Key].UnitWeight > 0 && !needed.Contains(i.Key))) {
+                double before = sim.Weight(state, "ship");
+                if (!Park("", 0, needed, double.MaxValue) || sim.Weight(state, "ship") >= before) break;
+            }
         }
         else if (!UnloadAll()) return null;
         if (!Switch("main")) return null;
@@ -71,6 +87,32 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
     }
 
     private bool KeepCargoHere => R.Settings.HomeWarehouseId is { Length: > 0 } home && sim.Port(state.Location)?.WarehouseId != home;
+
+    private bool CarriesTerminalLevelSeven(TaggedTransportState candidate) =>
+        candidate.Cargo.Where(c => !TaggedTransportSimulator.IsWarehouse(c.Key))
+            .Any(c => c.Value.Any(i => i.Value > 0 && sim.IsTerminalLevelSeven(candidate, i.Key)));
+
+    private bool FutureShipWillNeedRelief(TaggedTransportState candidate, IReadOnlyList<TaggedVoyageJob> jobs) {
+        var cargo = new Dictionary<string, int>(candidate.Cargo["ship"], StringComparer.Ordinal);
+        double weight = sim.Weight(candidate, "ship");
+        foreach (var job in jobs) {
+            var trade = R.Trades[job.TradeIndex];
+            int input = checked(trade.InputPerExchange * job.Quantity);
+            int missing = Math.Max(0, input - cargo.GetValueOrDefault(trade.InputId));
+            if (missing > 0) {
+                cargo[trade.InputId] = cargo.GetValueOrDefault(trade.InputId) + missing;
+                weight += missing * R.Items[trade.InputId].UnitWeight;
+            }
+            if (weight > R.ShipLimitLT + 0.001) return true;
+            cargo[trade.InputId] -= input;
+            if (cargo[trade.InputId] == 0) cargo.Remove(trade.InputId);
+            int output = checked(trade.OutputPerExchange * job.Quantity);
+            cargo[trade.OutputId] = cargo.GetValueOrDefault(trade.OutputId) + output;
+            weight += output * R.Items[trade.OutputId].UnitWeight - input * R.Items[trade.InputId].UnitWeight;
+            if (weight > R.ShipLimitLT + 0.001) return true;
+        }
+        return false;
+    }
 
     internal TaggedTransportState? ReturnCargoToWarehouse(TaggedTransportState initial, string island) {
         state = initial;
@@ -96,7 +138,8 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
                 if (laterSteps.TakeWhile(s => s.Action.Kind != TaggedActionKind.Barter).Any(s => TaggedTransportSimulator.IsWarehouse(s.Action.From))) break;
                 preload.AddRange(laterSteps.Where(s => s.Action.Kind == TaggedActionKind.Barter).Select(s => new TaggedVoyageJob(s.Action.TradeIndex, s.Action.Quantity)));
             }
-            current = Compile(current, jobs, steps[route.End - 1].Action.Location, preloadJobs: preload);
+            current = Compile(current, jobs, steps[route.End - 1].Action.Location,
+                prepareAtWarehouse: sim.Port(current.Location)?.WarehouseId.Length > 0, preloadJobs: preload);
             if (current is null) return null;
         }
         return sim.Complete(current) ? current : null;
@@ -116,7 +159,7 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
         return need;
     }
 
-    private bool Prepare(IReadOnlyList<TaggedVoyageJob> jobs, int packing) {
+    private bool Prepare(IReadOnlyList<TaggedVoyageJob> jobs, int packing, bool prefill = true) {
         string wh = TaggedTransportSimulator.Warehouse(sim.Port(state.Location)!.WarehouseId);
         var requirements = Required(jobs);
         if (requirements.Any(i => sim.Count(state, wh, i.Key) < i.Value)) return false;
@@ -132,14 +175,30 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
             if (count < item.Value) overflow[item.Key] = item.Value - count;
         }
         var allocation = R.Settings.Carriers.ToDictionary(c => c.Id, _ => new Dictionary<string, int>());
-        foreach (var item in overflow) {
-            int left = item.Value; double weight = R.Items[item.Key].UnitWeight;
+        foreach (var item in overflow.OrderByDescending(i => prefill ? R.Items[i.Key].UnitWeight * i.Value : 0).ToArray()) {
+            int left = overflow[item.Key]; double weight = R.Items[item.Key].UnitWeight;
+            if (left == 0) continue;
             foreach (string id in carrierOrders[packing % carrierOrders.Length]) {
                 var c = R.Settings.Carriers.Single(c => c.Id == id); var cargo = allocation[id];
                 double before = sim.Weight(state, id) + cargo.Sum(i => (double)R.Items[i.Key].UnitWeight * i.Value);
                 int usedSlots = state.Cargo[id].Sum(i => R.Items[i.Key].UnitWeight == 0 ? 0 : sim.Stackable(i.Key) ? 1 : i.Value)
                     + cargo.Sum(i => sim.Stackable(i.Key) ? 1 : i.Value);
                 if (before >= c.LimitLT * R.Settings.CharacterReceiveRatio || usedSlots >= c.Slots) continue;
+                if (prefill && !TaggedTransportSimulator.IsElephant(id) && sim.Stackable(item.Key)
+                    && before + left * weight >= c.LimitLT * R.Settings.CharacterReceiveRatio) {
+                    foreach (var extra in overflow.Where(i => i.Key != item.Key && i.Value > 0)
+                        .OrderByDescending(i => R.Items[i.Key].UnitWeight).ToArray()) {
+                        double w = R.Items[extra.Key].UnitWeight;
+                        if (w <= 0) continue;
+                        int n = Math.Min(extra.Value, Math.Max(0, (int)Math.Floor((c.LimitLT * R.Settings.CharacterReceiveRatio - before - 0.01) / w)));
+                        int availableSlots = c.Slots - usedSlots - 1;
+                        n = sim.Stackable(extra.Key) ? availableSlots > 0 ? n : 0 : Math.Min(n, availableSlots);
+                        if (n <= 0) continue;
+                        cargo[extra.Key] = cargo.GetValueOrDefault(extra.Key) + n;
+                        overflow[extra.Key] -= n; before += n * w;
+                        usedSlots += sim.Stackable(extra.Key) ? 1 : n;
+                    }
+                }
                 int count;
                 if (TaggedTransportSimulator.IsElephant(id)) {
                     var owner = R.Settings.Carriers.Single(c => c.Id == TaggedTransportSimulator.Owner(id));
@@ -152,9 +211,12 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
                 cargo[item.Key] = count; left -= count;
                 if (left == 0) break;
             }
+            overflow[item.Key] = left;
             if (left > 0) return false;
         }
         // Prepare mounts while their owners still have warehouse shuttle headroom.
+        // A loaded elephant cannot be whistle-summoned at another island, so the
+        // completed stack is transferred back to its owner before departure.
         foreach (var container in allocation.Where(c => TaggedTransportSimulator.IsElephant(c.Key)))
             foreach (var item in container.Value) {
                 if (!Switch(TaggedTransportSimulator.Owner(container.Key)) || !Summon(container.Key)
@@ -162,7 +224,44 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
             }
         foreach (string id in new[] { "alt", "main" }) {
             if (allocation[id].Count == 0) continue;
+            if (prefill) {
+                // Keep a large stack together instead of leaving most of it on
+                // the ship and using the character for only the overflow tail.
+                var firstInput = R.Trades[jobs[0].TradeIndex].InputId;
+                foreach (var stack in allocation[id].Where(i => sim.Stackable(i.Key) && i.Key != firstInput).ToArray()) {
+                    int onShip = ship.GetValueOrDefault(stack.Key);
+                    if (onShip > 0 && (stack.Value + onShip) * R.Items[stack.Key].UnitWeight <= R.ShipLimitLT - R.ShipOccupiedLT) {
+                        allocation[id][stack.Key] += onShip;
+                        ship.Remove(stack.Key);
+                    }
+                }
+            }
             if (!Switch(id)) return false;
+            // Fill the receiving headroom before the last stack takes the character
+            // over the receive threshold. Keep the next exchange's input on board.
+            var carrier = R.Settings.Carriers.Single(c => c.Id == id);
+            double allocatedWeight = allocation[id].Sum(i => R.Items[i.Key].UnitWeight * i.Value);
+            if (prefill && allocation[id].Count == 1 && allocation[id].Any(i => sim.Stackable(i.Key)) && sim.Weight(state, id) + allocatedWeight >= carrier.LimitLT * R.Settings.CharacterReceiveRatio) {
+                var first = R.Trades[jobs[0].TradeIndex];
+                foreach (var extra in ship.Where(i => !allocation[id].ContainsKey(i.Key) && R.Items[i.Key].UnitWeight > 0)
+                    .OrderByDescending(i => R.Items[i.Key].UnitWeight).ToArray()) {
+                    double weight = R.Items[extra.Key].UnitWeight;
+                    int reserve = extra.Key == first.InputId ? first.InputPerExchange * jobs[0].Quantity : 0;
+                    int count = Math.Min(extra.Value - reserve, (int)Math.Floor((carrier.LimitLT * R.Settings.CharacterReceiveRatio
+                        - sim.Weight(state, id) - 0.01) / weight));
+                    if (count <= 0) continue;
+                    var before = state;
+                    bool ok = Transfer(wh, "ship", extra.Key, count);
+                    if (ok && sim.Stackable(extra.Key)) ok = Transfer("ship", id, extra.Key, count);
+                    else if (ok) for (int n = 0; n < count && ok; n++) ok = Transfer("ship", id, extra.Key, 1);
+                    var final = allocation[id].Single();
+                    // Reserve the final stack's slot as well as its receive headroom.
+                    if (!ok || !sim.FitsSlots(state, id) || state.Cargo[id].Sum(i => R.Items[i.Key].UnitWeight == 0 ? 0 : sim.Stackable(i.Key) ? 1 : i.Value)
+                        + (state.Cargo[id].ContainsKey(final.Key) ? 0 : 1) > carrier.Slots) { state = before; continue; }
+                    ship[extra.Key] -= count;
+                    if (ship[extra.Key] == 0) ship.Remove(extra.Key);
+                }
+            }
             foreach (var item in allocation[id]) {
                 // Warehouse withdrawal is subject to normal character LT. Use the empty
                 // ship as a staging container when receiving one stack from a mount/ship.
@@ -178,6 +277,12 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
                     || !Transfer(elephant, id, item.Key, item.Value)) return false;
             }
         }
+        foreach (var container in allocation.Where(c => TaggedTransportSimulator.IsElephant(c.Key))) {
+            string owner = TaggedTransportSimulator.Owner(container.Key);
+            if (!Switch(owner)) return false;
+            foreach (var item in container.Value)
+                if (!Transfer(container.Key, owner, item.Key, item.Value)) return false;
+        }
         if (!Switch("main")) return false;
         foreach (var item in ship) if (!Transfer(wh, "ship", item.Key, item.Value)) return false;
         return true;
@@ -190,8 +295,7 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
         if (port.WarehouseId.Length > 0 && !KeepCargoHere && !UnloadTerminal(needed)) return false;
         var trade = R.Trades[job.TradeIndex]; int quantity = checked(trade.InputPerExchange * job.Quantity);
         for (int guard = 0; guard < 2000 && !stopped(); guard++) {
-            if (!Switch("main")) return false;
-            if (Ready(job, normalOutput: true)) return true;
+            if (Ready(job, normalOutput: true)) return Switch("main");
             int missing = quantity - sim.Count(state, "ship", trade.InputId);
             if (missing > 0 && Pull(trade.InputId, missing)) continue;
             double extra = Math.Max(0, missing) * (double)R.Items[trade.InputId].UnitWeight;
@@ -199,7 +303,7 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
                 - (double)quantity * R.Items[trade.InputId].UnitWeight;
             double deficit = Math.Max(1, sim.Weight(state, "ship") + extra + Math.Max(0, delta) - R.ShipLimitLT);
             if (Park(trade.InputId, quantity, needed, deficit)) continue;
-            return Switch("main") && Ready(job, normalOutput: false);
+            return Ready(job, normalOutput: false) && Switch("main");
         }
         return false;
     }
@@ -208,7 +312,7 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
         double weight = R.Items[item].UnitWeight;
         int room = weight == 0 ? missing : Math.Max(0, (int)Math.Floor((R.ShipLimitLT - sim.Weight(state, "ship")) / weight));
         if (room <= 0) return false;
-        foreach (string id in new[] { "main", "alt", "main-elephant", "alt-elephant" }) {
+        foreach (string id in new[] { "alt", "main", "alt-elephant", "main-elephant" }) {
             int n = Math.Min(missing, Math.Min(room, sim.Count(state, id, item)));
             if (n <= 0) continue;
             var before = state;
@@ -234,29 +338,64 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
         var beforeSale = state;
         state = TaggedTerminalSales.SellAvailable(sim, state);
         if (sim.Weight(state, "ship") < sim.Weight(beforeSale, "ship")) return true;
+        if (PackCharacter(input, quantity, onlyItem)) return true;
         foreach (var item in state.Cargo["ship"].Where(i => R.Items[i.Key].UnitWeight > 0
             && !sim.IsTerminalLevelSeven(state, i.Key)
             && (onlyItem is null || i.Key == onlyItem) && i.Value > (i.Key == input ? quantity : 0)).OrderBy(i => needed.Contains(i.Key)).ThenByDescending(i => R.Items[i.Key].UnitWeight).ToArray()) {
             int available = item.Value - (item.Key == input ? quantity : 0);
             int n = sim.Stackable(item.Key) ? (int)Math.Min(available, Math.Max(1, Math.Ceiling(deficit / R.Items[item.Key].UnitWeight))) : 1;
-            foreach (string owner in new[] { "main", "alt" }) {
+            foreach (string owner in new[] { "alt", "main" }) {
                 var before = state;
                 if (Switch(owner) && Transfer("ship", owner, item.Key, n)) return true;
-                state = before;
-            }
-            foreach (string owner in new[] { "main", "alt" }) {
-                var before = state; string mount = owner + "-elephant";
-                if (Switch(owner) && Summon(mount) && Transfer("ship", owner, item.Key, n) && Transfer(owner, mount, item.Key, n)) return true;
                 state = before;
             }
         }
         return false;
     }
 
+    private bool PackCharacter(string input, int quantity, string? onlyItem) {
+        var original = state;
+        var available = state.Cargo["ship"].Where(i => R.Items[i.Key].UnitWeight > 0
+            && !sim.IsTerminalLevelSeven(state, i.Key) && (onlyItem is null || i.Key == onlyItem))
+            .Select(i => new KeyValuePair<string, int>(i.Key, i.Value - (i.Key == input ? quantity : 0)))
+            .Where(i => i.Value > 0).ToArray();
+        // Finish the TAG character's entire useful batch before considering the
+        // main character. This minimizes character switches and matches the
+        // user's preferred handling order.
+        foreach (string owner in new[] { "alt", "main" }) {
+            TaggedTransportState? best = null;
+            double bestWeight = sim.Weight(original, "ship");
+            var c = R.Settings.Carriers.Single(c => c.Id == owner);
+            foreach (var final in available.Where(i => sim.Stackable(i.Key))) {
+                state = original;
+                if (!Switch(owner)) continue;
+                // Reserve one slot for the final distinct stack, and verify every
+                // receiving operation through the same simulator used for routes.
+                foreach (var item in available.Where(i => i.Key != final.Key).OrderByDescending(i => R.Items[i.Key].UnitWeight)) {
+                    double weight = R.Items[item.Key].UnitWeight;
+                    int count = Math.Min(item.Value, Math.Max(0, (int)Math.Floor(
+                        (c.LimitLT * R.Settings.CharacterReceiveRatio - sim.Weight(state, owner) - 0.01) / weight)));
+                    if (count == 0) continue;
+                    var before = state;
+                    bool ok = true;
+                    if (sim.Stackable(item.Key)) ok = Transfer("ship", owner, item.Key, count);
+                    else for (int n = 0; n < count && ok; n++) ok = Transfer("ship", owner, item.Key, 1);
+                    if (!ok || !sim.TryApply(state, new(TaggedActionKind.Transfer, state.Location, "ship", owner, final.Key, final.Value), out _, out _)) state = before;
+                }
+                if (Transfer("ship", owner, final.Key, final.Value) && sim.Weight(state, "ship") < bestWeight) {
+                    best = state; bestWeight = sim.Weight(state, "ship");
+                }
+            }
+            if (best is not null) { state = best; return true; }
+        }
+        state = original;
+        return false;
+    }
+
     private bool UnloadTerminal(HashSet<string> needed) {
         state = TaggedTerminalSales.SellAvailable(sim, state);
         string wh = TaggedTransportSimulator.Warehouse(sim.Port(state.Location)!.WarehouseId);
-        foreach (string source in new[] { "ship", "main", "alt" }) {
+        foreach (string source in new[] { "ship", "alt", "main" }) {
             var goods = state.Cargo[source].Where(i => R.Items[i.Key].UnitWeight > 0 && !needed.Contains(i.Key)
                 && !sim.IsTerminalLevelSeven(state, i.Key)).ToArray();
             if (goods.Length == 0) continue;
@@ -273,7 +412,7 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
         string wh = TaggedTransportSimulator.Warehouse(sim.Port(state.Location)!.WarehouseId);
         foreach (var item in state.Cargo["ship"].Where(i => R.Items[i.Key].UnitWeight > 0 && !sim.IsTerminalLevelSeven(state, i.Key)).ToArray())
             if (!Transfer("ship", wh, item.Key, item.Value)) return false;
-        foreach (string owner in new[] { "main", "alt" }) {
+        foreach (string owner in new[] { "alt", "main" }) {
             string mount = owner + "-elephant";
             if (state.Cargo[owner].Count == 0 && state.Cargo[mount].Count == 0) continue;
             if (!Switch(owner)) return false;
@@ -295,11 +434,13 @@ internal sealed class TaggedVoyageCompiler(TaggedTransportSimulator sim, Func<bo
         return Switch("main");
     }
     private bool Ready(TaggedVoyageJob job, bool normalOutput) {
-        if (state.Active != "main") return false;
         var t = R.Trades[job.TradeIndex];
         if (normalOutput && sim.Weight(state, "ship") + ((double)t.OutputPerExchange * R.Items[t.OutputId].UnitWeight
             - (double)t.InputPerExchange * R.Items[t.InputId].UnitWeight) * job.Quantity > R.ShipLimitLT) return false;
+        // Feasibility checks must not emit a character switch. Rebalance emits
+        // the single required switch after the whole wharf-handling batch.
         var arrival = state;
+        if (arrival.Active != "main") { arrival = arrival.Copy(); arrival.Active = "main"; }
         if (arrival.Location != t.IslandId && !sim.TryApply(arrival,
             new(TaggedActionKind.Sail, t.IslandId, arrival.Location, t.IslandId), out arrival, out _)) return false;
         return sim.TryApply(arrival, new(TaggedActionKind.Barter, t.IslandId, Quantity: job.Quantity, TradeIndex: job.TradeIndex), out _, out _);

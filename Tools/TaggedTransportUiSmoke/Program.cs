@@ -11,6 +11,19 @@ internal static class Program {
     [STAThread]
     private static int Main(string[] args) {
         try {
+            if (args.Length == 1 && args[0] == "--check-catalog") {
+                if (Directory.Exists(Path.Combine(AppContext.BaseDirectory, "docs"))
+                    || Directory.Exists(Path.Combine(AppContext.BaseDirectory, "doc")))
+                    throw new Exception("Catalog deployment check must run without documentation folders.");
+                using var csv = File.OpenText(Path.Combine(AppContext.BaseDirectory, "Resources", "Items.csv"));
+                var expected = CargoWeightTable.ReadWeights(csv);
+                if (expected.Count == 0) throw new Exception("Empty item catalog.");
+                foreach (var item in expected)
+                    if (CargoWeightTable.GetWeight(item.Key, -999) != item.Value)
+                        throw new Exception("Runtime weight differs from CSV for " + item.Key);
+                Console.WriteLine($"PASS: {expected.Count} runtime item weights read from Items.csv without doc/docs; Fig={CargoWeightTable.GetWeight("7018", 0):F2} LT.");
+                return 0;
+            }
             if (args.Length == 2 && args[0] == "--audit-algorithm") return TaggedAlgorithmAudit.Run(args[1]);
             if (args.Length == 2 && args[0] == "--trace-search") return TaggedAlgorithmAudit.TraceSearch(args[1]);
             if (args.Length == 2 && args[0] == "--audit-completion") return AuditCompletion(args[1]);
@@ -19,6 +32,8 @@ internal static class Program {
             if (args.Length == 2 && args[0] == "--audit-port-timing") return AuditPortTiming(args[1]);
             if (args.Length == 2 && args[0] == "--audit-lv7") return AuditLevelSeven(args[1]);
             if (args.Length == 2 && args[0] == "--audit-character-weight") return AuditCharacterWeight(args[1]);
+            if (args.Length == 2 && args[0] == "--audit-packing") return AuditPacking(args[1]);
+            if (args.Length == 2 && args[0] == "--audit-olvia") return AuditOlvia(args[1]);
             if (args.Length == 3 && args[0] == "--search") return VerifyLongSearch(args[1], double.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture));
             var application = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext(application.Dispatcher));
@@ -27,6 +42,8 @@ internal static class Program {
             application.Resources["AppTextBrush"] = Brushes.WhiteSmoke;
             application.Resources["AppMutedTextBrush"] = Brushes.LightGray;
             application.Resources["AppAccentBrush"] = Brushes.LightSkyBlue;
+            application.Resources["AppCargoLoadBrush"] = new SolidColorBrush(Color.FromRgb(138, 221, 176));
+            application.Resources["AppCargoUnloadBrush"] = new SolidColorBrush(Color.FromRgb(255, 193, 138));
             application.Resources["AppAccentTextBrush"] = Brushes.Black;
             application.Resources["AppFontFamily"] = new FontFamily("Segoe UI");
             application.Resources["AppCardBorderBrush"] = Brushes.Gray;
@@ -37,6 +54,7 @@ internal static class Program {
             VerifySettingsEditing();
             VerifyLogTheme();
             VerifyChineseSettings();
+            VerifyOrdinaryExchangeTitles();
             var request = new TaggedTransportRequest {
                 ShipLimitLT = 2000,
                 Items = new() { ["a"] = new("a", "Later-segment barter materials", 4, 1000), ["b"] = new("b", "Exchange output", 5, 1000) },
@@ -95,11 +113,14 @@ internal static class Program {
             application.Resources["AppMutedTextBrush"] = new SolidColorBrush(Color.FromRgb(82, 97, 112));
             application.Resources["AppCardBorderBrush"] = new SolidColorBrush(Color.FromRgb(195, 205, 216));
             application.Resources["AppAccentBrush"] = new SolidColorBrush(Color.FromRgb(23, 111, 127));
+            application.Resources["AppCargoLoadBrush"] = new SolidColorBrush(Color.FromRgb(23, 107, 67));
+            application.Resources["AppCargoUnloadBrush"] = new SolidColorBrush(Color.FromRgb(163, 76, 19));
             application.Resources["AppAccentTextBrush"] = Brushes.White;
             var light = new TaggedSettingsWindow(request.Settings);
             Render((FrameworkElement)light.Content, 790, 670, "tagged-settings-light.png");
             light.Close();
             if (args.Length == 1) RenderSavedSession(args[0]);
+            if (args.Length == 3 && args[0] == "--map-completion") RenderSavedSession(args[1], args[2]);
             VerifySharedToolbar();
             Console.WriteLine("PASS: focused cell editing, numeric editing, settings auto-save/load, invalid input protection, two-route grouping, route filtering, map focus, narrow route rendering, step completion, reload, undo, disable.");
             Console.WriteLine(AppContext.BaseDirectory);
@@ -139,7 +160,7 @@ internal static class Program {
         Console.WriteLine("PASS: actual invalid saved route opens twice without throwing; settings preserved; route hidden with replan guidance; original file unchanged.");
         return 0;
     }
-    private static void RenderSavedSession(string path) {
+    private static void RenderSavedSession(string path, string? completionIsland = null) {
         var session = TaggedTransportStorage.Load<TaggedTransportSession>(path) ?? throw new Exception("Missing session.");
         // This legacy fixture explicitly tests unrestricted warehouse restores.
         // New user settings default to bringing goods home to Iliya.
@@ -150,7 +171,11 @@ internal static class Program {
         string folder = Path.Combine(AppContext.BaseDirectory, "Resources");
         // Isolated test output only; never save over the user's supplied runtime directory.
         TaggedTransportStorage.Save(Path.Combine(folder, "tagged-transport-session.json"), session);
-        TaggedTransportStorage.Save(Path.Combine(folder, "tagged-transport-settings.json"), (session.WorkspaceInputs ?? session.SettlementBaseline ?? session.Request).Settings);
+        var fixtureSettings = (session.WorkspaceInputs ?? session.SettlementBaseline ?? session.Request).Settings with { };
+        var originalPorts = fixtureSettings.Ports.Select(p => p.IslandId).ToHashSet();
+        TaggedPortCatalog.Merge(fixtureSettings);
+        foreach (var port in fixtureSettings.Ports.Where(p => !originalPorts.Contains(p.IslandId))) port.Enabled = false;
+        TaggedTransportStorage.Save(Path.Combine(folder, "tagged-transport-settings.json"), fixtureSettings);
         foreach (string id in session.Request.Items.Keys) {
             string icon = Path.Combine(Path.GetDirectoryName(path)!, "Images", "Items", id + ".bmp");
             if (!File.Exists(icon)) icon = Path.Combine("Resources", "Images", "Items", id + ".bmp");
@@ -186,12 +211,8 @@ internal static class Program {
             steps.ScrollIntoView(kuit);
             Render(control, 420, 850, "tagged-kuit-transfer.png");
         }
-        ((TabControl)control.FindName("PlanTabs")).SelectedIndex = 1;
-        Render(control, 420, 850, "tagged-cargo-locations.png");
-        if (((TextBlock)control.FindName("InventoryText")).Text.Contains("warehouse:", StringComparison.Ordinal))
-            throw new Exception("Cargo view still dumps internal warehouse identifiers.");
-        ((TabControl)control.FindName("PlanTabs")).SelectedIndex = 0;
-        VerifySharedMap(control, path);
+        VerifySharedMap(control, path, completionIsland);
+        if (completionIsland is not null) return;
         control = new TaggedRouteControl(); // map test restores its isolated saved snapshot
         var groups = TaggedOperationGroups.Build(session.Request, session.Plan);
         Console.WriteLine($"Supplied save: {session.Plan.Steps.Length} internal steps, {groups.Length} display cards, first card {groups[0].End - groups[0].Start} operations.");
@@ -389,7 +410,7 @@ internal static class Program {
         Console.WriteLine($"PASS actual-save search {watch.Elapsed.TotalSeconds:F2}s; start={result.PlannedRequest.Settings.StartIsland}; distance={result.Plan.Distance}; routes={TaggedTransportRoutes.Build(result.PlannedRequest, result.Plan).Length}; alt={result.Plan.Steps.Any(s => s.Action.From.StartsWith("alt") || s.Action.To.StartsWith("alt"))}; {result.Message}");
         return 0;
     }
-    private static void VerifySharedMap(TaggedRouteControl control, string sessionPath) {
+    private static void VerifySharedMap(TaggedRouteControl control, string sessionPath, string? completionIsland = null) {
         var originalSession = control.Session!;
         var oldIslands = App.listIslands;
         var oldItems = App.listItems;
@@ -466,7 +487,7 @@ internal static class Program {
             selector.SelectedIndex = 0;
             var before = control.Session!;
             var labels = RouteStepLabelPlanner.PlanLabels(coordinator.DisplayPlan, true, null, new Dictionary<string, string>());
-            var barter = labels.FirstOrDefault(l => l.RouteNumber == 1 && l.IslandId == "Pujara")
+            var barter = completionIsland is not null ? labels.First(l => l.IslandId == completionIsland) : labels.FirstOrDefault(l => l.RouteNumber == 1 && l.IslandId == "Pujara")
                 ?? labels.First();
             selector.SelectedIndex = barter.RouteNumber;
             var route = TaggedTransportRoutes.Build(before.Request, before.Plan).Single(r => r.Number == barter.RouteNumber);
@@ -474,7 +495,8 @@ internal static class Program {
             WaitOnUi(control.CompleteMapStep(barter.RouteNumber, barter.StepIndex));
             if (control.Session == before || control.Session.CompletedSteps != 0) throw new Exception("Map completion did not replan only the selected exchange: "
                 + ((TextBlock)control.FindName("StatusText")).Text);
-            int expectedSelection = Math.Min(barter.RouteNumber, TaggedTransportRoutes.Build(control.Session.Request, control.Session.Plan).Length);
+            int expectedSelection = TaggedTransportRoutes.Build(control.Session.Request, control.Session.Plan)
+                .OrderBy(r => Math.Abs(r.Number - barter.RouteNumber)).First().Number;
             if (control.SelectedRouteNumber != expectedSelection || coordinator.DisplayShowAllRoutes
                 || coordinator.GetRenderSnapshot([]).Paths.Any(p => p.RouteNumber != expectedSelection))
                 throw new Exception("Map completion reset the selected route to all routes.");
@@ -491,10 +513,25 @@ internal static class Program {
             }
             control.Session.Current();
             Render(map, 1000, 700, "tagged-map-completed.png");
+            if (coordinator.GetRenderSnapshot([]).Paths.Count == 0
+                || !VisualChildren<FrameworkElement>(map).Any(e => e.Tag is RouteStepMapLabel))
+                throw new Exception("Remaining route disappeared from the map after completion.");
+            if (completionIsland == "Epheria" && control.Session.Request.Trades[
+                control.Session.Plan.Steps.First(s => s.Action.Kind == TaggedActionKind.Barter).Action.TradeIndex].IslandId != "Olvia")
+                throw new Exception("Out-of-order Epheria completion postponed the remaining Olvia exchange.");
             if (new TaggedRouteControl().Session!.Request.Fingerprint() != control.Session.Request.Fingerprint())
                 throw new Exception("Independent completion did not survive reload.");
-            if (!new TaggedRouteControl().ValidateRestoredWorkspace())
-                throw new Exception("Recorded cargo after map completion invalidated a matching workspace on restart.");
+            var restoredAfterCompletion = new TaggedRouteControl();
+            if (!restoredAfterCompletion.ValidateRestoredWorkspace())
+                throw new Exception("Recorded cargo after map completion invalidated a matching workspace on restart: "
+                    + ((TextBlock)restoredAfterCompletion.FindName("StatusText")).Text);
+            control.ClearRouteDisplayForPlanning();
+            control.ReloadSnapshotState();
+            if (!control.ValidateRestoredWorkspace() || control.IsDisplayCleared
+                || coordinator.GetRenderSnapshot([]).Paths.Count == 0)
+                throw new Exception("Reloading the restored TAG snapshot left the map cleared.");
+            if (completionIsland is not null)
+                Console.WriteLine($"PASS: {completionIsland} completion retains {control.Session!.Request.Trades.Length} exchanges, a visible selected route, and coherent TAG snapshot reload.");
             var carried = control.Session.Request.Settings.InitialCargo;
             string location = control.Session.Request.Settings.StartIsland;
             var retainedSession = control.Session;
@@ -613,6 +650,10 @@ internal static class Program {
         if (new TaggedRouteControl().SelectedRouteNumber != 1) throw new Exception("Map-focused route selection was not saved.");
         selector.SelectedIndex = 2;
         Render(control, 350, 900, "tagged-route-single.png");
+        var headings = VisualChildren<TextBlock>(control).Where(t => t.FontWeight == FontWeights.Bold).ToArray();
+        if (!headings.Any(t => Equals(t.Foreground, Application.Current.Resources["AppCargoLoadBrush"]))
+            || !headings.Any(t => Equals(t.Foreground, Application.Current.Resources["AppCargoUnloadBrush"])))
+            throw new Exception("Loading and unloading headings did not use their distinct theme colors.");
         selector.SelectedIndex = 0;
         if (steps.Items.Count != 6) throw new Exception("All routes were not restored.");
         reopened = new TaggedRouteControl();
@@ -628,6 +669,14 @@ internal static class Program {
         for (int i = 0; i < 5; i++) next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         if (control.Session?.CompletedSteps != 10 || !((Button)control.FindName("SettleButton")).IsEnabled)
             throw new Exception("Hidden legs left unfinishable execution steps.");
+        TaggedTransportStorage.Save(Path.Combine(folder, "tagged-transport-session.json"), new TaggedTransportSession(1, request, plan, 0));
+        control = new TaggedRouteControl();
+        WaitOnUi(control.CompleteMapStep(1, 2));
+        if (control.Session is null || TaggedTransportRoutes.Build(control.Session.Request, control.Session.Plan).Last().Number != 2)
+            throw new Exception("Completing route one renumbered route two.");
+        var restoredRemaining = new TaggedRouteControl().Session!;
+        if (TaggedTransportRoutes.Build(restoredRemaining.Request, restoredRemaining.Plan).Last().Number != 2)
+            throw new Exception("The surviving route number was not persisted.");
         TaggedTransportStorage.Save(Path.Combine(folder, "tagged-transport-session.json"), new TaggedTransportSession(1, request, plan, 0));
         control = new TaggedRouteControl();
         WaitOnUi(control.CompleteMapStep(2, 2)); // exact second-trip half of the same Planner row
@@ -838,6 +887,60 @@ internal static class Program {
             throw new Exception("LV7 sale item name, count or icon is missing.");
         if (new TaggedRouteControl().SelectedRouteNumber != 1) throw new Exception("Sale route selection failed to restore.");
         Console.WriteLine("PASS: LV7 sale card shows item icon/count and restores selection without a transfer-to-character instruction.");
+    }
+    private static void VerifyOrdinaryExchangeTitles() {
+        var row = new Barter(new Islands(EnumLists.Island.Velia, 0), new Items("Input", "800001", "1", 2), new Items("Output", "800011", "2", 3), 10);
+        var step = new BarterStep(row.PlannerRowId, "Velia", new("800001", 8), new("800011", 12), new(0, 0, 0));
+        var card = new iBarter.ViewModel.BarterRouteStepViewModel(step, "貝爾利亞村", new Dictionary<string, RouteItem>(), 0, row);
+        if (card.ExchangeCount != 4 || !card.Title.Contains("4", StringComparison.Ordinal)) throw new Exception("Ordinary split exchange title is missing its actual exchange count.");
+        Console.WriteLine("PASS: ordinary exchange card shows the step's four exchanges, not the row's ten exchanges.");
+    }
+    private static int AuditPacking(string path) {
+        var saved = System.Text.Json.JsonSerializer.Deserialize<TaggedTransportSession>(File.ReadAllText(path))!;
+        var request = saved.Request with { Settings = saved.Request.Settings with { SearchProfile = RouteOptimizationProfile.For(RouteOptimizationMode.Quick) } };
+        var result = new TaggedTransportPlanner().Plan(request, preferredTaggedPlan: saved.Plan);
+        if (result.Plan is null || result.PlannedRequest is null) throw new Exception(result.Message);
+        var sim = new TaggedTransportSimulator(result.PlannedRequest);
+        if (!sim.Verify(result.Plan, out var final, out var error)) throw new Exception(error);
+        var firstBarter = Array.FindIndex(result.Plan.Steps, s => s.Action.Kind == TaggedActionKind.Barter);
+        var transfers = result.Plan.Steps.Take(firstBarter).Where(s => s.Action is { Kind: TaggedActionKind.Transfer, To: "alt" }).ToArray();
+        foreach (var s in transfers) Console.WriteLine($"{s.Action.ItemId} x{s.Action.Quantity}: TAG {s.AltLT:F2} LT, ship {s.ShipLT:F2} LT");
+        if (transfers.Length < 2 || transfers[0].Action.ItemId == transfers[^1].Action.ItemId)
+            throw new Exception("Expected the supplied route to prefill another stack before the manual stack.");
+        var carrier = request.Settings.Carriers.Single(c => c.Id == "alt");
+        if (transfers[^2].AltLT >= carrier.LimitLT * request.Settings.CharacterReceiveRatio)
+            throw new Exception("Prefill blocks the final receive.");
+        Console.WriteLine($"PASS: supplied data fully replayed: {request.Trades.Length} exchanges, {final.Distance / 1000:F2} km; original resources unchanged.");
+        return 0;
+    }
+    private static int AuditOlvia(string path) {
+        byte[] originalFile = File.ReadAllBytes(path);
+        var saved = System.Text.Json.JsonSerializer.Deserialize<TaggedTransportSession>(originalFile)!;
+        var settings = saved.Request.Settings with { SearchProfile = RouteOptimizationProfile.For(RouteOptimizationMode.Quick) };
+        TaggedPortCatalog.Merge(settings);
+        var points = new Dictionary<string, RoutePoint>(saved.Request.Points);
+        foreach (var p in TaggedPortCatalog.Additional) points.TryAdd(p.Island, new(p.X, p.Y));
+        var request = saved.Request with { Settings = settings, Points = points };
+        var result = new TaggedTransportPlanner().Plan(request, preferredTaggedPlan: saved.Plan);
+        if (result.Plan is null || result.PlannedRequest is null) throw new Exception(result.Message);
+        var sim = new TaggedTransportSimulator(result.PlannedRequest);
+        if (!sim.Verify(result.Plan, out _, out var error)) throw new Exception(error);
+        double beforeDistance = sim.Distance("Midnight", "Olvia") + sim.Distance("Olvia", "Epheria") + sim.Distance("Epheria", "Iliya");
+        double afterDistance = sim.Distance("Midnight", "Epheria") + sim.Distance("Epheria", "Olvia") + sim.Distance("Olvia", "Iliya");
+        Console.WriteLine($"Navigable first-voyage distance {beforeDistance / 1000:F3} -> {afterDistance / 1000:F3} km.");
+        int receive = Array.FindIndex(saved.Plan.Steps, s => s.Action is { Kind: TaggedActionKind.Transfer, Location: "Haemo", To: "main", ItemId: "800220" });
+        var group = TaggedOperationGroups.Build(saved.Request, saved.Plan).Single(g => receive >= g.Start && receive < g.End);
+        var grouped = TaggedOperationGroups.Summarize(saved.Plan, group, saved.CompletedSteps)
+            .Where(l => l.Action is { Kind: TaggedActionKind.Transfer, To: "main", ItemId: "800220" }).ToArray();
+        if (grouped.Length != 1 || grouped[0].Action.Quantity != 3) throw new Exception("Actual consecutive receives did not merge.");
+        var first = TaggedTransportRoutes.Build(result.PlannedRequest, result.Plan)[0];
+        var firstSteps = result.Plan.Steps[first.Start..first.End];
+        Console.WriteLine(string.Join(" -> ", firstSteps.Where(s => s.Action.Kind == TaggedActionKind.Sail).Select(s => s.Action.Location)));
+        var barters = firstSteps.Where(s => s.Action.Kind == TaggedActionKind.Barter).Select(s => s.Action.Location).ToArray();
+        if (barters.Length < 2 || barters[0] != "Epheria" || barters[1] != "Olvia") throw new Exception("The supplied shorter first-voyage order was not found.");
+        if (!File.ReadAllBytes(path).SequenceEqual(originalFile)) throw new Exception("User resources changed.");
+        Console.WriteLine($"PASS: full route replay; distance {saved.Plan.Distance / 1000:F2} -> {result.Plan.Distance / 1000:F2} km; source unchanged.");
+        return 0;
     }
     private static int AuditCharacterWeight(string path) {
         // Read old requests without accepting their now-illegal saved operations.

@@ -12,7 +12,7 @@ public sealed class StorageCatalogContractTests {
         string storageViewModelSource = File.ReadAllText(
             Path.Combine(repositoryRoot, "ViewModel", "StorageViewModel.cs"));
 
-        Assert.Contains("Golden Flour Sack,800226,7,1", catalogLines);
+        Assert.Contains("Golden Flour Sack,800226,7,1,2000.00", catalogLines);
         Assert.DoesNotContain("800226", storageViewModelSource);
         Assert.DoesNotContain("Golden Flour Sack", storageViewModelSource);
     }
@@ -25,7 +25,7 @@ public sealed class StorageCatalogContractTests {
         string storageViewModelSource = File.ReadAllText(
             Path.Combine(repositoryRoot, "ViewModel", "StorageViewModel.cs"));
 
-        Assert.Contains("Rust Repair Tool,800073,5,1", catalogLines);
+        Assert.Contains("Rust Repair Tool,800073,5,1,1000.00", catalogLines);
         Assert.Contains(
             ".Where(item => !string.Equals(item.ItemID, \"800073\", StringComparison.Ordinal))",
             storageViewModelSource);

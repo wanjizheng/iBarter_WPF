@@ -51,16 +51,17 @@ public class TaggedTransportTests {
         Assert.False(sim.TryApply(s, new(TaggedActionKind.Transfer, "Velia", "ship", "main", "t7", 1), out _, out _));
     }
 
-    [Fact] public void WhistleMovesElephantWithCargoAndRequiresItsOwner() {
+    [Fact] public void LoadedElephantCannotBeWhistleMovedAndMustBeEmptiedBeforeSailing() {
         var r = Request(); var sim = new TaggedTransportSimulator(r); var s = sim.Initial();
         Assert.False(sim.TryApply(s, new(TaggedActionKind.SummonElephant, "Velia", "main", "alt-elephant"), out _, out _));
         Assert.True(sim.TryApply(s, new(TaggedActionKind.SummonElephant, "Velia", "main", "main-elephant"), out s, out _));
         Assert.True(sim.TryApply(s, new(TaggedActionKind.StackAtWarehouse, "Velia", "warehouse:Velia", "main-elephant", "a", 4), out s, out _));
         Assert.Equal(80 + r.Settings.ElephantSummonSeconds, s.Seconds);
+        Assert.False(sim.TryApply(s, new(TaggedActionKind.Sail, "Kuit"), out _, out _));
+        var detached = s.Copy(); detached.SummonedElephants.Clear();
+        Assert.False(sim.TryApply(detached, new(TaggedActionKind.SummonElephant, "Velia", "main", "main-elephant"), out _, out _));
+        Assert.True(sim.TryApply(s, new(TaggedActionKind.Transfer, "Velia", "main-elephant", "main", "a", 4), out s, out _));
         Assert.True(sim.TryApply(s, new(TaggedActionKind.Sail, "Kuit"), out s, out _));
-        Assert.False(sim.TryApply(s, new(TaggedActionKind.Transfer, "Kuit", "main-elephant", "main", "a", 4), out _, out _));
-        Assert.True(sim.TryApply(s, new(TaggedActionKind.SummonElephant, "Kuit", "main", "main-elephant"), out s, out _));
-        Assert.True(sim.TryApply(s, new(TaggedActionKind.Transfer, "Kuit", "main-elephant", "main", "a", 4), out s, out _));
         Assert.Equal(4, sim.Count(s, "main", "a"));
         Assert.False(sim.TryApply(s, new(TaggedActionKind.StackAtWarehouse, "Kuit", "warehouse:Velia", "main-elephant", "a", 1), out _, out _));
     }
@@ -117,7 +118,7 @@ public class TaggedTransportTests {
         Assert.True(sim.TryApply(s, new(TaggedActionKind.Transfer, "Kuit", "main", "ship", "a", 2), out s, out _));
     }
 
-    [Fact] public void PlannerUsesTagOrWhistleForDistantWharfInsteadOfExtraWarehouseTrip() {
+    [Fact] public void PlannerNeverSailsWithGoodsLeftOnAnElephant() {
         var r = Request();
         r.Points["Kuit"] = new(1000000, 0); r.Points["Island"] = new(1000100, 0);
         r.Settings.Carriers[0].LimitLT = 1000;
@@ -125,9 +126,40 @@ public class TaggedTransportTests {
         r.Settings.MaxStates = 30000; r.Settings.SearchSeconds = 10;
         var result = new TaggedTransportPlanner().Plan(r, TestContext.Current.CancellationToken);
         Assert.NotNull(result.Plan);
-        Assert.Contains(result.Plan.Steps, x => x.Action.Kind is TaggedActionKind.Switch or TaggedActionKind.SummonElephant);
-        Assert.Contains(result.Plan.Steps, x => x.Action.Location == "Kuit" && x.Action.Kind == TaggedActionKind.Transfer);
-        Assert.True(result.Plan.Distance < 30000, $"Distance {result.Plan.Distance}");
+        Assert.True(new TaggedTransportSimulator(r).Verify(result.Plan!, out _, out var error), error);
+        var replay = new TaggedTransportSimulator(r).Initial();
+        foreach (var step in result.Plan.Steps) {
+            if (step.Action.Kind == TaggedActionKind.Sail)
+                Assert.All(new[] { "main-elephant", "alt-elephant" }, id => Assert.Empty(replay.Cargo[id]));
+            Assert.True(new TaggedTransportSimulator(r).TryApply(replay, step.Action, out replay, out error), error);
+        }
+        Assert.True(result.Plan.ShipOnlyDistance is null || result.Plan.Distance <= result.Plan.ShipOnlyDistance,
+            $"TAG distance {result.Plan.Distance} exceeded ship-only {result.Plan.ShipOnlyDistance}");
+    }
+
+    [Fact] public void CompilerMovesCargoAtEarlierPortBeforeNextExchangeWouldOverloadShip() {
+        var r = Request();
+        r = r with {
+            ShipLimitLT = 3000,
+            Items = new() {
+                ["a"] = new("a", "A input", 4, 1000), ["b"] = new("b", "A output", 5, 1000),
+                ["c"] = new("c", "B input", 4, 1000), ["d"] = new("d", "B output", 6, 3000)
+            },
+            Points = new() { ["Velia"] = new(0, 0), ["A"] = new(10000, 0), ["B"] = new(20000, 0) },
+            Warehouses = new() { ["Velia"] = new() { ["a"] = 1, ["c"] = 1 } },
+            Trades = [new("a", "A", "a", 1, "b", 1, 1), new("b", "B", "c", 1, "d", 1, 1)]
+        };
+        r.Settings.Ports = [new() { IslandId = "Velia", WarehouseId = "Velia", Enabled = true }, new() { IslandId = "A", Enabled = true }];
+        r.Settings.Carriers[0].LimitLT = 1500;
+        var result = new TaggedTransportPlanner().Plan(r, TestContext.Current.CancellationToken);
+        Assert.NotNull(result.Plan);
+        var sim = new TaggedTransportSimulator(result.PlannedRequest!);
+        Assert.True(sim.Verify(result.Plan!, out var state, out var error), error);
+        int first = Array.FindIndex(result.Plan.Steps, s => s.Action is { Kind: TaggedActionKind.Barter, TradeIndex: 0 });
+        int second = Array.FindIndex(result.Plan.Steps, s => s.Action is { Kind: TaggedActionKind.Barter, TradeIndex: 1 });
+        Assert.Contains(result.Plan.Steps.Skip(first + 1).Take(second - first - 1),
+            s => s.Action is { Kind: TaggedActionKind.Transfer, Location: "A", From: "ship", ItemId: "b" });
+        Assert.Equal(0, state.OverloadedDistance);
     }
 
     [Fact] public void SettlementKeepsOriginalStockAcrossReplanning() {

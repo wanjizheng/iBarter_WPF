@@ -156,6 +156,32 @@ public partial class TaggedRouteControl : UserControl {
         if (beforeMigration != System.Text.Json.JsonSerializer.Serialize(Settings)) TrySaveSettings();
     }
 
+    public void ReloadSnapshotState() {
+        cancellation?.Cancel();
+        restoreFailed = false;
+        Session = null;
+        try {
+            Settings = TaggedTransportStorage.Load<TaggedTransportSettings>(SettingsPath) ?? new();
+            Session = TaggedTransportStorage.Load<TaggedTransportSession>(SessionPath);
+        }
+        catch (Exception e) when (e is IOException or System.Text.Json.JsonException or InvalidOperationException or ArgumentException) {
+            restoreFailed = true;
+            App.myCFun?.Log(L("Could not restore TAG settings / route: ", "無法還原 TAG 設定／路線：") + e.Message,
+                System.Windows.Media.Brushes.OrangeRed);
+        }
+        invalidatedSeed = null;
+        displayCleared = false;
+        selectedRoute = Session?.SelectedRouteNumber;
+        selectedStep = null;
+        focusedSegment = null;
+        routes = [];
+        initializing = true;
+        try { EnabledBox.IsChecked = Settings.Enabled; }
+        finally { initializing = false; }
+        Refresh();
+        DisplayChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     private void Enabled_Changed(object sender, RoutedEventArgs e) {
         if (initializing) return;
         cancellation?.Cancel();
@@ -405,11 +431,13 @@ public partial class TaggedRouteControl : UserControl {
                         "無法驗證其餘貨物與路線，未勾選任何交換。請核對初始攜貨／庫存，或使用自動規劃重新搜尋。");
                     return;
                 }
-                updated = new TaggedTransportSession(1, result.PlannedRequest, result.Plan, 0,
+                var numberedPlan = TaggedTransportRoutes.RetainNumbers(previous.Request, previous.Plan, result.PlannedRequest, result.Plan, index);
+                updated = new TaggedTransportSession(1, result.PlannedRequest, numberedPlan, 0,
                     WorkspaceInputs: (previous.WorkspaceInputs ?? previous.SettlementBaseline ?? previous.Request) with { Trades = remaining.Trades },
-                    SelectedRouteNumber: RetainedRouteSelection(result.PlannedRequest, result.Plan));
+                    SelectedRouteNumber: RetainedRouteSelection(result.PlannedRequest, numberedPlan));
             }
             if (own.IsCancellationRequested || Session?.Plan != previous.Plan || Session.CompletedSteps != previous.CompletedSteps || inputVersion != Inputs()) return;
+            iBarter.Persistence.WorkspaceSnapshotService.CaptureCompletedState("before-tag-map-completion");
             TaggedTransportStorage.Save(SessionPath, updated);
             saved = true;
             if (row is not null) {
@@ -535,7 +563,7 @@ public partial class TaggedRouteControl : UserControl {
                 TaggedActionKind.Sail => L("Sail to ", "航行至 ") + Island(a.Location),
                 TaggedActionKind.Switch => Island(a.Location) + " · " + L("Switch to ", "切換至 ") + Container(a.To),
                 TaggedActionKind.SummonElephant => Island(a.Location) + " · " + L("Use whistle: summon ", "使用笛子召喚：") + Container(a.To),
-                TaggedActionKind.Barter => L("Barter at ", "交換：") + Island(a.Location),
+                TaggedActionKind.Barter => L("Barter at ", "交換：") + Island(a.Location) + L($" ({a.Quantity:N0} times)", $"（{a.Quantity:N0} 次）"),
                 TaggedActionKind.StackAtWarehouse => L("Prepare elephant stack at ", "在倉庫準備小象疊貨：") + Island(a.Location),
                 _ => L("Transfer at ", "轉移：") + Island(a.Location)
             };
@@ -572,7 +600,10 @@ public partial class TaggedRouteControl : UserControl {
                     string character = action.Kind == TaggedActionKind.Sell ? ""
                         : action.To is "main" or "alt" ? action.To : action.From is "main" or "alt" ? action.From : "";
                     return new TaggedCargoLine((entry.Done ? "✓ " : "") + text,
-                        string.IsNullOrEmpty(action.ItemId) ? null : Icon(action.ItemId), character.Length == 0 ? "" : Container(character));
+                        string.IsNullOrEmpty(action.ItemId) ? null : Icon(action.ItemId), character.Length == 0 ? "" : Container(character),
+                        action.Kind is TaggedActionKind.Switch or TaggedActionKind.SummonElephant ? ""
+                            : TaggedTransportSimulator.IsWarehouse(action.To) || action.Kind == TaggedActionKind.Sell ? "unloading"
+                            : TaggedTransportSimulator.IsWarehouse(action.From) || action.To == "ship" ? "loading" : "unloading");
                 }).ToArray();
             }
             var load = plan.Steps[group.End - 1];
@@ -584,7 +615,7 @@ public partial class TaggedRouteControl : UserControl {
                 complete ? 0.5 : 1,
                 i, group.End, route.Number, routeTitles[route.Number], trade?.RowId,
                 trade is not null ? source?.Item1Icon ?? Icon(trade.InputId) : string.IsNullOrEmpty(a.ItemId) ? null : Icon(a.ItemId),
-                trade is not null ? source?.Item2Icon ?? Icon(trade.OutputId) : null, lines);
+                trade is not null ? source?.Item2Icon ?? Icon(trade.OutputId) : null, lines, group.Kind);
         }).ToArray();
         var view = new ListCollectionView(cards.Where(c => selectedRoute is null || c.RouteNumber == selectedRoute).ToArray());
         view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(TaggedStepCard.RouteTitle)));
@@ -649,10 +680,10 @@ public partial class TaggedRouteControl : UserControl {
     private static string Icon(string itemId) => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "Images", "Items", itemId + ".bmp");
     private sealed record TaggedRouteOption(int? Number, string DisplayName);
     private sealed record TaggedStepCard(string Title, string Detail, string Load, double Opacity,
-        int Index, int End, int RouteNumber, string RouteTitle, string? RowId, string? Item1Icon, string? Item2Icon, TaggedCargoLine[] Lines) {
+        int Index, int End, int RouteNumber, string RouteTitle, string? RowId, string? Item1Icon, string? Item2Icon, TaggedCargoLine[] Lines, string Kind) {
         public bool IsCargoGroup => Lines.Length > 0;
     }
-    private sealed record TaggedCargoLine(string Text, string? Icon, string Character = "") {
+    private sealed record TaggedCargoLine(string Text, string? Icon, string Character = "", string Direction = "") {
         private int CharacterIndex => Character.Length == 0 ? -1 : Text.IndexOf(Character, StringComparison.Ordinal);
         public string BeforeCharacter => CharacterIndex < 0 ? Text : Text[..CharacterIndex];
         public string CharacterText => CharacterIndex < 0 ? "" : Character;

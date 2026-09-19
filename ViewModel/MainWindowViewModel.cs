@@ -437,6 +437,8 @@ namespace iBarter.ViewModel {
             resources["AppSurfaceBrush"] = CreateBrush(dark ? "#1E1E1E" : "#FFFFFF");
             resources["AppRaisedSurfaceBrush"] = CreateBrush(dark ? "#2A2A2A" : "#F7F9FC");
             resources["AppTextBrush"] = CreateBrush(dark ? "#F1F4F6" : "#18212B");
+            resources["AppCargoLoadBrush"] = CreateBrush(dark ? "#8ADDB0" : "#176B43");
+            resources["AppCargoUnloadBrush"] = CreateBrush(dark ? "#FFC18A" : "#A34C13");
             resources["AppMutedTextBrush"] = CreateBrush(dark ? "#B9C4CC" : "#526170");
             resources["AppLogSuccessBrush"] = CreateBrush(dark ? "#A6DCB2" : "#236B3B");
             resources["AppLogWarningBrush"] = CreateBrush(dark ? "#FFB89E" : "#A33119");

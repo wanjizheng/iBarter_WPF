@@ -59,6 +59,11 @@ public sealed class TaggedTransportSimulator(TaggedTransportRequest request) {
         foreach (var c in request.Settings.Carriers) state.Cargo[c.Id] = new();
         foreach (var w in request.Warehouses) state.Cargo[Warehouse(w.Key)] = new(w.Value);
         foreach (var e in request.Settings.InitialCargo) Add(state.Cargo[e.Container], e.ItemId, e.Quantity);
+        // Initial mount cargo is physically present at the selected departure
+        // location.  Once the route sails away, a loaded elephant can no longer
+        // be recovered with the whistle and therefore must be emptied first.
+        foreach (var elephant in request.Settings.Carriers.Where(c => IsElephant(c.Id)))
+            if (state.Cargo[elephant.Id].Count > 0) state.SummonedElephants.Add(elephant.Id);
         return state;
     }
 
@@ -82,6 +87,11 @@ public sealed class TaggedTransportSimulator(TaggedTransportRequest request) {
         double duration = 0, distance = 0;
         if (action.Kind == TaggedActionKind.Sail) {
             if (action.Location == s.Location || s.Active != "main") return false;
+            // Trade goods prevent remote mount summoning.  Leaving cargo on an
+            // elephant would strand it at this island, so the cargo must first
+            // be moved to its owner (or another locally accessible container).
+            if (request.Settings.Carriers.Where(c => IsElephant(c.Id))
+                .Any(c => s.Cargo[c.Id].Any(i => i.Value > 0 && request.Items[i.Key].UnitWeight > 0))) return false;
             bool overweight = Weight(s, "ship") > request.ShipLimitLT;
             if (overweight && !request.Settings.AllowOverloadedSailing) return false;
             distance = Distance(s.Location, action.Location);
@@ -99,7 +109,8 @@ public sealed class TaggedTransportSimulator(TaggedTransportRequest request) {
                 next = s.Copy(); next.Active = action.To; duration = request.Settings.SwitchSeconds;
             }
             else if (action.Kind == TaggedActionKind.SummonElephant) {
-                if (port is null || action.To != s.Active + "-elephant" || s.SummonedElephants.Contains(action.To)) return false;
+                if (port is null || action.To != s.Active + "-elephant" || s.SummonedElephants.Contains(action.To)
+                    || s.Cargo[action.To].Any(i => i.Value > 0 && request.Items[i.Key].UnitWeight > 0)) return false;
                 next = s.Copy(); next.SummonedElephants.Add(action.To);
                 duration = request.Settings.ElephantSummonSeconds;
             }

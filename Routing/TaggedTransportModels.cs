@@ -115,7 +115,7 @@ public sealed record TaggedAction(TaggedActionKind Kind, string Location, string
 public sealed record TaggedTransportStep(TaggedAction Action, double Seconds, double TotalSeconds,
     double ShipLT, double MainLT, double AltLT);
 public sealed record TaggedTransportPlan(string Fingerprint, TaggedTransportStep[] Steps, double TotalSeconds,
-    double SailingSeconds, double HandlingSeconds, double Distance, string Status, double? ShipOnlySeconds = null, int? ShipOnlyRouteCount = null, double? ShipOnlyDistance = null);
+    double SailingSeconds, double HandlingSeconds, double Distance, string Status, double? ShipOnlySeconds = null, int? ShipOnlyRouteCount = null, double? ShipOnlyDistance = null, int[]? RouteNumbers = null);
 public sealed record TaggedSearchReport(double ElapsedSeconds, int Candidates, ExtremeSearchTerminationReason Termination, bool? OrdinaryReferenceAccepted = null);
 public sealed record TaggedTransportResult(TaggedTransportPlan? Plan, string Message, TaggedTransportRequest? PlannedRequest = null, TaggedSearchReport? Search = null);
 public sealed record TaggedSearchProgress(double ElapsedSeconds, double BudgetSeconds, int ExpandedStates, double? BestDistance, int? BestRoutes = null);

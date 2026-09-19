@@ -33,8 +33,12 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
-# Local BDF XYZ tile payload is a release resource, not source code.
-Resource/MapTiles/base/
+# The bundled map has coordinate folders named x64/x86. They are runtime
+# resources, not Visual Studio platform output, so keep tracking them.
+!Resources/MapTiles/base/**
+
+# Editor-created source snapshots are local recovery files.
+*.bak.*
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/

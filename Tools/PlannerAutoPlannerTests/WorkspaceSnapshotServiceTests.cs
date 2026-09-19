@@ -8,6 +8,45 @@ namespace PlannerAutoPlannerTests;
 
 public sealed class WorkspaceSnapshotServiceTests {
     [Fact]
+    public void Snapshot_does_not_record_a_tag_route_with_a_different_planner_exchange_set() {
+        using var temp = new SnapshotTempDirectory();
+        string storage = "[{\"ItemID\":\"1\"}]";
+        WriteState(temp.Path, Planner("a"), storage, "{}", "{}");
+        WriteTagState(temp.Path, "a");
+        Assert.True(WorkspaceSnapshotService.CaptureCompletedState("coherent", temp.Path));
+
+        WriteState(temp.Path, Planner("a", "b"), storage, "{}", "{}");
+        WriteTagState(temp.Path, "a");
+        Assert.False(WorkspaceSnapshotService.CaptureCompletedState("incoherent", temp.Path));
+        WriteState(temp.Path, Planner("a", "b", "c"), storage, "{}", "{}");
+
+        var result = WorkspaceSnapshotService.RestorePreviousNonEmpty(temp.Path);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("coherent", result.Reason);
+        Assert.Equal(Planner("a"), Read(temp.Path, "myPlan_Data.json"));
+        Assert.Contains("\"RowId\":\"a\"", Read(temp.Path, "tagged-transport-session.json"));
+    }
+
+    [Fact]
+    public void Restore_keeps_tag_cargo_route_settings_and_planner_in_the_same_snapshot() {
+        using var temp = new SnapshotTempDirectory();
+        WriteState(temp.Path, "[{\"state\":\"before\"}]", "[{\"ItemID\":\"1\"}]", "{}", "{}");
+        File.WriteAllText(Path.Combine(temp.Path, "tagged-transport-session.json"), "{\"route\":\"before\"}");
+        File.WriteAllText(Path.Combine(temp.Path, "tagged-transport-settings.json"), "{\"Enabled\":true}");
+        Assert.True(WorkspaceSnapshotService.CaptureCompletedState("before", temp.Path));
+        WriteState(temp.Path, "[{\"state\":\"after\"}]", "[{\"ItemID\":\"1\"}]", "{}", "{}");
+        File.WriteAllText(Path.Combine(temp.Path, "tagged-transport-session.json"), "{\"route\":\"after\"}");
+        File.WriteAllText(Path.Combine(temp.Path, "tagged-transport-settings.json"), "{\"Enabled\":false}");
+        Assert.True(WorkspaceSnapshotService.CaptureCompletedState("after", temp.Path));
+        var result = WorkspaceSnapshotService.RestorePreviousNonEmpty(temp.Path);
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("[{\"state\":\"before\"}]", Read(temp.Path, "myPlan_Data.json"));
+        Assert.Equal("{\"route\":\"before\"}", Read(temp.Path, "tagged-transport-session.json"));
+        Assert.Equal("{\"Enabled\":true}", Read(temp.Path, "tagged-transport-settings.json"));
+    }
+
+    [Fact]
     public void Batch_captures_once_and_restore_walks_back_through_non_empty_states() {
         using var temp = new SnapshotTempDirectory();
         WriteState(temp.Path, """[{"state":"A"}]""", """[{"ItemID":"1"}]""", """{"route":"A"}""", """{"ExtraLT":1,"TotalLT":100}""");
@@ -97,6 +136,17 @@ public sealed class WorkspaceSnapshotServiceTests {
 
     private static string Read(string directory, string fileName) =>
         File.ReadAllText(Path.Combine(directory, fileName));
+
+    private static string Planner(params string[] rowIds) => JsonSerializer.Serialize(rowIds.Select(id => new {
+        PlannerRowId = id, ExchangeDone = false, ExchangeQuantity = 1
+    }));
+
+    private static void WriteTagState(string directory, params string[] rowIds) {
+        File.WriteAllText(Path.Combine(directory, "tagged-transport-settings.json"), "{\"Enabled\":true}");
+        File.WriteAllText(Path.Combine(directory, "tagged-transport-session.json"), JsonSerializer.Serialize(new {
+            WorkspaceInputs = new { Trades = rowIds.Select(id => new { RowId = id }).ToArray() }
+        }));
+    }
 
     private static string[] SnapshotFiles(string directory) =>
         Directory.GetFiles(

@@ -52,7 +52,14 @@
         </DataTrigger></Style.Triggers>
        </Style></Border.Style>
        <StackPanel>
-        <TextBlock Text="{Binding Title}" FontWeight="Bold" TextWrapping="Wrap" Foreground="{DynamicResource AppTextBrush}"/>
+        <TextBlock Text="{Binding Title}" FontWeight="Bold" TextWrapping="Wrap">
+         <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+          <Style.Triggers>
+           <DataTrigger Binding="{Binding Kind}" Value="loading"><Setter Property="Foreground" Value="{DynamicResource AppCargoLoadBrush}"/></DataTrigger>
+           <DataTrigger Binding="{Binding Kind}" Value="unloading"><Setter Property="Foreground" Value="{DynamicResource AppCargoUnloadBrush}"/></DataTrigger>
+          </Style.Triggers>
+         </Style></TextBlock.Style>
+        </TextBlock>
         <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Foreground="{DynamicResource AppTextBrush}">
          <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsCargoGroup}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
          <InlineUIContainer BaselineAlignment="Center"><Image Source="{Binding Item1Icon}" Width="24" Height="24" Margin="0,0,5,0"><Image.Style><Style TargetType="Image"><Style.Triggers><DataTrigger Binding="{Binding Item1Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Image.Style></Image></InlineUIContainer>
@@ -64,7 +71,15 @@
           <Grid Margin="0,3">
            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
            <Image Source="{Binding Icon}" Width="24" Height="24" Margin="0,0,6,0"><Image.Style><Style TargetType="Image"><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Image.Style></Image>
-            <TextBlock Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{DynamicResource AppTextBrush}"><Run Text="{Binding BeforeCharacter, Mode=OneWay}"/><Run Text="{Binding CharacterText, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}"/><Run Text="{Binding AfterCharacter, Mode=OneWay}"/></TextBlock>
+            <TextBlock Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center">
+             <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+              <Style.Triggers>
+               <DataTrigger Binding="{Binding Direction}" Value="loading"><Setter Property="Foreground" Value="{DynamicResource AppCargoLoadBrush}"/></DataTrigger>
+               <DataTrigger Binding="{Binding Direction}" Value="unloading"><Setter Property="Foreground" Value="{DynamicResource AppCargoUnloadBrush}"/></DataTrigger>
+              </Style.Triggers>
+             </Style></TextBlock.Style>
+             <Run Text="{Binding BeforeCharacter, Mode=OneWay}"/><Run Text="{Binding CharacterText, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}"/><Run Text="{Binding AfterCharacter, Mode=OneWay}"/>
+            </TextBlock>
           </Grid>
          </DataTemplate></ItemsControl.ItemTemplate>
         </ItemsControl>

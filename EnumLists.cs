@@ -94,7 +94,8 @@
             Sausan,
             Sanctuary,
             UnKnown,
-            Nampo, Byukgye, Cheongsa, Ancado, Oquilla, Outpost
+            Nampo, Byukgye, Cheongsa, Ancado, Oquilla, Outpost,
+            ShakatuPier, RunnPier, Altinova, SanctuaryCoastalOutpost, AulisCoast, OlviaWharf
         }
 
         public enum Items {

@@ -92,8 +92,8 @@ public sealed class TaggedSettingsWindow : Window {
         TextColumn(carriers, "LimitLT", L("Capacity (LT)", "負重上限（LT）")); TextColumn(carriers, "OccupiedLT", L("Already used LT", "日常占用 LT"));
         TextColumn(carriers, "Slots", L("Free slots", "可用格數"));
         tabs.Items.Add(new TabItem { Header = L("Characters", "角色"), Content = WithNote(carriers,
-            L("Main sails the ship. Each character can summon their own elephant with a whistle. The route includes character switches, summons and transfers. Stacking via storage still requires a warehouse.",
-                "由主號開船。每個角色可用笛子召喚自己的小象；路線會列出切號、召喚及轉貨。透過倉庫疊貨仍需要倉庫。")) });
+            L("Main sails the ship. Each character can whistle-summon only an empty elephant. Trade goods must be moved from the elephant to its owner before sailing to the next island. Stacking via storage still requires a warehouse.",
+                "由主號開船。每個角色只能用笛子召喚空的小象；前往下一個島嶼前，必須先把小象上的交易物品轉到所屬角色身上。透過倉庫疊貨仍需要倉庫。")) });
         var ports = Grid(Result.Ports, false);
         ports.Columns.Add(new DataGridCheckBoxColumn { Header = L("Use", "使用"), Binding = new Binding("Enabled") });
         ports.Columns[0].Width = new DataGridLength(60);

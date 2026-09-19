@@ -4,6 +4,34 @@ using Xunit;
 namespace AutomaticRoutePlanningTests;
 
 public sealed class LandMaterialWeightTests {
+    [Fact]
+    public void Csv_values_override_legacy_weights_for_all_item_levels() {
+        using var csv = new StringReader("\"Fig, fresh\",7018,0,300,0.12\nSlab,800022,2,1,401.25\nCoin,44,-1,1,0\n");
+        var values = CargoWeightTable.ReadWeights(csv, new Dictionary<string, double> { ["7018"] = .1 });
+        Assert.Equal(.12, values["7018"]);
+        Assert.Equal(401.25, values["800022"]);
+        Assert.Equal(0, values["44"]);
+    }
+
+    [Fact]
+    public void Four_column_csv_uses_bundled_values_without_overwriting_explicit_zero() {
+        using var csv = new StringReader("Brass Ingot,4066,0,100\nFig,7018,0,300,0.00\n");
+        var values = CargoWeightTable.ReadWeights(csv,
+            new Dictionary<string, double> { ["4066"] = .3, ["7018"] = .1 });
+        Assert.Equal(.3, values["4066"]);
+        Assert.Equal(0, values["7018"]);
+    }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("NaN")]
+    [InlineData("text")]
+    [InlineData("0.001")]
+    public void Invalid_csv_weight_is_reported_instead_of_silently_ignored(string value) {
+        using var csv = new StringReader($"Fig,7018,0,300,{value}\n");
+        Assert.Throws<InvalidDataException>(() => CargoWeightTable.ReadWeights(csv));
+    }
+
     private static readonly (string Id, int Level, int Quantity)[] Cargo = [
         ("7018", 0, 3000), ("5854", 0, 500), ("800022", 2, 10), ("800027", 2, 7)
     ];

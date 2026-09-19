@@ -39,7 +39,12 @@
         <DataTemplate DataType="{x:Type vm:WarehouseRouteStepViewModel}">
             <Border Padding="7" Margin="3,2" Background="{DynamicResource AppCardBrush}" BorderBrush="{DynamicResource AppCardBorderBrush}" BorderThickness="1" CornerRadius="3">
                 <StackPanel>
-                    <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}" />
+                    <TextBlock Text="{Binding Title}" FontWeight="Bold">
+                        <TextBlock.Style><Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource AppCargoLoadBrush}"/>
+                            <Style.Triggers><DataTrigger Binding="{Binding IsUnload}" Value="True"><Setter Property="Foreground" Value="{DynamicResource AppCargoUnloadBrush}"/></DataTrigger></Style.Triggers>
+                        </Style></TextBlock.Style>
+                    </TextBlock>
                     <ItemsControl ItemsSource="{Binding Items}" Margin="0,4,0,0">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -83,7 +88,7 @@
                 </Border.Style>
                 <StackPanel>
                     <Grid>
-                        <TextBlock Text="{Binding Title}" Margin="0,0,70,0"
+                        <TextBlock Text="{Binding Title}" Margin="0,0,70,0" TextWrapping="Wrap"
                                    FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}" />
                         <Border HorizontalAlignment="Right" Padding="5,1" CornerRadius="2"
                                 Background="{DynamicResource AppAccentBrush}">

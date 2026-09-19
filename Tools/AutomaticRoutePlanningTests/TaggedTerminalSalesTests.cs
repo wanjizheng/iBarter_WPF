@@ -66,6 +66,46 @@ public class TaggedTerminalSalesTests {
         Assert.NotNull(exchangeOnly); Assert.Empty(exchangeOnly.SoldItems);
         Assert.Equal(TaggedActionKind.Barter, exchangeOnly.Steps.Last().Action.Kind);
     }
+    [Fact] public void CompilerSellsLevelSevenAtFirstTransferPortBeforeNextExchange() {
+        var request = Request();
+        request.Settings.Ports.Single(p => p.IslandId == "A").Enabled = false;
+        var sim = new TaggedTransportSimulator(request);
+        var state = new TaggedVoyageCompiler(sim, () => false).Compile(sim.Initial(), [new(0, 1), new(1, 1)], "Velia", packing: 3);
+        Assert.NotNull(state);
+        int sale = state.Steps.FindIndex(s => s.Action is { Kind: TaggedActionKind.Sell, Location: "B", ItemId: "b" });
+        int nextExchange = state.Steps.FindIndex(s => s.Action is { Kind: TaggedActionKind.Barter, TradeIndex: 1 });
+        Assert.True(sale >= 0 && sale < nextExchange, $"sale={sale}, next exchange={nextExchange}");
+        Assert.Equal(3, state.SoldItems["b"]);
+    }
+    [Fact] public void CompilerUsesEarlierTransferPortWhenOnlyALaterExchangeBecomesTight() {
+        var request = new TaggedTransportRequest {
+            ShipLimitLT = 3000,
+            Settings = new() { SearchSeconds = 1, MaxStates = 1, Ports = [
+                new() { IslandId = "Velia", WarehouseId = "Velia", Enabled = true },
+                new() { IslandId = "B", Enabled = true } ] },
+            Items = new() { ["a"] = new("a", "Input", 4, 1000),
+                ["b"] = new("b", "Terminal goods", 7, 1000),
+                ["c"] = new("c", "Middle goods", 4, 1000),
+                ["d"] = new("d", "Final goods", 4, 1000) },
+            Points = new() { ["Velia"] = new(0, 0), ["A"] = new(100, 0),
+                ["B"] = new(150, 0), ["C"] = new(200, 0), ["D"] = new(300, 0) },
+            Warehouses = new() { ["Velia"] = new() { ["a"] = 3 } },
+            Trades = [new("first", "A", "a", 1, "b", 1, 1),
+                new("middle", "C", "a", 1, "c", 1, 1),
+                new("last", "D", "a", 1, "d", 2, 1)]
+        };
+        var sim = new TaggedTransportSimulator(request);
+        var state = new TaggedVoyageCompiler(sim, () => false).Compile(sim.Initial(),
+            [new(0, 1), new(1, 1), new(2, 1)], "Velia", packing: 3);
+        Assert.NotNull(state);
+        int firstExchange = state.Steps.FindIndex(s => s.Action is { Kind: TaggedActionKind.Barter, TradeIndex: 0 });
+        int sale = state.Steps.FindIndex(s => s.Action is { Kind: TaggedActionKind.Sell, Location: "B", ItemId: "b" });
+        int middleExchange = state.Steps.FindIndex(s => s.Action is { Kind: TaggedActionKind.Barter, TradeIndex: 1 });
+        Assert.True(firstExchange >= 0 && sale > firstExchange && sale < middleExchange,
+            $"first={firstExchange}, sale={sale}, middle={middleExchange}");
+        Assert.Equal(1, state.SoldItems["b"]);
+        Assert.Equal(0, state.OverloadedDistance);
+    }
     [Fact] public void OlderSavedPlanIsStillVerifiableAndNewPlanningReplacesItsStorage() {
         var r = Request(); var sim = new TaggedTransportSimulator(r); var state = AtFirstExchange(sim);
         foreach (var action in new TaggedAction[] {

@@ -49,7 +49,6 @@ internal static class TaggedVoyageSearch {
             foreach (var edit in edits) {
                 if (Stopped()) break;
                 var prefix = prefixes[routes[edit.Left].Start];
-                if (sim.Port(prefix.Location)?.WarehouseId.Length is not > 0) continue;
                 for (int packing = 0; packing < (request.Settings.AllowOverloadedSailing ? 6 : 3) && !Stopped(); packing++) {
                     string key = seedHash + ":" + edit.Left + ":" + edit.Right + ":" + packing + ":" + string.Join("/",
                         edit.Replacement.Select(v => v.End + ":" + string.Join(",", v.Jobs.Select(j => $"{j.TradeIndex}.{j.Quantity}"))));
@@ -63,7 +62,8 @@ internal static class TaggedVoyageSearch {
                     }
                     TaggedTransportState? candidate = prefix;
                     foreach (var voyage in edit.Replacement) {
-                        candidate = compiler.Compile(candidate, voyage.Jobs, voyage.End, packing);
+                        candidate = compiler.Compile(candidate, voyage.Jobs, voyage.End, packing,
+                            prepareAtWarehouse: sim.Port(candidate.Location)?.WarehouseId.Length > 0);
                         if (candidate is null) break;
                     }
                     if (candidate is null || Stopped()) continue;

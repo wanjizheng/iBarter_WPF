@@ -763,12 +763,20 @@ public sealed class AutomaticRouteCoordinator : NotificationObject, IDisposable 
             barter, ResolveIslandDisplayName(barter.IslandId), currentPlan is null
             ? new Dictionary<string, RouteItem>()
             : BuildItemLookup(barter), routePeakLT,
-            App.myPVM?.BarterCollection.FirstOrDefault(row =>
-                StringComparer.Ordinal.Equals(
-                    row.PlannerRowId,
-                    RouteTaskIdentity.PlannerRowId(barter.RowId)))),
+            ResolveTitleBarter(barter)),
         _ => throw new InvalidOperationException($"Unknown route step {step.GetType().Name}"),
     };
+
+    private static Barter? ResolveTitleBarter(BarterStep step) {
+        var rows = App.myPVM?.BarterCollection;
+        var exact = rows?.FirstOrDefault(row => StringComparer.Ordinal.Equals(row.PlannerRowId, RouteTaskIdentity.PlannerRowId(step.RowId)));
+        if (exact is not null) return exact;
+        // Restored/legacy rows may have regenerated identifiers. Use the island
+        // and item pair only when they identify one unambiguous exchange.
+        var matches = rows?.Where(row => row.IsLandName == step.IslandId
+            && row.Item1?.ItemID == step.Consumed.ItemId && row.Item2?.ItemID == step.Produced.ItemId).ToArray();
+        return matches?.Length == 1 ? matches[0] : null;
+    }
 
     private IReadOnlyDictionary<string, RouteItem> BuildItemLookup(BarterStep step) {
         var result = new Dictionary<string, RouteItem>(StringComparer.Ordinal);

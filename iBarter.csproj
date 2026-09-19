@@ -18,9 +18,12 @@
     <FileVersion>6.0.0.0</FileVersion>
     <InformationalVersion>Beta6.0</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- Documentation stays in the source tree; it is not an application asset. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);doc\**;docs\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Resources\Items.csv" LogicalName="iBarter.Items.csv" />
     <Compile Remove="Tools\TaggedTransportUiSmoke\**\*.cs" />
     <Page Remove="Tools\TaggedTransportUiSmoke\**\*.xaml" />
     <!-- Review bundles retain source snapshots for audit, but must not be compiled by the WPF app. -->

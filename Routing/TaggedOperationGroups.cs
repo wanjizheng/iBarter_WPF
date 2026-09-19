@@ -9,8 +9,8 @@ public static class TaggedOperationGroups {
         var combined = new List<TaggedDisplayOperation>();
         for (int n = group.Start; n < group.End; n++) {
             var action = plan.Steps[n].Action; bool done = n < completedSteps;
-            if (combined.Count > 0 && action.Kind == TaggedActionKind.Transfer && combined[^1].Done == done
-                && combined[^1].Action with { Quantity = action.Quantity } == action) {
+            if (combined.Count > 0 && n > group.Start && action.Kind == TaggedActionKind.Transfer && combined[^1].Done == done
+                && plan.Steps[n - 1].Action == action) {
                 var last = combined[^1]; combined[^1] = last with { Action = last.Action with { Quantity = last.Action.Quantity + action.Quantity } };
             } else combined.Add(new(action, done));
         }
